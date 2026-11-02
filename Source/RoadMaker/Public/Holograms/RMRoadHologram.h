@@ -13,10 +13,10 @@ class ROADMAKER_API ARMRoadHologram : public ARMSplineHologram
 	GENERATED_BODY()
 
 public:
-	virtual bool TrySnapToActor(const FHitResult& hitResult) override;
 	virtual void CheckValidPlacement() override;
 
 protected:
+	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
 	virtual float GetSurfaceOffset() const override;
 	virtual int32 GetCostWidthFactor() const override;
 	virtual void RebuildPreview() override;

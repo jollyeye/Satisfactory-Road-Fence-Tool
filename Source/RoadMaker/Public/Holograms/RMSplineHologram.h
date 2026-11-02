@@ -24,6 +24,8 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	// AFGHologram
+	virtual bool IsValidHitResult(const FHitResult& hitResult) const override;
+	virtual bool TrySnapToActor(const FHitResult& hitResult) override;
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual int32 GetBaseCostMultiplier() const override;
@@ -41,6 +43,16 @@ protected:
 
 	/** Extra multiplier on top of length (road width in foundations). */
 	virtual int32 GetCostWidthFactor() const { return 1; }
+
+	/**
+	 * Snap the current step to something near the aim point (a free road end for roads).
+	 * Runs every frame from SetHologramLocationAndRotation, so it does not depend on the game
+	 * passing the aimed actor to TrySnapToActor. Return true if snapped (and the curve updated).
+	 */
+	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) { return false; }
+
+	/** Mouse-wheel rotation in degrees since the current step began. */
+	float GetStepScrollYaw() const;
 
 	/** Rebuild the preview mesh from mLocalPoints. */
 	virtual void RebuildPreview() PURE_VIRTUAL(ARMSplineHologram::RebuildPreview, );
@@ -80,4 +92,7 @@ protected:
 	FVector mEnd = FVector::ZeroVector;
 	FVector mEndDir = FVector::ForwardVector;
 	bool mEndSnapped = false;
+
+	/** Scroll value when the current step started, so each step rotates from zero. */
+	int32 mScrollAtStepStart = 0;
 };

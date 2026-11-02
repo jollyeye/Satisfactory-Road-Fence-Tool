@@ -1,6 +1,7 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "ProceduralMeshComponent.h"
 #include "FGInventoryComponent.h"
+#include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
@@ -53,8 +54,10 @@ void ARMBuildableProcedural::GetDismantleRefund_Implementation(TArray<FInventory
 
 void ARMBuildableProcedural::ApplyMaterial(int32 Section, UMaterialInterface* Material)
 {
-	if (mMesh && Material)
+	// Every section needs a material: the game's build/dismantle effect reads them all and
+	// crashes on an empty slot. Fall back to the engine default until a real one is assigned.
+	if (mMesh)
 	{
-		mMesh->SetMaterial(Section, Material);
+		mMesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
 	}
 }

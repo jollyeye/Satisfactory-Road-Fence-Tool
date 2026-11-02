@@ -39,9 +39,34 @@ bool ARMSplineHologram::IsStraightMode() const
 	return mBuildModeStraight && IsCurrentBuildMode(mBuildModeStraight);
 }
 
+bool ARMSplineHologram::IsValidHitResult(const FHitResult& hitResult) const
+{
+	// Our own pieces are always valid to aim at (roads on roads, fences on roads, snapping to ends).
+	if (Cast<ARMBuildableProcedural>(hitResult.GetActor()))
+	{
+		return true;
+	}
+	return Super::IsValidHitResult(hitResult);
+}
+
+bool ARMSplineHologram::TrySnapToActor(const FHitResult& hitResult)
+{
+	// Snapping is done in SetHologramLocationAndRotation every frame instead.
+	return false;
+}
+
+float ARMSplineHologram::GetStepScrollYaw() const
+{
+	return static_cast<float>(GetScrollRotateValue() - mScrollAtStepStart);
+}
+
 void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
 {
-	// Reaching here means TrySnapToActor did not snap this frame.
+	if (TrySnapToRoadEnd(hitResult))
+	{
+		return;
+	}
+
 	const FVector P = hitResult.Location + FVector(0.f, 0.f, GetSurfaceOffset());
 	FVector View = (hitResult.TraceEnd - hitResult.TraceStart);
 	View.Z = 0.f;
@@ -55,7 +80,8 @@ void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& hitResu
 	{
 		mStartSnapped = false;
 		mStart = P;
-		mStartDir = View;
+		// Mouse wheel turns the start direction.
+		mStartDir = View.RotateAngleAxis(GetStepScrollYaw(), FVector::UpVector);
 	}
 	else
 	{
@@ -99,6 +125,14 @@ void ARMSplineHologram::UpdateCurve()
 	else
 	{
 		RMGeometry::MakeArc(mStart, mStartDir, mEnd, World);
+
+		// Mouse wheel turns the end direction away from the natural arc.
+		const float Yaw = GetStepScrollYaw();
+		if (mStep == 1 && !FMath::IsNearlyZero(Yaw) && World.Num() == 2)
+		{
+			const FVector ArcEnd = FVector(World[1].Tangent.X, World[1].Tangent.Y, 0.f).GetSafeNormal();
+			RMGeometry::MakeFixedEnds(mStart, mStartDir, mEnd, ArcEnd.RotateAngleAxis(Yaw, FVector::UpVector), World);
+		}
 	}
 
 	SetWorldPoints(World);
@@ -142,6 +176,7 @@ bool ARMSplineHologram::DoMultiStepPlacement(bool isInputFromARelease)
 	{
 		// Lock in the start (and its snap) and start dragging the end.
 		mStep = 1;
+		mScrollAtStepStart = GetScrollRotateValue();
 		mEnd = mStart + mStartDir * RM::FoundationSize;
 		UpdateCurve();
 		return false;

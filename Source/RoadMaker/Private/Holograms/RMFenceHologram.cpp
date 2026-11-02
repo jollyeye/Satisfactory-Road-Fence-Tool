@@ -9,7 +9,7 @@ const ARMBuildableFence* ARMFenceHologram::GetFenceDefaults() const
 	return mBuildClass ? mBuildClass->GetDefaultObject<ARMBuildableFence>() : GetDefault<ARMBuildableFence>();
 }
 
-bool ARMFenceHologram::TrySnapToActor(const FHitResult& hitResult)
+bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 {
 	mOnRoadEdge = false;
 

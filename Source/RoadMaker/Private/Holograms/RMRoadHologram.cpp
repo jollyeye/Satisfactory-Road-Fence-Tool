@@ -21,13 +21,9 @@ int32 ARMRoadHologram::GetCostWidthFactor() const
 	return GetRoadDefaults()->mWidthInFoundations;
 }
 
-bool ARMRoadHologram::TrySnapToActor(const FHitResult& hitResult)
+bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 {
-	if (!Cast<ARMBuildableRoad>(hitResult.GetActor()))
-	{
-		return false;
-	}
-
+	// Any free road end near the aim point, whether you aim at the road or the ground next to it.
 	TArray<FRMRoadEndRef> Ends;
 	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSnapRadius, 1, nullptr, Ends);
 	if (Ends.Num() == 0)
