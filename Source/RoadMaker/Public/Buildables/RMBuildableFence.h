@@ -22,6 +22,10 @@ public:
 	ARMBuildableFence(const FObjectInitializer& ObjectInitializer);
 
 	virtual void RebuildMesh() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** +1: the road is on the fence's right (+Right of its spline), -1: on its left. Set by the hologram. */
+	void SetInwardSign(float InSign) { mInwardSign = InSign >= 0.f ? 1.f : -1.f; }
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")
 	ERMFenceType mFenceType = ERMFenceType::GuardRail;
@@ -37,4 +41,12 @@ public:
 	/** Section 1: masked grid material for the grid fence panel. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mPanelMaterial = nullptr;
+
+protected:
+	UFUNCTION()
+	void OnRep_InwardSign() { RebuildMesh(); }
+
+	/** Which side of the fence the road is on; the guard rail beam faces that way. */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_InwardSign)
+	float mInwardSign = 1.f;
 };

@@ -1,10 +1,17 @@
 #include "Buildables/RMBuildableFence.h"
 #include "ProceduralMeshComponent.h"
+#include "Net/UnrealNetwork.h"
 
 ARMBuildableFence::ARMBuildableFence(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	mMeshStep = 50.f;
+}
+
+void ARMBuildableFence::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ARMBuildableFence, mInwardSign);
 }
 
 void ARMBuildableFence::RebuildMesh()
@@ -21,7 +28,7 @@ void ARMBuildableFence::RebuildMesh()
 	switch (mFenceType)
 	{
 	case ERMFenceType::GuardRail:
-		RMGeometry::BuildGuardRail(Frames, mUVScale, Main);
+		RMGeometry::BuildGuardRail(Frames, mUVScale, mInwardSign, Main);
 		break;
 	case ERMFenceType::JerseyBarrier:
 		RMGeometry::BuildJerseyBarrier(Frames, mUVScale, Main);

@@ -19,6 +19,8 @@ public:
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual void CheckValidPlacement() override;
+	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
 	/** Aiming at a road: follow its edge on the side you look at. */
@@ -29,4 +31,8 @@ protected:
 	const ARMBuildableFence* GetFenceDefaults() const;
 
 	bool mOnRoadEdge = false;
+
+	/** Side of the fence the road is on (see ARMBuildableFence::SetInwardSign). */
+	UPROPERTY(Replicated)
+	float mInwardSign = 1.f;
 };

@@ -443,21 +443,27 @@ namespace
 	}
 }
 
-void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal)
+void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, float InwardSign, FRMMesh& Metal)
 {
-	// W-beam approximated by a shallow three-face box section 32 cm tall, centred at 60 cm.
+	const float S = InwardSign >= 0.f ? 1.f : -1.f;
+
+	// W-beam approximated by a shallow box section 32 cm tall, centred at 60 cm, bulging towards the road.
 	const TArray<FRMFrame> RailFrames = LiftFrames(Frames, 60.f);
-	const TArray<FVector2D> Beam = {
+	TArray<FVector2D> Beam = {
 		FVector2D(-4.f, 16.f), FVector2D(4.f, 16.f), FVector2D(6.f, 0.f), FVector2D(4.f, -16.f), FVector2D(-4.f, -16.f), FVector2D(-2.f, 0.f)
 	};
+	for (FVector2D& P : Beam)
+	{
+		P.X *= S;
+	}
 	ExtrudeProfile(RailFrames, Beam, true, FVector2D::ZeroVector, UVScale, Metal);
 	AddProfileCap(RailFrames[0], Beam, false, UVScale, Metal);
 	AddProfileCap(RailFrames.Last(), Beam, true, UVScale, Metal);
 
-	// Posts every 2 m, sitting just behind the beam.
+	// Posts every 2 m, behind the beam (away from the road).
 	ForEvery(Frames, 200.f, [&](const FRMFrame& F)
 	{
-		Metal.AddBox(F.Pos + FVector(0.f, 0.f, 40.f) - F.Right * 9.f, F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), UVScale);
+		Metal.AddBox(F.Pos + FVector(0.f, 0.f, 40.f) - F.Right * (9.f * S), F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), UVScale);
 	});
 }
 

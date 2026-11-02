@@ -132,8 +132,11 @@ namespace RMGeometry
 	/** Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre. */
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body);
 
-	/** Steel W-beam guard rail with posts. Frames are at the base of the fence. */
-	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal);
+	/**
+	 * Steel W-beam guard rail with posts. Frames are at the base of the fence.
+	 * InwardSign: +1 = the beam faces +Right (towards the road), posts sit on the other side; -1 = mirrored.
+	 */
+	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, float InwardSign, FRMMesh& Metal);
 
 	/** Continuous concrete jersey barrier. */
 	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete);

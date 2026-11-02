@@ -3,6 +3,7 @@
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "ProceduralMeshComponent.h"
+#include "Net/UnrealNetwork.h"
 
 const ARMBuildableFence* ARMFenceHologram::GetFenceDefaults() const
 {
@@ -46,6 +47,8 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	TArray<FRMSplinePoint> Edge;
 	RMGeometry::OffsetCurve(Frames, Offset, 400.f, Edge);
 
+	// The fence spline runs the same way as the road, so the road centre is on the fence's -Side side.
+	mInwardSign = -Side;
 	mOnRoadEdge = true;
 	SetWorldPoints(Edge);
 	return true;
@@ -54,6 +57,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 void ARMFenceHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
 {
 	mOnRoadEdge = false;
+	mInwardSign = 1.f;
 	Super::SetHologramLocationAndRotation(hitResult);
 }
 
@@ -80,7 +84,7 @@ void ARMFenceHologram::RebuildPreview()
 	FRMMesh Main, Panel;
 	switch (Fence->mFenceType)
 	{
-	case ERMFenceType::GuardRail:     RMGeometry::BuildGuardRail(Frames, 400.f, Main); break;
+	case ERMFenceType::GuardRail:     RMGeometry::BuildGuardRail(Frames, 400.f, mInwardSign, Main); break;
 	case ERMFenceType::JerseyBarrier: RMGeometry::BuildJerseyBarrier(Frames, 400.f, Main); break;
 	case ERMFenceType::GridFence:     RMGeometry::BuildGridFence(Frames, 400.f, Main, Panel); break;
 	}
@@ -101,4 +105,19 @@ void ARMFenceHologram::CheckValidPlacement()
 			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 		}
 	}
+}
+
+void ARMFenceHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ARMFenceHologram, mInwardSign);
+}
+
+void ARMFenceHologram::ConfigureActor(AFGBuildable* inBuildable) const
+{
+	if (ARMBuildableFence* Fence = Cast<ARMBuildableFence>(inBuildable))
+	{
+		Fence->SetInwardSign(mInwardSign);
+	}
+	Super::ConfigureActor(inBuildable);
 }
