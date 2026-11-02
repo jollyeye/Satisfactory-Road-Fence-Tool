@@ -25,12 +25,12 @@ void ARMSplineHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ARMSplineHologram, mLocalPoints);
 }
 
-void ARMSplineHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGHologramBuildModeDescriptor>>& out_buildmodes) const
+void ARMSplineHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
 {
 	Super::GetSupportedBuildModes_Implementation(out_buildmodes);
 	if (mBuildModeStraight)
 	{
-		out_buildmodes.AddUnique(mBuildModeStraight);
+		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeStraight.Get()));
 	}
 }
 

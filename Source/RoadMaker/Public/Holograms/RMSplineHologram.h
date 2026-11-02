@@ -11,6 +11,7 @@
 
 class UProceduralMeshComponent;
 class UFGHologramBuildModeDescriptor;
+class UFGBuildGunModeDescriptor;
 
 UCLASS(Abstract)
 class ROADMAKER_API ARMSplineHologram : public AFGBuildableHologram
@@ -26,7 +27,7 @@ public:
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual int32 GetBaseCostMultiplier() const override;
-	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGHologramBuildModeDescriptor>>& out_buildmodes) const override;
+	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const override;
 
 	// AFGBuildableHologram
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
