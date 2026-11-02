@@ -23,6 +23,9 @@ public:
 	/** Saved ends converted to world space, used to treat those road ends as occupied. */
 	void GetWorldEnds(TArray<FRMRoadEnd>& OutEnds) const;
 
+	/** Curved curbs between neighbouring roads, in world space, at the top of the slab. */
+	void GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) const;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mTopMaterial = nullptr;
 

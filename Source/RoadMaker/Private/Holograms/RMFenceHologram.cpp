@@ -2,6 +2,7 @@
 #include "Holograms/RMDisqualifiers.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
+#include "Buildables/RMBuildableIntersection.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -15,7 +16,15 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	mOnRoadEdge = false;
 
 	// Edge mode only makes sense before a free fence has been started.
-	ARMBuildableRoad* Road = mStep == 0 ? Cast<ARMBuildableRoad>(hitResult.GetActor()) : nullptr;
+	if (mStep != 0)
+	{
+		return false;
+	}
+	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
+	{
+		return SnapToIntersectionCurb(X, hitResult.Location);
+	}
+	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	if (!Road)
 	{
 		return false;
@@ -82,12 +91,7 @@ void ARMFenceHologram::RebuildPreview()
 	}
 
 	FRMMesh Main, Panel;
-	switch (Fence->mFenceType)
-	{
-	case ERMFenceType::GuardRail:     RMGeometry::BuildGuardRail(Frames, 400.f, mInwardSign, Main); break;
-	case ERMFenceType::JerseyBarrier: RMGeometry::BuildJerseyBarrier(Frames, 400.f, Main); break;
-	case ERMFenceType::GridFence:     RMGeometry::BuildGridFence(Frames, 400.f, Main, Panel); break;
-	}
+	ARMBuildableFence::BuildFenceMesh(Fence->mFenceType, Frames, 400.f, mInwardSign, Main, Panel);
 	Main.ApplyToSection(mPreviewMesh, 0, false);
 	Panel.ApplyToSection(mPreviewMesh, 1, false);
 }
@@ -120,4 +124,51 @@ void ARMFenceHologram::ConfigureActor(AFGBuildable* inBuildable) const
 		Fence->SetInwardSign(mInwardSign);
 	}
 	Super::ConfigureActor(inBuildable);
+}
+
+bool ARMFenceHologram::SnapToIntersectionCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint)
+{
+	TArray<TArray<FVector>> Curbs;
+	Intersection->GetWorldCurbs(Curbs);
+
+	// The curb with a point closest to where the player aims.
+	int32 BestCurb = INDEX_NONE;
+	float Best = TNumericLimits<float>::Max();
+	for (int32 C = 0; C < Curbs.Num(); ++C)
+	{
+		for (const FVector& P : Curbs[C])
+		{
+			const float D = FVector::DistSquared2D(P, AimPoint);
+			if (D < Best)
+			{
+				Best = D;
+				BestCurb = C;
+			}
+		}
+	}
+	if (BestCurb == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// Curbs run counter-clockwise, so the junction centre is on their +Right side: move the fence
+	// that way by the inset so it stands on the slab, and face it that way.
+	const TArray<FVector>& Curb = Curbs[BestCurb];
+	const float Inset = GetFenceDefaults()->mEdgeInset;
+	TArray<FVector> Inside;
+	for (int32 I = 0; I < Curb.Num(); ++I)
+	{
+		const FVector Prev = Curb[FMath::Max(I - 1, 0)];
+		const FVector Next = Curb[FMath::Min(I + 1, Curb.Num() - 1)];
+		const FVector Fwd = FVector(Next.X - Prev.X, Next.Y - Prev.Y, 0.f).GetSafeNormal();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+		Inside.Add(Curb[I] + Right * Inset);
+	}
+
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::SplineThroughPoints(Inside, Points);
+	mInwardSign = 1.f;
+	mOnRoadEdge = true;
+	SetWorldPoints(Points);
+	return true;
 }

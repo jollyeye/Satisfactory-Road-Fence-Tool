@@ -33,9 +33,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
 	int32 mWidthInFoundations = 1;
 
-	/** Thickness in cm. 200 = half of a 4 m foundation. */
+	/** Thickness in cm. 100 = a 1 m foundation. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
-	float mRoadHeight = 200.f;
+	float mRoadHeight = 100.f;
 
 	/** Tightest allowed turn, measured on the centre line, in cm. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")

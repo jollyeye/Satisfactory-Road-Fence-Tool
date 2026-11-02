@@ -24,6 +24,12 @@ public:
 	virtual void RebuildMesh() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/**
+	 * Builds any fence type facing the road. Builders are written for a road on +Right; for
+	 * InwardSign < 0 the frames are mirrored first, so every fence type (also future ones) mirrors.
+	 */
+	static void BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel);
+
 	/** +1: the road is on the fence's right (+Right of its spline), -1: on its left. Set by the hologram. */
 	void SetInwardSign(float InSign) { mInwardSign = InSign >= 0.f ? 1.f : -1.f; }
 

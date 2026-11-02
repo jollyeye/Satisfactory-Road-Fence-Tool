@@ -57,3 +57,24 @@ void ARMBuildableIntersection::GetWorldEnds(TArray<FRMRoadEnd>& OutEnds) const
 		OutEnds.Add(W);
 	}
 }
+
+void ARMBuildableIntersection::GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) const
+{
+	OutCurbs.Reset();
+	FRMMesh Top, Body;
+	TArray<FVector> Outline;
+	TArray<bool> IsMouth;
+	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth))
+	{
+		return;
+	}
+	RMGeometry::GetIntersectionCurbs(Outline, IsMouth, OutCurbs);
+	const FTransform& T = GetActorTransform();
+	for (TArray<FVector>& Curb : OutCurbs)
+	{
+		for (FVector& P : Curb)
+		{
+			P = T.TransformPosition(P);
+		}
+	}
+}

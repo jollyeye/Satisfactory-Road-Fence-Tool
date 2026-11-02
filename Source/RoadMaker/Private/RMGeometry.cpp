@@ -443,9 +443,44 @@ namespace
 	}
 }
 
-void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, float InwardSign, FRMMesh& Metal)
+void RMGeometry::MirrorFrames(TArray<FRMFrame>& Frames)
 {
-	const float S = InwardSign >= 0.f ? 1.f : -1.f;
+	for (FRMFrame& F : Frames)
+	{
+		F.Right = -F.Right;
+	}
+}
+
+void RMGeometry::SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSplinePoint>& OutPoints)
+{
+	OutPoints.Reset();
+	const int32 N = Points.Num();
+	for (int32 I = 0; I < N; ++I)
+	{
+		FVector Tangent;
+		if (N < 2)
+		{
+			Tangent = FVector::ForwardVector;
+		}
+		else if (I == 0)
+		{
+			Tangent = Points[1] - Points[0];
+		}
+		else if (I == N - 1)
+		{
+			Tangent = Points[I] - Points[I - 1];
+		}
+		else
+		{
+			Tangent = (Points[I + 1] - Points[I - 1]) * 0.5f;
+		}
+		OutPoints.Add(FRMSplinePoint(Points[I], Tangent));
+	}
+}
+
+void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal)
+{
+	const float S = 1.f; // road on +Right; mirroring is done by the caller
 
 	// W-beam approximated by a shallow box section 32 cm tall, centred at 60 cm, bulging towards the road.
 	const TArray<FRMFrame> RailFrames = LiftFrames(Frames, 60.f);
@@ -481,19 +516,19 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 
 void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel)
 {
-	// Thin double-faced panel 2 m tall, uses its own material slot (masked grid).
-	const TArray<FVector2D> PanelProfile = { FVector2D(-1.f, 5.f), FVector2D(1.f, 5.f), FVector2D(1.f, 200.f), FVector2D(-1.f, 200.f) };
-	ExtrudeProfile(Frames, PanelProfile, true, FVector2D(0.f, 100.f), 200.f, Panel);
+	// Thin double-faced panel 2 m tall on the road side, uses its own material slot (masked grid).
+	const TArray<FVector2D> PanelProfile = { FVector2D(2.f, 5.f), FVector2D(4.f, 5.f), FVector2D(4.f, 200.f), FVector2D(2.f, 200.f) };
+	ExtrudeProfile(Frames, PanelProfile, true, FVector2D(3.f, 100.f), 200.f, Panel);
 
-	// Top and bottom tubes plus posts every 3 m.
-	const TArray<FVector2D> Tube = { FVector2D(-3.f, -3.f), FVector2D(3.f, -3.f), FVector2D(3.f, 3.f), FVector2D(-3.f, 3.f) };
+	// Top and bottom tubes plus posts every 3 m, behind the panel (away from the road).
+	const TArray<FVector2D> Tube = { FVector2D(-6.f, -3.f), FVector2D(0.f, -3.f), FVector2D(0.f, 3.f), FVector2D(-6.f, 3.f) };
 	const TArray<FRMFrame> TopFrames = LiftFrames(Frames, 200.f);
 	const TArray<FRMFrame> BottomFrames = LiftFrames(Frames, 8.f);
 	ExtrudeProfile(TopFrames, Tube, true, FVector2D::ZeroVector, UVScale, Posts);
 	ExtrudeProfile(BottomFrames, Tube, true, FVector2D::ZeroVector, UVScale, Posts);
 	ForEvery(Frames, 300.f, [&](const FRMFrame& F)
 	{
-		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f), F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 105.f), UVScale);
+		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f) - F.Right * 3.f, F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 105.f), UVScale);
 	});
 }
 
@@ -502,7 +537,7 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 // ---------------------------------------------------------------------------------------------
 
 bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline)
+	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth)
 {
 	if (Ends.Num() < 2)
 	{
@@ -658,5 +693,52 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 	{
 		*OutOutline = Ring;
 	}
+	if (OutEdgeIsMouth)
+	{
+		*OutEdgeIsMouth = EdgeIsMouth;
+	}
 	return true;
+}
+
+void RMGeometry::GetIntersectionCurbs(const TArray<FVector>& Outline, const TArray<bool>& EdgeIsMouth, TArray<TArray<FVector>>& OutCurbs)
+{
+	OutCurbs.Reset();
+	const int32 N = Outline.Num();
+	if (N < 3 || EdgeIsMouth.Num() != N)
+	{
+		return;
+	}
+	// Start right after a mouth edge, then collect runs of non-mouth edges.
+	int32 Start = 0;
+	while (Start < N && !EdgeIsMouth[Start])
+	{
+		++Start;
+	}
+	if (Start == N)
+	{
+		return;
+	}
+	TArray<FVector> Current;
+	for (int32 Step = 1; Step <= N; ++Step)
+	{
+		const int32 E = (Start + Step) % N; // edge E goes Outline[E] -> Outline[E + 1]
+		if (EdgeIsMouth[E])
+		{
+			if (Current.Num() >= 2)
+			{
+				OutCurbs.Add(Current);
+			}
+			Current.Reset();
+			continue;
+		}
+		if (Current.Num() == 0)
+		{
+			Current.Add(Outline[E]);
+		}
+		Current.Add(Outline[(E + 1) % N]);
+	}
+	if (Current.Num() >= 2)
+	{
+		OutCurbs.Add(Current);
+	}
 }

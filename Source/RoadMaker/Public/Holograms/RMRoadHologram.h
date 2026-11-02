@@ -23,6 +23,16 @@ protected:
 
 	const ARMBuildableRoad* GetRoadDefaults() const;
 
+	/**
+	 * Aiming at a foundation: snap the current end to the middle of its nearest edge (or +-4 m along
+	 * it), road top level with the foundation top, pointing straight out of / into that edge.
+	 */
+	bool TrySnapToFoundation(const FHitResult& hitResult);
+
+	/** Along-edge snap step on foundations, in cm. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	float mFoundationEdgeStep = 400.f;
+
 	/** How close (cm) to a road end the crosshair must be to snap to it. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	float mSnapRadius = 600.f;

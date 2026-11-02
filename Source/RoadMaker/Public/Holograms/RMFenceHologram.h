@@ -9,6 +9,7 @@
 #include "RMFenceHologram.generated.h"
 
 class ARMBuildableFence;
+class ARMBuildableIntersection;
 
 UCLASS()
 class ROADMAKER_API ARMFenceHologram : public ARMSplineHologram
@@ -29,6 +30,9 @@ protected:
 	virtual void RebuildPreview() override;
 
 	const ARMBuildableFence* GetFenceDefaults() const;
+
+	/** Aiming at an intersection: follow the curved curb nearest the aim point, facing the centre. */
+	bool SnapToIntersectionCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint);
 
 	bool mOnRoadEdge = false;
 

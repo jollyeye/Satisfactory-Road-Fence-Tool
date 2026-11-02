@@ -132,11 +132,17 @@ namespace RMGeometry
 	/** Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre. */
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body);
 
-	/**
-	 * Steel W-beam guard rail with posts. Frames are at the base of the fence.
-	 * InwardSign: +1 = the beam faces +Right (towards the road), posts sit on the other side; -1 = mirrored.
-	 */
-	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, float InwardSign, FRMMesh& Metal);
+	// Fence builders all use one convention: the road is on the +Right side of the frames.
+	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.
+
+	/** Mirror frames sideways (Right = -Right), so a fence built for +Right faces -Right instead. */
+	ROADMAKER_API void MirrorFrames(TArray<FRMFrame>& Frames);
+
+	/** Smooth spline through world points (Catmull-Rom tangents). */
+	ROADMAKER_API void SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSplinePoint>& OutPoints);
+
+	/** Steel W-beam guard rail with posts. Frames are at the base of the fence. */
+	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal);
 
 	/** Continuous concrete jersey barrier. */
 	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete);
@@ -152,5 +158,11 @@ namespace RMGeometry
 	 * OutOutline receives the top outline, useful for fences or debugging.
 	 */
 	ROADMAKER_API bool BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr);
+		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr, TArray<bool>* OutEdgeIsMouth = nullptr);
+
+	/**
+	 * The curved curbs of an intersection: each is the outline run between two neighbouring road
+	 * mouths. Points run counter-clockwise around the centre, so the centre is on their +Right side.
+	 */
+	ROADMAKER_API void GetIntersectionCurbs(const TArray<FVector>& Outline, const TArray<bool>& EdgeIsMouth, TArray<TArray<FVector>>& OutCurbs);
 }

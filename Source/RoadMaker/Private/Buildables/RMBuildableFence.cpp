@@ -25,21 +25,30 @@ void ARMBuildableFence::RebuildMesh()
 	}
 
 	FRMMesh Main, Panel;
-	switch (mFenceType)
-	{
-	case ERMFenceType::GuardRail:
-		RMGeometry::BuildGuardRail(Frames, mUVScale, mInwardSign, Main);
-		break;
-	case ERMFenceType::JerseyBarrier:
-		RMGeometry::BuildJerseyBarrier(Frames, mUVScale, Main);
-		break;
-	case ERMFenceType::GridFence:
-		RMGeometry::BuildGridFence(Frames, mUVScale, Main, Panel);
-		break;
-	}
+	BuildFenceMesh(mFenceType, Frames, mUVScale, mInwardSign, Main, Panel);
 
 	Main.ApplyToSection(mMesh, 0, true);
 	Panel.ApplyToSection(mMesh, 1, true);
 	ApplyMaterial(0, mMainMaterial);
 	ApplyMaterial(1, mPanelMaterial);
+}
+
+void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel)
+{
+	if (InwardSign < 0.f)
+	{
+		RMGeometry::MirrorFrames(Frames);
+	}
+	switch (Type)
+	{
+	case ERMFenceType::GuardRail:
+		RMGeometry::BuildGuardRail(Frames, UVScale, Main);
+		break;
+	case ERMFenceType::JerseyBarrier:
+		RMGeometry::BuildJerseyBarrier(Frames, UVScale, Main);
+		break;
+	case ERMFenceType::GridFence:
+		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel);
+		break;
+	}
 }
