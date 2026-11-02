@@ -20,6 +20,21 @@ eal = unreal.EditorAssetLibrary
 MEL = unreal.MaterialEditingLibrary
 MP = unreal.MaterialProperty
 
+# Without the editor window the asset registry may not have scanned the mod's folder yet.
+unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/RoadMaker"], True)
+
+
+def load_bp(name):
+    """Load a Blueprint by full object path; does not depend on the registry having indexed it."""
+    for path in ("/RoadMaker/Buildables/%s.%s" % (name, name), "/RoadMaker/Buildables/" + name):
+        try:
+            obj = unreal.load_asset(path)
+        except Exception:
+            obj = None
+        if obj:
+            return obj
+    return None
+
 
 def new_material(name):
     path = ROOT + "/" + name
@@ -129,11 +144,10 @@ ASSIGN = {
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
 }
 for name, props in ASSIGN.items():
-    path = "/RoadMaker/Buildables/" + name
-    if not eal.does_asset_exist(path):
-        log("  ! missing " + path)
+    bp = load_bp(name)
+    if not bp:
+        log("  ! missing /RoadMaker/Buildables/" + name)
         continue
-    bp = eal.load_asset(path)
     d = unreal.get_default_object(bp.generated_class())
     for k, m in props.items():
         try:
