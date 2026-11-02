@@ -90,7 +90,8 @@ void ARMFenceHologram::RebuildPreview()
 
 void ARMFenceHologram::CheckValidPlacement()
 {
-	Super::CheckValidPlacement();
+	// No Super call on purpose: the vanilla floor check ("Surface is too uneven") is meant for
+	// box-shaped buildings and rejects spline pieces. Placement rules are checked below instead.
 	if (mStep == 1 && !mOnRoadEdge)
 	{
 		TArray<FRMFrame> Frames;

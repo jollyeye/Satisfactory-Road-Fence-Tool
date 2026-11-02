@@ -100,7 +100,8 @@ void ARMIntersectionHologram::RebuildPreview()
 
 void ARMIntersectionHologram::CheckValidPlacement()
 {
-	Super::CheckValidPlacement();
+	// No Super call on purpose: the vanilla floor check ("Surface is too uneven") is meant for
+	// box-shaped buildings and rejects spline pieces. Placement rules are checked below instead.
 	if (mLocalEnds.Num() < 2)
 	{
 		AddConstructDisqualifier(URMCD_NotEnoughRoads::StaticClass());

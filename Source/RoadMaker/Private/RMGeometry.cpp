@@ -4,7 +4,7 @@
 // If every procedural face shows up inside-out in game, flip this one switch.
 // Convention used: a triangle (A,B,C) faces along Cross(B-A, C-A), matching the classic
 // UProceduralMeshComponent example (verts (0,0,0),(0,100,0),(0,0,100) facing +X).
-static constexpr bool GRMFlipWinding = false;
+static constexpr bool GRMFlipWinding = true; // verified in game: UE front faces are the other winding
 
 // ---------------------------------------------------------------------------------------------
 // FRMMesh
