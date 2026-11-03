@@ -459,7 +459,10 @@ namespace
 			const bool bFreeEnd = BestEnd->Road
 				? !RMRoadUtils::IsEndOccupied(Hologram->GetWorld(), BestEnd->Road, BestEnd->EndIndex)
 				: !RMRoadUtils::IsMouthOccupied(Hologram->GetWorld(), BestEnd->Intersection, BestEnd->Location);
-			if (bFreeEnd && !HasFloorBeyond(Hologram->GetWorld(), Best, Along3))
+			// Both adjustments are for vehicle paths only: rail tracks are not laid onto the surface
+			// (a lift would leave them floating) and have no vehicle floor check.
+			const bool bVehiclePath = Hologram->IsA<AFGVehiclePathSegmentHologram>();
+			if (bVehiclePath && bFreeEnd && !HasFloorBeyond(Hologram->GetWorld(), Best, Along3))
 			{
 				Best -= Along3 * PathEndInset;
 			}
@@ -467,7 +470,10 @@ namespace
 			// A little above the asphalt (along the road's up): the game's "vehicles collide with
 			// the terrain" check tests against the ground, which near the high end of a road on a
 			// hill can sit right at the road surface.
-			Best += SurfaceUp * PathSnapLift;
+			if (bVehiclePath)
+			{
+				Best += SurfaceUp * PathSnapLift;
+			}
 
 			// Keep the road's tilt in the hit normal: rail tracks take their slope from it.
 			FHitResult Placed = MoveHit(Hit, Best);
