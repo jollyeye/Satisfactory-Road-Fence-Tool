@@ -348,9 +348,13 @@ jgroove = node(jersey, unreal.MaterialExpressionComponentMask, -550, 600, r=True
 jslope = node(jersey, unreal.MaterialExpressionComponentMask, -550, 750, r=False, g=True, b=False, a=False)
 link(joint, "", jgroove, "")
 link(joint, "", jslope, "")
+# Groove: the concrete a bit darker (shadowed), not black.
+jshade = node(jersey, unreal.MaterialExpressionMultiply, -450, 250)
+link(jbase, "", jshade, "A")
+link(const(jersey, 0.6, -600, 300), "", jshade, "B")
 jdark = node(jersey, unreal.MaterialExpressionLinearInterpolate, -300, 100)
 link(jbase, "", jdark, "A")
-link(color(jersey, 0.07, 0.07, 0.065, -500, 250), "", jdark, "B")
+link(jshade, "", jdark, "B")
 link(jgroove, "", jdark, "Alpha")
 MEL.connect_material_property(jdark, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(jersey, 0.92, -300, 400), "", MP.MP_ROUGHNESS)
@@ -370,27 +374,30 @@ MEL.connect_material_property(const(steel, 1.0, -300, 400), "", MP.MP_METALLIC)
 MEL.connect_material_property(const(steel, 0.45, -300, 500), "", MP.MP_ROUGHNESS)
 finish(steel)
 
-# --- Wire grid: masked lines from UVs (panel UVs are 1 per 2 m, so 20 cells = 10 cm) ---------
+# --- Wire grid: diamond mesh on a single two-sided sheet --------------------------------------
+# u = metres along the fence (UV1.x), v = world height in metres, so the diamonds stay upright on
+# slopes. Opacity mask: wires 1, holes 0.
+DIAMOND_HLSL = r"""
+float u = UV1.x;
+float v = WP.z / 100.0;
+float cell = 0.09;                               // diamond size (m, along each diagonal axis)
+float wire = 0.006;                              // half wire thickness (m)
+float2 p = float2(u + v, u - v) * 0.70710678 / cell;
+float2 f = abs(frac(p) - 0.5) * cell;            // distance to the cell centre lines, in m
+float d = cell * 0.5 - max(f.x, f.y);            // distance to the nearest wire
+float aa = max(fwidth(p.x) * cell, 0.0005);
+return 1.0 - smoothstep(wire - aa, wire + aa, d);
+"""
 grid = new_material("M_RoadGridFence")
 grid.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
 grid.set_editor_property("two_sided", True)
-grid.set_editor_property("opacity_mask_clip_value", 0.42)
-uv = node(grid, unreal.MaterialExpressionTextureCoordinate, -1100, 0, u_tiling=20.0, v_tiling=20.0)
-frac = node(grid, unreal.MaterialExpressionFrac, -900, 0)
-link(uv, "", frac, "")
-sub = node(grid, unreal.MaterialExpressionSubtract, -750, 0)
-link(frac, "", sub, "A")
-sub.set_editor_property("const_b", 0.5)
-ab = node(grid, unreal.MaterialExpressionAbs, -600, 0)
-link(sub, "", ab, "")
-mr = node(grid, unreal.MaterialExpressionComponentMask, -450, -60, r=True, g=False, b=False, a=False)
-mg = node(grid, unreal.MaterialExpressionComponentMask, -450, 60, r=False, g=True, b=False, a=False)
-link(ab, "", mr, "")
-link(ab, "", mg, "")
-mx = node(grid, unreal.MaterialExpressionMax, -300, 0)
-link(mr, "", mx, "A")
-link(mg, "", mx, "B")
-MEL.connect_material_property(mx, "", MP.MP_OPACITY_MASK)
+grid.set_editor_property("opacity_mask_clip_value", 0.4)
+gu1 = node(grid, unreal.MaterialExpressionTextureCoordinate, -1100, 0, coordinate_index=1)
+gwp = node(grid, unreal.MaterialExpressionWorldPosition, -1100, 120)
+dia = custom(grid, DIAMOND_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "WP"], -750, 0, "DiamondGrid")
+link(gu1, "", dia, "UV1")
+link(gwp, "", dia, "WP")
+MEL.connect_material_property(dia, "", MP.MP_OPACITY_MASK)
 MEL.connect_material_property(color(grid, 0.5, 0.51, 0.52, -300, 200), "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(grid, 1.0, -300, 300), "", MP.MP_METALLIC)
 MEL.connect_material_property(const(grid, 0.5, -300, 400), "", MP.MP_ROUGHNESS)

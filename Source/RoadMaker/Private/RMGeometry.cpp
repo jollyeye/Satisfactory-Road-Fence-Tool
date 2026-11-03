@@ -581,9 +581,16 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 
 void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel)
 {
-	// Thin double-faced panel 2 m tall on the road side, uses its own material slot (masked grid).
-	const TArray<FVector2D> PanelProfile = { FVector2D(2.f, 5.f), FVector2D(4.f, 5.f), FVector2D(4.f, 200.f), FVector2D(2.f, 200.f) };
-	ExtrudeProfile(Frames, PanelProfile, true, FVector2D(3.f, 100.f), 200.f, Panel);
+	// Single sheet 2 m tall on the road side, own material slot (two-sided masked diamond grid).
+	// The grid is laid out by the material from UV1.x = metres along the fence and the world height,
+	// so it stays upright on slopes. Normal faces the road (-Right).
+	const int32 PanelFirst = Panel.Vertices.Num();
+	ExtrudeProfile(Frames, { FVector2D(3.f, 200.f), FVector2D(3.f, 5.f) }, false, FVector2D(10.f, 100.f), 200.f, Panel);
+	Panel.MarkUV1.SetNumZeroed(Panel.Vertices.Num());
+	for (int32 I = PanelFirst; I < Panel.Vertices.Num(); ++I)
+	{
+		Panel.MarkUV1[I] = FVector2D(Panel.UVs[I].Y * 2.f, 0.f); // UV0.y = cm / 200
+	}
 
 	// Top and bottom tubes plus posts every 3 m, behind the panel (away from the road).
 	const TArray<FVector2D> Tube = { FVector2D(-6.f, -3.f), FVector2D(0.f, -3.f), FVector2D(0.f, 3.f), FVector2D(-6.f, 3.f) };
