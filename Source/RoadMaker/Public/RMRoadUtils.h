@@ -22,6 +22,13 @@ struct ROADMAKER_API FRMRoadEndRef
 
 	/** Points every Step cm across the end (centre included, out to the edges). */
 	TArray<FVector> GetPointsAcross(float Step) const;
+
+	/**
+	 * Snap points for vehicle paths and rail tracks across this end: on 1-lane roads every 2 m, on
+	 * 2- and 3-lane roads one point in the middle of each lane (lanes measured between the edge
+	 * lines). Intersection ends use the lanes of the road joined there (2 m rule if none).
+	 */
+	TArray<FVector> GetSnapPoints(UWorld* World) const;
 };
 
 namespace RMRoadUtils

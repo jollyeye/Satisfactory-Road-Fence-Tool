@@ -202,6 +202,45 @@ TArray<FVector> FRMRoadEndRef::GetPointsAcross(float Step) const
 	return Points;
 }
 
+TArray<FVector> FRMRoadEndRef::GetSnapPoints(UWorld* World) const
+{
+	// Lane layout of this end: the road itself, or the road joined to this intersection end.
+	const ARMBuildableRoad* LaneRoad = Road;
+	if (!LaneRoad && Intersection && World)
+	{
+		TArray<ARMBuildableRoad*> Nearby;
+		RMRoadUtils::GatherNearby(World, Location, Width, Nearby);
+		for (const ARMBuildableRoad* Candidate : Nearby)
+		{
+			for (int32 E = 0; E < 2 && !LaneRoad; ++E)
+			{
+				FVector EndLoc, EndOut;
+				Candidate->GetEndWorld(E, EndLoc, EndOut);
+				if (FVector::Dist(EndLoc, Location) < RMRoadUtils::JoinTolerance)
+				{
+					LaneRoad = Candidate;
+				}
+			}
+		}
+	}
+	const int32 Lanes = LaneRoad ? FMath::Clamp<int32>(LaneRoad->GetMarkings().Lanes, 1, 3) : 1;
+	if (Lanes <= 1)
+	{
+		return GetPointsAcross(200.f);
+	}
+
+	TArray<FVector> Points;
+	const FVector Across = FVector::CrossProduct(FVector::UpVector, FVector(Outward.X, Outward.Y, 0.f)).GetSafeNormal();
+	const float Inset = LaneRoad->mEdgeLineInset;
+	const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
+	for (int32 I = 0; I < Lanes; ++I)
+	{
+		const float Offset = -Width * 0.5f + Inset + Inner * (I + 0.5f) / Lanes;
+		Points.Add(Location + Across * Offset);
+	}
+	return Points;
+}
+
 bool RMRoadUtils::GetFoundationPiece(const FHitResult& Hit, FTransform& OutTransform, FBox& OutLocalBox)
 {
 	AActor* Actor = Hit.GetActor();

@@ -16,6 +16,8 @@
 #include "Patching/NativeHookManager.h"
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
+#include "Engine/OverlapResult.h"
+#include "Buildables/RMBuildableIntersection.h"
 
 namespace
 {
@@ -201,6 +203,38 @@ namespace
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * True if an existing vehicle path (for path holograms) or railway track (for track holograms)
+	 * is within 4 m: then the game's own snapping to it takes priority over road snap points.
+	 */
+	bool HasVanillaSnapNear(AFGHologram* Hologram, const FVector& Location)
+	{
+		UWorld* World = Hologram ? Hologram->GetWorld() : nullptr;
+		if (!World)
+		{
+			return false;
+		}
+		const bool bRail = Hologram->IsA<AFGRailroadTrackHologram>();
+		TArray<FOverlapResult> Overlaps;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMVanillaSnapNear), false, Hologram);
+		World->OverlapMultiByObjectType(Overlaps, Location, FQuat::Identity,
+			FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects), FCollisionShape::MakeSphere(400.f), Params);
+		for (const FOverlapResult& O : Overlaps)
+		{
+			const AActor* A = O.GetActor();
+			if (!A || A->IsA<AFGHologram>())
+			{
+				continue;
+			}
+			const FString Name = A->GetClass()->GetName();
+			if (bRail ? Name.Contains(TEXT("RailroadTrack")) : Name.Contains(TEXT("VehiclePath")))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Rise per horizontal distance of a road end, in its outward direction (0 for intersection mouths). */
@@ -411,17 +445,29 @@ namespace
 
 		if (Kind == ESnapKind::PathStart)
 		{
-			// Points near a road end or intersection mouth snap to the closest of the points every
-			// 2 m across that end, level with the road top. Joined ends count too: a path usually
-			// starts where two roads (or a road and an intersection) meet.
+			// Only the piece you aim at: a road gives its own ends' points, an intersection its own.
+			// The game's own snapping comes first (aiming at or near an existing path / track).
+			AActor* Aimed = Hit.GetActor();
+			const bool bAimRoad = Cast<ARMBuildableRoad>(Aimed) != nullptr;
+			const bool bAimIntersection = Cast<ARMBuildableIntersection>(Aimed) != nullptr;
+			if ((!bAimRoad && !bAimIntersection) || HasVanillaSnapNear(Hologram, Hit.Location))
+			{
+				ReleasePathSnap(Hologram);
+				return false;
+			}
 			TArray<FRMRoadEndRef> Ends;
-			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 6, nullptr, Ends, true);
+			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 16, nullptr, Ends, true);
 			FVector Best = FVector::ZeroVector;
 			const FRMRoadEndRef* BestEnd = nullptr;
 			float BestDist = 600.f;
 			for (const FRMRoadEndRef& End : Ends)
 			{
-				for (const FVector& P : End.GetPointsAcross(200.f))
+				const AActor* Owner = End.Road ? static_cast<const AActor*>(End.Road) : static_cast<const AActor*>(End.Intersection);
+				if (Owner != Aimed)
+				{
+					continue;
+				}
+				for (const FVector& P : End.GetSnapPoints(Hologram->GetWorld()))
 				{
 					const float D = FVector::Dist(P, Hit.Location);
 					if (D < BestDist)
