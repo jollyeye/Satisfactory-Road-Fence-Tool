@@ -37,6 +37,8 @@ exit /b 0
 
 :failed
 echo FAILED >> "%LOG%"
-echo FAILED - tell Claude, it can read D:\SFMods\update-log.txt
+echo.
+echo ***** FAILED: the game still has the OLD version of Road Maker. *****
+echo Tell Claude, it can read D:\SFMods\update-log.txt
 pause
 exit /b 1

@@ -11,6 +11,7 @@
 
 DEFINE_LOG_CATEGORY(LogRoadMaker);
 
+#if !WITH_EDITOR
 namespace
 {
 	/** True if this hologram may be placed on foundations (its mValidHitClasses covers them). */
@@ -33,6 +34,29 @@ namespace
 	}
 }
 
+/**
+ * AFGHologram::IsValidHitActor is protected. A class derived from AFGHologram may name it as
+ * &FRMHologramAccess::IsValidHitActor (same function, same pointer type), so the hook is set up here.
+ * Never instantiated.
+ */
+struct FRMHologramAccess : public AFGHologram
+{
+	static void InstallValidHitHook()
+	{
+		// Treat roads and intersections like foundations for every hologram that accepts foundations.
+		// The function is virtual, so SML needs an object to resolve the implementation from.
+		SUBSCRIBE_METHOD_VIRTUAL(FRMHologramAccess::IsValidHitActor, GetMutableDefault<AFGHologram>(),
+			[](auto& Scope, const AFGHologram* Hologram, AActor* HitActor)
+			{
+				if (Cast<ARMBuildableProcedural>(HitActor) && AcceptsFoundations(Hologram))
+				{
+					Scope.Override(true);
+				}
+			});
+	}
+};
+#endif
+
 void FRoadMakerModule::StartupModule()
 {
 #if !WITH_EDITOR
@@ -52,16 +76,7 @@ void FRoadMakerModule::StartupModule()
 	});
 
 	// Buildings ignore anything not in their valid-hit list, and our roads are not in anyone's list.
-	// Treat roads and intersections like foundations for every hologram that accepts foundations.
-	// IsValidHitActor is virtual, so the hook needs an object to resolve the implementation from.
-	SUBSCRIBE_METHOD_VIRTUAL(AFGHologram::IsValidHitActor, GetMutableDefault<AFGHologram>(),
-		[](auto& Scope, const AFGHologram* Hologram, AActor* HitActor)
-		{
-			if (Cast<ARMBuildableProcedural>(HitActor) && AcceptsFoundations(Hologram))
-			{
-				Scope.Override(true);
-			}
-		});
+	FRMHologramAccess::InstallValidHitHook();
 #endif
 }
 
