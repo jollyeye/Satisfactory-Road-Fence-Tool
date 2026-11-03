@@ -105,7 +105,9 @@ void ARMRoadHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());
 	}
-	if (Stats.MaxGradeDegrees > Road->mMaxGradeDegrees)
+	// Smooth mode allows steeper middles (its S-curve is steeper there than an even slope).
+	const float MaxGrade = IsSmoothMode() ? FMath::Max(Road->mMaxGradeDegrees, 45.f) : Road->mMaxGradeDegrees;
+	if (Stats.MaxGradeDegrees > MaxGrade)
 	{
 		AddConstructDisqualifier(URMCD_TooSteep::StaticClass());
 	}

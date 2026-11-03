@@ -75,6 +75,13 @@ protected:
 
 	bool IsStraightMode() const;
 
+	/**
+	 * "Smooth" build mode: the height eases in and out instead of rising at one even slope, so the
+	 * road leaves and arrives with the slope of whatever it snaps to (level for flat roads and
+	 * foundations, the road's own slope for sloped roads). No kinks at joints seen from the side.
+	 */
+	bool IsSmoothMode() const;
+
 	/** Samples the current local points. */
 	void GetPreviewFrames(TArray<FRMFrame>& OutFrames, float Step) const;
 
@@ -88,6 +95,10 @@ protected:
 	/** Build mode asset (a UFGHologramBuildModeDescriptor Blueprint) for straight placement. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeStraight;
+
+	/** Build mode asset for smooth height transitions (roads only). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeSmooth;
 
 	/** Current points, actor-local. Replicated so the server builds what the client sees. */
 	UPROPERTY(Replicated, CustomSerialization)

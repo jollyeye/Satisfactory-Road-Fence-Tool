@@ -208,8 +208,14 @@ bm = make_bp("Holograms", "BM_Straight", BuildModeDescriptor)
 setp(cdo(bm), text("Straight"), "m_display_name", "mDisplayName")
 finish(bm)
 
+bm_smooth = make_bp("Holograms", "BM_Smooth", BuildModeDescriptor)
+setp(cdo(bm_smooth), text("Smooth"), "m_display_name", "mDisplayName")
+setp(cdo(bm_smooth), text("Height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
+finish(bm_smooth)
+
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
 setp(cdo(holo_road), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
+setp(cdo(holo_road), bm_smooth.generated_class(), "m_build_mode_smooth", "mBuildModeSmooth")
 finish(holo_road)
 
 holo_fence = make_bp("Holograms", "Holo_Fence", RMFenceHologram)

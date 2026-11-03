@@ -175,6 +175,41 @@ namespace
 		}
 	}
 
+	/** Rise per horizontal distance of a road end, in its outward direction (0 for intersection mouths). */
+	float RoadSlope(const FRMRoadEndRef& End)
+	{
+		const float Flat = FVector(End.Outward.X, End.Outward.Y, 0.f).Size();
+		return Flat > KINDA_SMALL_NUMBER ? End.Outward.Z / Flat : 0.f;
+	}
+
+	/** Protected rail hologram members: its spline points and the update that rebuilds the preview. */
+	struct FRMRailAccess : public AFGRailroadTrackHologram
+	{
+		/**
+		 * Gives the spline point at the start (or end) the road's slope: the horizontal direction the
+		 * game chose stays, only the height part of the tangents changes. Then the preview, spline and
+		 * clearance are rebuilt from the edited points (the built track uses the same points).
+		 */
+		static void ApplySlope(AFGRailroadTrackHologram* Rail, bool bAtStart, float Slope)
+		{
+			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
+			if (Self->mSplineData.Num() < 2)
+			{
+				return;
+			}
+			FSplinePointData& P = bAtStart ? Self->mSplineData[0] : Self->mSplineData.Last();
+			auto Tilt = [Slope](FVector& T)
+			{
+				const float Flat = FVector(T.X, T.Y, 0.f).Size();
+				T.Z = Flat * Slope;
+			};
+			Tilt(P.ArriveTangent);
+			Tilt(P.LeaveTangent);
+			Self->UpdateSplineComponent();
+			Self->UpdateClearanceData();
+		}
+	};
+
 	/**
 	 * Rail track on a road-end snap point. The track's start direction (and its end direction once
 	 * custom end rotation is on) is the scroll value used as a world heading, rounded to the rotation
@@ -219,6 +254,23 @@ namespace
 		}
 		Hologram->SetScrollRotateValue(FMath::RoundToInt(Dir.Rotation().Yaw));
 		Scope(Hologram, Placed);
+
+		// The road's slope at this end, along the direction the track travels: the game only turns
+		// the track by heading, so the height part is added to its spline point afterwards. At the
+		// start it is also kept in mHitTangent, which the game copies when the start is clicked.
+		const float Slope = RoadSlope(End) * (FVector::DotProduct(Dir, Axis) >= 0.f ? 1.f : -1.f);
+		if (AFGRailroadTrackHologram* Rail = Cast<AFGRailroadTrackHologram>(Hologram))
+		{
+			FRMRailAccess::ApplySlope(Rail, bStart, Slope);
+			if (bStart)
+			{
+				if (FVector* HitTangent = VectorField(Hologram, TEXT("mHitTangent")))
+				{
+					const FVector Flat = FVector(HitTangent->X, HitTangent->Y, 0.f);
+					*HitTangent = (Flat + FVector(0.f, 0.f, Flat.Size() * Slope)).GetSafeNormal() * FMath::Max(HitTangent->Size(), 1.f);
+				}
+			}
+		}
 	}
 
 	/** Travel direction at the end of the path hologram's own (unprojected) spline. */
@@ -394,11 +446,14 @@ namespace
 					Dir = -Dir;
 				}
 				Scope(Hologram, Placed);
+				// Follow the road's slope too (the direction above is only the heading).
+				const float Slope = RoadSlope(*BestEnd) * (FVector::DotProduct(Dir, Axis) >= 0.f ? 1.f : -1.f);
+				const FVector Dir3 = (Dir + FVector(0.f, 0.f, Slope)).GetSafeNormal();
 				if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
 				{
-					*Exit = Dir;
+					*Exit = Dir3;
 				}
-				State.StartDir = Dir;
+				State.StartDir = Dir3;
 				PointStartArrow(Hologram, Dir);
 			}
 			else

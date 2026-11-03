@@ -36,11 +36,36 @@ void ARMSplineHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf
 	{
 		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeStraight.Get()));
 	}
+	if (mBuildModeSmooth)
+	{
+		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeSmooth.Get()));
+	}
 }
 
 bool ARMSplineHologram::IsStraightMode() const
 {
 	return mBuildModeStraight && IsCurrentBuildMode(mBuildModeStraight);
+}
+
+bool ARMSplineHologram::IsSmoothMode() const
+{
+	return mBuildModeSmooth && IsCurrentBuildMode(mBuildModeSmooth);
+}
+
+namespace
+{
+	/** Rise per horizontal distance of a direction. */
+	float SlopeOf(const FVector& Dir)
+	{
+		const float Flat = FVector(Dir.X, Dir.Y, 0.f).Size();
+		return Flat > KINDA_SMALL_NUMBER ? Dir.Z / Flat : 0.f;
+	}
+
+	/** Sets the height part of a tangent from a slope, keeping its horizontal part. */
+	void SetTangentSlope(FVector& Tangent, float Slope)
+	{
+		Tangent.Z = FVector(Tangent.X, Tangent.Y, 0.f).Size() * Slope;
+	}
 }
 
 bool ARMSplineHologram::IsValidHitResult(const FHitResult& hitResult) const
@@ -137,6 +162,14 @@ void ARMSplineHologram::UpdateCurve()
 			const FVector ArcEnd = FVector(World[1].Tangent.X, World[1].Tangent.Y, 0.f).GetSafeNormal();
 			RMGeometry::MakeFixedEnds(mStart, mStartDir, mEnd, ArcEnd.RotateAngleAxis(Yaw, FVector::UpVector), World);
 		}
+	}
+
+	if (IsSmoothMode() && World.Num() >= 2)
+	{
+		// Leave and arrive with the slope of what the ends snap to; free ends are level. With level
+		// ends the height follows an S-curve (eases out of the lower road, into the upper one).
+		SetTangentSlope(World[0].Tangent, mStartSnapped ? SlopeOf(mStartDir) : 0.f);
+		SetTangentSlope(World.Last().Tangent, mEndSnapped ? SlopeOf(mEndDir) : 0.f);
 	}
 
 	SetWorldPoints(World);
