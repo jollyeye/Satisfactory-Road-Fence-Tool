@@ -15,6 +15,7 @@
 #include "Hologram/FGVehiclePathSegmentHologram.h"
 #include "Patching/NativeHookManager.h"
 #include "Components/SplineComponent.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -177,6 +178,30 @@ namespace
 
 	/** Height (cm) path/rail snap points sit above the asphalt. */
 	constexpr float PathSnapLift = 10.f;
+
+	/** How far (cm) snap points move onto the road at a free end that drops off. */
+	constexpr float PathEndInset = 500.f;
+
+	/** True if there is something to drive on just beyond a road end (within 1.5 m below its top). */
+	bool HasFloorBeyond(UWorld* World, const FVector& EndPoint, const FVector& Outward)
+	{
+		if (!World)
+		{
+			return false;
+		}
+		const FVector Flat = FVector(Outward.X, Outward.Y, 0.f).GetSafeNormal();
+		for (const float Ahead : { 150.f, 400.f })
+		{
+			const FVector From = EndPoint + Flat * Ahead + FVector(0.f, 0.f, 100.f);
+			const FVector To = From - FVector(0.f, 0.f, 250.f);
+			FHitResult Hit;
+			if (!World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 
 	/** Rise per horizontal distance of a road end, in its outward direction (0 for intersection mouths). */
 	float RoadSlope(const FRMRoadEndRef& End)
@@ -353,61 +378,6 @@ namespace
 		}
 	}
 
-	/**
-	 * Diagnostics (temporary): what the vehicle path hologram holds and what the game's own path
-	 * check says, a couple of times per second, for snapped and free placement alike.
-	 */
-	void LogPathDiag(AFGHologram* Hologram, const TCHAR* Where)
-	{
-		static double LastLog = 0.0;
-		const double Now = FPlatformTime::Seconds();
-		if (!Cast<AFGVehiclePathSegmentHologram>(Hologram) || Now - LastLog < 0.5)
-		{
-			return;
-		}
-		LastLog = Now;
-		auto Vec = [Hologram](const TCHAR* Name) -> FString
-		{
-			FStructProperty* Prop = FindFProperty<FStructProperty>(Hologram->GetClass(), Name);
-			if (!Prop || Prop->Struct != TBaseStructure<FVector>::Get())
-			{
-				return TEXT("?");
-			}
-			const FVector V = *Prop->ContainerPtrToValuePtr<FVector>(Hologram);
-			return FString::Printf(TEXT("(%.0f,%.0f,%.0f|yaw %.1f pitch %.1f)"), V.X, V.Y, V.Z, V.Rotation().Yaw, V.Rotation().Pitch);
-		};
-		auto Export = [Hologram](const TCHAR* Name) -> FString
-		{
-			FProperty* Prop = FindFProperty<FProperty>(Hologram->GetClass(), Name);
-			if (!Prop)
-			{
-				return TEXT("?");
-			}
-			FString Out;
-			Prop->ExportTextItem_Direct(Out, Prop->ContainerPtrToValuePtr<void>(Hologram), nullptr, nullptr, PPF_None);
-			return Out.Left(600);
-		};
-		FString Splines;
-		TInlineComponentArray<USplineComponent*> Comps(Hologram);
-		for (USplineComponent* S : Comps)
-		{
-			const int32 N = S->GetNumberOfSplinePoints();
-			if (N >= 2)
-			{
-				const FRotator A = S->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).Rotation();
-				const FRotator B = S->GetDirectionAtSplinePoint(N - 1, ESplineCoordinateSpace::World).Rotation();
-				const FVector P0 = S->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
-				const FVector P1 = S->GetLocationAtSplinePoint(N - 1, ESplineCoordinateSpace::World);
-				Splines += FString::Printf(TEXT(" %s[%d] start(%.0f,%.0f,%.0f yaw %.1f pitch %.1f) end(%.0f,%.0f,%.0f yaw %.1f pitch %.1f);"),
-					*S->GetName(), N, P0.X, P0.Y, P0.Z, A.Yaw, A.Pitch, P1.X, P1.Y, P1.Z, B.Yaw, B.Pitch);
-			}
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("PathDiag[%s]: step=%s exit=%s entry=%s startLoc=%s endLoc=%s custom=%s shapeInvalid=%s |%s | validation=%s"),
-			Where, *Export(TEXT("mBuildStep")), *Vec(TEXT("mStartPointExitDirection")), *Vec(TEXT("mEndPointEntryDirection")),
-			*Vec(TEXT("mStartLocation")), *Vec(TEXT("mEndLocation")), *Export(TEXT("mUseCustomEndRotation")),
-			*Export(TEXT("mIsPathSegmentShapeInvalid")), *Splines, *Export(TEXT("mCurrentPathValidationInfo")));
-	}
-
 	/** Turns the path's start arrow to the direction we set (it is only a visual). */
 	void PointStartArrow(AFGHologram* Hologram, const FVector& Dir)
 	{
@@ -465,7 +435,6 @@ namespace
 			if (!BestEnd)
 			{
 				ReleasePathSnap(Hologram);
-				LogPathDiag(Hologram, TEXT("free"));
 				return false;
 			}
 
@@ -482,16 +451,17 @@ namespace
 				SurfaceUp = FVector::UpVector;
 			}
 
-			// At a free end the points move 1 m onto the road: the game lays vehicle paths onto the
-			// surface below them, and right on the edge of a raised end part of it would drop to the
-			// ground ("vehicles collide with the terrain"). Joined ends stay on the joint so paths
-			// on neighbouring roads still meet.
+			// The game's path check needs floor under the whole vehicle at both ends of a path (seen
+			// in the log: "NoFloor" at the last point). At a free end that drops off (raised road,
+			// nothing beyond it) the points move 5 m onto the road, so a vehicle standing there is on
+			// the asphalt. Ends joined to another piece, or with floor right beyond them (ground,
+			// foundations), keep their points on the end so paths still meet there.
 			const bool bFreeEnd = BestEnd->Road
 				? !RMRoadUtils::IsEndOccupied(Hologram->GetWorld(), BestEnd->Road, BestEnd->EndIndex)
 				: !RMRoadUtils::IsMouthOccupied(Hologram->GetWorld(), BestEnd->Intersection, BestEnd->Location);
-			if (bFreeEnd)
+			if (bFreeEnd && !HasFloorBeyond(Hologram->GetWorld(), Best, Along3))
 			{
-				Best -= Along3 * 100.f;
+				Best -= Along3 * PathEndInset;
 			}
 
 			// A little above the asphalt (along the road's up): the game's "vehicles collide with
@@ -548,14 +518,12 @@ namespace
 				}
 				State.StartDir = Dir3;
 				PointStartArrow(Hologram, Dir);
-				LogPathDiag(Hologram, bFreeEnd ? TEXT("snap-start-free-end") : TEXT("snap-start-joined"));
 			}
 			else
 			{
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
 				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
 				PlacePathEnd(Scope, Hologram, Placed, Start, Axis, State);
-				LogPathDiag(Hologram, bFreeEnd ? TEXT("snap-end-free-end") : TEXT("snap-end-joined"));
 			}
 			return true;
 		}
