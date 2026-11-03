@@ -234,8 +234,8 @@ namespace
 	 * the scroll value used as a world heading (seen in the log: scroll 0 = +X), so the scroll is set
 	 * to the road's heading; the result is checked and turned 180 once if it arrives backwards.
 	 */
-	template <typename TScope>
-	void PlacePathEnd(TScope& Scope, AFGVehiclePathSegmentHologram* Hologram, const FHitResult& Placed, const FVector& Start, const FVector& Axis, FPathState& State)
+	template <typename TScope, typename THologram>
+	void PlacePathEnd(TScope& Scope, THologram* Hologram, const FHitResult& Placed, const FVector& Start, const FVector& Axis, FPathState& State)
 	{
 		if (!State.bSetCustomEnd)
 		{
@@ -372,7 +372,7 @@ namespace
 			{
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
 				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
-				PlacePathEnd(Scope, Path, Placed, Start, Axis, State);
+				PlacePathEnd(Scope, Hologram, Placed, Start, Axis, State);
 				LogPathEnd(Hologram, Axis);
 			}
 			return true;
