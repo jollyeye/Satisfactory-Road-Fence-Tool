@@ -80,6 +80,93 @@ def noise_blend(mat, dark, light, scale, y):
     return lerp
 
 
+# --- The game's own foundation textures --------------------------------------------------------
+# Atlases laid out for the foundation meshes (seen in the real textures, 1024x1024):
+#   asphalt BC/N: top-left square = asphalt top, bottom-left square = concrete side
+#   concrete BC/N: bottom-left square = plain concrete (top-left has panel seams)
+# Each square is one 8 m foundation face. It does not tile, so it is mirrored every 8 m (no seams),
+# in world space, so roads, intersections and neighbouring pieces line up.
+FOUNDATION_TEX = "/Game/FactoryGame/Buildable/Building/Foundation/"
+ASPHALT_BC = FOUNDATION_TEX + "AsphaltSet/Textures/TX_AsphaltFoundation_BC"
+ASPHALT_N = FOUNDATION_TEX + "AsphaltSet/Textures/TX_AsphaltFoundation_N"
+CONCRETE_BC = FOUNDATION_TEX + "ConcreteSet/Textures/TX_Concrete_BC"
+CONCRETE_N = FOUNDATION_TEX + "ConcreteSet/Textures/TX_Concrete_N"
+RECT_TOP_LEFT = (3.0 / 1024, 3.0 / 1024, 494.0 / 1024, 494.0 / 1024)        # min u, min v, size u, size v
+RECT_BOTTOM_LEFT = (3.0 / 1024, 530.0 / 1024, 494.0 / 1024, 490.0 / 1024)
+PERIOD_CM = 800.0
+
+
+def load_tex(path):
+    try:
+        t = unreal.load_asset(path)
+    except Exception as e:
+        t = None
+        log("  ! cannot load %s: %s" % (path, e))
+    if t:
+        log("  texture %s compression=%s srgb=%s" % (path, t.get_editor_property("compression_settings"), t.get_editor_property("srgb")))
+    return t
+
+
+def sampler_for(tex):
+    cs = tex.get_editor_property("compression_settings")
+    if cs == unreal.TextureCompressionSettings.TC_NORMALMAP:
+        return unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL
+    if not tex.get_editor_property("srgb"):
+        return unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
+    return unreal.MaterialSamplerType.SAMPLERTYPE_COLOR
+
+
+def custom(mat, code, out_type, inputs, x, y, desc):
+    c = node(mat, unreal.MaterialExpressionCustom, x, y)
+    c.set_editor_property("code", code)
+    c.set_editor_property("output_type", out_type)
+    c.set_editor_property("description", desc)
+    lst = []
+    for name in inputs:
+        ci = unreal.CustomInput()
+        ci.set_editor_property("input_name", name)
+        lst.append(ci)
+    c.set_editor_property("inputs", lst)
+    return c
+
+
+# Planar world projection: top faces use XY; with Triplanar the dominant axis of the vertex normal
+# picks XY, YZ or XZ (for the sides of the slab and the barriers).
+ATLAS_UV_HLSL = r"""
+float3 a = abs(N);
+float2 p = WP.xy;
+if (Tri > 0.5 && a.z < 0.7) { p = a.x > a.y ? WP.yz : WP.xz; }
+float2 h = frac(p / (2.0 * Period));
+float2 m = 1.0 - abs(h * 2.0 - 1.0);
+return Rect.xy + m * Rect.zw;
+"""
+# Mirrored cells flip the normal map's X/Y; rebuilt as a world-space normal for flat tops.
+WORLD_NORMAL_HLSL = r"""
+float2 h = frac(WP.xy / (2.0 * Period));
+float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
+float3 n = float3(T.x * s.x, -T.y * s.y, T.z);
+return normalize(lerp(n, float3(0, 0, 1), Flat));
+"""
+
+
+def atlas_sample(mat, tex, rect, triplanar, x, y):
+    """Texture sample of one atlas square, mirrored every 8 m in world space."""
+    wp = node(mat, unreal.MaterialExpressionWorldPosition, x - 600, y)
+    vn = node(mat, unreal.MaterialExpressionVertexNormalWS, x - 600, y + 100)
+    uv = custom(mat, ATLAS_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["WP", "N", "Rect", "Tri", "Period"], x - 350, y, "AtlasUV")
+    link(wp, "", uv, "WP")
+    link(vn, "", uv, "N")
+    rc = node(mat, unreal.MaterialExpressionConstant4Vector, x - 600, y + 200, constant=unreal.LinearColor(*rect))
+    link(rc, "", uv, "Rect")
+    link(const(mat, 1.0 if triplanar else 0.0, x - 600, y + 300), "", uv, "Tri")
+    link(const(mat, PERIOD_CM, x - 600, y + 380), "", uv, "Period")
+    ts = node(mat, unreal.MaterialExpressionTextureSample, x - 120, y)
+    ts.set_editor_property("texture", tex)
+    ts.set_editor_property("sampler_type", sampler_for(tex))
+    link(uv, "", ts, "UVs")
+    return ts
+
+
 def finish(mat):
     MEL.recompile_material(mat)
     eal.save_loaded_asset(mat, only_if_is_dirty=False)
@@ -121,7 +208,16 @@ return float2(saturate(mid), saturate(side));
 """
 
 asphalt = new_material("M_RoadAsphalt")
-base = noise_blend(asphalt, (0.025, 0.025, 0.027), (0.06, 0.06, 0.062), 0.08, 0)
+tex_bc = load_tex(ASPHALT_BC)
+tex_n = load_tex(ASPHALT_N)
+asphalt_normal = None
+if tex_bc:
+    base = atlas_sample(asphalt, tex_bc, RECT_TOP_LEFT, False, -700, -400)
+    if tex_n:
+        nrm = atlas_sample(asphalt, tex_n, RECT_TOP_LEFT, False, -700, 1200)
+        asphalt_normal = nrm
+else:
+    base = noise_blend(asphalt, (0.025, 0.025, 0.027), (0.06, 0.06, 0.062), 0.08, 0)
 
 uv1 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
 uv2 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
@@ -174,12 +270,27 @@ link(const(asphalt, 0.85, -500, 350), "", rough, "A")
 link(const(asphalt, 0.6, -500, 420), "", rough, "B")
 link(any_line, "", rough, "Alpha")
 MEL.connect_material_property(rough, "", MP.MP_ROUGHNESS)
+
+if asphalt_normal:
+    # World-space normal (the projection is world-aligned, not the mesh's tangents); flat on lines.
+    asphalt.set_editor_property("tangent_space_normal", False)
+    wp2 = node(asphalt, unreal.MaterialExpressionWorldPosition, -500, 1500)
+    wn = custom(asphalt, WORLD_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["T", "WP", "Period", "Flat"], -250, 1300, "WorldNormal")
+    link(asphalt_normal, "", wn, "T")
+    link(wp2, "", wn, "WP")
+    link(const(asphalt, PERIOD_CM, -500, 1600), "", wn, "Period")
+    link(any_line, "", wn, "Flat")
+    MEL.connect_material_property(wn, "", MP.MP_NORMAL)
 finish(asphalt)
 log("Asphalt with lane markings")
 
 # --- Concrete: light grey, slightly mottled --------------------------------------------------
 concrete = new_material("M_RoadConcrete")
-base = noise_blend(concrete, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
+tex_c = load_tex(CONCRETE_BC)
+if tex_c:
+    base = atlas_sample(concrete, tex_c, RECT_BOTTOM_LEFT, True, -700, 0)
+else:
+    base = noise_blend(concrete, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
 MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
 finish(concrete)
