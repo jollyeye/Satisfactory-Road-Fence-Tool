@@ -84,7 +84,7 @@ def noise_blend(mat, dark, light, scale, y):
 # Atlases laid out for the foundation meshes (seen in the real textures, 1024x1024):
 #   asphalt BC/N: top-left square = asphalt top, bottom-left square = concrete side
 #   concrete BC/N: bottom-left square = plain concrete (top-left has panel seams)
-# Each square is one 8 m foundation face. It does not tile, so it is mirrored every 8 m (no seams),
+# Each square covers 4 m on a foundation (checked in game). It does not tile, so it is mirrored every 4 m (no seams),
 # in world space, so roads, intersections and neighbouring pieces line up.
 FOUNDATION_TEX = "/Game/FactoryGame/Buildable/Building/Foundation/"
 ASPHALT_BC = FOUNDATION_TEX + "AsphaltSet/Textures/TX_AsphaltFoundation_BC"
@@ -93,7 +93,7 @@ CONCRETE_BC = FOUNDATION_TEX + "ConcreteSet/Textures/TX_Concrete_BC"
 CONCRETE_N = FOUNDATION_TEX + "ConcreteSet/Textures/TX_Concrete_N"
 RECT_TOP_LEFT = (3.0 / 1024, 3.0 / 1024, 494.0 / 1024, 494.0 / 1024)        # min u, min v, size u, size v
 RECT_BOTTOM_LEFT = (3.0 / 1024, 530.0 / 1024, 494.0 / 1024, 490.0 / 1024)
-PERIOD_CM = 800.0
+PERIOD_CM = 400.0  # one atlas square per 4 m (matched to foundations in game)
 
 
 def load_tex(path):
