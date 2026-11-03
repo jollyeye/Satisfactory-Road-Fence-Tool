@@ -814,22 +814,63 @@ void RMGeometry::GetIntersectionCurbs(const TArray<FVector>& Outline, const TArr
 	}
 }
 
-void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, FRMMesh& Out)
+namespace
+{
+	/** Height of a triangle mesh at an XY point (top-most hit), or Fallback when outside it. */
+	float SurfaceHeightAt(const FRMMesh& Surface, const FVector& P, float Fallback)
+	{
+		float Best = -BIG_NUMBER;
+		for (int32 T = 0; T + 2 < Surface.Triangles.Num(); T += 3)
+		{
+			const FVector& A = Surface.Vertices[Surface.Triangles[T]];
+			const FVector& B = Surface.Vertices[Surface.Triangles[T + 1]];
+			const FVector& C = Surface.Vertices[Surface.Triangles[T + 2]];
+			const float Den = (B.Y - C.Y) * (A.X - C.X) + (C.X - B.X) * (A.Y - C.Y);
+			if (FMath::Abs(Den) < 1e-3f)
+			{
+				continue;
+			}
+			const float L1 = ((B.Y - C.Y) * (P.X - C.X) + (C.X - B.X) * (P.Y - C.Y)) / Den;
+			const float L2 = ((C.Y - A.Y) * (P.X - C.X) + (A.X - C.X) * (P.Y - C.Y)) / Den;
+			const float L3 = 1.f - L1 - L2;
+			const float Tol = -1e-3f;
+			if (L1 >= Tol && L2 >= Tol && L3 >= Tol)
+			{
+				Best = FMath::Max(Best, L1 * A.Z + L2 * B.Z + L3 * C.Z);
+			}
+		}
+		return Best > -BIG_NUMBER ? Best : Fallback;
+	}
+}
+
+void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, const FRMMesh& Surface, FRMMesh& Out)
 {
 	Out.Reset();
 	const float E = Inset / 100.f;            // inset in metres, as on road tops
 	const float HalfStrip = 12.f;             // cm; the line itself is 15 cm wide, drawn by the material
-	const float Lift = 0.6f;                  // cm above the slab, against z-fighting
+	const float Lift = 1.5f;                  // cm above the slab, against z-fighting
+	const float MaxPiece = 50.f;              // short pieces so the strip follows the slab's facets
 	const FVector2D Layout(100.f, E);         // "road" so wide that only this one side line shows
 	const FVector2D Style(1.f, 1.f);          // 1 lane (no dividers), side lines on
 
-	for (const TArray<FVector>& Curb : Curbs)
+	for (const TArray<FVector>& Raw : Curbs)
 	{
-		const int32 N = Curb.Num();
-		if (N < 2)
+		if (Raw.Num() < 2)
 		{
 			continue;
 		}
+		// Subdivide long curb edges (straight corners can be several metres).
+		TArray<FVector> Curb;
+		Curb.Add(Raw[0]);
+		for (int32 I = 1; I < Raw.Num(); ++I)
+		{
+			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(FVector::Dist(Raw[I - 1], Raw[I]) / MaxPiece));
+			for (int32 K = 1; K <= Pieces; ++K)
+			{
+				Curb.Add(FMath::Lerp(Raw[I - 1], Raw[I], float(K) / Pieces));
+			}
+		}
+		const int32 N = Curb.Num();
 		const int32 Base = Out.Vertices.Num();
 		for (int32 I = 0; I < N; ++I)
 		{
@@ -843,11 +884,12 @@ void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inse
 			}
 			// Curbs run so the intersection centre is on their +Right side.
 			const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
-			const FVector Mid = Curb[I] + Right * Inset + FVector(0.f, 0.f, Lift);
+			const FVector Mid = Curb[I] + Right * Inset;
 			for (int32 Side = 0; Side < 2; ++Side)
 			{
 				const float Off = Side == 0 ? -HalfStrip : HalfStrip;
-				const FVector P = Mid + Right * Off;
+				FVector P = Mid + Right * Off;
+				P.Z = SurfaceHeightAt(Surface, P, Curb[I].Z) + Lift;
 				Out.AddVertex(P, FVector::UpVector, FVector2D(P.X, P.Y) / 400.f, Fwd);
 				Out.MarkUV1.Add(FVector2D(E + Off / 100.f, 0.f));
 				Out.MarkUV2.Add(Layout);

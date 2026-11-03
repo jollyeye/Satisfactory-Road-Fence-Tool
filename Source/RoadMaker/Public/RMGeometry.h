@@ -204,7 +204,8 @@ namespace RMGeometry
 	 * Side lines of an intersection: a thin strip just above the slab along every curb, Inset cm in
 	 * from it, so it continues the side lines of the roads. The strip carries the same marking UVs
 	 * as a road top (one side line, no lanes), so the asphalt material draws it in the secondary
-	 * colour and shows plain asphalt around the line.
+	 * colour and shows plain asphalt around the line. Heights are taken from Surface (the slab top),
+	 * so the line lies on the slab even where the roads joined are at different heights.
 	 */
-	ROADMAKER_API void BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, FRMMesh& Out);
+	ROADMAKER_API void BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, const FRMMesh& Surface, FRMMesh& Out);
 }

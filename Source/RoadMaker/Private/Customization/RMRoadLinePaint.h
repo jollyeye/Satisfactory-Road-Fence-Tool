@@ -53,6 +53,10 @@ class URMRoadLinesHint : public UUserWidget
 public:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual void NativeDestruct() override;
+
+	/** Shows the selected Road Lines on the hovered road/intersection (local only), like the customizer's material preview. */
+	void UpdatePreview(AActor* Target);
 
 protected:
 	UPROPERTY(Transient)
@@ -60,4 +64,6 @@ protected:
 
 	UPROPERTY(Transient)
 	UTextBlock* Text = nullptr;
+
+	TWeakObjectPtr<AActor> mPreviewTarget;
 };

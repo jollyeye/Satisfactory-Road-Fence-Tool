@@ -53,12 +53,12 @@ void ARMBuildableIntersection::RebuildMesh()
 	ApplyMaterial(0, mTopMaterial);
 	ApplyMaterial(1, mBodyMaterial);
 
-	if (mSideLines)
+	if (mPreviewSideLines.Get(mSideLines))
 	{
 		TArray<TArray<FVector>> Curbs;
 		RMGeometry::GetIntersectionCurbs(Outline, IsMouth, Curbs);
 		FRMMesh Lines;
-		RMGeometry::BuildCurbLines(Curbs, mEdgeLineInset, Lines);
+		RMGeometry::BuildCurbLines(Curbs, mEdgeLineInset, Top, Lines);
 		Lines.ApplyToSection(mMesh, 2, false);
 		ApplyMaterial(2, mTopMaterial);
 	}
@@ -72,6 +72,19 @@ void ARMBuildableIntersection::SetSideLines(bool bOn)
 		return;
 	}
 	mSideLines = bOn;
+	if (HasActorBegunPlay())
+	{
+		RebuildMesh();
+	}
+}
+
+void ARMBuildableIntersection::SetPreviewSideLines(TOptional<bool> Preview)
+{
+	if (Preview == mPreviewSideLines)
+	{
+		return;
+	}
+	mPreviewSideLines = Preview;
 	if (HasActorBegunPlay())
 	{
 		RebuildMesh();

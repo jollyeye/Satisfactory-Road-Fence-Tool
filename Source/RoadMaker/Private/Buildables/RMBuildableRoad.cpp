@@ -32,7 +32,7 @@ void ARMBuildableRoad::RebuildMesh()
 	}
 
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mMarkings, mEdgeLineInset, Top, Body);
+	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, Top, Body);
 	Top.ApplyToSection(mMesh, 0, true);
 	Body.ApplyToSection(mMesh, 1, true);
 	ApplyMaterial(0, mTopMaterial);
@@ -76,6 +76,21 @@ void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
 		return;
 	}
 	mMarkings = Clean;
+	if (HasActorBegunPlay())
+	{
+		RebuildMesh();
+	}
+}
+
+void ARMBuildableRoad::SetPreviewMarkings(const TOptional<FRMMarkings>& Preview)
+{
+	const bool bSame = Preview.IsSet() == mPreviewMarkings.IsSet()
+		&& (!Preview.IsSet() || Preview.GetValue() == mPreviewMarkings.GetValue());
+	if (bSame)
+	{
+		return;
+	}
+	mPreviewMarkings = Preview;
 	if (HasActorBegunPlay())
 	{
 		RebuildMesh();

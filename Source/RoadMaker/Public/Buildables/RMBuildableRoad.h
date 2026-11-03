@@ -31,6 +31,9 @@ public:
 	/** Lane markings; changing them rebuilds the mesh (and replicates). */
 	void SetMarkings(const FRMMarkings& InMarkings);
 	const FRMMarkings& GetMarkings() const { return mMarkings; }
+
+	/** Local-only look while the customizer hovers this road; unset = show the real markings. */
+	void SetPreviewMarkings(const TOptional<FRMMarkings>& Preview);
 	float GetRoadHeight() const { return mRoadHeight; }
 
 	/**
@@ -94,6 +97,8 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
 	FRMMarkings mMarkings;
+
+	TOptional<FRMMarkings> mPreviewMarkings;
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	USceneComponent* mStartAnchor;

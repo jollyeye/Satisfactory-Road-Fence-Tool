@@ -32,6 +32,9 @@ public:
 	void SetSideLines(bool bOn);
 	bool HasSideLines() const { return mSideLines; }
 
+	/** Local-only look while the customizer hovers this intersection; unset = show the real state. */
+	void SetPreviewSideLines(TOptional<bool> Preview);
+
 	/** Customizer: side lines use the secondary colour, like on roads. */
 	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
 	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
@@ -64,4 +67,6 @@ protected:
 	/** Off by default, so intersections from older saves look as before. */
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
 	bool mSideLines = false;
+
+	TOptional<bool> mPreviewSideLines;
 };

@@ -131,9 +131,11 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	Box->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	if (!bShow)
 	{
+		UpdatePreview(nullptr);
 		return;
 	}
 	AActor* Target = RMRoadLinePaint::TraceTarget(PC);
+	UpdatePreview(RMRoadLinePaint::CanApplyTo(Target) ? Target : nullptr);
 	if (RMRoadLinePaint::CanApplyTo(Target))
 	{
 		Text->SetText(Cast<ARMBuildableIntersection>(Target)
@@ -152,6 +154,44 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		// Same warning as before: the option only applies to roads.
 		Text->SetText(NSLOCTEXT("RoadMaker", "AimAtRoadLines", "Aim at a road"));
 		Box->SetBrushColor(FLinearColor(0.6f, 0.08f, 0.05f, 0.85f));
+	}
+}
+
+void URMRoadLinesHint::NativeDestruct()
+{
+	UpdatePreview(nullptr);
+	Super::NativeDestruct();
+}
+
+void URMRoadLinesHint::UpdatePreview(AActor* Target)
+{
+	AActor* Old = mPreviewTarget.Get();
+	if (Old && Old != Target)
+	{
+		if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Old))
+		{
+			Road->SetPreviewMarkings(TOptional<FRMMarkings>());
+		}
+		else if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(Old))
+		{
+			X->SetPreviewSideLines(TOptional<bool>());
+		}
+	}
+	mPreviewTarget = Target;
+	if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Target))
+	{
+		FRMMarkings M = Road->GetMarkings();
+		URMRoadLineDescriptor::ApplyTo(GActiveSides, M);
+		URMRoadLineDescriptor::ApplyTo(GActiveLanes, M);
+		M.Lanes = FMath::Clamp<uint8>(M.Lanes, 1, 3);
+		Road->SetPreviewMarkings(M);
+	}
+	else if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(Target))
+	{
+		if (GActiveSides)
+		{
+			X->SetPreviewSideLines(GActiveSides->GetDefaultObject<URMRoadLineDescriptor>()->mSideLines);
+		}
 	}
 }
 
