@@ -1,5 +1,6 @@
 #include "RoadMakerModule.h"
 #include "LanePaint/RMLanePaint.h"
+#include "Snapping/RMVanillaSnapping.h"
 #include "Buildables/RMBuildableProcedural.h"
 #include "Buildables/FGBuildableFoundation.h"
 #include "Equipment/FGBuildGun.h"
@@ -77,6 +78,9 @@ void FRoadMakerModule::StartupModule()
 
 	// Buildings ignore anything not in their valid-hit list, and our roads are not in anyone's list.
 	FRMHologramAccess::InstallValidHitHook();
+
+	// Poles, street lights, railways and vehicle paths snapping to roads.
+	RMVanillaSnapping::InstallHooks();
 #endif
 }
 

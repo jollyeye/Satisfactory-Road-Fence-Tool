@@ -263,11 +263,18 @@ void RMGeometry::MakeFixedEnds(const FVector& Start, const FVector& StartDir, co
 {
 	OutPoints.Reset();
 	const FVector Chord = End - Start;
-	const float Length = FMath::Max(Chord.Size(), 1.f);
+	const float Length = FMath::Max(FVector(Chord.X, Chord.Y, 0.f).Size(), 1.f);
 	const FVector S = FVector(StartDir.X, StartDir.Y, 0.f).GetSafeNormal();
 	const FVector E = FVector(EndDir.X, EndDir.Y, 0.f).GetSafeNormal();
-	OutPoints.Add(FRMSplinePoint(Start, S * Length + FVector(0.f, 0.f, Chord.Z)));
-	OutPoints.Add(FRMSplinePoint(End, E * Length + FVector(0.f, 0.f, Chord.Z)));
+
+	// Tangent length of a circular arc turning by Theta over this chord: chord / cos^2(Theta / 4).
+	// (Equals 4 R tan(Theta / 4).) A 90 degree turn between two fixed ends becomes a true quarter
+	// circle instead of a flattened curve. Capped so near-U-turns stay sane.
+	const float Theta = FMath::Acos(FMath::Clamp(FVector::DotProduct(S, E), -1.f, 1.f));
+	const float CosQuarter = FMath::Cos(FMath::Min(Theta, FMath::DegreesToRadians(170.f)) * 0.25f);
+	const float Magnitude = Length / FMath::Max(CosQuarter * CosQuarter, 0.25f);
+	OutPoints.Add(FRMSplinePoint(Start, S * Magnitude + FVector(0.f, 0.f, Chord.Z)));
+	OutPoints.Add(FRMSplinePoint(End, E * Magnitude + FVector(0.f, 0.f, Chord.Z)));
 }
 
 void RMGeometry::OffsetCurve(const TArray<FRMFrame>& Frames, float LateralOffset, float KeyEvery, TArray<FRMSplinePoint>& OutPoints)
