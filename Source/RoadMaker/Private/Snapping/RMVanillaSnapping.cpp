@@ -106,21 +106,22 @@ namespace
 	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location);
 
 	/**
-	 * Per path/track hologram while the snap key forces alignment. The game owns the direction, so
-	 * it is steered through the scroll rotation: each frame the spline's actual direction at the
-	 * snapped point is measured and the scroll value corrected (a frame later) until it matches.
+	 * Per path/track hologram while the snap key forces alignment. The game owns the direction and
+	 * only lets it be turned through the scroll rotation, so the hologram is placed, its spline
+	 * direction measured, and the scroll value solved for the wanted direction (how many degrees one
+	 * scroll unit turns it is measured once with a probe placement), then placed again.
 	 */
 	struct FPathState
 	{
 		bool bStartStep = true;
-		bool bFlipped = false;        // scrolling while the snap key is held turns it 180
-		bool bHasLastSet = false;
-		int32 LastSetScroll = 0;      // last value we wrote; anything else means the player scrolled
-		float LastError = 0.f;
-		float Sign = 1.f;             // learned: does more scroll turn it left or right
+		bool bFlipped = false;        // scroll while the snap key is held turns it 180
+		float DegreesPerUnit = 0.f;   // measured; 0 = not yet
 		bool bSetCustomEnd = false;
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FPathState> GPathStates;
+
+	/** Set while we place the hologram ourselves, so our own hook lets the game's code run. */
+	bool GInSteerPlacement = false;
 
 	bool IsStartStep(AFGHologram* Hologram)
 	{
@@ -184,8 +185,15 @@ namespace
 		}
 	}
 
-	/** After the game placed the point: measure and correct the direction for the next frame. */
-	void SteerAlongRoad(AFGHologram* Hologram, const FHitResult& Hit, const FVector& Point, const FRMRoadEndRef& End)
+	/** Places the hologram again with the game's own code (our hook stands aside). */
+	void PlaceAgain(AFGHologram* Hologram, const FHitResult& Hit)
+	{
+		TGuardValue<bool> Guard(GInSteerPlacement, true);
+		Hologram->SetHologramLocationAndRotation(Hit);
+	}
+
+	/** The hologram was just placed at a road end with the snap key held: turn it along the road. */
+	void SteerAlongRoad(AFGHologram* Hologram, const FHitResult& PlacedHit, const FHitResult& Hit, const FRMRoadEndRef& End)
 	{
 		const FVector Axis = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
 		if (Axis.IsNearlyZero())
@@ -196,18 +204,12 @@ namespace
 		FPathState& State = GPathStates.FindOrAdd(Hologram);
 		if (State.bStartStep != bStart)
 		{
+			const float Known = State.DegreesPerUnit;
 			State = FPathState();
 			State.bStartStep = bStart;
+			State.DegreesPerUnit = bStart ? Known : 0.f; // the end may react differently
 		}
 
-		// Player scrolled while holding the key: flip 180 instead.
-		const int32 Scroll = Hologram->GetScrollRotateValue();
-		if (State.bHasLastSet && Scroll != State.LastSetScroll)
-		{
-			State.bFlipped = !State.bFlipped;
-		}
-
-		// Base direction: start = along the road the way you look; end = the way the path travels.
 		FVector Want;
 		if (bStart)
 		{
@@ -220,35 +222,51 @@ namespace
 			{
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
 				State.bSetCustomEnd = true;
+				PlaceAgain(Hologram, PlacedHit);
 			}
-			const FVector Start = Hologram->GetActorLocation();
-			Want = FVector::DotProduct(Point - Start, Axis) >= 0.f ? Axis : -Axis;
+			Want = FVector::DotProduct(PlacedHit.Location - Hologram->GetActorLocation(), Axis) >= 0.f ? Axis : -Axis;
 		}
 		if (State.bFlipped)
 		{
 			Want = -Want;
 		}
+		const float WantYaw = Want.Rotation().Yaw;
 
 		FVector Have;
 		if (!GetSplineDirection(Hologram, bStart, Have))
 		{
 			return;
 		}
-		const float Error = FMath::FindDeltaAngleDegrees(Have.Rotation().Yaw, Want.Rotation().Yaw);
-		// Learn which way the scroll turns: if the last correction made things worse, reverse.
-		if (State.bHasLastSet && FMath::Abs(State.LastError) > 2.f && FMath::Abs(Error) > FMath::Abs(State.LastError) + 1.f)
+		const int32 Scroll0 = Hologram->GetScrollRotateValue();
+		const float Error = FMath::FindDeltaAngleDegrees(Have.Rotation().Yaw, WantYaw);
+		if (FMath::Abs(Error) < 0.5f)
 		{
-			State.Sign = -State.Sign;
+			return;
 		}
-		State.LastError = Error;
-		int32 NewScroll = Scroll;
-		if (FMath::Abs(Error) > 0.5f)
+
+		if (FMath::Abs(State.DegreesPerUnit) < 0.01f)
 		{
-			NewScroll = Scroll + FMath::RoundToInt(Error * State.Sign);
-			Hologram->SetScrollRotateValue(NewScroll);
+			// Probe: how far does the direction turn for 45 scroll units?
+			const int32 Probe = 45;
+			Hologram->SetScrollRotateValue(Scroll0 + Probe);
+			PlaceAgain(Hologram, PlacedHit);
+			FVector Probed;
+			const bool bOk = GetSplineDirection(Hologram, bStart, Probed);
+			const float Turned = bOk ? FMath::FindDeltaAngleDegrees(Have.Rotation().Yaw, Probed.Rotation().Yaw) : 0.f;
+			if (FMath::Abs(Turned) < 1.f)
+			{
+				// Scroll does not turn it here: put everything back as the game had it.
+				Hologram->SetScrollRotateValue(Scroll0);
+				PlaceAgain(Hologram, PlacedHit);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Path align: scroll does not turn %s (start=%d)"), *Hologram->GetName(), bStart);
+				return;
+			}
+			State.DegreesPerUnit = Turned / Probe;
+			UE_LOG(LogRoadMaker, Display, TEXT("Path align: %s turns %.3f deg per scroll unit (start=%d)"), *Hologram->GetName(), State.DegreesPerUnit, bStart);
 		}
-		State.LastSetScroll = Hologram->GetScrollRotateValue();
-		State.bHasLastSet = true;
+
+		Hologram->SetScrollRotateValue(Scroll0 + FMath::RoundToInt(Error / State.DegreesPerUnit));
+		PlaceAgain(Hologram, PlacedHit);
 	}
 
 	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location)
@@ -266,7 +284,7 @@ namespace
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		const ESnapKind Kind = KindOf(Hologram);
-		if (Kind == ESnapKind::None || !Hologram->GetWorld())
+		if (Kind == ESnapKind::None || !Hologram->GetWorld() || GInSteerPlacement)
 		{
 			return false;
 		}
@@ -299,11 +317,12 @@ namespace
 				ReleasePathSnap(Hologram);
 				return false;
 			}
-			Scope(Hologram, MoveHit(Hit, Best));
+			const FHitResult Placed = MoveHit(Hit, Best);
+			Scope(Hologram, Placed);
 			// Holding the snap key: line it up with the road (square to the end edge).
 			if (FRMSnapAccess::IsSnapHeld(Hologram))
 			{
-				SteerAlongRoad(Hologram, Hit, Best, *BestEnd);
+				SteerAlongRoad(Hologram, Placed, Hit, *BestEnd);
 			}
 			else
 			{
@@ -356,6 +375,24 @@ void RMVanillaSnapping::InstallHooks()
 	RM_HOOK_SET_LOCATION(AFGVehiclePathSegmentHologram);
 
 #undef RM_HOOK_SET_LOCATION
+
+	// Scrolling while a path/track is held aligned at a road end flips it 180 instead of turning.
+#define RM_HOOK_SCROLL(Class) \
+	SUBSCRIBE_METHOD_VIRTUAL(Class::ScrollRotate, GetMutableDefault<Class>(), \
+		[](auto& Scope, Class* Hologram, int32 Delta, int32 Step) \
+		{ \
+			FPathState* State = GPathStates.Find(Hologram); \
+			if (State && Delta != 0 && FRMSnapAccess::IsSnapHeld(Hologram)) \
+			{ \
+				State->bFlipped = !State->bFlipped; \
+				Scope.Cancel(); \
+			} \
+		})
+
+	RM_HOOK_SCROLL(AFGRailroadTrackHologram);
+	RM_HOOK_SCROLL(AFGVehiclePathSegmentHologram);
+
+#undef RM_HOOK_SCROLL
 }
 
 #else
