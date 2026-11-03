@@ -155,7 +155,8 @@ if (Tri > 0.5 && a.z < 0.7)
 }
 float2 h = frac(p / (2.0 * Period));
 float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
-float3 n = normalize(U * (T.x * s.x * Str) - V * (T.y * s.y * Str) + W * max(T.z, 0.2));
+// Signs checked in game (the first guess lit bumps from the wrong side).
+float3 n = normalize(-U * (T.x * s.x * Str) + V * (T.y * s.y * Str) + W * max(T.z, 0.2));
 return normalize(lerp(n, normalize(N), Flat));
 """
 NORMAL_STRENGTH = 2.5
