@@ -341,16 +341,24 @@ def icon(name):
     except Exception:
         return None
 
-# Flat brush icon for the tab: look for the game's own brush / paint icon.
+# Flat brush icon for the tab: the game's own UI brush / paint icon. Only UI textures count
+# (names with Icon / UI / TXUI), never world textures like "TX_Toothbrush".
 brush_tex = None
+candidates = []
 for a in game_assets():
-    n = str(a.asset_name).lower()
-    cls = str(a.asset_class_path.asset_name)
-    if cls == "Texture2D" and "brush" in n:
-        brush_tex = a.get_asset()
-        log("  tab icon: " + str(a.asset_name))
-        break
-if not brush_tex:
+    n = str(a.asset_name)
+    low = n.lower()
+    if str(a.asset_class_path.asset_name) != "Texture2D":
+        continue
+    if ("brush" in low or "paint" in low or "customiz" in low) and "tooth" not in low and (
+            "icon" in low or "ui" in low.split("_") or low.startswith("txui") or "/interface/" in str(a.package_name).lower()):
+        candidates.append(a)
+candidates.sort(key=lambda a: (0 if "brush" in str(a.asset_name).lower() else 1, len(str(a.asset_name))))
+log("  tab icon candidates: " + ", ".join(str(c.asset_name) for c in candidates[:15]))
+if candidates:
+    brush_tex = candidates[0].get_asset()
+    log("  tab icon: " + str(candidates[0].asset_name))
+else:
     brush_tex = icon("Lanes2Dashed")
     log("  tab icon: no brush texture found, using a road icon")
 
@@ -362,7 +370,6 @@ setp(cdo(cat), 50.0, "m_menu_priority", "mMenuPriority")
 if brush_tex:
     brush = unreal.SlateBrush()
     brush.set_editor_property("resource_object", brush_tex)
-    brush.set_editor_property("image_size", unreal.Vector2D(64, 64))
     setp(cdo(cat), brush, "m_category_icon", "mCategoryIcon")
 finish(cat)
 
