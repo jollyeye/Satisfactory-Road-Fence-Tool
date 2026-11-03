@@ -175,6 +175,9 @@ namespace
 		}
 	}
 
+	/** Height (cm) path/rail snap points sit above the asphalt. */
+	constexpr float PathSnapLift = 10.f;
+
 	/** Rise per horizontal distance of a road end, in its outward direction (0 for intersection mouths). */
 	float RoadSlope(const FRMRoadEndRef& End)
 	{
@@ -434,6 +437,11 @@ namespace
 			{
 				Best -= Along3 * 100.f;
 			}
+
+			// A little above the asphalt (along the road's up): the game's "vehicles collide with
+			// the terrain" check tests against the ground, which near the high end of a road on a
+			// hill can sit right at the road surface.
+			Best += SurfaceUp * PathSnapLift;
 
 			// Keep the road's tilt in the hit normal: rail tracks take their slope from it.
 			FHitResult Placed = MoveHit(Hit, Best);
