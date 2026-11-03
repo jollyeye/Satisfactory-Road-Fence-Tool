@@ -26,15 +26,6 @@ void FRoadMakerModule::StartupModule()
 		UE_LOG(LogRoadMaker, Display, TEXT("Lane Paint: R pressed, toggling menu"));
 		RMLanePaint::ToggleMenu(Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr);
 	});
-
-	// The customizer applies colours through this non-virtual function; refresh road markings after it.
-	SUBSCRIBE_METHOD_AFTER(AFGBuildable::ApplyCustomizationData_Native, [](AFGBuildable* Buildable, const FFactoryCustomizationData& Data)
-	{
-		if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Buildable))
-		{
-			Road->ApplyMarkingColors(Data);
-		}
-	});
 #endif
 }
 

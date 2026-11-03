@@ -21,6 +21,8 @@ public:
 
 	/** Customizer: primary colour = dashed middle lines, secondary colour = side lines. */
 	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
+	/** The customizer applies colours through this one (virtual via IFGColorInterface). */
+	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
 
 	/** Custom primitive data slots read by M_RoadAsphalt (after the 20 floats the game itself uses). */
 	static constexpr int32 PrimaryColorIndex = 24;

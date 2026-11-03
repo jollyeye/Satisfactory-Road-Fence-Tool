@@ -101,3 +101,9 @@ void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 	mMesh->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
 	mMesh->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }
+
+void ARMBuildableRoad::ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData)
+{
+	Super::ApplyCustomizationData_Native(customizationData);
+	ApplyMarkingColors(customizationData);
+}
