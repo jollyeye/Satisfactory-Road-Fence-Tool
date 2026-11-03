@@ -279,8 +279,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
             setp(c, m, k)
     if parent == RMBuildableRoad:
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
-        if light_swatch:
-            setp(c, light_swatch, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
+        setp(c, None, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
     finish(b)
 
     d = make_bp("Buildables", "Desc_" + name, BuildingDescriptor)
@@ -342,14 +341,15 @@ RMWorldModule = native_class("RMGameWorldModule") or GameWorldModule
 gwm = make_bp("", "RootGameWorld_RoadMaker", RMWorldModule)
 # Existing asset made from the plain GameWorldModule: move it onto the Road Maker module class.
 try:
-    if gwm.get_editor_property("parent_class") != RMWorldModule:
-        unreal.BlueprintEditorLibrary.reparent_blueprint(gwm, RMWorldModule)
-        log("  reparented RootGameWorld_RoadMaker to " + RMWorldModule.get_name())
+    unreal.BlueprintEditorLibrary.reparent_blueprint(gwm, RMWorldModule)
+    log("  parent class: " + RMWorldModule.get_name())
 except Exception as e:
     log("  ! reparent failed: %s" % e)
 g = cdo(gwm)
 setp(g, True, "root_module", "b_root_module", "bRootModule")
 setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
+if light_swatch:
+    setp(g, light_swatch, "m_default_road_swatch", "mDefaultRoadSwatch")
 finish(gwm)
 
 log("DONE")

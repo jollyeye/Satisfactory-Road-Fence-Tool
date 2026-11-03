@@ -52,7 +52,7 @@ class ROADMAKER_API URMCD_AimAtRoad : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_AimAtRoad() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtRoad", "Aim at a road. Right-click to choose lanes"); }
+	URMCD_AimAtRoad() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtRoad", "Aim at a road. Press R to choose lanes"); }
 };
 
 UCLASS()

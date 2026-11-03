@@ -1,6 +1,7 @@
 #include "LanePaint/RMLanePaint.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Holograms/RMDisqualifiers.h"
+#include "RoadMakerModule.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -44,6 +45,7 @@ void RMLanePaint::ToggleMenu(APlayerController* PC)
 	}
 	if (!PC || !PC->IsLocalController())
 	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("Lane Paint: no local player controller for the menu"));
 		return;
 	}
 	URMLanePaintMenu* Menu = CreateWidget<URMLanePaintMenu>(PC, URMLanePaintMenu::StaticClass());
@@ -115,6 +117,9 @@ void ARMLanePaintHologram::CheckValidPlacement()
 
 bool ARMLanePaintHologram::DoMultiStepPlacement(bool isInputFromARelease)
 {
+	UE_LOG(LogRoadMaker, Display, TEXT("Lane Paint: click, target %s, authority %d, lanes %d, side lines %d"),
+		mTargetRoad.IsValid() ? *mTargetRoad->GetName() : TEXT("none"), HasAuthority() ? 1 : 0,
+		RMLanePaint::Settings().Lanes, RMLanePaint::Settings().bEdgeLines ? 1 : 0);
 	if (ARMBuildableRoad* Road = mTargetRoad.Get())
 	{
 		// The road replicates the change to other players. Only the host can change it, so this
@@ -281,7 +286,7 @@ void URMLanePaintMenu::BuildTree()
 
 	UVerticalBoxSlot* Title = Content->AddChildToVerticalBox(Label(Tree, TEXT("Lane Paint"), 20));
 	Title->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-	UVerticalBoxSlot* Hint = Content->AddChildToVerticalBox(Label(Tree, TEXT("Pick a layout, then left-click roads to paint them"), 11));
+	UVerticalBoxSlot* Hint = Content->AddChildToVerticalBox(Label(Tree, TEXT("Pick a layout, then left-click roads to paint them. R or Done closes this."), 11));
 	Hint->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	UHorizontalBox* Choices = Tree->ConstructWidget<UHorizontalBox>();
@@ -358,7 +363,7 @@ void URMLanePaintMenu::OnClose()
 FReply URMLanePaintMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey Key = InKeyEvent.GetKey();
-	if (Key == EKeys::Escape || Key == EKeys::Enter || Key == EKeys::Q)
+	if (Key == EKeys::Escape || Key == EKeys::Enter || Key == EKeys::Q || Key == EKeys::R)
 	{
 		RMLanePaint::CloseMenu();
 		return FReply::Handled();

@@ -83,9 +83,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mBodyMaterial = nullptr;
 
-protected:
 	/** Pushes the resolved customizer colours to the mesh for the marking material. */
 	void ApplyMarkingColors(const FFactoryCustomizationData& Data);
+
+protected:
 
 	UFUNCTION()
 	void OnRep_Markings() { RebuildMesh(); }

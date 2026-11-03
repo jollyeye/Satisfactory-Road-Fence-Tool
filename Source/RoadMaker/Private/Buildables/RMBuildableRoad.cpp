@@ -3,10 +3,15 @@
 #include "Math/RotationMatrix.h"
 #include "Net/UnrealNetwork.h"
 #include "FGFactoryColoringTypes.h"
+#include "Buildables/RMSwatchGroupRoads.h"
 
 ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Paintable with the customizer, with its own default-swatch group ("Roads").
+	mAllowColoring = true;
+	mSwatchGroup = URMSwatchGroup_Roads::StaticClass();
+
 	mStartAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("StartAnchor"));
 	mStartAnchor->SetupAttachment(mMesh);
 	mStartAnchor->ComponentTags.Add(TEXT("RMRoadAnchor"));

@@ -5,6 +5,10 @@
 #include "FGRecipeManager.h"
 #include "Unlocks/FGUnlockRecipe.h"
 #include "Engine/World.h"
+#include "FGGameState.h"
+#include "FGSwatchGroup.h"
+#include "Buildables/RMSwatchGroupRoads.h"
+#include "UObject/UnrealType.h"
 
 void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
@@ -12,6 +16,7 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{
 		GrantRecipesOfPurchasedSchematics();
+		EnsureRoadSwatchGroup();
 	}
 }
 
@@ -41,8 +46,39 @@ void URMGameWorldModule::GrantRecipesOfPurchasedSchematics()
 			{
 				TArray<TSubclassOf<UFGRecipe>> ToAdd = RecipeUnlock->GetRecipesToUnlock();
 				Recipes->AddAvailableRecipes(ToAdd);
-				UE_LOG(LogRoadMaker, Log, TEXT("Ensured %d recipe(s) of bought schematic %s"), ToAdd.Num(), *Schematic->GetName());
+				UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d recipe(s) of bought schematic %s"), ToAdd.Num(), *Schematic->GetName());
 			}
 		}
 	}
+}
+
+void URMGameWorldModule::EnsureRoadSwatchGroup()
+{
+	UWorld* World = GetWorld();
+	AFGGameState* GameState = World ? World->GetGameState<AFGGameState>() : nullptr;
+	if (!GameState || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+	// mSwatchGroupDatum is private; it is a saved, replicated UPROPERTY, so go through reflection.
+	FArrayProperty* Prop = FindFProperty<FArrayProperty>(AFGGameState::StaticClass(), TEXT("mSwatchGroupDatum"));
+	if (!Prop)
+	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("mSwatchGroupDatum not found; Roads swatch group not added"));
+		return;
+	}
+	TArray<FSwatchGroupData>* Datum = Prop->ContainerPtrToValuePtr<TArray<FSwatchGroupData>>(GameState);
+	for (const FSwatchGroupData& Entry : *Datum)
+	{
+		if (Entry.SwatchGroup == URMSwatchGroup_Roads::StaticClass())
+		{
+			return; // already there (from the save, or the player's choice)
+		}
+	}
+	FSwatchGroupData Roads;
+	Roads.SwatchGroup = URMSwatchGroup_Roads::StaticClass();
+	Roads.Swatch = mDefaultRoadSwatch;
+	Datum->Add(Roads);
+	GameState->ForceNetUpdate();
+	UE_LOG(LogRoadMaker, Display, TEXT("Added Roads swatch group (default %s)"), mDefaultRoadSwatch ? *mDefaultRoadSwatch->GetName() : TEXT("none"));
 }
