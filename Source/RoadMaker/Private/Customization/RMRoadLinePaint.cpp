@@ -218,13 +218,7 @@ namespace
 		}
 	}
 
-	/** Game UI chrome (frames, rings) lives under /Interface/; item icons do not. */
-	bool IsChrome(const UObject* Asset)
-	{
-		return Asset && Asset->GetPathName().Contains(TEXT("/Interface/"));
-	}
-
-	/** All widgets of a tile, including those inside nested user widgets (the icon often is). */
+	/** All widgets of a tile, including those inside nested user widgets (the icon is). */
 	void CollectWidgets(UUserWidget* Root, TArray<UWidget*>& Out, int32 Depth = 0)
 	{
 		if (!Root || !Root->WidgetTree || Depth > 4)
@@ -243,64 +237,106 @@ namespace
 		}
 	}
 
-	void PutIconInTile(UUserWidget* Tile, UTexture2D* Icon)
+	/**
+	 * Tiles we changed, so the game's own look can be put back when the menu reuses a tile for a
+	 * colour, material or pattern (tiles are pooled across tabs).
+	 */
+	struct FPatchedTile
+	{
+		TWeakObjectPtr<UTextBlock> Label;
+		TWeakObjectPtr<UImage> Icon;
+		FSlateBrush OriginalBrush;
+		TArray<TPair<TWeakObjectPtr<UTextBlock>, ESlateVisibility>> HiddenTexts;
+	};
+	TArray<FPatchedTile> GPatched;
+
+	bool IsRoadLinesLabel(const UTextBlock* Label)
+	{
+		return Label && GIconsByName.Contains(Label->GetText().ToString().TrimStartAndEnd());
+	}
+
+	/** Puts the game's look back on tiles that no longer show a Road Lines option. */
+	void RestoreReusedTiles()
+	{
+		for (int32 I = GPatched.Num() - 1; I >= 0; --I)
+		{
+			FPatchedTile& T = GPatched[I];
+			if (T.Label.IsValid() && IsRoadLinesLabel(T.Label.Get()))
+			{
+				continue;
+			}
+			if (UImage* Image = T.Icon.Get())
+			{
+				Image->SetBrush(T.OriginalBrush);
+			}
+			for (const auto& Hidden : T.HiddenTexts)
+			{
+				if (UTextBlock* Text = Hidden.Key.Get())
+				{
+					Text->SetVisibility(Hidden.Value);
+				}
+			}
+			GPatched.RemoveAtSwap(I);
+		}
+	}
+
+	FPatchedTile* FindPatched(const UTextBlock* Label)
+	{
+		return GPatched.FindByPredicate([Label](const FPatchedTile& T) { return T.Label.Get() == Label; });
+	}
+
+	void PutIconInTile(UTextBlock* Label, UUserWidget* Tile, UTexture2D* Icon)
 	{
 		TArray<UWidget*> Widgets;
 		CollectWidgets(Tile, Widgets);
+
+		FPatchedTile* Patched = FindPatched(Label);
 		for (UWidget* W : Widgets)
 		{
-			// The tile keeps an "Edit" label from the colour tab; Road Lines options are not editable.
-			if (UTextBlock* Text = Cast<UTextBlock>(W))
-			{
-				if (Text->GetText().ToString().Equals(TEXT("Edit"), ESearchCase::IgnoreCase))
-				{
-					Text->SetVisibility(ESlateVisibility::Collapsed);
-				}
-				continue;
-			}
 			UImage* Image = Cast<UImage>(W);
-			if (!Image)
+			UUserWidget* Owner = W->GetTypedOuter<UUserWidget>();
+			// The option picture is the image "mIcon" of the customizer icon widget. It is normally a
+			// material that paints swatch colours; we draw the Road Lines picture in its place.
+			if (!Image || Image->GetName() != TEXT("mIcon") || !Owner || !Owner->GetClass()->GetName().Contains(TEXT("CustomiserIcon")))
 			{
 				continue;
 			}
-			UObject* Resource = Image->GetBrush().GetResourceObject();
-			if (!GLoggedTileLayout)
+			if (!Patched)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: tile %s widget %s (%s) resource %s"),
-					*Tile->GetClass()->GetName(), *Image->GetName(), *Image->GetTypedOuter<UUserWidget>()->GetClass()->GetName(),
-					Resource ? *Resource->GetPathName() : TEXT("none"));
-			}
-			if (UTexture2D* Tex = Cast<UTexture2D>(Resource))
-			{
-				if (!IsChrome(Tex) && Tex != Icon)
+				FPatchedTile New;
+				New.Label = Label;
+				New.Icon = Image;
+				New.OriginalBrush = Image->GetBrush();
+				// The "Edit" label left over from the colour tab: Road Lines options are not editable.
+				for (UWidget* Other : Widgets)
 				{
-					Image->SetBrushResourceObject(Icon);
+					UTextBlock* Text = Cast<UTextBlock>(Other);
+					if (Text && Text->GetText().ToString().Equals(TEXT("Edit"), ESearchCase::IgnoreCase))
+					{
+						New.HiddenTexts.Emplace(Text, Text->GetVisibility());
+						Text->SetVisibility(ESlateVisibility::Collapsed);
+					}
 				}
-				continue;
-			}
-			UMaterialInstance* Instance = Cast<UMaterialInstance>(Resource);
-			if (!Instance)
-			{
-				continue;
-			}
-			// Icon drawn through a material (e.g. masked to a circle): swap its item texture parameter.
-			for (const FTextureParameterValue& Param : Instance->TextureParameterValues)
-			{
-				if (!Param.ParameterValue || IsChrome(Param.ParameterValue) || Param.ParameterValue == Icon)
+				Patched = &GPatched.Add_GetRef(New);
+				if (!GLoggedTileLayout)
 				{
-					continue;
+					GLoggedTileLayout = true;
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: drawing into %s.mIcon (was %s)"),
+						*Owner->GetClass()->GetName(),
+						New.OriginalBrush.GetResourceObject() ? *New.OriginalBrush.GetResourceObject()->GetName() : TEXT("none"));
 				}
-				UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Instance);
-				if (!MID)
-				{
-					MID = UMaterialInstanceDynamic::Create(Instance, Image);
-					Image->SetBrushFromMaterial(MID);
-				}
-				MID->SetTextureParameterValue(Param.ParameterInfo.Name, Icon);
-				break;
 			}
+			if (Image->GetBrush().GetResourceObject() != Icon)
+			{
+				FSlateBrush Brush = Patched->OriginalBrush;
+				Brush.SetResourceObject(Icon);
+				Brush.DrawAs = ESlateBrushDrawType::Image;
+				Brush.TintColor = FSlateColor(FLinearColor::White);
+				Image->SetBrush(Brush);
+				Image->SetColorAndOpacity(FLinearColor::White);
+			}
+			return;
 		}
-		GLoggedTileLayout = true;
 	}
 
 	TArray<FString> GetKeysOf(const TMap<FString, TWeakObjectPtr<UTexture2D>>& Map)
@@ -330,6 +366,7 @@ namespace
 			return true;
 		}
 		BuildIconTable();
+		RestoreReusedTiles();
 		static bool bLoggedLabels = false;
 		TArray<FString> SeenLabels;
 		int32 Matches = 0;
@@ -349,7 +386,7 @@ namespace
 			if (Icon && Icon->IsValid())
 			{
 				++Matches;
-				PutIconInTile(Label->GetTypedOuter<UUserWidget>(), Icon->Get());
+				PutIconInTile(Label, Label->GetTypedOuter<UUserWidget>(), Icon->Get());
 			}
 		}
 		// Once per session, when the Road Lines tab is open but no tile was matched, log what the
