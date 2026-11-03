@@ -15,7 +15,13 @@ public:
 
 	virtual void RebuildMesh() override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	float GetRoadWidth() const { return mWidthInFoundations * RM::FoundationSize; }
+
+	/** Lane markings; changing them rebuilds the mesh (and replicates). */
+	void SetMarkings(const FRMMarkings& InMarkings);
+	const FRMMarkings& GetMarkings() const { return mMarkings; }
 	float GetRoadHeight() const { return mRoadHeight; }
 
 	/**
@@ -58,6 +64,10 @@ public:
 
 	// --- Look -------------------------------------------------------------------------------
 
+	/** Side lines sit this far in from the road edge (cm), leaving room for fences. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mEdgeLineInset = 90.f;
+
 	/** Section 0. Pick the game's asphalt material here. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mTopMaterial = nullptr;
@@ -67,6 +77,12 @@ public:
 	UMaterialInterface* mBodyMaterial = nullptr;
 
 protected:
+	UFUNCTION()
+	void OnRep_Markings() { RebuildMesh(); }
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
+	FRMMarkings mMarkings;
+
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	USceneComponent* mStartAnchor;
 

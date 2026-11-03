@@ -1,6 +1,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "ProceduralMeshComponent.h"
 #include "Math/RotationMatrix.h"
+#include "Net/UnrealNetwork.h"
 
 ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -25,7 +26,7 @@ void ARMBuildableRoad::RebuildMesh()
 	}
 
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, Top, Body);
+	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mMarkings, mEdgeLineInset, Top, Body);
 	Top.ApplyToSection(mMesh, 0, true);
 	Body.ApplyToSection(mMesh, 1, true);
 	ApplyMaterial(0, mTopMaterial);
@@ -51,4 +52,25 @@ void ARMBuildableRoad::GetEndWorld(int32 EndIndex, FVector& OutLocation, FVector
 	const FRMFrame& F = EndIndex == 0 ? Frames[0] : Frames.Last();
 	OutLocation = F.Pos;
 	OutOutward = EndIndex == 0 ? -F.Fwd : F.Fwd;
+}
+
+void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ARMBuildableRoad, mMarkings);
+}
+
+void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
+{
+	FRMMarkings Clean = InMarkings;
+	Clean.Lanes = FMath::Clamp<uint8>(Clean.Lanes, 1, 3);
+	if (Clean == mMarkings)
+	{
+		return;
+	}
+	mMarkings = Clean;
+	if (HasActorBegunPlay())
+	{
+		RebuildMesh();
+	}
 }

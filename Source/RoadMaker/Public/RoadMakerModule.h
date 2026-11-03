@@ -8,6 +8,6 @@ DECLARE_LOG_CATEGORY_EXTERN(LogRoadMaker, Log, All);
 class FRoadMakerModule : public IModuleInterface
 {
 public:
-	virtual void StartupModule() override {}
+	virtual void StartupModule() override;
 	virtual void ShutdownModule() override {}
 };

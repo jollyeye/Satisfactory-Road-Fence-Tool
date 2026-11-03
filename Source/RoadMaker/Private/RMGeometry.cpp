@@ -17,6 +17,9 @@ void FRMMesh::Reset()
 	Normals.Reset();
 	UVs.Reset();
 	Tangents.Reset();
+	UV1.Reset();
+	UV2.Reset();
+	UV3.Reset();
 }
 
 int32 FRMMesh::AddVertex(const FVector& P, const FVector& N, const FVector2D& UV, const FVector& TangentX)
@@ -92,7 +95,18 @@ void FRMMesh::ApplyToSection(UProceduralMeshComponent* Comp, int32 Section, bool
 		return;
 	}
 	static const TArray<FLinearColor> NoColors;
-	Comp->CreateMeshSection_LinearColor(Section, Vertices, Triangles, Normals, UVs, NoColors, Tangents, bCollision);
+	auto Channel = [this](const TArray<FVector2D>& In)
+	{
+		if (In.Num() == Vertices.Num())
+		{
+			return In;
+		}
+		TArray<FVector2D> Zeros;
+		Zeros.Init(FVector2D::ZeroVector, Vertices.Num());
+		return Zeros;
+	};
+	Comp->CreateMeshSection_LinearColor(Section, Vertices, Triangles, Normals, UVs, Channel(UV1), Channel(UV2), Channel(UV3),
+		NoColors, Tangents, bCollision);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -382,13 +396,33 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // Roads and fences
 // ---------------------------------------------------------------------------------------------
 
-void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body)
+void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
 
-	// Asphalt top surface, U runs across the road so lane markings in a texture line up.
+	// Asphalt top surface: one strip, two vertices per frame (left edge, right edge).
+	const int32 TopBase = Top.Vertices.Num();
 	ExtrudeProfile(Frames, { FVector2D(-H, 0.f), FVector2D(H, 0.f) }, false, Centroid, UVScale, Top);
+
+	// Marking data in metres for the asphalt material.
+	Top.UV1.SetNumZeroed(Top.Vertices.Num());
+	Top.UV2.SetNumZeroed(Top.Vertices.Num());
+	Top.UV3.SetNumZeroed(Top.Vertices.Num());
+	const FVector2D Layout(Width / 100.f, EdgeLineInset / 100.f);
+	const FVector2D Style(Markings.Lanes, Markings.bEdgeLines ? 1.f : 0.f);
+	for (int32 I = 0; I < Frames.Num(); ++I)
+	{
+		const float Along = Frames[I].Dist / 100.f;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const int32 V = TopBase + I * 2 + Side;
+			Top.UV1[V] = FVector2D(Side == 0 ? 0.f : Width / 100.f, Along);
+			Top.UV2[V] = Layout;
+			Top.UV3[V] = Style;
+		}
+	}
 
 	// Concrete: right side, bottom, left side.
 	ExtrudeProfile(Frames, { FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height), FVector2D(-H, 0.f) },

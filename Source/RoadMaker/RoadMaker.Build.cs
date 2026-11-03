@@ -17,6 +17,9 @@ public class RoadMaker : ModuleRules
 			"PhysicsCore",
 			"NetCore",
 			"ProceduralMeshComponent",
+			"UMG",
+			"Slate",
+			"SlateCore",
 			// Satisfactory + mod loader
 			"FactoryGame",
 			"SML",

@@ -47,6 +47,23 @@ struct ROADMAKER_API FRMRoadEnd
 	float Width = RM::FoundationSize;
 };
 
+/** Lane markings of a road piece. Saved with the road; drawn by the asphalt material. */
+USTRUCT(BlueprintType)
+struct ROADMAKER_API FRMMarkings
+{
+	GENERATED_BODY()
+
+	/** 1, 2 or 3 lanes (0 = no markings at all, used for intersections). */
+	UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite, Category = "Road")
+	uint8 Lanes = 2;
+
+	/** Solid lines along both sides. */
+	UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite, Category = "Road")
+	bool bEdgeLines = true;
+
+	bool operator==(const FRMMarkings& O) const { return Lanes == O.Lanes && bEdgeLines == O.bEdgeLines; }
+};
+
 /** A sampled point along a spline with a level (no banking) orthonormal frame. */
 struct ROADMAKER_API FRMFrame
 {
@@ -68,6 +85,15 @@ struct ROADMAKER_API FRMMesh
 	TArray<FVector> Normals;
 	TArray<FVector2D> UVs;
 	TArray<FProcMeshTangent> Tangents;
+
+	/**
+	 * Extra UV channels, only filled for road tops (lane markings): UV1 = metres across / along,
+	 * UV2 = (road width m, side line inset m), UV3 = (lanes, side lines 0/1). Missing channels are
+	 * sent as zeros, which the asphalt material reads as "no markings".
+	 */
+	TArray<FVector2D> UV1;
+	TArray<FVector2D> UV2;
+	TArray<FVector2D> UV3;
 
 	void Reset();
 	bool IsEmpty() const { return Triangles.Num() == 0; }
@@ -129,8 +155,12 @@ namespace RMGeometry
 	/** Fan-triangulated cap of a convex profile at a frame. Normal is +Fwd or -Fwd. */
 	ROADMAKER_API void AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& Profile, bool bFacingForward, float UVScale, FRMMesh& Out);
 
-	/** Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre. */
-	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body);
+	/**
+	 * Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre.
+	 * Markings and EdgeLineInset (cm from the road edge, leaves room for fences) go into the top's UV1-3.
+	 */
+	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
+		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body);
 
 	// Fence builders all use one convention: the road is on the +Right side of the frames.
 	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.

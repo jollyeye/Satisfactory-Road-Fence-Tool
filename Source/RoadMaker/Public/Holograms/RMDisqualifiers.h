@@ -48,6 +48,14 @@ public:
 };
 
 UCLASS()
+class ROADMAKER_API URMCD_AimAtRoad : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_AimAtRoad() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtRoad", "Aim at a road. Right-click to choose lanes"); }
+};
+
+UCLASS()
 class ROADMAKER_API URMCD_BadIntersection : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()

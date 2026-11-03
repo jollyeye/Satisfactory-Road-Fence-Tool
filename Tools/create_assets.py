@@ -17,6 +17,8 @@ ROOT = "/RoadMaker"
 asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
 eal = unreal.EditorAssetLibrary
 registry = unreal.AssetRegistryHelpers.get_asset_registry()
+# Without the editor window the registry may not have scanned the mod folder yet.
+registry.scan_paths_synchronous(["/RoadMaker", "/Game/FactoryGame"], True)
 
 # ---------------------------------------------------------------------------------------------
 # Finding game assets and classes
@@ -72,8 +74,11 @@ def native_class(*names):
 # ---------------------------------------------------------------------------------------------
 def make_bp(folder, name, parent):
     path = "%s/%s/%s" % (ROOT, folder, name) if folder else "%s/%s" % (ROOT, name)
-    if eal.does_asset_exist(path):
-        bp = eal.load_asset(path)
+    try:
+        bp = unreal.load_asset("%s.%s" % (path, name))
+    except Exception:
+        bp = None
+    if bp:
         log("Updating " + path)
     else:
         factory = unreal.BlueprintFactory()
@@ -214,6 +219,9 @@ finish(holo_fence)
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
 
+holo_paint = make_bp("Holograms", "Holo_LanePaint", native_class("RMLanePaintHologram"))
+finish(holo_paint)
+
 log("== Sub-category ==")
 subcat = None
 if VehiclePathSubCat:
@@ -239,6 +247,9 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free ends. Cost is per connected road.",
      {}, [(Desc_Cement, 6)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("LanePaint", native_class("RMBuildableLanePaint"), holo_paint, "Lane Paint",
+     "Left-click a road to paint its lane markings. Right-click to choose 1, 2 or 3 lanes and side lines.",
+     {}, [(Desc_IronPlate, 1)], road_icons, {}),
 ]
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
@@ -287,33 +298,42 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     finish(r)
     recipes.append(r.generated_class())
 
-log("== Schematic ==")
-sch = make_bp("Unlocks", "Schematic_RoadMaker", Schematic)
-sc = cdo(sch)
-setp(sc, text("Road Maker"), "m_display_name", "mDisplayName")
-setp(sc, 1, "m_tech_tier", "mTechTier")
-st = getattr(unreal, "SchematicType", None)
-if st is not None:
-    for n in ("EST_MILESTONE", "MILESTONE"):
-        if hasattr(st, n):
-            setp(sc, getattr(st, n), "m_type", "mType")
-            break
-if Desc_IronPlate:
-    setp(sc, [item_amount(Desc_IronPlate, 1)], "m_cost", "mCost")
-if UnlockRecipe:
-    try:
-        unlock = unreal.new_object(UnlockRecipe, outer=sc)
-        setp(unlock, recipes, "m_recipes", "mRecipes")
-        setp(sc, [unlock], "m_unlocks", "mUnlocks")
-    except Exception as e:
-        log("  ! could not create recipe unlock: %s" % e)
-finish(sch)
+def make_schematic(name, display, recipe_list):
+    log("== " + name + " ==")
+    bp = make_bp("Unlocks", name, Schematic)
+    c = cdo(bp)
+    setp(c, text(display), "m_display_name", "mDisplayName")
+    setp(c, 1, "m_tech_tier", "mTechTier")
+    st = getattr(unreal, "SchematicType", None)
+    if st is not None:
+        for n in ("EST_MILESTONE", "MILESTONE"):
+            if hasattr(st, n):
+                setp(c, getattr(st, n), "m_type", "mType")
+                break
+    if Desc_IronPlate:
+        setp(c, [item_amount(Desc_IronPlate, 1)], "m_cost", "mCost")
+    if UnlockRecipe:
+        try:
+            unlock = unreal.new_object(UnlockRecipe, outer=c)
+            setp(unlock, recipe_list, "m_recipes", "mRecipes")
+            setp(c, [unlock], "m_unlocks", "mUnlocks")
+        except Exception as e:
+            log("  ! could not create recipe unlock: %s" % e)
+    finish(bp)
+    return bp
+
+
+# Lane Paint has its own milestone so it also unlocks in saves that already bought Road Maker.
+paint_recipes = [r for r in recipes if "LanePaint" in r.get_name()]
+road_recipes = [r for r in recipes if "LanePaint" not in r.get_name()]
+sch = make_schematic("Schematic_RoadMaker", "Road Maker", road_recipes)
+sch_paint = make_schematic("Schematic_RoadMakerLanePaint", "Road Maker: Lane Paint", paint_recipes)
 
 log("== Game world module ==")
 gwm = make_bp("", "RootGameWorld_RoadMaker", GameWorldModule)
 g = cdo(gwm)
 setp(g, True, "root_module", "b_root_module", "bRootModule")
-setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
+setp(g, [sch.generated_class(), sch_paint.generated_class()], "m_schematics", "mSchematics")
 finish(gwm)
 
 log("DONE")

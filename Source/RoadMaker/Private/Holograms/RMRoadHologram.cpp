@@ -35,6 +35,11 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 		return TrySnapToFoundation(hitResult);
 	}
 	const FRMRoadEndRef& End = Ends[0];
+	if (End.Road && (mStep == 0 || !mHasCopiedMarkings))
+	{
+		mMarkings = End.Road->GetMarkings();
+		mHasCopiedMarkings = true;
+	}
 
 	if (mStep == 0)
 	{
@@ -68,7 +73,7 @@ void ARMRoadHologram::RebuildPreview()
 		return;
 	}
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, Top, Body);
+	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, mMarkings, Road->mEdgeLineInset, Top, Body);
 	Top.ApplyToSection(mPreviewMesh, 0, false);
 	Body.ApplyToSection(mPreviewMesh, 1, false);
 }
@@ -198,4 +203,13 @@ bool ARMRoadHologram::TrySnapToFoundation(const FHitResult& hitResult)
 	}
 	UpdateCurve();
 	return true;
+}
+
+void ARMRoadHologram::ConfigureActor(AFGBuildable* inBuildable) const
+{
+	Super::ConfigureActor(inBuildable);
+	if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(inBuildable))
+	{
+		Road->SetMarkings(mMarkings);
+	}
 }

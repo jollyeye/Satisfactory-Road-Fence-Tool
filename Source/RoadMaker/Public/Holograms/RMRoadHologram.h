@@ -14,6 +14,7 @@ class ROADMAKER_API ARMRoadHologram : public ARMSplineHologram
 
 public:
 	virtual void CheckValidPlacement() override;
+	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 
 protected:
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
@@ -28,6 +29,10 @@ protected:
 	 * it), road top level with the foundation top, pointing straight out of / into that edge.
 	 */
 	bool TrySnapToFoundation(const FHitResult& hitResult);
+
+	/** Markings for the new road: copied from the road it snaps to, otherwise the default. */
+	FRMMarkings mMarkings;
+	bool mHasCopiedMarkings = false;
 
 	/** Along-edge snap step on foundations, in cm. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
