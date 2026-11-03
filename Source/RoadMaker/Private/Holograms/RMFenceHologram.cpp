@@ -5,6 +5,7 @@
 #include "Buildables/RMBuildableIntersection.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "RMRoadUtils.h"
 
 const ARMBuildableFence* ARMFenceHologram::GetFenceDefaults() const
 {
@@ -18,7 +19,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	// Edge mode only makes sense before a free fence has been started.
 	if (mStep != 0)
 	{
-		return false;
+		return SnapToFoundationGrid(hitResult);
 	}
 	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
 	{
@@ -27,7 +28,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	if (!Road)
 	{
-		return false;
+		return SnapToFoundationGrid(hitResult);
 	}
 
 	TArray<FRMFrame> Frames;
@@ -60,6 +61,64 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	mInwardSign = -Side;
 	mOnRoadEdge = true;
 	SetWorldPoints(Edge);
+	return true;
+}
+
+bool ARMFenceHologram::SnapToFoundationGrid(const FHitResult& hitResult)
+{
+	FTransform Piece;
+	FBox Box;
+	if (!RMRoadUtils::GetFoundationPiece(hitResult, Piece, Box))
+	{
+		return false;
+	}
+
+	// Grid in the piece's local space, counted from its centre, so the edges and the centre of a
+	// foundation are always grid points; the point sits on the top face.
+	const FVector Scale = Piece.GetScale3D().GetAbs();
+	const FVector Center = Box.GetCenter();
+	const FVector Local = Piece.InverseTransformPosition(hitResult.Location);
+	auto SnapAxis = [this](float Value, float Mid, float Min, float Max, float AxisScale)
+	{
+		const float Step = mFoundationGridStep / FMath::Max(AxisScale, KINDA_SMALL_NUMBER);
+		return FMath::Clamp(Mid + FMath::RoundToFloat((Value - Mid) / Step) * Step, Min, Max);
+	};
+	const FVector LocalPoint(
+		SnapAxis(Local.X, Center.X, Box.Min.X, Box.Max.X, Scale.X),
+		SnapAxis(Local.Y, Center.Y, Box.Min.Y, Box.Max.Y, Scale.Y),
+		Box.Max.Z);
+	const FVector Point = Piece.TransformPosition(LocalPoint);
+
+	if (mStep == 0)
+	{
+		// Start direction: the foundation axis closest to where you look, then the mouse wheel.
+		FVector View = hitResult.TraceEnd - hitResult.TraceStart;
+		View.Z = 0.f;
+		View = View.GetSafeNormal();
+		FVector BestAxis = FVector::ForwardVector;
+		float BestDot = -2.f;
+		for (const FVector& A : { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) })
+		{
+			FVector W = Piece.TransformVectorNoScale(A);
+			W.Z = 0.f;
+			W = W.GetSafeNormal();
+			const float D = FVector::DotProduct(W, View);
+			if (D > BestDot)
+			{
+				BestDot = D;
+				BestAxis = W;
+			}
+		}
+		mStart = Point;
+		mStartSnapped = false;
+		mStartDir = BestAxis.RotateAngleAxis(GetStepScrollYaw(), FVector::UpVector);
+	}
+	else
+	{
+		mEnd = Point;
+		mEndSnapped = false;
+	}
+	UpdateCurve();
 	return true;
 }
 

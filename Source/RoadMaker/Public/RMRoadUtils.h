@@ -2,6 +2,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/HitResult.h"
 #include "RMGeometry.h"
 
 class ARMBuildableRoad;
@@ -38,7 +39,16 @@ namespace RMRoadUtils
 	/** True if a road end or another intersection already sits on this mouth. */
 	ROADMAKER_API bool IsMouthOccupied(UWorld* World, const ARMBuildableIntersection* Intersection, const FVector& MouthCenter);
 
-	/** Free road ends and free intersection mouths within Radius of Center, nearest first. */
+	/**
+	 * Free road ends and free intersection mouths within Radius of Center, nearest first.
+	 * bIncludeOccupied also returns ends that are already joined (used for path snap points).
+	 */
 	ROADMAKER_API void FindFreeEnds(UWorld* World, const FVector& Center, float Radius, int32 MaxCount,
-		const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds);
+		const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds, bool bIncludeOccupied = false);
+
+	/**
+	 * If the hit is on a foundation-shaped building piece (classic or instanced), its transform and
+	 * local bounding box. Road Maker pieces are not foundations.
+	 */
+	ROADMAKER_API bool GetFoundationPiece(const FHitResult& Hit, FTransform& OutTransform, FBox& OutLocalBox);
 }

@@ -121,10 +121,11 @@ namespace
 
 		if (Kind == ESnapKind::PathStart)
 		{
-			// Points near a free road end (or free intersection mouth) snap to the closest of the
-			// points every 2 m across that end, level with the road top.
+			// Points near a road end or intersection mouth snap to the closest of the points every
+			// 2 m across that end, level with the road top. Joined ends count too: a path usually
+			// starts where two roads (or a road and an intersection) meet.
 			TArray<FRMRoadEndRef> Ends;
-			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 3, nullptr, Ends);
+			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 6, nullptr, Ends, true);
 			FVector Best = FVector::ZeroVector;
 			float BestDist = 600.f;
 			for (const FRMRoadEndRef& End : Ends)

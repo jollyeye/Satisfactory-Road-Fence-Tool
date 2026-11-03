@@ -4,6 +4,9 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "CollisionQueryParams.h"
+#include "Buildables/FGBuildable.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 
 void RMRoadUtils::GatherNearby(UWorld* World, const FVector& Center, float Radius,
 	TArray<ARMBuildableRoad*>& OutRoads, TArray<ARMBuildableIntersection*>* OutIntersections)
@@ -87,7 +90,7 @@ bool RMRoadUtils::IsEndOccupied(UWorld* World, const ARMBuildableRoad* Road, int
 }
 
 void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radius, int32 MaxCount,
-	const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds)
+	const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds, bool bIncludeOccupied)
 {
 	OutEnds.Reset();
 	TArray<ARMBuildableRoad*> Roads;
@@ -114,7 +117,7 @@ void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radiu
 			Ref.Width = Mouth.Width;
 			Ref.Height = X->GetSlabHeight();
 			Ref.Distance = FVector::Dist(Ref.Location, Center);
-			if (Ref.Distance <= Radius && !IsMouthOccupied(World, X, Mouth.Center))
+			if (Ref.Distance <= Radius && (bIncludeOccupied || !IsMouthOccupied(World, X, Mouth.Center)))
 			{
 				OutEnds.Add(Ref);
 			}
@@ -136,7 +139,7 @@ void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radiu
 			Ref.Width = Road->GetRoadWidth();
 			Ref.Height = Road->GetRoadHeight();
 			Ref.Distance = FVector::Dist(Ref.Location, Center);
-			if (Ref.Distance <= Radius && !IsEndOccupied(World, Road, E))
+			if (Ref.Distance <= Radius && (bIncludeOccupied || !IsEndOccupied(World, Road, E)))
 			{
 				OutEnds.Add(Ref);
 			}
@@ -197,4 +200,33 @@ TArray<FVector> FRMRoadEndRef::GetPointsAcross(float Step) const
 		Points.Add(Location + Across * (K * Step));
 	}
 	return Points;
+}
+
+bool RMRoadUtils::GetFoundationPiece(const FHitResult& Hit, FTransform& OutTransform, FBox& OutLocalBox)
+{
+	AActor* Actor = Hit.GetActor();
+	UStaticMeshComponent* Mesh = Cast<UStaticMeshComponent>(Hit.GetComponent());
+	if (!Actor || !Mesh || !Mesh->GetStaticMesh() || Cast<ARMBuildableProcedural>(Actor))
+	{
+		return false;
+	}
+	// Foundations since 1.0 are instances owned by an abstract instance manager.
+	const bool bBuilding = Actor->IsA<AFGBuildable>()
+		|| Actor->GetClass()->GetName().Contains(TEXT("AbstractInstance"))
+		|| Actor->GetClass()->GetName().Contains(TEXT("Lightweight"));
+	if (!bBuilding)
+	{
+		return false;
+	}
+	OutTransform = Mesh->GetComponentTransform();
+	if (UInstancedStaticMeshComponent* Instanced = Cast<UInstancedStaticMeshComponent>(Mesh))
+	{
+		if (Hit.Item == INDEX_NONE || !Instanced->GetInstanceTransform(Hit.Item, OutTransform, true))
+		{
+			return false;
+		}
+	}
+	OutLocalBox = Mesh->GetStaticMesh()->GetBoundingBox();
+	const FVector Size = OutLocalBox.GetSize() * OutTransform.GetScale3D().GetAbs();
+	return Size.X >= 390.f && Size.Y >= 390.f && Size.Z >= 50.f && Size.Z <= 450.f;
 }

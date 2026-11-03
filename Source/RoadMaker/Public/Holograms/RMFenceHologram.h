@@ -42,6 +42,13 @@ protected:
 	/** Aiming at an intersection: follow the curved curb nearest the aim point, facing the centre. */
 	bool SnapToIntersectionCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint);
 
+	/** Aiming at a foundation: the point being placed snaps to its grid, at its top. */
+	bool SnapToFoundationGrid(const FHitResult& hitResult);
+
+	/** Foundation grid step in cm (foundation edges and centre are always on it). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	float mFoundationGridStep = 100.f;
+
 	bool mOnRoadEdge = false;
 
 	/** Side of the fence the road is on (see ARMBuildableFence::SetInwardSign). */
