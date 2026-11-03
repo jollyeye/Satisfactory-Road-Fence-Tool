@@ -813,3 +813,53 @@ void RMGeometry::GetIntersectionCurbs(const TArray<FVector>& Outline, const TArr
 		OutCurbs.Add(Current);
 	}
 }
+
+void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, FRMMesh& Out)
+{
+	Out.Reset();
+	const float E = Inset / 100.f;            // inset in metres, as on road tops
+	const float HalfStrip = 12.f;             // cm; the line itself is 15 cm wide, drawn by the material
+	const float Lift = 0.6f;                  // cm above the slab, against z-fighting
+	const FVector2D Layout(100.f, E);         // "road" so wide that only this one side line shows
+	const FVector2D Style(1.f, 1.f);          // 1 lane (no dividers), side lines on
+
+	for (const TArray<FVector>& Curb : Curbs)
+	{
+		const int32 N = Curb.Num();
+		if (N < 2)
+		{
+			continue;
+		}
+		const int32 Base = Out.Vertices.Num();
+		for (int32 I = 0; I < N; ++I)
+		{
+			const FVector Prev = Curb[FMath::Max(I - 1, 0)];
+			const FVector Next = Curb[FMath::Min(I + 1, N - 1)];
+			FVector Fwd = Next - Prev;
+			Fwd.Z = 0.f;
+			if (!Fwd.Normalize())
+			{
+				Fwd = FVector::ForwardVector;
+			}
+			// Curbs run so the intersection centre is on their +Right side.
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+			const FVector Mid = Curb[I] + Right * Inset + FVector(0.f, 0.f, Lift);
+			for (int32 Side = 0; Side < 2; ++Side)
+			{
+				const float Off = Side == 0 ? -HalfStrip : HalfStrip;
+				const FVector P = Mid + Right * Off;
+				Out.AddVertex(P, FVector::UpVector, FVector2D(P.X, P.Y) / 400.f, Fwd);
+				Out.MarkUV1.Add(FVector2D(E + Off / 100.f, 0.f));
+				Out.MarkUV2.Add(Layout);
+				Out.MarkUV3.Add(Style);
+			}
+		}
+		for (int32 I = 0; I + 1 < N; ++I)
+		{
+			const int32 A = Base + I * 2;
+			const int32 B = A + 2;
+			Out.AddTriangle(A, B, B + 1, FVector::UpVector);
+			Out.AddTriangle(A, B + 1, A + 1, FVector::UpVector);
+		}
+	}
+}

@@ -48,5 +48,9 @@ protected:
 	UPROPERTY(Replicated)
 	float mHeight = 200.f;
 
+	/** New intersections get side lines when a connected road (or intersection) has them. */
+	UPROPERTY(Replicated)
+	bool mSideLines = false;
+
 	bool mGeometryValid = false;
 };

@@ -2,6 +2,8 @@
 #include "RoadMakerModule.h"
 #include "Customization/RMRoadLineDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
+#include "Buildables/RMBuildableIntersection.h"
+#include "UObject/UnrealType.h"
 #include "Equipment/FGBuildGun.h"
 #include "Equipment/FGBuildGunPaint.h"
 #include "FGCustomizationRecipe.h"
@@ -52,6 +54,24 @@ FText RMRoadLinePaint::GetActiveText()
 /** Road under the player's crosshair, if any. */
 ARMBuildableRoad* RMRoadLinePaint::TraceRoad(APlayerController* PC)
 {
+	return Cast<ARMBuildableRoad>(TraceTarget(PC));
+}
+
+bool RMRoadLinePaint::CanApplyTo(const AActor* Target)
+{
+	if (Cast<ARMBuildableRoad>(Target))
+	{
+		return IsAnyActive();
+	}
+	if (Cast<ARMBuildableIntersection>(Target))
+	{
+		return GActiveSides != nullptr;
+	}
+	return false;
+}
+
+AActor* RMRoadLinePaint::TraceTarget(APlayerController* PC)
+{
 	if (!PC || !PC->GetWorld())
 	{
 		return nullptr;
@@ -65,7 +85,8 @@ ARMBuildableRoad* RMRoadLinePaint::TraceRoad(APlayerController* PC)
 	{
 		return nullptr;
 	}
-	return Cast<ARMBuildableRoad>(Hit.GetActor());
+	AActor* Actor = Hit.GetActor();
+	return Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor) ? Actor : nullptr;
 }
 
 bool RMRoadLinePaint::IsPaintStateActive(APlayerController* PC)
@@ -112,10 +133,19 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	{
 		return;
 	}
-	if (RMRoadLinePaint::TraceRoad(PC))
+	AActor* Target = RMRoadLinePaint::TraceTarget(PC);
+	if (RMRoadLinePaint::CanApplyTo(Target))
 	{
-		Text->SetText(RMRoadLinePaint::GetActiveText());
+		Text->SetText(Cast<ARMBuildableIntersection>(Target)
+			? FText::FromString(TEXT("Intersection: ") + UFGItemDescriptor::GetItemName(GActiveSides).ToString())
+			: RMRoadLinePaint::GetActiveText());
 		Box->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.025f, 0.75f));
+	}
+	else if (Target)
+	{
+		// An intersection with only a lane option picked: lanes do not exist there.
+		Text->SetText(NSLOCTEXT("RoadMaker", "IntersectionSidesOnly", "Intersections take Sidelines only"));
+		Box->SetBrushColor(FLinearColor(0.6f, 0.08f, 0.05f, 0.85f));
 	}
 	else
 	{
@@ -424,8 +454,48 @@ namespace
 	}
 }
 
+namespace
+{
+	/**
+	 * Road Lines options are material-type options that no building maps to, so the paint gun's own
+	 * check flags every target as "Invalid customization target!". Our hint shows the real state, so
+	 * the game's message is dropped while a Road Lines option is selected.
+	 */
+	void ClearPaintDisqualifiers(UFGBuildGunStatePaint* State)
+	{
+		static FArrayProperty* Prop = FindFProperty<FArrayProperty>(UFGBuildGunStatePaint::StaticClass(), TEXT("mConstructDisqualifiers"));
+		if (!State || !Prop)
+		{
+			return;
+		}
+		FScriptArrayHelper Array(Prop, Prop->ContainerPtrToValuePtr<void>(State));
+		if (Array.Num() > 0)
+		{
+			Array.EmptyValues();
+		}
+	}
+}
+
 void RMRoadLinePaint::InstallHooks()
 {
+	SUBSCRIBE_METHOD(UFGBuildGunStatePaint::AddConstructDisqualifier,
+		[](auto& Scope, UFGBuildGunStatePaint* State, TSubclassOf<UFGConstructDisqualifier> Disqualifier)
+		{
+			if (IsAnyActive())
+			{
+				Scope.Cancel();
+			}
+		});
+
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(UFGBuildGunStatePaint::TickState_Implementation, GetMutableDefault<UFGBuildGunStatePaint>(),
+		[](UFGBuildGunStatePaint* State, float DeltaTime)
+		{
+			if (IsAnyActive())
+			{
+				ClearPaintDisqualifiers(State);
+			}
+		});
+
 	// Road Lines tiles in the customizer menu: put our icons in, ten times a second while it is open.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixCustomizerIcons), 0.1f);
 
@@ -472,7 +542,16 @@ void RMRoadLinePaint::InstallHooks()
 		}
 		Scope.Cancel();
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
-		ARMBuildableRoad* Road = TraceRoad(Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr);
+		AActor* Target = TraceTarget(Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr);
+		if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(Target))
+		{
+			if (GActiveSides && Intersection->HasAuthority())
+			{
+				Intersection->SetSideLines(GActiveSides->GetDefaultObject<URMRoadLineDescriptor>()->mSideLines);
+			}
+			return;
+		}
+		ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Target);
 		if (!Road || !Road->HasAuthority())
 		{
 			return; // the hint already says "Aim at a road"; clients in multiplayer: not yet

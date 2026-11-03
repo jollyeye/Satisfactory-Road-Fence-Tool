@@ -28,6 +28,19 @@ public:
 	/** Curved curbs between neighbouring roads, in world space, at the top of the slab. */
 	void GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) const;
 
+	/** Side lines along the curbs (Road Lines > Sidelines in the customizer). */
+	void SetSideLines(bool bOn);
+	bool HasSideLines() const { return mSideLines; }
+
+	/** Customizer: side lines use the secondary colour, like on roads. */
+	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
+	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
+	void ApplyMarkingColors(const FFactoryCustomizationData& Data);
+
+	/** Same as roads: side lines sit this far in from the curb (cm). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mEdgeLineInset = 90.f;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mTopMaterial = nullptr;
 
@@ -47,4 +60,8 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
 	float mHeight = 200.f;
+
+	/** Off by default, so intersections from older saves look as before. */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
+	bool mSideLines = false;
 };

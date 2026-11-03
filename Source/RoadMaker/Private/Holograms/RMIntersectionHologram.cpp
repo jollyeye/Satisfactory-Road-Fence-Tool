@@ -26,6 +26,7 @@ void ARMIntersectionHologram::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMIntersectionHologram, mLocalEnds);
 	DOREPLIFETIME(ARMIntersectionHologram, mHeight);
+	DOREPLIFETIME(ARMIntersectionHologram, mSideLines);
 }
 
 void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
@@ -44,11 +45,14 @@ void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& h
 	// The slab is as thick as the thickest connected road.
 	FVector Origin = FVector::ZeroVector;
 	float Height = 0.f;
+	bool bSideLines = false;
 	for (const FRMRoadEndRef& R : Found)
 	{
 		Origin += R.Location;
 		Height = FMath::Max(Height, R.Height);
+		bSideLines |= (R.Road && R.Road->GetMarkings().bEdgeLines) || (R.Intersection && R.Intersection->HasSideLines());
 	}
+	mSideLines = bSideLines;
 	Origin /= Found.Num();
 	SetActorLocationAndRotation(Origin, FRotator::ZeroRotator);
 
@@ -117,6 +121,7 @@ void ARMIntersectionHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	Super::ConfigureActor(inBuildable);
 	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(inBuildable))
 	{
+		X->SetSideLines(mSideLines);
 		X->SetEnds(mLocalEnds, mHeight);
 		X->SetCostMultiplier(GetBaseCostMultiplier());
 	}

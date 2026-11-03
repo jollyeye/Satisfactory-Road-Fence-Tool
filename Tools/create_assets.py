@@ -283,7 +283,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     for k, m in mats.items():
         if m:
             setp(c, m, k)
-    if parent == RMBuildableRoad:
+    if parent in (RMBuildableRoad, RMBuildableIntersection):
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
         setp(c, None, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
     finish(b)
@@ -419,11 +419,11 @@ for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIO
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)
     c = cdo(d)
     setp(c, text(display), "m_display_name", "mDisplayName")
-    setp(c, text("Road Lines: " + display + ". Aim at a road and apply."), "m_description", "mDescription")
+    setp(c, text("Road Lines: " + display + (". Aim at a road or intersection and apply." if is_side else ". Aim at a road and apply.")), "m_description", "mDescription")
     setp(c, cat.generated_class(), "m_category", "mCategory")
     setp(c, [subcats[sub]], "m_sub_categories", "mSubCategories")
     setp(c, float(i), "m_menu_priority", "mMenuPriority")
-    setp(c, [RMBuildableRoad], "m_valid_buildables", "mValidBuildables")
+    setp(c, [RMBuildableRoad, RMBuildableIntersection] if is_side else [RMBuildableRoad], "m_valid_buildables", "mValidBuildables")
     setp(c, 9100 + i, "id", "ID")
     tex = icon(key)
     if tex:

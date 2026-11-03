@@ -199,4 +199,12 @@ namespace RMGeometry
 	 * mouths. Points run counter-clockwise around the centre, so the centre is on their +Right side.
 	 */
 	ROADMAKER_API void GetIntersectionCurbs(const TArray<FVector>& Outline, const TArray<bool>& EdgeIsMouth, TArray<TArray<FVector>>& OutCurbs);
+
+	/**
+	 * Side lines of an intersection: a thin strip just above the slab along every curb, Inset cm in
+	 * from it, so it continues the side lines of the roads. The strip carries the same marking UVs
+	 * as a road top (one side line, no lanes), so the asphalt material draws it in the secondary
+	 * colour and shows plain asphalt around the line.
+	 */
+	ROADMAKER_API void BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, FRMMesh& Out);
 }
