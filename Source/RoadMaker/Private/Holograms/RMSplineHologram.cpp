@@ -3,6 +3,7 @@
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Holograms/RMHologramLook.h"
 
 ARMSplineHologram::ARMSplineHologram()
 {
@@ -163,15 +164,26 @@ void ARMSplineHologram::SetWorldPoints(const TArray<FRMSplinePoint>& WorldPoints
 		mLocalPoints.Add(FRMSplinePoint(T.InverseTransformPosition(P.Location), T.InverseTransformVectorNoScale(P.Tangent)));
 	}
 	RebuildPreview();
-
-	if (mPreviewMaterial)
-	{
-		for (int32 I = 0; I < mPreviewMesh->GetNumSections(); ++I)
-		{
-			mPreviewMesh->SetMaterial(I, mPreviewMaterial);
-		}
-	}
+	UpdateHologramLook();
 }
+
+void ARMSplineHologram::SetMaterialState(EHologramMaterialState state)
+{
+	Super::SetMaterialState(state);
+	UpdateHologramLook();
+}
+
+void ARMSplineHologram::UpdateHologramLook()
+{
+	UMaterialInterface* Material = mPreviewMaterial;
+	if (!Material)
+	{
+		Material = (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR && mInvalidPlacementMaterial)
+			? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
+	}
+	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+}
+
 
 bool ARMSplineHologram::DoMultiStepPlacement(bool isInputFromARelease)
 {

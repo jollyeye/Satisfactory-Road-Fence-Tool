@@ -26,6 +26,10 @@ public:
 	virtual int32 GetBaseCostMultiplier() const override { return FMath::Max(1, mLocalEnds.Num()); }
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 
+	// Game hologram material + valid/invalid colour on the procedural preview.
+	virtual void SetMaterialState(EHologramMaterialState state) override;
+	void UpdateHologramLook();
+
 protected:
 	void RebuildPreview();
 

@@ -5,6 +5,7 @@
 #include "RMRoadUtils.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Holograms/RMHologramLook.h"
 
 ARMIntersectionHologram::ARMIntersectionHologram()
 {
@@ -94,13 +95,27 @@ void ARMIntersectionHologram::RebuildPreview()
 	{
 		Top.ApplyToSection(mPreviewMesh, 0, false);
 		Body.ApplyToSection(mPreviewMesh, 1, false);
-		if (mPreviewMaterial)
-		{
-			mPreviewMesh->SetMaterial(0, mPreviewMaterial);
-			mPreviewMesh->SetMaterial(1, mPreviewMaterial);
-		}
+		UpdateHologramLook();
 	}
 }
+
+void ARMIntersectionHologram::SetMaterialState(EHologramMaterialState state)
+{
+	Super::SetMaterialState(state);
+	UpdateHologramLook();
+}
+
+void ARMIntersectionHologram::UpdateHologramLook()
+{
+	UMaterialInterface* Material = mPreviewMaterial;
+	if (!Material)
+	{
+		Material = (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR && mInvalidPlacementMaterial)
+			? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
+	}
+	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+}
+
 
 void ARMIntersectionHologram::CheckValidPlacement()
 {

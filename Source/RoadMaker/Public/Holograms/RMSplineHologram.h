@@ -40,6 +40,10 @@ public:
 	// AFGBuildableHologram
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 
+	// Game hologram material + valid/invalid colour on the procedural preview.
+	virtual void SetMaterialState(EHologramMaterialState state) override;
+	void UpdateHologramLook();
+
 protected:
 	/** Height added above the aimed surface (roads sit on top of what they are placed on). */
 	virtual float GetSurfaceOffset() const { return 0.f; }

@@ -626,7 +626,15 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	// or on a slope do not run through each other. Everything sits in the posts' centre plane.
 	const float PostHalf = 5.f;
 	const float FrameX = -3.f;
-	const TArray<FRMFrame> Inner = TrimFrames(Frames, PostHalf - 2.f, PostHalf - 2.f); // ends 2 cm inside the end posts
+	// Built against true vertical (not the road's tilted up) so the sheet, tubes and posts stay
+	// upright and line up on slopes.
+	TArray<FRMFrame> Upright = Frames;
+	for (FRMFrame& F : Upright)
+	{
+		F.Up = FVector::UpVector;
+		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+	}
+	const TArray<FRMFrame> Inner = TrimFrames(Upright, PostHalf - 2.f, PostHalf - 2.f); // ends 2 cm inside the end posts
 
 	// Single sheet between the tubes, own material slot (two-sided masked diamond grid). The grid
 	// is laid out by the material from UV1.x = metres along the fence and the world height, so it
@@ -645,7 +653,7 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	const TArray<FRMFrame> BottomFrames = LiftFrames(Inner, 8.f);
 	ExtrudeProfile(TopFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
 	ExtrudeProfile(BottomFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
-	ForEvery(Frames, 300.f, [&](const FRMFrame& F)
+	ForEvery(Upright, 300.f, [&](const FRMFrame& F)
 	{
 		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f) + F.Right * FrameX, F.Fwd, F.Right, FVector::UpVector, FVector(PostHalf, 5.f, 105.f), UVScale);
 	});
