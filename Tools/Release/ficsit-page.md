@@ -20,7 +20,8 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 ![The eight Road Maker buildables in the build menu](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu.png)
 
 ### Roads (1, 2 and 3 foundations wide)
-- Two clicks: start and end. The road curves like a vehicle path; there is also a straight build mode, and the mouse wheel turns it.
+- Two clicks: start and end. The road curves like a vehicle path; the mouse wheel turns it.
+- Build modes: **Default**, **Straight**, and **Smooth** (height eases in and out to join roads at different levels without kinks, up to 45°).
 - Snaps to the ends of other roads and intersections, and to foundation edges (top level with the foundation).
 - 1 m thick, asphalt and concrete textures matched to the game's foundations.
 - Other buildings can be placed on roads, just like on foundations.
@@ -46,7 +47,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 
 ### Snapping for game buildings
 - **Power poles** (all tiers) and **street lights** snap to the road's fence lines while holding the snap key (Ctrl); street lights face the road, scroll flips them.
-- **Vehicle paths** and **railway tracks** get snap points every 2 m across road ends and align with the road; scroll flips them 180°.
+- **Vehicle paths** and **railway tracks** snap to road and intersection ends — one point per lane (every 2 m on 1-lane roads) — and line up with the road, slope included; scroll flips them 180°.
 
 ### Performance
 - Far-away roads, intersections and fences switch to simpler meshes.
@@ -55,6 +56,14 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 ### Notes
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
+
+## Changelog for version 1.1.0
+- New **Smooth** build mode for roads: the height eases in and out and matches the slope of the roads it connects, so linking roads at different heights has no kinks when seen from the side. Allows up to 45°.
+- Vehicle paths and railway tracks follow the road's slope at road-end snap points (start and end).
+- Snap points follow the lanes: 1-lane roads every 2 m, 2- and 3-lane roads one point in the middle of each lane. Intersection ends use the lanes of the road joined there.
+- Snapping only uses the road or intersection you aim at, and the game's own snapping to existing vehicle paths and tracks takes priority.
+- Fixed "vehicles collide with the terrain" when a vehicle path snaps to the raised end of a road (the point moves onto the road when there is no floor beyond the end).
+- Railway tracks no longer float above the road at snap points.
 
 ## Changelog for version 1.0.0
 First release: roads (1/2/3 wide), Road Lines customizer tab, road intersections with side lines, four fence types, snapping for power poles, street lights, vehicle paths and railway tracks, distance LODs.
