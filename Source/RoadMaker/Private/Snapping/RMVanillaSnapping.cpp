@@ -266,8 +266,10 @@ namespace
 			else
 			{
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
-				const FVector Start = StartField ? *StartField : Hologram->GetActorLocation();
-				FVector Dir = FVector::DotProduct(Best - Start, Axis) >= 0.f ? Axis : -Axis;
+				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
+				// The game stores the end direction pointing back into the path (seen in game: the
+				// travel direction made the path loop), so it is the opposite of the way it travels.
+				FVector Dir = FVector::DotProduct(Best - Start, Axis) >= 0.f ? -Axis : Axis;
 				if (State.bFlipped)
 				{
 					Dir = -Dir;
