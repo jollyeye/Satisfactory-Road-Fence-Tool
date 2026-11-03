@@ -23,6 +23,7 @@
 #include "Materials/MaterialInstanceConstant.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectIterator.h"
+#include "UObject/StrongObjectPtr.h"
 
 namespace
 {
@@ -246,6 +247,9 @@ namespace
 		TWeakObjectPtr<UTextBlock> Label;
 		TWeakObjectPtr<UImage> Icon;
 		FSlateBrush OriginalBrush;
+		// The brush copy does not keep its material alive; without this the game frees the
+		// original icon material while our picture is shown, and restoring it crashes.
+		TStrongObjectPtr<UObject> OriginalResource;
 		TArray<TPair<TWeakObjectPtr<UTextBlock>, ESlateVisibility>> HiddenTexts;
 	};
 	TArray<FPatchedTile> GPatched;
@@ -267,7 +271,10 @@ namespace
 			}
 			if (UImage* Image = T.Icon.Get())
 			{
-				Image->SetBrush(T.OriginalBrush);
+				if (T.OriginalResource.IsValid())
+				{
+					Image->SetBrush(T.OriginalBrush);
+				}
 			}
 			for (const auto& Hidden : T.HiddenTexts)
 			{
@@ -307,6 +314,7 @@ namespace
 				New.Label = Label;
 				New.Icon = Image;
 				New.OriginalBrush = Image->GetBrush();
+				New.OriginalResource.Reset(New.OriginalBrush.GetResourceObject());
 				// The "Edit" label left over from the colour tab: Road Lines options are not editable.
 				for (UWidget* Other : Widgets)
 				{
@@ -324,6 +332,21 @@ namespace
 					UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: drawing into %s.mIcon (was %s)"),
 						*Owner->GetClass()->GetName(),
 						New.OriginalBrush.GetResourceObject() ? *New.OriginalBrush.GetResourceObject()->GetName() : TEXT("none"));
+					if (const UMaterialInstance* MI = Cast<UMaterialInstance>(New.OriginalBrush.GetResourceObject()))
+					{
+						for (const FTextureParameterValue& P : MI->TextureParameterValues)
+						{
+							UE_LOG(LogRoadMaker, Display, TEXT("  icon material texture %s = %s"), *P.ParameterInfo.Name.ToString(), P.ParameterValue ? *P.ParameterValue->GetPathName() : TEXT("none"));
+						}
+						for (const FScalarParameterValue& P : MI->ScalarParameterValues)
+						{
+							UE_LOG(LogRoadMaker, Display, TEXT("  icon material scalar %s = %f"), *P.ParameterInfo.Name.ToString(), P.ParameterValue);
+						}
+						for (const FVectorParameterValue& P : MI->VectorParameterValues)
+						{
+							UE_LOG(LogRoadMaker, Display, TEXT("  icon material vector %s = %s"), *P.ParameterInfo.Name.ToString(), *P.ParameterValue.ToString());
+						}
+					}
 				}
 			}
 			if (Image->GetBrush().GetResourceObject() != Icon)
