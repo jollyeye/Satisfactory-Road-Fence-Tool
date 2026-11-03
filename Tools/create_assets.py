@@ -338,7 +338,15 @@ def make_schematic(name, display, recipe_list):
 sch = make_schematic("Schematic_RoadMaker", "Road Maker", recipes)
 
 log("== Game world module ==")
-gwm = make_bp("", "RootGameWorld_RoadMaker", GameWorldModule)
+RMWorldModule = native_class("RMGameWorldModule") or GameWorldModule
+gwm = make_bp("", "RootGameWorld_RoadMaker", RMWorldModule)
+# Existing asset made from the plain GameWorldModule: move it onto the Road Maker module class.
+try:
+    if gwm.get_editor_property("parent_class") != RMWorldModule:
+        unreal.BlueprintEditorLibrary.reparent_blueprint(gwm, RMWorldModule)
+        log("  reparented RootGameWorld_RoadMaker to " + RMWorldModule.get_name())
+except Exception as e:
+    log("  ! reparent failed: %s" % e)
 g = cdo(gwm)
 setp(g, True, "root_module", "b_root_module", "bRootModule")
 setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
