@@ -52,6 +52,6 @@ protected:
 	bool mOnRoadEdge = false;
 
 	/** Side of the fence the road is on (see ARMBuildableFence::SetInwardSign). */
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, CustomSerialization)
 	float mInwardSign = 1.f;
 };

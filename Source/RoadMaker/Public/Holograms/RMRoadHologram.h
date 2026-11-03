@@ -31,6 +31,7 @@ protected:
 	bool TrySnapToFoundation(const FHitResult& hitResult);
 
 	/** Markings for the new road: copied from the road it snaps to, otherwise the default. */
+	UPROPERTY(CustomSerialization)
 	FRMMarkings mMarkings;
 	bool mHasCopiedMarkings = false;
 

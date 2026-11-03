@@ -86,7 +86,7 @@ protected:
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeStraight;
 
 	/** Current points, actor-local. Replicated so the server builds what the client sees. */
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, CustomSerialization)
 	TArray<FRMSplinePoint> mLocalPoints;
 
 	int32 mStep = 0;

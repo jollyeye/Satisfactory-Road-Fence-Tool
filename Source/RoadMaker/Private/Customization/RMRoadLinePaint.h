@@ -28,6 +28,9 @@ namespace RMRoadLinePaint
 
 	/** True if the active options do something on this target (intersections take side lines only). */
 	bool CanApplyTo(const AActor* Target);
+
+	/** Server side: writes the options into a road (side lines and/or lanes) or an intersection (side lines). */
+	void ApplyToTarget(AActor* Target, TSubclassOf<class URMRoadLineDescriptor> Sides, TSubclassOf<class URMRoadLineDescriptor> Lanes);
 	bool IsPaintStateActive(APlayerController* PC);
 
 	/** True if the labels include the "Road Lines" tab name (customizer open on or near our tab). */

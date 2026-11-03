@@ -3,6 +3,7 @@
 #include "Customization/RMRoadLineDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "Net/RMRemoteCallObject.h"
 #include "UObject/UnrealType.h"
 #include "Equipment/FGBuildGun.h"
 #include "Equipment/FGBuildGunPaint.h"
@@ -68,6 +69,28 @@ bool RMRoadLinePaint::CanApplyTo(const AActor* Target)
 		return GActiveSides != nullptr;
 	}
 	return false;
+}
+
+void RMRoadLinePaint::ApplyToTarget(AActor* Target, TSubclassOf<URMRoadLineDescriptor> Sides, TSubclassOf<URMRoadLineDescriptor> Lanes)
+{
+	if (!Target || !Target->HasAuthority())
+	{
+		return;
+	}
+	if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(Target))
+	{
+		if (Sides)
+		{
+			Intersection->SetSideLines(Sides->GetDefaultObject<URMRoadLineDescriptor>()->mSideLines);
+		}
+	}
+	else if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Target))
+	{
+		FRMMarkings Markings = Road->GetMarkings();
+		URMRoadLineDescriptor::ApplyTo(Sides, Markings);
+		URMRoadLineDescriptor::ApplyTo(Lanes, Markings);
+		Road->SetMarkings(Markings);
+	}
 }
 
 AActor* RMRoadLinePaint::TraceTarget(APlayerController* PC)
@@ -573,24 +596,25 @@ void RMRoadLinePaint::InstallHooks()
 		}
 		Scope.Cancel();
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
-		AActor* Target = TraceTarget(Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr);
-		if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(Target))
+		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+		AActor* Target = TraceTarget(PC);
+		if (!CanApplyTo(Target))
 		{
-			if (GActiveSides && Intersection->HasAuthority())
-			{
-				Intersection->SetSideLines(GActiveSides->GetDefaultObject<URMRoadLineDescriptor>()->mSideLines);
-			}
-			return;
+			return; // the hint already says what is wrong
 		}
-		ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Target);
-		if (!Road || !Road->HasAuthority())
+		if (Target->HasAuthority())
 		{
-			return; // the hint already says "Aim at a road"; clients in multiplayer: not yet
+			ApplyToTarget(Target, GActiveSides, GActiveLanes);
 		}
-		FRMMarkings Markings = Road->GetMarkings();
-		URMRoadLineDescriptor::ApplyTo(GActiveSides, Markings);
-		URMRoadLineDescriptor::ApplyTo(GActiveLanes, Markings);
-		Road->SetMarkings(Markings);
+		else if (URMRemoteCallObject* RCO = URMRemoteCallObject::Get(PC))
+		{
+			// Multiplayer client: only the server may change the road.
+			RCO->ServerApplyRoadLines(Target, GActiveSides, GActiveLanes);
+		}
+		else
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("Road Lines: no remote call object, cannot apply as a client"));
+		}
 	});
 }
 

@@ -42,14 +42,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mPreviewMesh;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, CustomSerialization)
 	TArray<FRMRoadEnd> mLocalEnds;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, CustomSerialization)
 	float mHeight = 200.f;
 
 	/** New intersections get side lines when a connected road (or intersection) has them. */
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, CustomSerialization)
 	bool mSideLines = false;
 
 	bool mGeometryValid = false;

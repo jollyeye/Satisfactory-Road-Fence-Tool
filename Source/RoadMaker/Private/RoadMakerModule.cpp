@@ -10,6 +10,8 @@
 #include "Patching/NativeHookManager.h"
 #include "GameFramework/PlayerController.h"
 #include "UObject/UnrealType.h"
+#include "FGPlayerController.h"
+#include "Net/RMRemoteCallObject.h"
 
 DEFINE_LOG_CATEGORY(LogRoadMaker);
 
@@ -70,6 +72,13 @@ void FRoadMakerModule::StartupModule()
 
 	// Road Lines tab in the customizer.
 	RMRoadLinePaint::InstallHooks();
+
+	// Multiplayer: every player gets Road Maker's remote call object (made on the server).
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGPlayerController::BeginPlay, GetMutableDefault<AFGPlayerController>(),
+		[](AFGPlayerController* PC)
+		{
+			URMRemoteCallObject::RegisterFor(PC);
+		});
 #endif
 }
 
