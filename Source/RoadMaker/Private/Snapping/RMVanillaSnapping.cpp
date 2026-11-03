@@ -353,6 +353,61 @@ namespace
 		}
 	}
 
+	/**
+	 * Diagnostics (temporary): what the vehicle path hologram holds and what the game's own path
+	 * check says, a couple of times per second, for snapped and free placement alike.
+	 */
+	void LogPathDiag(AFGHologram* Hologram, const TCHAR* Where)
+	{
+		static double LastLog = 0.0;
+		const double Now = FPlatformTime::Seconds();
+		if (!Cast<AFGVehiclePathSegmentHologram>(Hologram) || Now - LastLog < 0.5)
+		{
+			return;
+		}
+		LastLog = Now;
+		auto Vec = [Hologram](const TCHAR* Name) -> FString
+		{
+			FStructProperty* Prop = FindFProperty<FStructProperty>(Hologram->GetClass(), Name);
+			if (!Prop || Prop->Struct != TBaseStructure<FVector>::Get())
+			{
+				return TEXT("?");
+			}
+			const FVector V = *Prop->ContainerPtrToValuePtr<FVector>(Hologram);
+			return FString::Printf(TEXT("(%.0f,%.0f,%.0f|yaw %.1f pitch %.1f)"), V.X, V.Y, V.Z, V.Rotation().Yaw, V.Rotation().Pitch);
+		};
+		auto Export = [Hologram](const TCHAR* Name) -> FString
+		{
+			FProperty* Prop = FindFProperty<FProperty>(Hologram->GetClass(), Name);
+			if (!Prop)
+			{
+				return TEXT("?");
+			}
+			FString Out;
+			Prop->ExportTextItem_Direct(Out, Prop->ContainerPtrToValuePtr<void>(Hologram), nullptr, nullptr, PPF_None);
+			return Out.Left(600);
+		};
+		FString Splines;
+		TInlineComponentArray<USplineComponent*> Comps(Hologram);
+		for (USplineComponent* S : Comps)
+		{
+			const int32 N = S->GetNumberOfSplinePoints();
+			if (N >= 2)
+			{
+				const FRotator A = S->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).Rotation();
+				const FRotator B = S->GetDirectionAtSplinePoint(N - 1, ESplineCoordinateSpace::World).Rotation();
+				const FVector P0 = S->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
+				const FVector P1 = S->GetLocationAtSplinePoint(N - 1, ESplineCoordinateSpace::World);
+				Splines += FString::Printf(TEXT(" %s[%d] start(%.0f,%.0f,%.0f yaw %.1f pitch %.1f) end(%.0f,%.0f,%.0f yaw %.1f pitch %.1f);"),
+					*S->GetName(), N, P0.X, P0.Y, P0.Z, A.Yaw, A.Pitch, P1.X, P1.Y, P1.Z, B.Yaw, B.Pitch);
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("PathDiag[%s]: step=%s exit=%s entry=%s startLoc=%s endLoc=%s custom=%s shapeInvalid=%s |%s | validation=%s"),
+			Where, *Export(TEXT("mBuildStep")), *Vec(TEXT("mStartPointExitDirection")), *Vec(TEXT("mEndPointEntryDirection")),
+			*Vec(TEXT("mStartLocation")), *Vec(TEXT("mEndLocation")), *Export(TEXT("mUseCustomEndRotation")),
+			*Export(TEXT("mIsPathSegmentShapeInvalid")), *Splines, *Export(TEXT("mCurrentPathValidationInfo")));
+	}
+
 	/** Turns the path's start arrow to the direction we set (it is only a visual). */
 	void PointStartArrow(AFGHologram* Hologram, const FVector& Dir)
 	{
@@ -410,6 +465,7 @@ namespace
 			if (!BestEnd)
 			{
 				ReleasePathSnap(Hologram);
+				LogPathDiag(Hologram, TEXT("free"));
 				return false;
 			}
 
@@ -492,12 +548,14 @@ namespace
 				}
 				State.StartDir = Dir3;
 				PointStartArrow(Hologram, Dir);
+				LogPathDiag(Hologram, bFreeEnd ? TEXT("snap-start-free-end") : TEXT("snap-start-joined"));
 			}
 			else
 			{
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
 				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
 				PlacePathEnd(Scope, Hologram, Placed, Start, Axis, State);
+				LogPathDiag(Hologram, bFreeEnd ? TEXT("snap-end-free-end") : TEXT("snap-end-joined"));
 			}
 			return true;
 		}
