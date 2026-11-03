@@ -106,9 +106,9 @@ namespace
 		return Moved;
 	}
 
-	/** Shared before-hook body. Returns true if it handled the call. */
-	template <typename TScope>
-	bool HandleSetLocation(TScope& Scope, AFGHologram* Hologram, const FHitResult& Hit)
+	/** Shared before-hook body; THologram is the hooked class, which the scope must be called with. */
+	template <typename TScope, typename THologram>
+	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		const ESnapKind Kind = KindOf(Hologram);
 		if (Kind == ESnapKind::None || !Hologram->GetWorld())
