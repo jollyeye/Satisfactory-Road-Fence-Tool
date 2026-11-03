@@ -21,4 +21,4 @@
 3. Submit. The site checks the zip (this can take a few minutes); new mods may also wait for approval.
 
 ## Later updates
-Raise `SemVersion`/`VersionName` (and `Version`) in `RoadMaker.uplugin`, run the bat, do step 1 again, then step 3 with a new changelog.
+Raise `SemVersion`/`VersionName` in `RoadMaker.uplugin` (`Version` must equal the first number of SemVersion, e.g. 1.2.0 → 1, 2.0.0 → 2), run the bat, do step 1 again, then step 3 with a new changelog.
