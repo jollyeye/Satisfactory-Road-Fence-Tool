@@ -140,13 +140,46 @@ float2 h = frac(p / (2.0 * Period));
 float2 m = 1.0 - abs(h * 2.0 - 1.0);
 return Rect.xy + m * Rect.zw;
 """
-# Mirrored cells flip the normal map's X/Y; rebuilt as a world-space normal for flat tops.
+# Normal map in world space, for the same planar/triplanar projection as AtlasUV: mirrored cells
+# flip the map's X/Y, Str boosts the (faint) detail, Flat blends back to the vertex normal (lines).
 WORLD_NORMAL_HLSL = r"""
-float2 h = frac(WP.xy / (2.0 * Period));
+float3 a = abs(N);
+float2 p = WP.xy;
+float3 U = float3(1, 0, 0);
+float3 V = float3(0, 1, 0);
+float3 W = float3(0, 0, N.z >= 0 ? 1 : -1);
+if (Tri > 0.5 && a.z < 0.7)
+{
+    if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); W = float3(N.x >= 0 ? 1 : -1, 0, 0); }
+    else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); W = float3(0, N.y >= 0 ? 1 : -1, 0); }
+}
+float2 h = frac(p / (2.0 * Period));
 float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
-float3 n = float3(T.x * s.x, -T.y * s.y, T.z);
-return normalize(lerp(n, float3(0, 0, 1), Flat));
+float3 n = normalize(U * (T.x * s.x * Str) - V * (T.y * s.y * Str) + W * max(T.z, 0.2));
+return normalize(lerp(n, normalize(N), Flat));
 """
+NORMAL_STRENGTH = 2.5
+
+
+def world_normal(mat, tex_n, rect, triplanar, flat, x, y):
+    """Connects the atlas normal map (world space) to the material's Normal."""
+    t = atlas_sample(mat, tex_n, rect, triplanar, x - 500, y)
+    mat.set_editor_property("tangent_space_normal", False)
+    wp = node(mat, unreal.MaterialExpressionWorldPosition, x - 300, y + 250)
+    vn = node(mat, unreal.MaterialExpressionVertexNormalWS, x - 300, y + 330)
+    wn = custom(mat, WORLD_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                ["T", "WP", "N", "Tri", "Period", "Flat", "Str"], x, y, "WorldNormal")
+    link(t, "", wn, "T")
+    link(wp, "", wn, "WP")
+    link(vn, "", wn, "N")
+    link(const(mat, 1.0 if triplanar else 0.0, x - 300, y + 410), "", wn, "Tri")
+    link(const(mat, PERIOD_CM, x - 300, y + 480), "", wn, "Period")
+    if flat is None:
+        link(const(mat, 0.0, x - 300, y + 550), "", wn, "Flat")
+    else:
+        link(flat, "", wn, "Flat")
+    link(const(mat, NORMAL_STRENGTH, x - 300, y + 620), "", wn, "Str")
+    MEL.connect_material_property(wn, "", MP.MP_NORMAL)
 
 
 def atlas_sample(mat, tex, rect, triplanar, x, y):
@@ -210,12 +243,8 @@ return float2(saturate(mid), saturate(side));
 asphalt = new_material("M_RoadAsphalt")
 tex_bc = load_tex(ASPHALT_BC)
 tex_n = load_tex(ASPHALT_N)
-asphalt_normal = None
 if tex_bc:
     base = atlas_sample(asphalt, tex_bc, RECT_TOP_LEFT, False, -700, -400)
-    if tex_n:
-        nrm = atlas_sample(asphalt, tex_n, RECT_TOP_LEFT, False, -700, 1200)
-        asphalt_normal = nrm
 else:
     base = noise_blend(asphalt, (0.025, 0.025, 0.027), (0.06, 0.06, 0.062), 0.08, 0)
 
@@ -271,24 +300,20 @@ link(const(asphalt, 0.6, -500, 420), "", rough, "B")
 link(any_line, "", rough, "Alpha")
 MEL.connect_material_property(rough, "", MP.MP_ROUGHNESS)
 
-if asphalt_normal:
-    # World-space normal (the projection is world-aligned, not the mesh's tangents); flat on lines.
-    asphalt.set_editor_property("tangent_space_normal", False)
-    wp2 = node(asphalt, unreal.MaterialExpressionWorldPosition, -500, 1500)
-    wn = custom(asphalt, WORLD_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["T", "WP", "Period", "Flat"], -250, 1300, "WorldNormal")
-    link(asphalt_normal, "", wn, "T")
-    link(wp2, "", wn, "WP")
-    link(const(asphalt, PERIOD_CM, -500, 1600), "", wn, "Period")
-    link(any_line, "", wn, "Flat")
-    MEL.connect_material_property(wn, "", MP.MP_NORMAL)
+if tex_bc and tex_n:
+    # Flat where lines are painted.
+    world_normal(asphalt, tex_n, RECT_TOP_LEFT, False, any_line, -250, 1300)
 finish(asphalt)
 log("Asphalt with lane markings")
 
 # --- Concrete: light grey, slightly mottled --------------------------------------------------
 concrete = new_material("M_RoadConcrete")
 tex_c = load_tex(CONCRETE_BC)
+tex_cn = load_tex(CONCRETE_N)
 if tex_c:
     base = atlas_sample(concrete, tex_c, RECT_BOTTOM_LEFT, True, -700, 0)
+    if tex_cn:
+        world_normal(concrete, tex_cn, RECT_BOTTOM_LEFT, True, None, -250, 900)
 else:
     base = noise_blend(concrete, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
 MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
