@@ -15,6 +15,10 @@ Curved roads 1–3 foundations wide with lane lines, road-edge fences, intersect
 
 Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersections are **free to build**.
 
+![A curved road with grid fence, cement blocks and power poles](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-and-fences.jpg)
+
+![The eight Road Maker buildables in the build menu](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu.png)
+
 ### Roads (1, 2 and 3 foundations wide)
 - Two clicks: start and end. The road curves like a vehicle path; there is also a straight build mode, and the mouse wheel turns it.
 - Snaps to the ends of other roads and intersections, and to foundation edges (top level with the foundation).
@@ -22,11 +26,15 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Other buildings can be placed on roads, just like on foundations.
 
 ### Lane lines — Customizer › Road Lines
+![The Road Lines tab in the customizer](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-lines.png)
+
 - **Sidelines:** on / off.
 - **Lanes:** 1 lane, 2 lanes dashed or continuous, 3 lanes dashed or continuous.
 - Hover a road to preview, click to apply. Middle lines use the **primary colour**, side lines the **secondary colour**; roads have their own default swatch group ("Roads").
 
 ### Road Intersection
+![A four-way intersection with side lines and fences on the curbs](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection.jpg)
+
 - Aim between road ends: joins up to 6 free road ends (or free intersection ends) with curved curbs.
 - Free ends are capped and can be built on again; intersections can join each other.
 - Side lines along the curbs (Road Lines › Sidelines).
