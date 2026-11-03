@@ -31,7 +31,8 @@
 		},
 		{
 			"Name": "ProceduralMeshComponent",
-			"Enabled": true
+			"Enabled": true,
+			"BasePlugin": true
 		}
 	]
 }
