@@ -122,6 +122,7 @@ namespace
 		int32 SavedScroll = 0;                  // the player's scroll before we steered the end
 		float EndYawOffset = 0.f;               // learned: 0 or 180 between scroll heading and travel
 		bool bEndOffsetLearned = false;
+		int32 EndTrim = 0;                      // learned: whole degrees the game's heading is off
 	};
 
 	/** Set while we place the hologram again ourselves, so our hook lets the game's code run. */
@@ -174,40 +175,6 @@ namespace
 		}
 	}
 
-	/** Diagnostics for the path end: a few lines per second while on a road-end snap point. */
-	void LogPathEnd(AFGHologram* Hologram, const FVector& Axis)
-	{
-		static double LastLog = 0.0;
-		const double Now = FPlatformTime::Seconds();
-		if (Now - LastLog < 0.5)
-		{
-			return;
-		}
-		LastLog = Now;
-		const FVector* Entry = VectorField(Hologram, TEXT("mEndPointEntryDirection"));
-		const FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection"));
-		const FVector* StartLoc = VectorField(Hologram, TEXT("mStartLocation"));
-		const FVector* EndLoc = VectorField(Hologram, TEXT("mEndLocation"));
-		FBoolProperty* Custom = FindFProperty<FBoolProperty>(Hologram->GetClass(), TEXT("mUseCustomEndRotation"));
-		FString Splines;
-		TInlineComponentArray<USplineComponent*> Comps(Hologram);
-		for (USplineComponent* S : Comps)
-		{
-			const int32 N = S->GetNumberOfSplinePoints();
-			if (N >= 2)
-			{
-				Splines += FString::Printf(TEXT(" %s[%d] startDir=%s endDir=%s;"), *S->GetName(), N,
-					*S->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).ToCompactString(),
-					*S->GetDirectionAtSplinePoint(N - 1, ESplineCoordinateSpace::World).ToCompactString());
-			}
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("PathEnd: scroll=%d custom=%d entry=%s exit=%s start=%s end=%s actorYaw=%.1f roadAxis=%s |%s"),
-			Hologram->GetScrollRotateValue(), Custom ? (int32)Custom->GetPropertyValue_InContainer(Hologram) : -1,
-			Entry ? *Entry->ToCompactString() : TEXT("?"), Exit ? *Exit->ToCompactString() : TEXT("?"),
-			StartLoc ? *StartLoc->ToCompactString() : TEXT("?"), EndLoc ? *EndLoc->ToCompactString() : TEXT("?"),
-			Hologram->GetActorRotation().Yaw, *Axis.ToCompactString(), *Splines);
-	}
-
 	/** Travel direction at the end of the path hologram's own (unprojected) spline. */
 	bool GetPathEndDirection(AFGHologram* Hologram, FVector& OutDir)
 	{
@@ -249,8 +216,21 @@ namespace
 		}
 		const float WantYaw = Travel.Rotation().Yaw;
 		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
-		Hologram->SetScrollRotateValue(FMath::RoundToInt(FRotator::NormalizeAxis(WantYaw + State.EndYawOffset)));
+		const float Heading = FRotator::NormalizeAxis(WantYaw + State.EndYawOffset);
+		Hologram->SetScrollRotateValue(FMath::RoundToInt(Heading) + State.EndTrim);
 		Scope(Hologram, Placed);
+
+		// Fine trim: compare the heading the game actually used with the one wanted (whole degrees,
+		// the rotation step is 1 here, see the GetRotationStep hook).
+		if (const FVector* Entry = VectorField(Hologram, TEXT("mEndPointEntryDirection")))
+		{
+			const float Err = FMath::FindDeltaAngleDegrees(Heading, Entry->Rotation().Yaw);
+			if (FMath::Abs(Err) > 0.6f && FMath::Abs(Err) < 30.f)
+			{
+				State.EndTrim -= FMath::RoundToInt(Err);
+				State.EndTrim = FMath::Clamp(State.EndTrim, -20, 20);
+			}
+		}
 
 		FVector Have;
 		if (!State.bEndOffsetLearned && GetPathEndDirection(Hologram, Have))
@@ -373,7 +353,6 @@ namespace
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
 				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
 				PlacePathEnd(Scope, Hologram, Placed, Start, Axis, State);
-				LogPathEnd(Hologram, Axis);
 			}
 			return true;
 		}
@@ -435,6 +414,18 @@ void RMVanillaSnapping::InstallHooks()
 					State->bFlipped = !State->bFlipped;
 				}
 				Scope.Cancel();
+			}
+		});
+
+	// The path end turns in rotation-step increments (10 degrees); on a road-end snap point use 1
+	// degree so the end can line up with the road.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGVehiclePathSegmentHologram::GetRotationStep, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
+		[](auto& Scope, const AFGVehiclePathSegmentHologram* Hologram)
+		{
+			const FPathState* State = GPathStates.Find(Hologram);
+			if (State && State->bSetCustomEnd)
+			{
+				Scope.Override(1);
 			}
 		});
 
