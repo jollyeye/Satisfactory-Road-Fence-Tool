@@ -1,8 +1,9 @@
 // A "Road Lines" option in the customizer. Each descriptor changes either the side lines or the
 // lane layout of the road it is applied to; the other setting is kept.
-// Derives from the pattern type because the customizer menu draws patterns with their icon (other
-// types are drawn as colour swatches). It is never applied as a pattern: the paint gun's fire is
-// intercepted while a Road Lines option is selected (see RMRoadLinePaint).
+// Derives from the material type because the customizer menu draws materials with their own icon
+// (swatches are drawn from colour slots, patterns from the game's pattern atlas by ID). It is never
+// applied as a material: the paint gun's fire is intercepted while a Road Lines option is selected
+// (see RMRoadLinePaint), and its buildable map is empty, so it swaps nothing.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,7 +12,7 @@
 #include "RMRoadLineDescriptor.generated.h"
 
 UCLASS(Blueprintable, BlueprintType)
-class ROADMAKER_API URMRoadLineDescriptor : public UFGFactoryCustomizationDescriptor_Pattern
+class ROADMAKER_API URMRoadLineDescriptor : public UFGFactoryCustomizationDescriptor_Material
 {
 	GENERATED_BODY()
 

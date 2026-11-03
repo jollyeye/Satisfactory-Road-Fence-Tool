@@ -165,15 +165,15 @@ namespace
 		{
 			GActiveSides = nullptr;
 			GActiveLanes = nullptr;
-			// Road Lines options are pattern-type descriptors. If the paint gun still holds one as
-			// its active pattern (e.g. a colour was picked after it), drop it so it never gets
-			// applied to a building as a pattern.
+			// Road Lines options are material-type descriptors. If the paint gun still holds one as
+			// its active material (e.g. a colour was picked after it), drop it so it never gets
+			// applied to a building as a material.
 			if (State)
 			{
-				TSubclassOf<UFGFactoryCustomizationDescriptor_Pattern> Pattern = State->GetActivePatternDesc();
-				if (Pattern && Pattern->IsChildOf(URMRoadLineDescriptor::StaticClass()))
+				TSubclassOf<UFGFactoryCustomizationDescriptor_Material> Material = State->GetActiveMaterialDesc();
+				if (Material && Material->IsChildOf(URMRoadLineDescriptor::StaticClass()))
 				{
-					State->SetActivePatternDesc(nullptr);
+					State->SetActiveMaterialDesc(nullptr);
 				}
 			}
 		}
