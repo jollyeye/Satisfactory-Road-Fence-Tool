@@ -409,7 +409,36 @@ namespace
 				ReleasePathSnap(Hologram);
 				return false;
 			}
-			const FHitResult Placed = MoveHit(Hit, Best);
+
+			// Road surface at this end: along the road (with its slope) and its up normal.
+			const FVector Along3 = BestEnd->Outward.GetSafeNormal();          // out of the road
+			const FVector Across = FVector::CrossProduct(FVector::UpVector, Along3).GetSafeNormal();
+			FVector SurfaceUp = FVector::CrossProduct(Across, Along3).GetSafeNormal();
+			if (SurfaceUp.Z < 0.f)
+			{
+				SurfaceUp = -SurfaceUp;
+			}
+			if (SurfaceUp.IsNearlyZero())
+			{
+				SurfaceUp = FVector::UpVector;
+			}
+
+			// At a free end the points move 1 m onto the road: the game lays vehicle paths onto the
+			// surface below them, and right on the edge of a raised end part of it would drop to the
+			// ground ("vehicles collide with the terrain"). Joined ends stay on the joint so paths
+			// on neighbouring roads still meet.
+			const bool bFreeEnd = BestEnd->Road
+				? !RMRoadUtils::IsEndOccupied(Hologram->GetWorld(), BestEnd->Road, BestEnd->EndIndex)
+				: !RMRoadUtils::IsMouthOccupied(Hologram->GetWorld(), BestEnd->Intersection, BestEnd->Location);
+			if (bFreeEnd)
+			{
+				Best -= Along3 * 100.f;
+			}
+
+			// Keep the road's tilt in the hit normal: rail tracks take their slope from it.
+			FHitResult Placed = MoveHit(Hit, Best);
+			Placed.Normal = SurfaceUp;
+			Placed.ImpactNormal = SurfaceUp;
 			AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram);
 			const FVector Axis = FVector(BestEnd->Outward.X, BestEnd->Outward.Y, 0.f).GetSafeNormal();
 			if (!Path || Axis.IsNearlyZero())
