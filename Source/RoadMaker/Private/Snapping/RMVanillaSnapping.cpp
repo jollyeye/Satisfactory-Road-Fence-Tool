@@ -175,40 +175,50 @@ namespace
 		}
 	}
 
-	/** Diagnostics for rail tracks on road-end snap points (a few lines per second). */
-	void LogRail(AFGHologram* Hologram, const FHitResult& Hit, const FVector& Axis)
+	/**
+	 * Rail track on a road-end snap point. The track's start direction (and its end direction once
+	 * custom end rotation is on) is the scroll value used as a world heading, rounded to the rotation
+	 * step (seen in the log), so the scroll is set to the road's heading; the step is 1 degree here
+	 * (GetRotationStep hook). Start: along the road the way you look. End: the way the track travels.
+	 */
+	template <typename TScope, typename THologram>
+	void PlaceRail(TScope& Scope, THologram* Hologram, const FHitResult& Hit, const FHitResult& Placed, const FRMRoadEndRef& End, const FVector& Axis)
 	{
-		static double LastLog = 0.0;
-		const double Now = FPlatformTime::Seconds();
-		if (Now - LastLog < 0.4)
-		{
-			return;
-		}
-		LastLog = Now;
-		auto Vec = [Hologram](const TCHAR* Name) -> FString
-		{
-			const FVector* V = VectorField(Hologram, Name);
-			return V ? FString::Printf(TEXT("%s(yaw %.2f)"), *V->ToCompactString(), V->Rotation().Yaw) : FString(TEXT("?"));
-		};
-		FBoolProperty* Custom = FindFProperty<FBoolProperty>(Hologram->GetClass(), TEXT("mUseCustomEndRotation"));
-		FString Splines;
-		TInlineComponentArray<USplineComponent*> Comps(Hologram);
-		for (USplineComponent* S : Comps)
-		{
-			const int32 N = S->GetNumberOfSplinePoints();
-			if (N >= 2)
-			{
-				Splines += FString::Printf(TEXT(" %s[%d] startYaw=%.2f endYaw=%.2f;"), *S->GetName(), N,
-					S->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).Rotation().Yaw,
-					S->GetDirectionAtSplinePoint(N - 1, ESplineCoordinateSpace::World).Rotation().Yaw);
-			}
-		}
+		const UObject* Owner = End.Road ? static_cast<const UObject*>(End.Road) : static_cast<const UObject*>(End.Intersection);
 		const bool bStart = IsStartStep(Hologram);
-		UE_LOG(LogRoadMaker, Display, TEXT("RailDiag: start=%d scroll=%d rotStep=%d custom=%d viewYaw=%.2f roadYaw=%.2f actorYaw=%.2f hitTangent=%s snappedStartTangent=%s hitLoc=%s snappedStart=%s |%s"),
-			bStart, Hologram->GetScrollRotateValue(), Hologram->GetRotationStep(),
-			Custom ? (int32)Custom->GetPropertyValue_InContainer(Hologram) : -1,
-			(Hit.TraceEnd - Hit.TraceStart).Rotation().Yaw, Axis.Rotation().Yaw, Hologram->GetActorRotation().Yaw,
-			*Vec(TEXT("mHitTangent")), *Vec(TEXT("mSnappedStartTangent")), *Vec(TEXT("mHitLocation")), *Vec(TEXT("mSnappedStartLocation")), *Splines);
+		FPathState& State = GPathStates.FindOrAdd(Hologram);
+		if (State.Owner.Get() != Owner || State.EndIndex != End.EndIndex || State.bStartStep != bStart)
+		{
+			State.bFlipped = false;
+		}
+		State.Owner = Owner;
+		State.EndIndex = End.EndIndex;
+		State.bStartStep = bStart;
+		if (!State.bSetCustomEnd)
+		{
+			State.SavedScroll = Hologram->GetScrollRotateValue();
+			State.bSetCustomEnd = true; // "we changed the scroll"; undone in ReleasePathSnap
+		}
+
+		FVector Dir;
+		if (bStart)
+		{
+			const FVector View = Hit.TraceEnd - Hit.TraceStart;
+			Dir = FVector::DotProduct(View, Axis) >= 0.f ? Axis : -Axis;
+		}
+		else
+		{
+			const FVector* StartField = VectorField(Hologram, TEXT("mSnappedStartLocation"));
+			const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
+			Dir = FVector::DotProduct(Placed.Location - Start, Axis) >= 0.f ? Axis : -Axis;
+			SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
+		}
+		if (State.bFlipped)
+		{
+			Dir = -Dir;
+		}
+		Hologram->SetScrollRotateValue(FMath::RoundToInt(Dir.Rotation().Yaw));
+		Scope(Hologram, Placed);
 	}
 
 	/** Travel direction at the end of the path hologram's own (unprojected) spline. */
@@ -352,10 +362,13 @@ namespace
 			const FVector Axis = FVector(BestEnd->Outward.X, BestEnd->Outward.Y, 0.f).GetSafeNormal();
 			if (!Path || Axis.IsNearlyZero())
 			{
-				Scope(Hologram, Placed); // rail tracks: snap points only (for now: logging how they turn)
-				if (!Axis.IsNearlyZero())
+				if (!Path && !Axis.IsNearlyZero())
 				{
-					LogRail(Hologram, Hit, Axis);
+					PlaceRail(Scope, Hologram, Hit, Placed, *BestEnd, Axis);
+				}
+				else
+				{
+					Scope(Hologram, Placed);
 				}
 				return true;
 			}
@@ -469,11 +482,27 @@ void RMVanillaSnapping::InstallHooks()
 			}
 		});
 
-	// Rail diagnostics: how scrolling reaches the track hologram.
+	// Rail tracks on road-end snap points: scroll flips 180, and turning uses 1 degree steps.
 	SUBSCRIBE_METHOD_VIRTUAL(AFGRailroadTrackHologram::ScrollRotate, GetMutableDefault<AFGRailroadTrackHologram>(),
 		[](auto& Scope, AFGRailroadTrackHologram* Hologram, int32 Delta, int32 Step)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("RailDiag: ScrollRotate delta=%d step=%d scroll(before)=%d"), Delta, Step, Hologram->GetScrollRotateValue());
+			if (FPathState* State = GPathStates.Find(Hologram))
+			{
+				if (Delta != 0)
+				{
+					State->bFlipped = !State->bFlipped;
+				}
+				Scope.Cancel();
+			}
+		});
+
+	SUBSCRIBE_METHOD_VIRTUAL(AFGRailroadTrackHologram::GetRotationStep, GetMutableDefault<AFGRailroadTrackHologram>(),
+		[](auto& Scope, const AFGRailroadTrackHologram* Hologram)
+		{
+			if (GPathStates.Contains(Hologram))
+			{
+				Scope.Override(1);
+			}
 		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
