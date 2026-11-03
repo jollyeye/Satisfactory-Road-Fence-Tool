@@ -91,7 +91,35 @@ void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radiu
 {
 	OutEnds.Reset();
 	TArray<ARMBuildableRoad*> Roads;
-	GatherNearby(World, Center, Radius, Roads);
+	TArray<ARMBuildableIntersection*> Intersections;
+	GatherNearby(World, Center, Radius, Roads, &Intersections);
+
+	// Intersection mouths whose road was removed (or never built) are free ends too.
+	for (ARMBuildableIntersection* X : Intersections)
+	{
+		if (X == Ignore)
+		{
+			continue;
+		}
+		TArray<FRMRoadEnd> Mouths;
+		X->GetWorldEnds(Mouths);
+		for (int32 M = 0; M < Mouths.Num(); ++M)
+		{
+			const FRMRoadEnd& Mouth = Mouths[M];
+			FRMRoadEndRef Ref;
+			Ref.Intersection = X;
+			Ref.EndIndex = M;
+			Ref.Location = Mouth.Center;
+			Ref.Outward = -FVector(Mouth.Inward.X, Mouth.Inward.Y, 0.f).GetSafeNormal();
+			Ref.Width = Mouth.Width;
+			Ref.Height = X->GetSlabHeight();
+			Ref.Distance = FVector::Dist(Ref.Location, Center);
+			if (Ref.Distance <= Radius && !IsMouthOccupied(World, X, Mouth.Center))
+			{
+				OutEnds.Add(Ref);
+			}
+		}
+	}
 
 	for (ARMBuildableRoad* Road : Roads)
 	{
@@ -105,6 +133,8 @@ void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radiu
 			Ref.Road = Road;
 			Ref.EndIndex = E;
 			Road->GetEndWorld(E, Ref.Location, Ref.Outward);
+			Ref.Width = Road->GetRoadWidth();
+			Ref.Height = Road->GetRoadHeight();
 			Ref.Distance = FVector::Dist(Ref.Location, Center);
 			if (Ref.Distance <= Radius && !IsEndOccupied(World, Road, E))
 			{
@@ -118,4 +148,53 @@ void RMRoadUtils::FindFreeEnds(UWorld* World, const FVector& Center, float Radiu
 	{
 		OutEnds.SetNum(MaxCount);
 	}
+}
+
+bool RMRoadUtils::IsMouthOccupied(UWorld* World, const ARMBuildableIntersection* Intersection, const FVector& MouthCenter)
+{
+	TArray<ARMBuildableRoad*> Roads;
+	TArray<ARMBuildableIntersection*> Intersections;
+	GatherNearby(World, MouthCenter, 150.f, Roads, &Intersections);
+	for (ARMBuildableRoad* Road : Roads)
+	{
+		for (int32 E = 0; E < 2; ++E)
+		{
+			FVector L, O;
+			Road->GetEndWorld(E, L, O);
+			if (FVector::Dist(L, MouthCenter) < JoinTolerance)
+			{
+				return true;
+			}
+		}
+	}
+	for (ARMBuildableIntersection* Other : Intersections)
+	{
+		if (Other == Intersection)
+		{
+			continue;
+		}
+		TArray<FRMRoadEnd> Ends;
+		Other->GetWorldEnds(Ends);
+		for (const FRMRoadEnd& E : Ends)
+		{
+			if (FVector::Dist(E.Center, MouthCenter) < JoinTolerance)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+TArray<FVector> FRMRoadEndRef::GetPointsAcross(float Step) const
+{
+	TArray<FVector> Points;
+	const FVector Across = FVector::CrossProduct(FVector::UpVector, FVector(Outward.X, Outward.Y, 0.f)).GetSafeNormal();
+	const float Half = Width * 0.5f;
+	const int32 Count = FMath::FloorToInt(Half / FMath::Max(Step, 1.f));
+	for (int32 K = -Count; K <= Count; ++K)
+	{
+		Points.Add(Location + Across * (K * Step));
+	}
+	return Points;
 }

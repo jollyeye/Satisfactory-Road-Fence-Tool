@@ -20,6 +20,8 @@ public:
 	/** Ends in actor-local space, plus the slab thickness taken from the connected roads. */
 	void SetEnds(const TArray<FRMRoadEnd>& LocalEnds, float Height);
 
+	float GetSlabHeight() const { return mHeight; }
+
 	/** Saved ends converted to world space, used to treat those road ends as occupied. */
 	void GetWorldEnds(TArray<FRMRoadEnd>& OutEnds) const;
 

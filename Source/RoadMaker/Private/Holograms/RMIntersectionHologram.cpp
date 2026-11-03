@@ -47,7 +47,7 @@ void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& h
 	for (const FRMRoadEndRef& R : Found)
 	{
 		Origin += R.Location;
-		Height = FMath::Max(Height, R.Road->GetRoadHeight());
+		Height = FMath::Max(Height, R.Height);
 	}
 	Origin /= Found.Num();
 	SetActorLocationAndRotation(Origin, FRotator::ZeroRotator);
@@ -58,7 +58,7 @@ void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& h
 		FRMRoadEnd E;
 		E.Center = R.Location - Origin;
 		E.Inward = FVector(R.Outward.X, R.Outward.Y, 0.f).GetSafeNormal();
-		E.Width = R.Road->GetRoadWidth();
+		E.Width = R.Width;
 		Local.Add(E);
 	}
 

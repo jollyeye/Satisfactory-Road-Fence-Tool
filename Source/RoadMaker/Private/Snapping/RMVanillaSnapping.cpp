@@ -28,6 +28,9 @@ namespace
 
 	enum class ESnapKind : uint8 { None, PowerPole, StreetLight, PathStart };
 
+	/** Correction between "facing" and the street light model's own forward axis (was 90 off in game). */
+	constexpr float StreetLightYawOffset = -90.f;
+
 	ESnapKind KindOf(const AFGHologram* Hologram)
 	{
 		const UClass* Build = Hologram ? Hologram->GetBuildClass().Get() : nullptr;
@@ -118,14 +121,29 @@ namespace
 
 		if (Kind == ESnapKind::PathStart)
 		{
-			// Points near a free road end go to the centre of that end, level with the road top.
+			// Points near a free road end (or free intersection mouth) snap to the closest of the
+			// points every 2 m across that end, level with the road top.
 			TArray<FRMRoadEndRef> Ends;
-			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 600.f, 1, nullptr, Ends);
-			if (Ends.Num() == 0)
+			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 3, nullptr, Ends);
+			FVector Best = FVector::ZeroVector;
+			float BestDist = 600.f;
+			for (const FRMRoadEndRef& End : Ends)
+			{
+				for (const FVector& P : End.GetPointsAcross(200.f))
+				{
+					const float D = FVector::Dist(P, Hit.Location);
+					if (D < BestDist)
+					{
+						BestDist = D;
+						Best = P;
+					}
+				}
+			}
+			if (BestDist >= 600.f)
 			{
 				return false;
 			}
-			Scope(Hologram, MoveHit(Hit, Ends[0].Location));
+			Scope(Hologram, MoveHit(Hit, Best));
 			return true;
 		}
 
@@ -151,7 +169,8 @@ namespace
 				State.LastScroll = Scroll;
 			}
 			const FVector Facing = State.bFacingAway ? -Line.Inward : Line.Inward;
-			Hologram->SetActorRotation(FRotator(0.f, Facing.Rotation().Yaw, 0.f));
+			// The street light model's arm points along its local Y axis, not X: turn by 90 degrees.
+			Hologram->SetActorRotation(FRotator(0.f, Facing.Rotation().Yaw + StreetLightYawOffset, 0.f));
 		}
 		return true;
 	}

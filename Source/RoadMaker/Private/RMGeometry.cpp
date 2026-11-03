@@ -735,14 +735,15 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		}
 	}
 
-	// Curb sides. Road mouths are skipped: the road's own end cap closes them.
+	// Curb sides, and an end face (cap) on every road mouth: the mouth stays closed when its road is
+	// removed. Where a road is attached its own end cap meets this face inside the solid, unseen.
 	float U = 0.f;
 	for (int32 K = 0; K < Ring.Num(); ++K)
 	{
 		const FVector A = Ring[K];
 		const FVector B = Ring[(K + 1) % Ring.Num()];
 		const float EdgeLen = FVector::Dist(A, B);
-		if (!EdgeIsMouth[K])
+		if (EdgeLen > 0.5f)
 		{
 			const FVector Mid = (A + B) * 0.5f;
 			FVector N = FVector::CrossProduct(B - A, FVector::UpVector).GetSafeNormal();

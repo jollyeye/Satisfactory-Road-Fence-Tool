@@ -7,13 +7,20 @@
 class ARMBuildableRoad;
 class ARMBuildableIntersection;
 
+/** A free end: a road end, or an intersection mouth with no road attached. */
 struct ROADMAKER_API FRMRoadEndRef
 {
-	ARMBuildableRoad* Road = nullptr;
+	ARMBuildableRoad* Road = nullptr;                 // set for road ends
+	ARMBuildableIntersection* Intersection = nullptr; // set for intersection mouths
 	int32 EndIndex = 0;
 	FVector Location = FVector::ZeroVector; // top-centre, world
-	FVector Outward = FVector::ForwardVector;
+	FVector Outward = FVector::ForwardVector; // direction a road attached here continues in
+	float Width = 0.f;
+	float Height = 0.f;
 	float Distance = 0.f; // to the query point
+
+	/** Points every Step cm across the end (centre included, out to the edges). */
+	TArray<FVector> GetPointsAcross(float Step) const;
 };
 
 namespace RMRoadUtils
@@ -28,7 +35,10 @@ namespace RMRoadUtils
 	/** True if another road end or an intersection already sits on this end. */
 	ROADMAKER_API bool IsEndOccupied(UWorld* World, const ARMBuildableRoad* Road, int32 EndIndex);
 
-	/** Free road ends within Radius of Center, nearest first. */
+	/** True if a road end or another intersection already sits on this mouth. */
+	ROADMAKER_API bool IsMouthOccupied(UWorld* World, const ARMBuildableIntersection* Intersection, const FVector& MouthCenter);
+
+	/** Free road ends and free intersection mouths within Radius of Center, nearest first. */
 	ROADMAKER_API void FindFreeEnds(UWorld* World, const FVector& Center, float Radius, int32 MaxCount,
 		const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds);
 }
