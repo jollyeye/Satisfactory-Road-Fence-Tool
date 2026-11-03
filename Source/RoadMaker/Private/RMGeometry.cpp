@@ -620,12 +620,17 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 	}
 }
 
-void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel)
+void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale)
 {
-	// Tubes and the mesh sheet stop inside the end posts (5 cm), so two fences meeting at a corner
-	// or on a slope do not run through each other. Everything sits in the posts' centre plane.
-	const float PostHalf = 5.f;
+	// Scale 1: 2 m tall. Scale 2: the 4 m version (twice as tall, thicker posts and tubes).
+	// Tubes and the mesh sheet stop inside the end posts, so two fences meeting at a corner or on a
+	// slope do not run through each other. Everything sits in the posts' centre plane.
+	const float Height = 200.f * Scale;
+	const float PostHalf = 5.f * (Scale > 1.f ? 1.6f : 1.f);
+	const float TubeHalf = 3.f * (Scale > 1.f ? 1.5f : 1.f);
 	const float FrameX = -3.f;
+	const float Bottom = 8.f + (TubeHalf - 3.f);
+
 	// Built against true vertical (not the road's tilted up) so the sheet, tubes and posts stay
 	// upright and line up on slopes.
 	TArray<FRMFrame> Upright = Frames;
@@ -640,7 +645,8 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	// is laid out by the material from UV1.x = metres along the fence and the world height, so it
 	// stays upright on slopes.
 	const int32 PanelFirst = Panel.Vertices.Num();
-	ExtrudeProfile(Inner, { FVector2D(FrameX, 197.f), FVector2D(FrameX, 11.f) }, false, FVector2D(FrameX + 10.f, 100.f), 200.f, Panel);
+	ExtrudeProfile(Inner, { FVector2D(FrameX, Height - TubeHalf), FVector2D(FrameX, Bottom + TubeHalf) }, false,
+		FVector2D(FrameX + 10.f, Height * 0.5f), 200.f, Panel);
 	Panel.MarkUV1.SetNumZeroed(Panel.Vertices.Num());
 	for (int32 I = PanelFirst; I < Panel.Vertices.Num(); ++I)
 	{
@@ -648,14 +654,15 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	}
 
 	// Top and bottom tubes plus posts about every 3 m (and at both ends).
-	const TArray<FVector2D> Tube = { FVector2D(FrameX - 3.f, -3.f), FVector2D(FrameX + 3.f, -3.f), FVector2D(FrameX + 3.f, 3.f), FVector2D(FrameX - 3.f, 3.f) };
-	const TArray<FRMFrame> TopFrames = LiftFrames(Inner, 200.f);
-	const TArray<FRMFrame> BottomFrames = LiftFrames(Inner, 8.f);
-	ExtrudeProfile(TopFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
-	ExtrudeProfile(BottomFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
+	const TArray<FVector2D> Tube = { FVector2D(FrameX - TubeHalf, -TubeHalf), FVector2D(FrameX + TubeHalf, -TubeHalf),
+		FVector2D(FrameX + TubeHalf, TubeHalf), FVector2D(FrameX - TubeHalf, TubeHalf) };
+	ExtrudeProfile(LiftFrames(Inner, Height), Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
+	ExtrudeProfile(LiftFrames(Inner, Bottom), Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
+	const float PostTop = Height + TubeHalf + 2.f;
 	ForEvery(Upright, 300.f, [&](const FRMFrame& F)
 	{
-		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f) + F.Right * FrameX, F.Fwd, F.Right, FVector::UpVector, FVector(PostHalf, 5.f, 105.f), UVScale);
+		Posts.AddBox(F.Pos + FVector(0.f, 0.f, PostTop * 0.5f) + F.Right * FrameX, F.Fwd, F.Right, FVector::UpVector,
+			FVector(PostHalf, PostHalf, PostTop * 0.5f), UVScale);
 	});
 }
 

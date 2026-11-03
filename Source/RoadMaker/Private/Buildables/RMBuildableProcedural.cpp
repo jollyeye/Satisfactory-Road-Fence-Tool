@@ -22,12 +22,50 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 	mMesh->bUseComplexAsSimpleCollision = true;
 	mMesh->SetCollisionProfileName(TEXT("BlockAll"));
 	mMesh->SetCastShadow(true);
+
+	mFarMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ProceduralMeshFar"));
+	mFarMesh->SetupAttachment(mMesh);
+	mFarMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mFarMesh->SetCanEverAffectNavigation(false);
+	mFarMesh->SetCastShadow(true);
 }
 
 void ARMBuildableProcedural::BeginPlay()
 {
 	Super::BeginPlay();
+	UpdateLODDistances();
 	RebuildMesh();
+}
+
+void ARMBuildableProcedural::UpdateLODDistances()
+{
+	if (!mMesh || !mFarMesh)
+	{
+		return;
+	}
+	const bool bFar = mLODDistance > 0.f && !IsRunningDedicatedServer();
+	mMesh->SetCullDistance(bFar ? mLODDistance : 0.f);
+	mFarMesh->MinDrawDistance = bFar ? mLODDistance : 0.f;
+	mFarMesh->SetVisibility(bFar);
+	mFarMesh->MarkRenderStateDirty();
+}
+
+void ARMBuildableProcedural::ClearFarMesh()
+{
+	if (mFarMesh)
+	{
+		mFarMesh->ClearAllMeshSections();
+	}
+}
+
+void ARMBuildableProcedural::ApplyFarSection(const FRMMesh& Data, int32 Section, UMaterialInterface* Material)
+{
+	if (!mFarMesh || mLODDistance <= 0.f || IsRunningDedicatedServer())
+	{
+		return;
+	}
+	Data.ApplyToSection(mFarMesh, Section, false);
+	mFarMesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
 }
 
 void ARMBuildableProcedural::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

@@ -40,6 +40,7 @@ void ARMBuildableIntersection::OnRep_Ends()
 void ARMBuildableIntersection::RebuildMesh()
 {
 	mMesh->ClearAllMeshSections();
+	ClearFarMesh();
 	FRMMesh Top, Body;
 	TArray<FVector> Outline;
 	TArray<bool> IsMouth;
@@ -61,6 +62,24 @@ void ARMBuildableIntersection::RebuildMesh()
 		RMGeometry::BuildCurbLines(Curbs, mEdgeLineInset, Top, Lines);
 		Lines.ApplyToSection(mMesh, 2, false);
 		ApplyMaterial(2, mTopMaterial);
+	}
+
+	// Far version: 3 points per curb fillet instead of mFilletSegments.
+	FRMMesh FarTop, FarBody;
+	TArray<FVector> FarOutline;
+	TArray<bool> FarIsMouth;
+	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth))
+	{
+		ApplyFarSection(FarTop, 0, mTopMaterial);
+		ApplyFarSection(FarBody, 1, mBodyMaterial);
+		if (mPreviewSideLines.Get(mSideLines))
+		{
+			TArray<TArray<FVector>> FarCurbs;
+			RMGeometry::GetIntersectionCurbs(FarOutline, FarIsMouth, FarCurbs);
+			FRMMesh FarLines;
+			RMGeometry::BuildCurbLines(FarCurbs, mEdgeLineInset, FarTop, FarLines);
+			ApplyFarSection(FarLines, 2, mTopMaterial);
+		}
 	}
 	ApplyMarkingColors(mCustomizationData);
 }
@@ -100,8 +119,14 @@ void ARMBuildableIntersection::ApplyMarkingColors(const FFactoryCustomizationDat
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
+	{
+		if (M)
+		{
+			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+		}
+	}
 }
 
 void ARMBuildableIntersection::ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData)

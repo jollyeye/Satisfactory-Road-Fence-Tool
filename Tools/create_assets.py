@@ -254,6 +254,8 @@ TOOLS = [
      {"m_fence_type": "JERSEY_BARRIER"}, [(Desc_Cement, 3)], fence_icons, {"m_main_material": mat_concrete}),
     ("Fence_Grid", RMBuildableFence, holo_fence, "Metal Grid Fence", "Metal grid fence. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
+    ("Fence_GridTall", RMBuildableFence, holo_fence, "Metal Grid Fence (4m tall)", "Tall metal grid fence, 4 m high. Aim at a road to follow its edge. Cost is per 4 m.",
+     {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free ends. Cost is per connected road.",
      {}, [(Desc_Cement, 6)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]

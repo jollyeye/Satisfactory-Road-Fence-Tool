@@ -412,6 +412,7 @@ ASSIGN = {
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
+    "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)

@@ -38,8 +38,25 @@ protected:
 	/** Applies a material to a section, falling back to the first slot material. */
 	void ApplyMaterial(int32 Section, UMaterialInterface* Material);
 
+	/**
+	 * Distance version: subclasses build a simpler copy of their mesh (coarser curve sampling, fewer
+	 * fillet points) into mFarMesh with this. Beyond mLODDistance the engine draws only the far mesh,
+	 * closer only the detailed one (plain draw distances, no ticking). Collision stays on mMesh.
+	 */
+	void ApplyFarSection(const FRMMesh& Data, int32 Section, UMaterialInterface* Material);
+	void ClearFarMesh();
+	void UpdateLODDistances();
+
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mMesh;
+
+	/** Low-poly copy drawn beyond mLODDistance (no collision). */
+	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
+	UProceduralMeshComponent* mFarMesh;
+
+	/** Switch distance in cm between the detailed and the far mesh. 0 = no far mesh. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|LOD")
+	float mLODDistance = 8000.f;
 
 	/** How many recipe units this piece cost. Saved so the refund matches what was paid. */
 	UPROPERTY(SaveGame, Replicated)

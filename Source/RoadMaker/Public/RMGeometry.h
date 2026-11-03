@@ -182,7 +182,7 @@ namespace RMGeometry
 	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete);
 
 	/** Posts plus a mesh panel (panel uses a masked grid material). */
-	ROADMAKER_API void BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel);
+	ROADMAKER_API void BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale = 1.f);
 
 	/**
 	 * Builds the slab that joins 2..N road ends. Ends are ordered by angle around their centroid, the

@@ -28,6 +28,7 @@ void ARMBuildableRoad::RebuildMesh()
 	if (Frames.Num() < 2)
 	{
 		mMesh->ClearAllMeshSections();
+		ClearFarMesh();
 		return;
 	}
 
@@ -37,6 +38,18 @@ void ARMBuildableRoad::RebuildMesh()
 	Body.ApplyToSection(mMesh, 1, true);
 	ApplyMaterial(0, mTopMaterial);
 	ApplyMaterial(1, mBodyMaterial);
+
+	// Far version: the same road sampled every 4 m instead of every 1 m.
+	ClearFarMesh();
+	TArray<FRMFrame> FarFrames;
+	GetLocalFrames(FarFrames, 400.f);
+	if (FarFrames.Num() >= 2)
+	{
+		FRMMesh FarTop, FarBody;
+		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, FarTop, FarBody);
+		ApplyFarSection(FarTop, 0, mTopMaterial);
+		ApplyFarSection(FarBody, 1, mBodyMaterial);
+	}
 	ApplyMarkingColors(mCustomizationData);
 
 	// Anchors sit on the top-centre of each end, facing outward.
@@ -113,8 +126,14 @@ void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	mMesh->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-	mMesh->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
+	{
+		if (M)
+		{
+			M->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+			M->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+		}
+	}
 }
 
 void ARMBuildableRoad::ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData)

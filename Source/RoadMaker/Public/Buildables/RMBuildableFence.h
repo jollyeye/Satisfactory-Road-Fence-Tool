@@ -11,6 +11,7 @@ enum class ERMFenceType : uint8
 	GuardRail     UMETA(DisplayName = "Metal Guard Rail"),
 	JerseyBarrier UMETA(DisplayName = "Cement Blocks"),
 	GridFence     UMETA(DisplayName = "Metal Grid Fence"),
+	GridFenceTall UMETA(DisplayName = "Metal Grid Fence (4m tall)"),
 };
 
 UCLASS()
