@@ -478,15 +478,6 @@ namespace
 
 void RMRoadLinePaint::InstallHooks()
 {
-	SUBSCRIBE_METHOD(UFGBuildGunStatePaint::AddConstructDisqualifier,
-		[](auto& Scope, UFGBuildGunStatePaint* State, TSubclassOf<UFGConstructDisqualifier> Disqualifier)
-		{
-			if (IsAnyActive())
-			{
-				Scope.Cancel();
-			}
-		});
-
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(UFGBuildGunStatePaint::TickState_Implementation, GetMutableDefault<UFGBuildGunStatePaint>(),
 		[](UFGBuildGunStatePaint* State, float DeltaTime)
 		{
