@@ -167,6 +167,40 @@ namespace
 		}
 	}
 
+	/** Diagnostics for the path end: a few lines per second while on a road-end snap point. */
+	void LogPathEnd(AFGHologram* Hologram, const FVector& Axis)
+	{
+		static double LastLog = 0.0;
+		const double Now = FPlatformTime::Seconds();
+		if (Now - LastLog < 0.5)
+		{
+			return;
+		}
+		LastLog = Now;
+		const FVector* Entry = VectorField(Hologram, TEXT("mEndPointEntryDirection"));
+		const FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection"));
+		const FVector* StartLoc = VectorField(Hologram, TEXT("mStartLocation"));
+		const FVector* EndLoc = VectorField(Hologram, TEXT("mEndLocation"));
+		FBoolProperty* Custom = FindFProperty<FBoolProperty>(Hologram->GetClass(), TEXT("mUseCustomEndRotation"));
+		FString Splines;
+		TInlineComponentArray<USplineComponent*> Comps(Hologram);
+		for (USplineComponent* S : Comps)
+		{
+			const int32 N = S->GetNumberOfSplinePoints();
+			if (N >= 2)
+			{
+				Splines += FString::Printf(TEXT(" %s[%d] startDir=%s endDir=%s;"), *S->GetName(), N,
+					*S->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).ToCompactString(),
+					*S->GetDirectionAtSplinePoint(N - 1, ESplineCoordinateSpace::World).ToCompactString());
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("PathEnd: scroll=%d custom=%d entry=%s exit=%s start=%s end=%s actorYaw=%.1f roadAxis=%s |%s"),
+			Hologram->GetScrollRotateValue(), Custom ? (int32)Custom->GetPropertyValue_InContainer(Hologram) : -1,
+			Entry ? *Entry->ToCompactString() : TEXT("?"), Exit ? *Exit->ToCompactString() : TEXT("?"),
+			StartLoc ? *StartLoc->ToCompactString() : TEXT("?"), EndLoc ? *EndLoc->ToCompactString() : TEXT("?"),
+			Hologram->GetActorRotation().Yaw, *Axis.ToCompactString(), *Splines);
+	}
+
 	/** Turns the path's start arrow to the direction we set (it is only a visual). */
 	void PointStartArrow(AFGHologram* Hologram, const FVector& Dir)
 	{
@@ -265,22 +299,10 @@ namespace
 			}
 			else
 			{
-				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
-				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
-				// The game stores the end direction pointing back into the path (seen in game: the
-				// travel direction made the path loop), so it is the opposite of the way it travels.
-				FVector Dir = FVector::DotProduct(Best - Start, Axis) >= 0.f ? -Axis : Axis;
-				if (State.bFlipped)
-				{
-					Dir = -Dir;
-				}
-				if (FVector* Entry = VectorField(Hologram, TEXT("mEndPointEntryDirection")))
-				{
-					*Entry = Dir;
-					SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
-					State.bSetCustomEnd = true;
-				}
+				// End: the game ignores a written end direction (it rebuilds it every frame), so for
+				// now only the location snaps. Log what the game does here, to find what drives it.
 				Scope(Hologram, Placed);
+				LogPathEnd(Hologram, Axis);
 			}
 			return true;
 		}
@@ -334,13 +356,18 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL(AFGVehiclePathSegmentHologram::ScrollRotate, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
 		[](auto& Scope, AFGVehiclePathSegmentHologram* Hologram, int32 Delta, int32 Step)
 		{
-			if (FPathState* State = GPathStates.Find(Hologram))
+			FPathState* State = GPathStates.Find(Hologram);
+			if (State && State->bStartStep)
 			{
 				if (Delta != 0)
 				{
 					State->bFlipped = !State->bFlipped;
 				}
 				Scope.Cancel();
+			}
+			else if (State)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("PathEnd: scroll delta=%d step=%d"), Delta, Step);
 			}
 		});
 
