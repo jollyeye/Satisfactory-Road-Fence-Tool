@@ -1,0 +1,234 @@
+# Stylised isometric icons for Road Maker buildables: tiny painter's-algorithm renderer.
+import math, sys
+from PIL import Image, ImageDraw, ImageFilter
+import numpy as np
+
+S = 2048          # draw size (supersampled)
+OUT = 512
+L = np.array([0.35, 0.75, 1.0]); L = L / np.linalg.norm(L)
+CAM = np.array([1.0, 1.0, 1.15]); CAM = CAM / np.linalg.norm(CAM)
+
+def proj(p):
+    x, y, z = p
+    return np.array([(x - y) * 0.866, (x + y) * 0.5 - z * 1.0])
+
+class Scene:
+    def __init__(s): s.faces = []
+    def face(s, pts, col, layer=0, two=False, shade=True):
+        s.faces.append((np.array(pts, float), np.array(col, float), layer, two, shade))
+    def quad(s, a, b, c, d, col, **k): s.face([a, b, c, d], col, **k)
+
+def shade_col(n, col):
+    k = 0.42 + 0.62 * max(0.0, float(np.dot(n, L)))
+    return np.clip(col * k, 0, 255)
+
+def render(scene, path, shadow=True):
+    faces = []
+    for pts, col, layer, two, sh in scene.faces:
+        n = np.cross(pts[1] - pts[0], pts[2] - pts[0])
+        if np.linalg.norm(n) < 1e-9:
+            continue
+        n = n / np.linalg.norm(n)
+        if np.dot(n, CAM) < 0:
+            if not two:
+                continue
+            n = -n
+        depth = float(np.mean(pts @ CAM))
+        faces.append((layer, depth, pts, shade_col(n, col) if sh else col))
+    allp = np.array([proj(p) for f in faces for p in f[2]])
+    lo, hi = allp.min(0), allp.max(0)
+    scale = 0.84 * S / max(hi - lo)
+    off = np.array([S, S]) / 2 - (lo + hi) / 2 * scale
+    def P(p): q = proj(p) * scale + off; return (float(q[0]), float(q[1]))
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    if shadow:
+        sh = Image.new("L", (S, S), 0)
+        d = ImageDraw.Draw(sh)
+        zmin = min(p[2] for f in faces for p in f[2])
+        for f in faces:
+            q = [P((p[0] + (p[2] - zmin) * 0.35, p[1] + (p[2] - zmin) * 0.35, zmin)) for p in f[2]]
+            d.polygon(q, fill=110)
+        sh = sh.filter(ImageFilter.GaussianBlur(S / 90))
+        black = Image.new("RGBA", (S, S), (10, 12, 16, 255))
+        img = Image.composite(black, img, sh)
+    d = ImageDraw.Draw(img)
+    for layer, depth, pts, col in sorted(faces, key=lambda f: (f[1] + f[0] * 1000.0)):
+        c = tuple(int(v) for v in col) + (255,)
+        d.polygon([P(p) for p in pts], fill=c, outline=c)
+    img = img.resize((OUT, OUT), Image.LANCZOS)
+    img.save(path)
+
+# ---- geometry helpers -----------------------------------------------------------------------
+def frames_arc(length, bend, n=24):
+    """Path along +x bending towards +y; returns list of (pos, fwd, right(level))."""
+    out = []
+    if abs(bend) < 1e-6:
+        for i in range(n + 1):
+            t = length * i / n
+            out.append((np.array([t, 0, 0.0]), np.array([1, 0, 0.0])))
+    else:
+        r = length / bend
+        for i in range(n + 1):
+            a = bend * i / n
+            out.append((np.array([r * math.sin(a), r * (1 - math.cos(a)), 0.0]), np.array([math.cos(a), math.sin(a), 0.0])))
+    res = []
+    for p, f in out:
+        right = np.array([f[1], -f[0], 0.0])   # level right
+        res.append((p, f, right))
+    return res
+
+def at(fr, lat, up):
+    p, f, r = fr
+    return p + r * lat + np.array([0, 0, up])
+
+def extrude(sc, frs, profile, col, closed=True, layer=0, two=False):
+    m = len(profile)
+    edges = m if closed else m - 1
+    for e in range(edges):
+        a, b = profile[e], profile[(e + 1) % m]
+        for i in range(len(frs) - 1):
+            sc.quad(at(frs[i], *a), at(frs[i], *b), at(frs[i + 1], *b), at(frs[i + 1], *a), col, layer=layer, two=two)
+
+def cap(sc, fr, profile, col):
+    sc.face([at(fr, *p) for p in profile], col, two=True)
+
+def box(sc, c, hx, hy, hz, col, fwd=(1, 0, 0), layer=0):
+    f = np.array(fwd, float); f /= np.linalg.norm(f)
+    r = np.array([f[1], -f[0], 0.0]); u = np.array([0, 0, 1.0]); c = np.array(c, float)
+    X, Y, Z = f * hx, r * hy, u * hz
+    for s in (1, -1):
+        sc.quad(c + s*X - Y - Z, c + s*X + Y - Z, c + s*X + Y + Z, c + s*X - Y + Z, col, layer=layer, two=True)
+        sc.quad(c - X + s*Y - Z, c + X + s*Y - Z, c + X + s*Y + Z, c - X + s*Y + Z, col, layer=layer, two=True)
+        sc.quad(c - X - Y + s*Z, c + X - Y + s*Z, c + X + Y + s*Z, c - X + Y + s*Z, col, layer=layer, two=True)
+
+ASPHALT = np.array([62, 64, 68.0]); CONCRETE = np.array([178, 174, 166.0]); YELLOW = np.array([250, 190, 40.0])
+WHITE = np.array([240, 240, 236.0]); STEEL = np.array([168, 176, 186.0]); DARKSTEEL = np.array([110, 118, 128.0])
+ORANGE = np.array([250, 149, 73.0])
+
+def line_strip(sc, frs, lat, w, col, dash=None, z=0.02):
+    for i in range(len(frs) - 1):
+        if dash and (i // dash[0]) % 2 == 1:
+            continue
+        sc.quad(at(frs[i], lat - w, z), at(frs[i], lat + w, z), at(frs[i + 1], lat + w, z), at(frs[i + 1], lat - w, z), col, layer=1, two=True)
+
+def road(sc, width, lanes, length=18.0, bend=0.55, h=1.0):
+    frs = frames_arc(length, bend, 32)
+    hw = width / 2
+    extrude(sc, frs, [(-hw, 0), (hw, 0)], ASPHALT, closed=False, two=True)
+    extrude(sc, frs, [(hw, 0), (hw, -h)], CONCRETE, closed=False, two=True)
+    extrude(sc, frs, [(-hw, -h), (-hw, 0)], CONCRETE, closed=False, two=True)
+    cap(sc, frs[0], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE)
+    cap(sc, frs[-1], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE)
+    e = 0.9
+    line_strip(sc, frs, -hw + e, 0.16, YELLOW)
+    line_strip(sc, frs, hw - e, 0.16, YELLOW)
+    inner = width - 2 * e
+    for k in range(1, lanes):
+        line_strip(sc, frs, -hw + e + inner * k / lanes, 0.13, WHITE, dash=(2, 0))
+
+def guard_rail(sc):
+    frs = frames_arc(6.0, 0.35, 24)
+    beam = [(-0.08, 0.95), (0.08, 0.95), (0.2, 0.8), (0.08, 0.6), (-0.08, 0.6), (0.0, 0.78)]
+    extrude(sc, frs, beam, STEEL)
+    cap(sc, frs[0], beam, STEEL); cap(sc, frs[-1], beam, STEEL)
+    for i in (0, 8, 16, 24):
+        p, f, r = frs[i]
+        box(sc, p - r * 0.14 + np.array([0, 0, 0.47]), 0.09, 0.09, 0.47, DARKSTEEL, fwd=f)
+
+def jersey(sc):
+    prof = [(-0.3, 0), (0.3, 0), (0.28, 0.08), (0.12, 0.3), (0.075, 0.8), (-0.075, 0.8), (-0.12, 0.3), (-0.28, 0.08)]
+    for k in range(3):
+        frs = frames_arc(1.9, 0.0, 2)
+        frs = [(p + np.array([k * 2.0, 0, 0]), f, r) for p, f, r in frs]
+        extrude(sc, frs, prof, CONCRETE)
+        cap(sc, frs[0], prof, CONCRETE); cap(sc, frs[-1], prof, CONCRETE)
+
+def grid_fence(sc, scale=1.0):
+    length = 6.0
+    hgt = 2.0 * scale
+    post = 0.05 * (1.6 if scale > 1 else 1.0) * 2
+    tube = 0.03 * (1.5 if scale > 1 else 1.0) * 2
+    frs = frames_arc(length, 0.0, 2)
+    # mesh panel: diamond wires as thin quads in the fence plane (x along, z up)
+    cell = 0.32 * (1.3 if scale > 1 else 1.0)
+    w = 0.025 * (1.3 if scale > 1 else 1.0)
+    z0, z1 = 0.08, hgt
+    def seg(a, b):
+        (x0, zz0), (x1, zz1) = a, b
+        sc.quad((x0 - w, 0, zz0), (x0 + w, 0, zz0), (x1 + w, 0, zz1), (x1 - w, 0, zz1), DARKSTEEL, layer=0, two=True, shade=False)
+    n = int((length + hgt) / cell) + 2
+    for k in range(-n, n + 1):
+        for sgn in (1, -1):
+            # line x = c + sgn*z, clipped to the panel rectangle
+            c = k * cell
+            pts = []
+            for z in (z0, z1):
+                x = c + sgn * z
+                pts.append((x, z))
+            # clip in x
+            (xa, za), (xb, zb) = pts
+            def clipx(xa, za, xb, zb, lo, hi):
+                if xa > xb: xa, za, xb, zb = xb, zb, xa, za
+                if xb < lo or xa > hi: return None
+                if xa < lo: za = za + (zb - za) * (lo - xa) / (xb - xa); xa = lo
+                if xb > hi: zb = za + (zb - za) * (hi - xa) / (xb - xa); xb = hi
+                return (xa, za), (xb, zb)
+            r = clipx(xa, za, xb, zb, 0.0, length)
+            if r: seg(*r)
+    for z in (z0, z1):
+        box(sc, (length / 2, 0, z), length / 2, tube, tube, STEEL)
+    for x in np.linspace(0, length, 3):
+        box(sc, (x, 0, (hgt + 0.05) / 2), post, post, (hgt + 0.05) / 2, STEEL)
+
+def intersection(sc):
+    hw, h, e, stub = 4.0, 1.0, 0.9, 7.0
+    R = 3.0
+    # outline: plus shape with rounded inner corners (counter clockwise)
+    pts = []
+    def arc(cx, cy, a0, a1, n=8):
+        for i in range(n + 1):
+            a = a0 + (a1 - a0) * i / n
+            pts.append((cx + R * math.cos(a), cy + R * math.sin(a)))
+    pts += [(hw + stub, -hw), (hw + stub, hw)]
+    arc(hw + R, hw + R, -math.pi / 2, -math.pi)
+    pts += [(hw, hw + stub), (-hw, hw + stub)]
+    arc(-hw - R, hw + R, 0, -math.pi / 2)
+    pts += [(-hw - stub, hw), (-hw - stub, -hw)]
+    arc(-hw - R, -hw - R, math.pi / 2, 0)
+    pts += [(-hw, -hw - stub), (hw, -hw - stub)]
+    arc(hw + R, -hw - R, math.pi, math.pi / 2)
+    P3 = [np.array([x, y, 0.0]) for x, y in pts]
+    for i in range(len(P3)):
+        sc.face([np.zeros(3), P3[i], P3[(i + 1) % len(P3)]], ASPHALT, two=True)
+        a, b = P3[i], P3[(i + 1) % len(P3)]
+        sc.quad(a, b, b - [0, 0, h], a - [0, 0, h], CONCRETE, two=True)
+    # side lines: road edges along the stubs + inner curb arcs, inset by e
+    def lstrip(path):
+        for i in range(len(path) - 1):
+            a, b = np.array(path[i] + (0.02,)), np.array(path[i + 1] + (0.02,))
+            d = b - a; d[2] = 0; d /= np.linalg.norm(d)
+            r = np.array([d[1], -d[0], 0]) * 0.16
+            sc.quad(a - r, a + r, b + r, b - r, YELLOW, layer=1, two=True)
+    for sx, sy, a0 in ((1, 1, -math.pi / 2), (-1, 1, 0), (-1, -1, math.pi / 2), (1, -1, math.pi)):
+        cx, cy = sx * (hw + R), sy * (hw + R)
+        rr = R + e
+        path = []
+        # straight bit along x-stub, arc, straight along y-stub
+        for i in range(11):
+            a = a0 + (-math.pi / 2) * i / 10
+            path.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+        start = (sx * (hw + stub), sy * (hw - e))
+        end = (sx * (hw - e), sy * (hw + stub))
+        lstrip([start] + path + [end] if (sx * sy) > 0 else [end] + path + [start])
+
+what = sys.argv[1]; out = sys.argv[2]
+sc = Scene()
+if what == "road1": road(sc, 8, 1)
+elif what == "road2": road(sc, 16, 2)
+elif what == "road3": road(sc, 24, 3)
+elif what == "guard": guard_rail(sc)
+elif what == "jersey": jersey(sc)
+elif what == "grid": grid_fence(sc, 1.0)
+elif what == "gridtall": grid_fence(sc, 2.0)
+elif what == "cross": intersection(sc)
+render(sc, out)

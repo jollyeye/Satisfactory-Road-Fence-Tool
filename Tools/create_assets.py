@@ -242,12 +242,12 @@ if VehiclePathSubCat:
 
 # name, parent, hologram, display, description, props, recipe ingredients, icons, materials
 TOOLS = [
-    ("Road_1x", RMBuildableRoad, holo_road, "Road (1 wide)", "A road one foundation wide. Cost is per 8 m.",
-     {"m_width_in_foundations": 1}, [(Desc_Cement, 4)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("Road_2x", RMBuildableRoad, holo_road, "Road (2 wide)", "A road two foundations wide. Cost is per 8 m per foundation of width.",
-     {"m_width_in_foundations": 2}, [(Desc_Cement, 4)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("Road_3x", RMBuildableRoad, holo_road, "Road (3 wide)", "A road three foundations wide. Cost is per 8 m per foundation of width.",
-     {"m_width_in_foundations": 3}, [(Desc_Cement, 4)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("Road_1x", RMBuildableRoad, holo_road, "Road (1 wide)", "A road one foundation wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
+     {"m_width_in_foundations": 1}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("Road_2x", RMBuildableRoad, holo_road, "Road (2 wide)", "A road two foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
+     {"m_width_in_foundations": 2}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("Road_3x", RMBuildableRoad, holo_road, "Road (3 wide)", "A road three foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
+     {"m_width_in_foundations": 3}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
     ("Fence_Jersey", RMBuildableFence, holo_fence, "Cement Blocks", "Concrete road barrier. Aim at a road to follow its edge. Cost is per 4 m.",
@@ -256,8 +256,8 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("Fence_GridTall", RMBuildableFence, holo_fence, "Metal Grid Fence (4m tall)", "Tall metal grid fence, 4 m high. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
-    ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free ends. Cost is per connected road.",
-     {}, [(Desc_Cement, 6)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free road ends (or free intersection ends) with curved curbs. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
+     {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
@@ -269,6 +269,32 @@ for n in ("SwatchDesc_Concrete", "SwatchDesc_White", "SwatchDesc_Unpainted"):
     if light_swatch:
         log("  default road swatch: " + n)
         break
+# Import every PNG in Tools/Icons (build menu icons and Road Lines icons).
+import os
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Icons")
+tasks = []
+for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
+    if f.lower().endswith(".png"):
+        t = unreal.AssetImportTask()
+        t.set_editor_property("filename", os.path.join(ICON_DIR, f))
+        t.set_editor_property("destination_path", ROOT + "/Icons")
+        t.set_editor_property("replace_existing", True)
+        t.set_editor_property("automated", True)
+        t.set_editor_property("save", True)
+        tasks.append(t)
+if tasks:
+    asset_tools.import_asset_tasks(tasks)
+    log("  imported %d icons" % len(tasks))
+
+
+
+def tool_icon(name):
+    try:
+        return unreal.load_asset("%s/Icons/T_Icon_%s.T_Icon_%s" % (ROOT, name, name))
+    except Exception:
+        return None
+
+
 recipes = []
 
 for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
@@ -299,10 +325,13 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         setp(dc, VehicleCat, "m_category", "mCategory", "m_build_menu_category")
     if subcat or VehiclePathSubCat:
         setp(dc, [subcat or VehiclePathSubCat], "m_sub_categories", "mSubCategories")
-    if icons[0]:
-        setp(dc, icons[0], "m_small_icon", "mSmallIcon")
-    if icons[1]:
-        setp(dc, icons[1], "m_persistent_big_icon", "mPersistentBigIcon", "m_big_icon")
+    own = tool_icon(name)  # stylised isometric icon from Tools/Icons, else a borrowed game icon
+    small_icon = own or icons[0]
+    big_icon = own or icons[1]
+    if small_icon:
+        setp(dc, small_icon, "m_small_icon", "mSmallIcon")
+    if big_icon:
+        setp(dc, big_icon, "m_persistent_big_icon", "mPersistentBigIcon", "m_big_icon")
     finish(d)
 
     r = make_bp("Unlocks", "Recipe_" + name, Recipe)
@@ -321,22 +350,6 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
 # Customizer: "Road Lines" tab with Sidelines and Lanes
 # ---------------------------------------------------------------------------------------------
 log("== Road Lines (customizer) ==")
-import os
-ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Icons")
-tasks = []
-for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
-    if f.lower().endswith(".png"):
-        t = unreal.AssetImportTask()
-        t.set_editor_property("filename", os.path.join(ICON_DIR, f))
-        t.set_editor_property("destination_path", ROOT + "/Icons")
-        t.set_editor_property("replace_existing", True)
-        t.set_editor_property("automated", True)
-        t.set_editor_property("save", True)
-        tasks.append(t)
-if tasks:
-    asset_tools.import_asset_tasks(tasks)
-    log("  imported %d icons" % len(tasks))
-
 def icon(name):
     try:
         return unreal.load_asset("%s/Icons/T_RoadLines_%s.T_RoadLines_%s" % (ROOT, name, name))
