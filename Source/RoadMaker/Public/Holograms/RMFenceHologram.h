@@ -20,6 +20,14 @@ public:
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual void CheckValidPlacement() override;
+	virtual bool CanNudgeHologram() const override { return !mOnRoadEdge && Super::CanNudgeHologram(); }
+	virtual void SetHologramNudgeLocation() override
+	{
+		if (!mOnRoadEdge)
+		{
+			Super::SetHologramNudgeLocation();
+		}
+	}
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

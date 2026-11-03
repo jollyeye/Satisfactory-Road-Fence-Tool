@@ -31,6 +31,12 @@ public:
 	virtual int32 GetBaseCostMultiplier() const override;
 	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const override;
 
+	// Nudging: lock the hologram (H), then nudge the point being placed (start, or end after the first click).
+	virtual bool CanNudgeHologram() const override;
+	virtual void SetHologramNudgeLocation() override;
+	virtual void OnHologramLockStateChanged() override;
+	virtual FTransform GetNudgeSpaceTransform() const override;
+
 	// AFGBuildableHologram
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 
@@ -92,6 +98,9 @@ protected:
 	FVector mEnd = FVector::ZeroVector;
 	FVector mEndDir = FVector::ForwardVector;
 	bool mEndSnapped = false;
+
+	/** Where the point being placed was when the hologram got locked; nudges are relative to it. */
+	FVector mNudgeBase = FVector::ZeroVector;
 
 	/** Scroll value when the current step started, so each step rotates from zero. */
 	int32 mScrollAtStepStart = 0;

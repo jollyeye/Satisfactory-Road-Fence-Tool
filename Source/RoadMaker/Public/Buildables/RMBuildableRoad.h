@@ -52,16 +52,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
 	float mRoadHeight = 100.f;
 
-	/** Tightest allowed turn, measured on the centre line, in cm. */
+	/**
+	 * Smallest allowed radius of the road's inner edge in a turn, in cm. The centre-line limit is
+	 * half the road width plus this: 6 m for 1 wide, 10 m for 2 wide, 14 m for 3 wide.
+	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")
-	float mMinTurnRadius = 1200.f;
+	float mMinInnerEdgeRadius = 200.f;
 
-	/** Extra turn radius per extra foundation of width, so wide roads cannot fold over themselves. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")
-	float mTurnRadiusPerExtraWidth = 400.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")
-	float mMaxGradeDegrees = 25.f;
+	float mMaxGradeDegrees = 30.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")
 	float mMinLength = 200.f;
@@ -69,7 +68,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Placement")
 	float mMaxLength = 10000.f;
 
-	float GetEffectiveMinTurnRadius() const { return mMinTurnRadius + FMath::Max(0, mWidthInFoundations - 1) * mTurnRadiusPerExtraWidth; }
+	float GetEffectiveMinTurnRadius() const { return GetRoadWidth() * 0.5f + mMinInnerEdgeRadius; }
 
 	// --- Look -------------------------------------------------------------------------------
 

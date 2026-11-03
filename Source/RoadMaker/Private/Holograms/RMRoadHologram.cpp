@@ -101,7 +101,7 @@ void ARMRoadHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_TooLong::StaticClass());
 	}
-	if (Stats.MinTurnRadius < Road->GetEffectiveMinTurnRadius())
+	if (Stats.MinTurnRadius < Road->GetEffectiveMinTurnRadius() * 0.95f)
 	{
 		AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());
 	}

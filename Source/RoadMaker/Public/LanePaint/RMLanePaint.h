@@ -45,6 +45,9 @@ public:
 	virtual bool TrySnapToActor(const FHitResult& hitResult) override { return false; }
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual void CheckValidPlacement() override;
+	virtual void BeginPlay() override;
+	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const override;
+	virtual void ScrollRotate(int32 delta, int32 step) override {}
 
 	/** Applies the chosen markings to the aimed road. Always returns false: nothing gets built. */
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
@@ -52,6 +55,10 @@ public:
 protected:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ARMBuildableRoad> mTargetRoad;
+
+	/** Only build mode of the tool, named "Lane menu (R)" so the HUD shows what R does. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<class UFGHologramBuildModeDescriptor> mLaneMenuMode;
 };
 
 /** The small right-click menu: three lane presets with a picture each, and a side-lines toggle. */

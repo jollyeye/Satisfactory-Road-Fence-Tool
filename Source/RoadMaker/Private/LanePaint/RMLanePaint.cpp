@@ -2,6 +2,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "RoadMakerModule.h"
+#include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -90,6 +91,33 @@ ARMLanePaintHologram::ARMLanePaintHologram()
 	if (!RootComponent)
 	{
 		SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+	}
+	// Nothing to lock, nudge or rotate: keep the HUD down to the R hint.
+	mCanLockHologram = false;
+	mCanNudgeHologram = false;
+}
+
+void ARMLanePaintHologram::BeginPlay()
+{
+	// Start in (and stay in) the named mode so the HUD reads "Lane menu (R)".
+	if (mLaneMenuMode)
+	{
+		mDefaultBuildMode = mLaneMenuMode;
+	}
+	Super::BeginPlay();
+}
+
+void ARMLanePaintHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
+{
+	// Only our named mode (R never actually switches: the build gun hook opens the menu instead).
+	out_buildmodes.Reset();
+	if (mLaneMenuMode)
+	{
+		out_buildmodes.Add(TSubclassOf<UFGBuildGunModeDescriptor>(mLaneMenuMode.Get()));
+	}
+	else
+	{
+		Super::GetSupportedBuildModes_Implementation(out_buildmodes);
 	}
 }
 

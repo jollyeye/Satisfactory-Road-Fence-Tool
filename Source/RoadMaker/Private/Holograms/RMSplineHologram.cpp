@@ -17,6 +17,9 @@ ARMSplineHologram::ARMSplineHologram()
 	}
 	mPreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mPreviewMesh->SetCastShadow(false);
+
+	mCanLockHologram = true;
+	mCanNudgeHologram = true;
 }
 
 void ARMSplineHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -206,4 +209,46 @@ void ARMSplineHologram::ConfigureActor(AFGBuildable* inBuildable) const
 		Spline->SetSplinePoints(mLocalPoints);
 		Spline->SetCostMultiplier(GetBaseCostMultiplier());
 	}
+}
+
+bool ARMSplineHologram::CanNudgeHologram() const
+{
+	return IsHologramLocked();
+}
+
+void ARMSplineHologram::OnHologramLockStateChanged()
+{
+	Super::OnHologramLockStateChanged();
+	mNudgeBase = mStep == 0 ? mStart : mEnd;
+}
+
+FTransform ARMSplineHologram::GetNudgeSpaceTransform() const
+{
+	// Forward/back/left/right relative to the direction of the point being placed.
+	FVector Dir = mStep == 0 ? mStartDir : (mEnd - mStart);
+	Dir.Z = 0.f;
+	if (!Dir.Normalize())
+	{
+		Dir = FVector::ForwardVector;
+	}
+	return FTransform(FRotator(0.f, Dir.Rotation().Yaw, 0.f), mStep == 0 ? mStart : mEnd);
+}
+
+void ARMSplineHologram::SetHologramNudgeLocation()
+{
+	if (!IsHologramLocked())
+	{
+		return;
+	}
+	const FVector Base = mNudgeBase;
+	const FVector Offset = GetNudgeSpaceTransform().GetRotation().RotateVector(GetHologramNudgeOffset());
+	if (mStep == 0)
+	{
+		mStart = Base + Offset;
+	}
+	else
+	{
+		mEnd = Base + Offset;
+	}
+	UpdateCurve();
 }

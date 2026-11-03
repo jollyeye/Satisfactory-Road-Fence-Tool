@@ -219,7 +219,13 @@ finish(holo_fence)
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
 
+bm_lanes = make_bp("Holograms", "BM_LaneMenu", BuildModeDescriptor)
+setp(cdo(bm_lanes), text("Lane menu (R)"), "m_display_name", "mDisplayName")
+finish(bm_lanes)
+
 holo_paint = make_bp("Holograms", "Holo_LanePaint", native_class("RMLanePaintHologram"))
+setp(cdo(holo_paint), bm_lanes.generated_class(), "m_lane_menu_mode", "mLaneMenuMode")
+setp(cdo(holo_paint), bm_lanes.generated_class(), "m_default_build_mode", "mDefaultBuildMode")
 finish(holo_paint)
 
 log("== Sub-category ==")

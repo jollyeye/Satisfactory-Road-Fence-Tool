@@ -660,12 +660,40 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		}
 	}
 
-	// The fan from the centre only works if every edge turns the same way around it.
+	// Merge points that coincide (e.g. a side road whose corners sit exactly on the corners of the
+	// gap it joins: its curb fillets have zero length). The kept edge takes the dropped edge's flag.
+	{
+		TArray<FVector> Points;
+		TArray<bool> Flags;
+		for (int32 K = 0; K < Ring.Num(); ++K)
+		{
+			if (Points.Num() > 0 && FVector::Dist2D(Ring[K], Points.Last()) < 1.f)
+			{
+				Flags.Last() = EdgeIsMouth[K];
+				continue;
+			}
+			Points.Add(Ring[K]);
+			Flags.Add(EdgeIsMouth[K]);
+		}
+		while (Points.Num() > 2 && FVector::Dist2D(Points.Last(), Points[0]) < 1.f)
+		{
+			Points.Pop();
+			Flags.Pop();
+		}
+		Ring = MoveTemp(Points);
+		EdgeIsMouth = MoveTemp(Flags);
+	}
+	if (Ring.Num() < 3)
+	{
+		return false;
+	}
+
+	// The fan from the centre only works if no edge turns backwards around it (straight is fine).
 	for (int32 K = 0; K < Ring.Num(); ++K)
 	{
 		const FVector& A = Ring[K];
 		const FVector& B = Ring[(K + 1) % Ring.Num()];
-		if (Cross2D(A - Center, B - Center) <= 1.f)
+		if (Cross2D(A - Center, B - Center) < -1.f)
 		{
 			return false;
 		}
