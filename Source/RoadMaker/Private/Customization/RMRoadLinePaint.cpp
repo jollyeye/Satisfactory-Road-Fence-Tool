@@ -16,6 +16,13 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/Image.h"
+#include "Containers/Ticker.h"
+#include "Engine/Engine.h"
+#include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceConstant.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "UObject/UObjectIterator.h"
 
 namespace
 {
@@ -180,8 +187,142 @@ namespace
 	}
 }
 
+
+namespace
+{
+	/**
+	 * The customizer's own menu tiles never show a mod option's icon (they keep whatever the reused
+	 * tile showed before). While the paint gun is out, find tiles labelled with a Road Lines option
+	 * name and put that option's icon into the tile's icon image (plain texture or material).
+	 */
+	TMap<FString, TWeakObjectPtr<UTexture2D>> GIconsByName;
+	bool GLoggedTileLayout = false;
+
+	void BuildIconTable()
+	{
+		if (GIconsByName.Num() > 0)
+		{
+			return;
+		}
+		for (TObjectIterator<UClass> It; It; ++It)
+		{
+			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract)
+				&& *It != URMRoadLineDescriptor::StaticClass())
+			{
+				URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+				if (UTexture2D* Icon = D ? D->GetIcon() : nullptr)
+				{
+					GIconsByName.Add(UFGItemDescriptor::GetItemName(*It).ToString(), Icon);
+				}
+			}
+		}
+	}
+
+	/** Game UI chrome (frames, rings) lives under /Interface/; item icons do not. */
+	bool IsChrome(const UObject* Asset)
+	{
+		return Asset && Asset->GetPathName().Contains(TEXT("/Interface/"));
+	}
+
+	void PutIconInTile(UUserWidget* Tile, UTexture2D* Icon)
+	{
+		if (!Tile || !Tile->WidgetTree)
+		{
+			return;
+		}
+		TArray<UWidget*> Widgets;
+		Tile->WidgetTree->GetAllWidgets(Widgets);
+		for (UWidget* W : Widgets)
+		{
+			UImage* Image = Cast<UImage>(W);
+			if (!Image)
+			{
+				continue;
+			}
+			UObject* Resource = Image->GetBrush().GetResourceObject();
+			if (!GLoggedTileLayout)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: tile %s image %s resource %s"),
+					*Tile->GetClass()->GetName(), *Image->GetName(), Resource ? *Resource->GetPathName() : TEXT("none"));
+			}
+			if (UTexture2D* Tex = Cast<UTexture2D>(Resource))
+			{
+				if (!IsChrome(Tex) && Tex != Icon)
+				{
+					Image->SetBrushResourceObject(Icon);
+				}
+				continue;
+			}
+			UMaterialInstance* Instance = Cast<UMaterialInstance>(Resource);
+			if (!Instance)
+			{
+				continue;
+			}
+			// Icon drawn through a material (e.g. masked to a circle): swap its item texture parameter.
+			for (const FTextureParameterValue& Param : Instance->TextureParameterValues)
+			{
+				if (!Param.ParameterValue || IsChrome(Param.ParameterValue) || Param.ParameterValue == Icon)
+				{
+					continue;
+				}
+				UMaterialInstanceDynamic* MID = Cast<UMaterialInstanceDynamic>(Instance);
+				if (!MID)
+				{
+					MID = UMaterialInstanceDynamic::Create(Instance, Image);
+					Image->SetBrushFromMaterial(MID);
+				}
+				MID->SetTextureParameterValue(Param.ParameterInfo.Name, Icon);
+				break;
+			}
+		}
+		GLoggedTileLayout = true;
+	}
+
+	bool FixCustomizerIcons(float)
+	{
+		UWorld* World = nullptr;
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType == EWorldType::Game && Context.World())
+			{
+				World = Context.World();
+				break;
+			}
+		}
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		if (!RMRoadLinePaint::IsPaintStateActive(PC))
+		{
+			return true;
+		}
+		BuildIconTable();
+		for (TObjectIterator<UTextBlock> It; It; ++It)
+		{
+			UTextBlock* Label = *It;
+			if (!Label || Label->IsTemplate() || !Label->IsVisible())
+			{
+				continue;
+			}
+			const TWeakObjectPtr<UTexture2D>* Icon = GIconsByName.Find(Label->GetText().ToString());
+			if (Icon && Icon->IsValid())
+			{
+				// The label may sit in a small nested widget; try the next tile level up as well.
+				UUserWidget* Tile = Label->GetTypedOuter<UUserWidget>();
+				PutIconInTile(Tile, Icon->Get());
+				if (UUserWidget* Parent = Tile ? Tile->GetTypedOuter<UUserWidget>() : nullptr)
+				{
+					PutIconInTile(Parent, Icon->Get());
+				}
+			}
+		}
+		return true;
+	}
+}
+
 void RMRoadLinePaint::InstallHooks()
 {
+	// Road Lines tiles in the customizer menu: put our icons in, ten times a second while it is open.
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixCustomizerIcons), 0.1f);
+
 	SUBSCRIBE_METHOD_AFTER(UFGBuildGunStatePaint::SetActiveCustomization,
 		[](UFGBuildGunStatePaint* State, TSubclassOf<UFGFactoryCustomizationDescriptor> Desc)
 		{
