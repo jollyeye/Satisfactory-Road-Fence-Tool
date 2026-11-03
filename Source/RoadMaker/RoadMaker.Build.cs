@@ -20,6 +20,7 @@ public class RoadMaker : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
+			"EnhancedInput",
 			// Satisfactory + mod loader
 			"FactoryGame",
 			"SML",

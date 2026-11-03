@@ -22,6 +22,17 @@ namespace RMLanePaint
 	/** Opens the menu if closed, closes it if open. */
 	ROADMAKER_API void ToggleMenu(APlayerController* PC);
 	ROADMAKER_API void CloseMenu();
+
+	/**
+	 * Keys currently bound to the build gun's mode-select action (R by default), read from the
+	 * player's live Enhanced Input mappings, so rebinds and gamepads show their own key.
+	 */
+	ROADMAKER_API FText GetMenuKeyText(APlayerController* PC);
+	ROADMAKER_API TArray<FKey> GetMenuKeys(APlayerController* PC);
+
+	/** On-screen "[key] Lane menu" hint while the tool is held. */
+	ROADMAKER_API void ShowHint(APlayerController* PC);
+	ROADMAKER_API void HideHint();
 }
 
 /** Placeholder buildable so the tool can have a descriptor and recipe. Never spawned. */
@@ -59,6 +70,23 @@ protected:
 	/** Only build mode of the tool, named "Lane menu (R)" so the HUD shows what R does. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGHologramBuildModeDescriptor> mLaneMenuMode;
+};
+
+/** Small "[key] Lane menu" hint shown while the Lane Paint tool is held. */
+UCLASS()
+class ROADMAKER_API URMLanePaintHint : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	void SetKeyText(const FText& KeyText);
+
+protected:
+	UPROPERTY(Transient)
+	UTextBlock* mText = nullptr;
+
+	FText mKeyText;
 };
 
 /** The small right-click menu: three lane presets with a picture each, and a side-lines toggle. */

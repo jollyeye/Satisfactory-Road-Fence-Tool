@@ -15,6 +15,11 @@
 #include "Components/VerticalBoxSlot.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Engine/LocalPlayer.h"
+#include "EnhancedInputSubsystems.h"
+#include "EnhancedPlayerInput.h"
+#include "InputAction.h"
+#include "FGInputLibrary.h"
 
 // ---------------------------------------------------------------------------------------------
 // Settings and menu lifetime
@@ -24,6 +29,7 @@ namespace
 {
 	FRMMarkings GSettings;
 	TWeakObjectPtr<URMLanePaintMenu> GMenu;
+	TWeakObjectPtr<URMLanePaintHint> GHint;
 
 	const FLinearColor ColAsphalt(0.03f, 0.03f, 0.035f);
 	const FLinearColor ColLine(0.85f, 0.85f, 0.8f);
@@ -82,6 +88,91 @@ void RMLanePaint::CloseMenu()
 	}
 }
 
+TArray<FKey> RMLanePaint::GetMenuKeys(APlayerController* PC)
+{
+	TArray<FKey> Keys;
+	ULocalPlayer* LocalPlayer = PC ? PC->GetLocalPlayer() : nullptr;
+	UEnhancedInputLocalPlayerSubsystem* Input = LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+	UEnhancedPlayerInput* PlayerInput = Input ? Input->GetPlayerInput() : nullptr;
+	if (!PlayerInput)
+	{
+		return Keys;
+	}
+	// The build gun's "mode select" action; its asset name contains ModeSelect / BuildMode.
+	for (const FEnhancedActionKeyMapping& Mapping : PlayerInput->GetEnhancedActionMappings())
+	{
+		if (!Mapping.Action || !Mapping.Key.IsValid())
+		{
+			continue;
+		}
+		const FString Name = Mapping.Action->GetName().ToLower();
+		if (Name.Contains(TEXT("modeselect")) || (Name.Contains(TEXT("buildgun")) && Name.Contains(TEXT("mode"))))
+		{
+			Keys.AddUnique(Mapping.Key);
+		}
+	}
+	if (Keys.Num() == 0)
+	{
+		static bool bLogged = false;
+		if (!bLogged)
+		{
+			bLogged = true;
+			TArray<FString> Names;
+			for (const FEnhancedActionKeyMapping& Mapping : PlayerInput->GetEnhancedActionMappings())
+			{
+				if (Mapping.Action)
+				{
+					Names.AddUnique(Mapping.Action->GetName());
+				}
+			}
+			UE_LOG(LogRoadMaker, Warning, TEXT("Lane Paint: mode-select action not found. Mapped actions: %s"), *FString::Join(Names, TEXT(", ")));
+		}
+	}
+	return Keys;
+}
+
+FText RMLanePaint::GetMenuKeyText(APlayerController* PC)
+{
+	TArray<FString> Names;
+	for (const FKey& Key : GetMenuKeys(PC))
+	{
+		const FString KeyName = UFGInputLibrary::GetAbbreviatedKeyName(Key).ToString();
+		Names.AddUnique(KeyName.IsEmpty() ? Key.GetDisplayName(false).ToString() : KeyName);
+	}
+	return FText::FromString(Names.Num() > 0 ? FString::Join(Names, TEXT(" / ")) : TEXT("R"));
+}
+
+void RMLanePaint::ShowHint(APlayerController* PC)
+{
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	URMLanePaintHint* Hint = GHint.Get();
+	if (!Hint)
+	{
+		Hint = CreateWidget<URMLanePaintHint>(PC, URMLanePaintHint::StaticClass());
+		if (!Hint)
+		{
+			return;
+		}
+		Hint->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Hint->AddToViewport(500);
+		GHint = Hint;
+	}
+	// Read the binding each time the tool is picked up, so rebinds show up.
+	Hint->SetKeyText(GetMenuKeyText(PC));
+}
+
+void RMLanePaint::HideHint()
+{
+	if (URMLanePaintHint* Hint = GHint.Get())
+	{
+		Hint->RemoveFromParent();
+	}
+	GHint.Reset();
+}
+
 // ---------------------------------------------------------------------------------------------
 // Hologram
 // ---------------------------------------------------------------------------------------------
@@ -99,12 +190,19 @@ ARMLanePaintHologram::ARMLanePaintHologram()
 
 void ARMLanePaintHologram::BeginPlay()
 {
-	// Start in (and stay in) the named mode so the HUD reads "Lane menu (R)".
 	if (mLaneMenuMode)
 	{
 		mDefaultBuildMode = mLaneMenuMode;
 	}
 	Super::BeginPlay();
+
+	// Only for the player holding the tool.
+	APawn* Pawn = GetConstructionInstigator();
+	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (PC && PC->IsLocalController())
+	{
+		RMLanePaint::ShowHint(PC);
+	}
 }
 
 void ARMLanePaintHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
@@ -123,8 +221,9 @@ void ARMLanePaintHologram::GetSupportedBuildModes_Implementation(TArray<TSubclas
 
 void ARMLanePaintHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Switching tools or leaving build mode closes the menu.
+	// Switching tools or leaving build mode closes the menu and the hint.
 	RMLanePaint::CloseMenu();
+	RMLanePaint::HideHint();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -314,7 +413,7 @@ void URMLanePaintMenu::BuildTree()
 
 	UVerticalBoxSlot* Title = Content->AddChildToVerticalBox(Label(Tree, TEXT("Lane Paint"), 20));
 	Title->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-	UVerticalBoxSlot* Hint = Content->AddChildToVerticalBox(Label(Tree, TEXT("Pick a layout, then left-click roads to paint them. R or Done closes this."), 11));
+	UVerticalBoxSlot* Hint = Content->AddChildToVerticalBox(Label(Tree, TEXT("Pick a layout, then left-click roads to paint them."), 11));
 	Hint->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 
 	UHorizontalBox* Choices = Tree->ConstructWidget<UHorizontalBox>();
@@ -391,7 +490,7 @@ void URMLanePaintMenu::OnClose()
 FReply URMLanePaintMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey Key = InKeyEvent.GetKey();
-	if (Key == EKeys::Escape || Key == EKeys::Enter || Key == EKeys::Q || Key == EKeys::R)
+	if (Key == EKeys::Escape || Key == EKeys::Enter || Key == EKeys::Q || RMLanePaint::GetMenuKeys(GetOwningPlayer()).Contains(Key))
 	{
 		RMLanePaint::CloseMenu();
 		return FReply::Handled();
@@ -411,4 +510,45 @@ FReply URMLanePaintMenu::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 		return FReply::Handled();
 	}
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hint widget
+// ---------------------------------------------------------------------------------------------
+
+TSharedRef<SWidget> URMLanePaintHint::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		// Bottom centre, under the crosshair area, like the game's own build hints.
+		UVerticalBox* Screen = WidgetTree->ConstructWidget<UVerticalBox>();
+		WidgetTree->RootWidget = Screen;
+		UVerticalBoxSlot* Fill = Screen->AddChildToVerticalBox(WidgetTree->ConstructWidget<USpacer>());
+		Fill->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
+		Box->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.025f, 0.75f));
+		Box->SetPadding(FMargin(12.f, 6.f));
+		UVerticalBoxSlot* BoxSlot = Screen->AddChildToVerticalBox(Box);
+		BoxSlot->SetHorizontalAlignment(HAlign_Center);
+		BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 180.f));
+
+		mText = WidgetTree->ConstructWidget<UTextBlock>();
+		FSlateFontInfo Font = mText->GetFont();
+		Font.Size = 16;
+		mText->SetFont(Font);
+		mText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		Box->SetContent(mText);
+		SetKeyText(mKeyText);
+	}
+	return Super::RebuildWidget();
+}
+
+void URMLanePaintHint::SetKeyText(const FText& KeyText)
+{
+	mKeyText = KeyText;
+	if (mText)
+	{
+		mText->SetText(FText::Format(NSLOCTEXT("RoadMaker", "LaneMenuHint", "[{0}]  Lane menu"), KeyText));
+	}
 }
