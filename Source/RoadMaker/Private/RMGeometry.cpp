@@ -551,9 +551,32 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 		FVector2D(-30.f, 0.f), FVector2D(30.f, 0.f), FVector2D(28.f, 8.f), FVector2D(12.f, 30.f),
 		FVector2D(7.5f, 80.f), FVector2D(-7.5f, 80.f), FVector2D(-12.f, 30.f), FVector2D(-28.f, 8.f)
 	};
+	const int32 First = Concrete.Vertices.Num();
 	ExtrudeProfile(Frames, Profile, true, FVector2D(0.f, 30.f), UVScale, Concrete);
+	const int32 FirstCap = Concrete.Vertices.Num();
 	AddProfileCap(Frames[0], Profile, false, UVScale, Concrete);
+	const int32 SecondCap = Concrete.Vertices.Num();
 	AddProfileCap(Frames.Last(), Profile, true, UVScale, Concrete);
+
+	// Block joints are drawn by the material (M_RoadJersey): UV1 = (metres along the fence, 1 on
+	// the end caps), UV2 = (block length m). Blocks are about 2 m, fitted so the fence ends on a joint.
+	const float Total = Frames.Last().Dist;
+	const float Block = Total / FMath::Max(1, FMath::RoundToInt(Total / 200.f));
+	const float S = FMath::Max(UVScale, 1.f) / 100.f; // UV0.y * S = metres along
+	Concrete.MarkUV1.SetNumZeroed(Concrete.Vertices.Num());
+	Concrete.MarkUV2.SetNumZeroed(Concrete.Vertices.Num());
+	for (int32 I = First; I < Concrete.Vertices.Num(); ++I)
+	{
+		float Along = Concrete.UVs[I].Y * S;
+		float Cap = 0.f;
+		if (I >= FirstCap)
+		{
+			Along = (I < SecondCap ? Frames[0].Dist : Total) / 100.f;
+			Cap = 1.f;
+		}
+		Concrete.MarkUV1[I] = FVector2D(Along, Cap);
+		Concrete.MarkUV2[I] = FVector2D(Block / 100.f, 0.f);
+	}
 }
 
 void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel)

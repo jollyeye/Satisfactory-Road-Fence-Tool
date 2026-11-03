@@ -321,6 +321,47 @@ MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
 finish(concrete)
 
+# --- Cement blocks: the earlier procedural concrete, finer, with block joints ----------------------
+# The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint
+# is a thin dark groove with a small bevel on both blocks (tangent X runs along the fence).
+JOINT_HLSL = r"""
+float L = max(UV2.x, 0.1);
+float a = frac(UV1.x / L);
+float d = min(a, 1.0 - a) * L;          // metres to the nearest joint
+float side = a < 0.5 ? -1.0 : 1.0;      // just after a joint the face tilts back towards it
+float open = 1.0 - saturate(UV1.y);     // no joints on the end caps
+float gap = 0.006;                      // half width of the groove
+float bevel = 0.025;
+float aa = max(fwidth(UV1.x), 0.0005);
+float groove = open * (1.0 - smoothstep(gap - aa, gap + aa, d));
+float slope = open * (1.0 - smoothstep(gap, gap + bevel, d)) * side;
+return float2(groove, slope);
+"""
+jersey = new_material("M_RoadJersey")
+jbase = noise_blend(jersey, (0.34, 0.33, 0.31), (0.47, 0.46, 0.44), 0.12, 0)
+ju1 = node(jersey, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+ju2 = node(jersey, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
+joint = custom(jersey, JOINT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2"], -800, 650, "BlockJoints")
+link(ju1, "", joint, "UV1")
+link(ju2, "", joint, "UV2")
+jgroove = node(jersey, unreal.MaterialExpressionComponentMask, -550, 600, r=True, g=False, b=False, a=False)
+jslope = node(jersey, unreal.MaterialExpressionComponentMask, -550, 750, r=False, g=True, b=False, a=False)
+link(joint, "", jgroove, "")
+link(joint, "", jslope, "")
+jdark = node(jersey, unreal.MaterialExpressionLinearInterpolate, -300, 100)
+link(jbase, "", jdark, "A")
+link(color(jersey, 0.07, 0.07, 0.065, -500, 250), "", jdark, "B")
+link(jgroove, "", jdark, "Alpha")
+MEL.connect_material_property(jdark, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(jersey, 0.92, -300, 400), "", MP.MP_ROUGHNESS)
+# Tangent-space normal: tilt along the fence on the bevels.
+JN_HLSL = r"""return normalize(float3(S * 0.8, 0, 1));"""
+jn = custom(jersey, JN_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["S"], -300, 750, "BevelNormal")
+link(jslope, "", jn, "S")
+MEL.connect_material_property(jn, "", MP.MP_NORMAL)
+finish(jersey)
+log("Cement blocks with joints")
+
 # --- Galvanised steel ------------------------------------------------------------------------
 steel = new_material("M_RoadSteel")
 base = noise_blend(steel, (0.45, 0.46, 0.47), (0.6, 0.61, 0.62), 0.05, 0)
@@ -362,7 +403,7 @@ ASSIGN = {
     "Build_Road_3x": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_RoadIntersection": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_Fence_GuardRail": {"m_main_material": steel},
-    "Build_Fence_Jersey": {"m_main_material": concrete},
+    "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
 }
 for name, props in ASSIGN.items():
