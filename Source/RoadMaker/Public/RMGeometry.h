@@ -61,7 +61,11 @@ struct ROADMAKER_API FRMMarkings
 	UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite, Category = "Road")
 	bool bEdgeLines = true;
 
-	bool operator==(const FRMMarkings& O) const { return Lanes == O.Lanes && bEdgeLines == O.bEdgeLines; }
+	/** Lane dividers drawn solid instead of dashed. */
+	UPROPERTY(SaveGame, EditAnywhere, BlueprintReadWrite, Category = "Road")
+	bool bContinuous = false;
+
+	bool operator==(const FRMMarkings& O) const { return Lanes == O.Lanes && bEdgeLines == O.bEdgeLines && bContinuous == O.bContinuous; }
 };
 
 /** A sampled point along a spline with a level (no banking) orthonormal frame. */

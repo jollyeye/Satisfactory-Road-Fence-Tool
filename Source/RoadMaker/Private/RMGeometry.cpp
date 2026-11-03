@@ -418,7 +418,8 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	Top.MarkUV2.SetNumZeroed(Top.Vertices.Num());
 	Top.MarkUV3.SetNumZeroed(Top.Vertices.Num());
 	const FVector2D Layout(Width / 100.f, EdgeLineInset / 100.f);
-	const FVector2D Style(Markings.Lanes, Markings.bEdgeLines ? 1.f : 0.f);
+	// UV3.y packs flags: 1 = side lines, 2 = continuous dividers.
+	const FVector2D Style(Markings.Lanes, (Markings.bEdgeLines ? 1.f : 0.f) + (Markings.bContinuous ? 2.f : 0.f));
 	for (int32 I = 0; I < Frames.Num(); ++I)
 	{
 		const float Along = Frames[I].Dist / 100.f;

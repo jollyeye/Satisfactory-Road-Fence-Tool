@@ -219,14 +219,17 @@ finish(holo_fence)
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
 
-bm_lanes = make_bp("Holograms", "BM_LaneMenu", BuildModeDescriptor)
-setp(cdo(bm_lanes), text("Lane menu (R)"), "m_display_name", "mDisplayName")
-finish(bm_lanes)
+# Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.
+for old in ("Unlocks/Recipe_LanePaint", "Buildables/Desc_LanePaint", "Buildables/Build_LanePaint",
+            "Holograms/Holo_LanePaint", "Holograms/BM_LaneMenu"):
+    path = ROOT + "/" + old
+    try:
+        if unreal.load_asset(path + "." + old.split("/")[-1]):
+            eal.delete_asset(path)
+            log("Deleted " + path)
+    except Exception as e:
+        log("  ! could not delete %s: %s" % (path, e))
 
-holo_paint = make_bp("Holograms", "Holo_LanePaint", native_class("RMLanePaintHologram"))
-setp(cdo(holo_paint), bm_lanes.generated_class(), "m_lane_menu_mode", "mLaneMenuMode")
-setp(cdo(holo_paint), bm_lanes.generated_class(), "m_default_build_mode", "mDefaultBuildMode")
-finish(holo_paint)
 
 log("== Sub-category ==")
 subcat = None
@@ -253,9 +256,6 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free ends. Cost is per connected road.",
      {}, [(Desc_Cement, 6)], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("LanePaint", native_class("RMBuildableLanePaint"), holo_paint, "Lane Paint",
-     "Left-click a road to paint its lane markings. Right-click to choose 1, 2 or 3 lanes and side lines.",
-     {}, [(Desc_IronPlate, 1)], road_icons, {}),
 ]
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
@@ -314,6 +314,122 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
             setp(rc, [unreal.SoftClassPath(BuildGun.get_path_name())], "m_produced_in", "mProducedIn")
     finish(r)
     recipes.append(r.generated_class())
+
+# ---------------------------------------------------------------------------------------------
+# Customizer: "Road Lines" tab with Sidelines and Lanes
+# ---------------------------------------------------------------------------------------------
+log("== Road Lines (customizer) ==")
+import os
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Icons")
+tasks = []
+for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
+    if f.lower().endswith(".png"):
+        t = unreal.AssetImportTask()
+        t.set_editor_property("filename", os.path.join(ICON_DIR, f))
+        t.set_editor_property("destination_path", ROOT + "/Icons")
+        t.set_editor_property("replace_existing", True)
+        t.set_editor_property("automated", True)
+        t.set_editor_property("save", True)
+        tasks.append(t)
+if tasks:
+    asset_tools.import_asset_tasks(tasks)
+    log("  imported %d icons" % len(tasks))
+
+def icon(name):
+    try:
+        return unreal.load_asset("%s/Icons/T_RoadLines_%s.T_RoadLines_%s" % (ROOT, name, name))
+    except Exception:
+        return None
+
+# Flat brush icon for the tab: look for the game's own brush / paint icon.
+brush_tex = None
+for a in game_assets():
+    n = str(a.asset_name).lower()
+    cls = str(a.asset_class_path.asset_name)
+    if cls == "Texture2D" and "brush" in n:
+        brush_tex = a.get_asset()
+        log("  tab icon: " + str(a.asset_name))
+        break
+if not brush_tex:
+    brush_tex = icon("Lanes2Dashed")
+    log("  tab icon: no brush texture found, using a road icon")
+
+CustCategory = native_class("FGCustomizerCategory")
+CustSubCategory = native_class("FGCustomizerSubCategory")
+cat = make_bp("Customization", "CustCat_RoadLines", CustCategory)
+setp(cdo(cat), text("Road Lines"), "m_display_name", "mDisplayName")
+setp(cdo(cat), 50.0, "m_menu_priority", "mMenuPriority")
+if brush_tex:
+    brush = unreal.SlateBrush()
+    brush.set_editor_property("resource_object", brush_tex)
+    brush.set_editor_property("image_size", unreal.Vector2D(64, 64))
+    setp(cdo(cat), brush, "m_category_icon", "mCategoryIcon")
+finish(cat)
+
+subcats = {}
+for i, (key, display) in enumerate((("Sidelines", "Sidelines"), ("Lanes", "Lanes"))):
+    sc = make_bp("Customization", "CustSub_RoadLines_" + key, CustSubCategory)
+    setp(cdo(sc), text(display), "m_display_name", "mDisplayName")
+    setp(cdo(sc), float(i), "m_menu_priority", "mMenuPriority")
+    finish(sc)
+    subcats[key] = sc.generated_class()
+
+# Produced-in for customization recipes: copy it from one of the game's own.
+cust_produced_in = None
+for a in game_assets():
+    n = str(a.asset_name)
+    if n.startswith("Recipe_Swatch") or n.startswith("Recipe_Pattern"):
+        try:
+            d = unreal.get_default_object(a.get_asset().generated_class())
+            cust_produced_in = getp(d, "m_produced_in", "mProducedIn")
+            log("  produced-in copied from " + n)
+            break
+        except Exception:
+            continue
+
+LineDesc = native_class("RMRoadLineDescriptor")
+CustRecipe = native_class("FGCustomizationRecipe")
+OPTIONS = [
+    # key, subcategory, display, side-line option?, side lines, lanes, continuous
+    ("SidesOff", "Sidelines", "Sidelines off", True, False, 0, False),
+    ("SidesOn", "Sidelines", "Sidelines on", True, True, 0, False),
+    ("Lanes1", "Lanes", "1 lane (no lines)", False, True, 1, False),
+    ("Lanes2Dashed", "Lanes", "2 lanes, dashed", False, True, 2, False),
+    ("Lanes2Solid", "Lanes", "2 lanes, continuous", False, True, 2, True),
+    ("Lanes3Dashed", "Lanes", "3 lanes, dashed", False, True, 3, False),
+    ("Lanes3Solid", "Lanes", "3 lanes, continuous", False, True, 3, True),
+]
+for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIONS):
+    d = make_bp("Customization", "RoadLines_" + key, LineDesc)
+    c = cdo(d)
+    setp(c, text(display), "m_display_name", "mDisplayName")
+    setp(c, text("Road Lines: " + display + ". Aim at a road and apply."), "m_description", "mDescription")
+    setp(c, cat.generated_class(), "m_category", "mCategory")
+    setp(c, [subcats[sub]], "m_sub_categories", "mSubCategories")
+    setp(c, float(i), "m_menu_priority", "mMenuPriority")
+    setp(c, [RMBuildableRoad], "m_valid_buildables", "mValidBuildables")
+    setp(c, 9100 + i, "id", "ID")
+    tex = icon(key)
+    if tex:
+        setp(c, tex, "m_icon", "mIcon")
+        setp(c, tex, "m_small_icon", "mSmallIcon")
+        setp(c, tex, "m_persistent_big_icon", "mPersistentBigIcon")
+    setp(c, is_side, "m_is_side_line_option", "mIsSideLineOption")
+    setp(c, sides, "m_side_lines", "mSideLines")
+    setp(c, max(lanes, 1), "m_lanes", "mLanes")
+    setp(c, continuous, "m_continuous", "mContinuous")
+    finish(d)
+
+    r = make_bp("Customization", "Recipe_RoadLines_" + key, CustRecipe)
+    rc = cdo(r)
+    setp(rc, text(display), "m_display_name", "mDisplayName")
+    setp(rc, d.generated_class(), "m_customization_desc", "mCustomizationDesc")
+    setp(rc, [item_amount(d.generated_class(), 1)], "m_product", "mProduct")
+    if cust_produced_in:
+        setp(rc, cust_produced_in, "m_produced_in", "mProducedIn")
+    finish(r)
+    recipes.append(r.generated_class())
+
 
 def make_schematic(name, display, recipe_list):
     log("== " + name + " ==")

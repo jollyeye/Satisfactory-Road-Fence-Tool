@@ -91,7 +91,10 @@ def finish(mat):
 MARKINGS_HLSL = r"""
 float u = UV1.x; float v = UV1.y;
 float W = UV2.x; float e = UV2.y;
-float N = round(UV3.x); float sides = UV3.y;
+float N = round(UV3.x);
+float flags = round(UV3.y);              // 1 = side lines, 2 = continuous dividers
+float sides = fmod(flags, 2.0);
+float continuous = flags > 1.5 ? 1.0 : 0.0;
 if (N < 0.5 || W < 0.5) return float2(0, 0);
 float hw = 0.075;                       // 15 cm wide lines
 float aa = max(fwidth(u), 0.002);
@@ -112,7 +115,7 @@ if (N > 1.5 && L > 0.1)
     float p = frac(v / 9.0) * 9.0;      // 3 m dash, 6 m gap
     float av = max(fwidth(v), 0.002);
     float dash = smoothstep(0, av, p) * (1 - smoothstep(3 - av, 3 + av, p));
-    mid = lineMask * dash;
+    mid = lineMask * max(dash, continuous);
 }
 return float2(saturate(mid), saturate(side));
 """
