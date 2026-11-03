@@ -474,6 +474,47 @@ namespace
 		}
 	}
 
+	/** Frames from Start cm to (length - End) cm along the curve; distances are kept as they were. */
+	TArray<FRMFrame> TrimFrames(const TArray<FRMFrame>& Frames, float Start, float End)
+	{
+		if (Frames.Num() < 2)
+		{
+			return Frames;
+		}
+		const float Total = Frames.Last().Dist;
+		const float From = FMath::Clamp(Start, 0.f, Total * 0.45f);
+		const float To = FMath::Clamp(Total - End, Total * 0.55f, Total);
+		auto At = [&Frames](float D)
+		{
+			int32 Seg = 0;
+			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
+			{
+				++Seg;
+			}
+			const FRMFrame& A = Frames[Seg];
+			const FRMFrame& B = Frames[Seg + 1];
+			const float Alpha = (B.Dist > A.Dist) ? FMath::Clamp((D - A.Dist) / (B.Dist - A.Dist), 0.f, 1.f) : 0.f;
+			FRMFrame F = A;
+			F.Pos = FMath::Lerp(A.Pos, B.Pos, Alpha);
+			F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, Alpha).GetSafeNormal();
+			F.Right = FMath::Lerp(A.Right, B.Right, Alpha).GetSafeNormal();
+			F.Up = FMath::Lerp(A.Up, B.Up, Alpha).GetSafeNormal();
+			F.Dist = D;
+			return F;
+		};
+		TArray<FRMFrame> Out;
+		Out.Add(At(From));
+		for (const FRMFrame& F : Frames)
+		{
+			if (F.Dist > From + 1.f && F.Dist < To - 1.f)
+			{
+				Out.Add(F);
+			}
+		}
+		Out.Add(At(To));
+		return Out;
+	}
+
 	TArray<FRMFrame> LiftFrames(const TArray<FRMFrame>& Frames, float Z)
 	{
 		TArray<FRMFrame> Out = Frames;
@@ -581,26 +622,32 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 
 void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel)
 {
-	// Single sheet 2 m tall on the road side, own material slot (two-sided masked diamond grid).
-	// The grid is laid out by the material from UV1.x = metres along the fence and the world height,
-	// so it stays upright on slopes. Normal faces the road (-Right).
+	// Tubes and the mesh sheet stop inside the end posts (5 cm), so two fences meeting at a corner
+	// or on a slope do not run through each other. Everything sits in the posts' centre plane.
+	const float PostHalf = 5.f;
+	const float FrameX = -3.f;
+	const TArray<FRMFrame> Inner = TrimFrames(Frames, PostHalf - 2.f, PostHalf - 2.f); // ends 2 cm inside the end posts
+
+	// Single sheet between the tubes, own material slot (two-sided masked diamond grid). The grid
+	// is laid out by the material from UV1.x = metres along the fence and the world height, so it
+	// stays upright on slopes.
 	const int32 PanelFirst = Panel.Vertices.Num();
-	ExtrudeProfile(Frames, { FVector2D(3.f, 200.f), FVector2D(3.f, 5.f) }, false, FVector2D(10.f, 100.f), 200.f, Panel);
+	ExtrudeProfile(Inner, { FVector2D(FrameX, 197.f), FVector2D(FrameX, 11.f) }, false, FVector2D(FrameX + 10.f, 100.f), 200.f, Panel);
 	Panel.MarkUV1.SetNumZeroed(Panel.Vertices.Num());
 	for (int32 I = PanelFirst; I < Panel.Vertices.Num(); ++I)
 	{
 		Panel.MarkUV1[I] = FVector2D(Panel.UVs[I].Y * 2.f, 0.f); // UV0.y = cm / 200
 	}
 
-	// Top and bottom tubes plus posts every 3 m, behind the panel (away from the road).
-	const TArray<FVector2D> Tube = { FVector2D(-6.f, -3.f), FVector2D(0.f, -3.f), FVector2D(0.f, 3.f), FVector2D(-6.f, 3.f) };
-	const TArray<FRMFrame> TopFrames = LiftFrames(Frames, 200.f);
-	const TArray<FRMFrame> BottomFrames = LiftFrames(Frames, 8.f);
-	ExtrudeProfile(TopFrames, Tube, true, FVector2D::ZeroVector, UVScale, Posts);
-	ExtrudeProfile(BottomFrames, Tube, true, FVector2D::ZeroVector, UVScale, Posts);
+	// Top and bottom tubes plus posts about every 3 m (and at both ends).
+	const TArray<FVector2D> Tube = { FVector2D(FrameX - 3.f, -3.f), FVector2D(FrameX + 3.f, -3.f), FVector2D(FrameX + 3.f, 3.f), FVector2D(FrameX - 3.f, 3.f) };
+	const TArray<FRMFrame> TopFrames = LiftFrames(Inner, 200.f);
+	const TArray<FRMFrame> BottomFrames = LiftFrames(Inner, 8.f);
+	ExtrudeProfile(TopFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
+	ExtrudeProfile(BottomFrames, Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
 	ForEvery(Frames, 300.f, [&](const FRMFrame& F)
 	{
-		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f) - F.Right * 3.f, F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 105.f), UVScale);
+		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 105.f) + F.Right * FrameX, F.Fwd, F.Right, FVector::UpVector, FVector(PostHalf, 5.f, 105.f), UVScale);
 	});
 }
 
