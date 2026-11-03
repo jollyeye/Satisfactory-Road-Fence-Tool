@@ -14,6 +14,7 @@
 #include "Hologram/FGRailroadTrackHologram.h"
 #include "Hologram/FGVehiclePathSegmentHologram.h"
 #include "Patching/NativeHookManager.h"
+#include "Components/SplineComponent.h"
 
 namespace
 {
@@ -104,12 +105,19 @@ namespace
 
 	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location);
 
-	/** Where a path hologram is snapped, so alignment is applied once per snap and scrolling still works. */
+	/**
+	 * Per path/track hologram while the snap key forces alignment. The game owns the direction, so
+	 * it is steered through the scroll rotation: each frame the spline's actual direction at the
+	 * snapped point is measured and the scroll value corrected (a frame later) until it matches.
+	 */
 	struct FPathState
 	{
-		TWeakObjectPtr<const UObject> Owner; // road or intersection of the snapped end
-		int32 EndIndex = -1;
 		bool bStartStep = true;
+		bool bFlipped = false;        // scrolling while the snap key is held turns it 180
+		bool bHasLastSet = false;
+		int32 LastSetScroll = 0;      // last value we wrote; anything else means the player scrolled
+		float LastError = 0.f;
+		float Sign = 1.f;             // learned: does more scroll turn it left or right
 		bool bSetCustomEnd = false;
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FPathState> GPathStates;
@@ -132,12 +140,6 @@ namespace
 		return true;
 	}
 
-	FVector* VectorField(UObject* Object, const TCHAR* Name)
-	{
-		FStructProperty* Prop = FindFProperty<FStructProperty>(Object->GetClass(), Name);
-		return Prop && Prop->Struct == TBaseStructure<FVector>::Get() ? Prop->ContainerPtrToValuePtr<FVector>(Object) : nullptr;
-	}
-
 	void SetBoolField(UObject* Object, const TCHAR* Name, bool bValue)
 	{
 		if (FBoolProperty* Prop = FindFProperty<FBoolProperty>(Object->GetClass(), Name))
@@ -146,7 +148,30 @@ namespace
 		}
 	}
 
-	/** The hologram left a road-end snap point: give the end direction back to the game. */
+	/** Travel direction of the hologram's spline at its first or last point (world, horizontal). */
+	bool GetSplineDirection(AFGHologram* Hologram, bool bAtStart, FVector& OutDir)
+	{
+		TInlineComponentArray<USplineComponent*> Splines(Hologram);
+		USplineComponent* Best = nullptr;
+		for (USplineComponent* Spline : Splines)
+		{
+			if (Spline && Spline->GetNumberOfSplinePoints() >= 2
+				&& (!Best || Spline->GetNumberOfSplinePoints() > Best->GetNumberOfSplinePoints()))
+			{
+				Best = Spline;
+			}
+		}
+		if (!Best)
+		{
+			return false;
+		}
+		const int32 Index = bAtStart ? 0 : Best->GetNumberOfSplinePoints() - 1;
+		OutDir = Best->GetDirectionAtSplinePoint(Index, ESplineCoordinateSpace::World);
+		OutDir.Z = 0.f;
+		return OutDir.Normalize();
+	}
+
+	/** Snap key released or snap point left: stop steering. */
 	void ReleasePathSnap(AFGHologram* Hologram)
 	{
 		if (FPathState* State = GPathStates.Find(Hologram))
@@ -159,73 +184,71 @@ namespace
 		}
 	}
 
-
-	/**
-	 * Snapped onto a road end: the path/track runs straight along the road there (perpendicular to
-	 * the end edge), in the direction closest to where it is going. The mouse wheel still turns it.
-	 * Start: the game takes the start direction from the aim, so the aim direction is replaced.
-	 * End: the custom end direction is set once when the snap begins; scrolling changes it later.
-	 */
-	FHitResult AlignToRoadEnd(AFGHologram* Hologram, const FHitResult& Hit, const FVector& Point, const FRMRoadEndRef& End)
+	/** After the game placed the point: measure and correct the direction for the next frame. */
+	void SteerAlongRoad(AFGHologram* Hologram, const FHitResult& Hit, const FVector& Point, const FRMRoadEndRef& End)
 	{
-		FHitResult Moved = MoveHit(Hit, Point);
 		const FVector Axis = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
 		if (Axis.IsNearlyZero())
 		{
-			return Moved;
+			return;
 		}
-		const UObject* Owner = End.Road ? static_cast<const UObject*>(End.Road) : static_cast<const UObject*>(End.Intersection);
 		const bool bStart = IsStartStep(Hologram);
 		FPathState& State = GPathStates.FindOrAdd(Hologram);
-		const bool bNewSnap = State.Owner.Get() != Owner || State.EndIndex != End.EndIndex || State.bStartStep != bStart;
-		if (bNewSnap && State.bSetCustomEnd && bStart)
+		if (State.bStartStep != bStart)
 		{
-			SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
-			State.bSetCustomEnd = false;
+			State = FPathState();
+			State.bStartStep = bStart;
 		}
-		State.Owner = Owner;
-		State.EndIndex = End.EndIndex;
-		State.bStartStep = bStart;
 
+		// Player scrolled while holding the key: flip 180 instead.
+		const int32 Scroll = Hologram->GetScrollRotateValue();
+		if (State.bHasLastSet && Scroll != State.LastSetScroll)
+		{
+			State.bFlipped = !State.bFlipped;
+		}
+
+		// Base direction: start = along the road the way you look; end = the way the path travels.
+		FVector Want;
 		if (bStart)
 		{
 			const FVector View = Hit.TraceEnd - Hit.TraceStart;
-			const FVector Dir = FVector::DotProduct(View, Axis) >= 0.f ? Axis : -Axis;
-			if (bNewSnap)
-			{
-				Hologram->SetScrollRotateValue(0);
-				if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
-				{
-					*Exit = Dir;
-				}
-			}
-			const FVector NewView = Dir * FVector(View.X, View.Y, 0.f).Size() + FVector(0.f, 0.f, View.Z);
-			Moved.TraceStart = Point - NewView * 0.5f;
-			Moved.TraceEnd = Point + NewView * 0.5f;
-			return Moved;
+			Want = FVector::DotProduct(View, Axis) >= 0.f ? Axis : -Axis;
 		}
-
-		if (bNewSnap)
+		else
 		{
-			const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
-			const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
-			const FVector Dir = FVector::DotProduct(Point - Start, Axis) >= 0.f ? Axis : -Axis;
-			bool bAny = false;
-			for (const TCHAR* Name : { TEXT("mEndPointEntryDirection"), TEXT("mHitTangent") })
-			{
-				if (FVector* Field = VectorField(Hologram, Name))
-				{
-					*Field = Name[1] == TEXT('H') ? Dir * FMath::Max(Field->Size(), 1.f) : Dir;
-					bAny = true;
-				}
-			}
-			if (bAny)
+			if (!State.bSetCustomEnd)
 			{
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
 				State.bSetCustomEnd = true;
 			}
+			const FVector Start = Hologram->GetActorLocation();
+			Want = FVector::DotProduct(Point - Start, Axis) >= 0.f ? Axis : -Axis;
 		}
-		return Moved;
+		if (State.bFlipped)
+		{
+			Want = -Want;
+		}
+
+		FVector Have;
+		if (!GetSplineDirection(Hologram, bStart, Have))
+		{
+			return;
+		}
+		const float Error = FMath::FindDeltaAngleDegrees(Have.Rotation().Yaw, Want.Rotation().Yaw);
+		// Learn which way the scroll turns: if the last correction made things worse, reverse.
+		if (State.bHasLastSet && FMath::Abs(State.LastError) > 2.f && FMath::Abs(Error) > FMath::Abs(State.LastError) + 1.f)
+		{
+			State.Sign = -State.Sign;
+		}
+		State.LastError = Error;
+		int32 NewScroll = Scroll;
+		if (FMath::Abs(Error) > 0.5f)
+		{
+			NewScroll = Scroll + FMath::RoundToInt(Error * State.Sign);
+			Hologram->SetScrollRotateValue(NewScroll);
+		}
+		State.LastSetScroll = Hologram->GetScrollRotateValue();
+		State.bHasLastSet = true;
 	}
 
 	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location)
@@ -276,7 +299,16 @@ namespace
 				ReleasePathSnap(Hologram);
 				return false;
 			}
-			Scope(Hologram, AlignToRoadEnd(Hologram, Hit, Best, *BestEnd));
+			Scope(Hologram, MoveHit(Hit, Best));
+			// Holding the snap key: line it up with the road (square to the end edge).
+			if (FRMSnapAccess::IsSnapHeld(Hologram))
+			{
+				SteerAlongRoad(Hologram, Hit, Best, *BestEnd);
+			}
+			else
+			{
+				ReleasePathSnap(Hologram);
+			}
 			return true;
 		}
 
