@@ -121,11 +121,11 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 namespace
 {
-	TWeakObjectPtr<URMRoadLinesHint> GHint;
+	TWeakObjectPtr<URMRoadLinesHint> GRoadLinesHint;
 
 	void EnsureHint(UFGBuildGunStatePaint* State)
 	{
-		if (GHint.IsValid() || !State)
+		if (GRoadLinesHint.IsValid() || !State)
 		{
 			return;
 		}
@@ -140,7 +140,7 @@ namespace
 		{
 			Hint->SetVisibility(ESlateVisibility::HitTestInvisible);
 			Hint->AddToViewport(500);
-			GHint = Hint;
+			GRoadLinesHint = Hint;
 		}
 	}
 
