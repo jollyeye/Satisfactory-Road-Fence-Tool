@@ -364,7 +364,16 @@ else:
 
 CustCategory = native_class("FGCustomizerCategory")
 CustSubCategory = native_class("FGCustomizerSubCategory")
-cat = make_bp("Customization", "CustCat_RoadLines", CustCategory)
+# The customizer menu updates its tiles per tab type; a tab derived from the game's Materials
+# category (CC_Material) gets material-style tiles (with icons) while keeping its own name and icon.
+MaterialTab = load_game_class("CC_Material")
+log("  tab parent: " + ("CC_Material" if MaterialTab else "FGCustomizerCategory (CC_Material not found)"))
+cat = make_bp("Customization", "CustCat_RoadLines", MaterialTab or CustCategory)
+if MaterialTab:
+    try:
+        unreal.BlueprintEditorLibrary.reparent_blueprint(cat, MaterialTab)
+    except Exception as e:
+        log("  ! tab reparent failed: %s" % e)
 setp(cdo(cat), text("Road Lines"), "m_display_name", "mDisplayName")
 setp(cdo(cat), 50.0, "m_menu_priority", "mMenuPriority")
 if brush_tex:
@@ -471,7 +480,7 @@ gwm = make_bp("", "RootGameWorld_RoadMaker", RMWorldModule)
 # Existing asset made from the plain GameWorldModule: move it onto the Road Maker module class.
 try:
     unreal.BlueprintEditorLibrary.reparent_blueprint(gwm, RMWorldModule)
-    log("  parent class: " + RMWorldModule.get_name())
+    log("  parent class set")
 except Exception as e:
     log("  ! reparent failed: %s" % e)
 g = cdo(gwm)

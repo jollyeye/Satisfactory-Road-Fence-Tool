@@ -224,16 +224,40 @@ namespace
 		return Asset && Asset->GetPathName().Contains(TEXT("/Interface/"));
 	}
 
-	void PutIconInTile(UUserWidget* Tile, UTexture2D* Icon)
+	/** All widgets of a tile, including those inside nested user widgets (the icon often is). */
+	void CollectWidgets(UUserWidget* Root, TArray<UWidget*>& Out, int32 Depth = 0)
 	{
-		if (!Tile || !Tile->WidgetTree)
+		if (!Root || !Root->WidgetTree || Depth > 4)
 		{
 			return;
 		}
 		TArray<UWidget*> Widgets;
-		Tile->WidgetTree->GetAllWidgets(Widgets);
+		Root->WidgetTree->GetAllWidgets(Widgets);
 		for (UWidget* W : Widgets)
 		{
+			Out.Add(W);
+			if (UUserWidget* Nested = Cast<UUserWidget>(W))
+			{
+				CollectWidgets(Nested, Out, Depth + 1);
+			}
+		}
+	}
+
+	void PutIconInTile(UUserWidget* Tile, UTexture2D* Icon)
+	{
+		TArray<UWidget*> Widgets;
+		CollectWidgets(Tile, Widgets);
+		for (UWidget* W : Widgets)
+		{
+			// The tile keeps an "Edit" label from the colour tab; Road Lines options are not editable.
+			if (UTextBlock* Text = Cast<UTextBlock>(W))
+			{
+				if (Text->GetText().ToString().Equals(TEXT("Edit"), ESearchCase::IgnoreCase))
+				{
+					Text->SetVisibility(ESlateVisibility::Collapsed);
+				}
+				continue;
+			}
 			UImage* Image = Cast<UImage>(W);
 			if (!Image)
 			{
@@ -242,8 +266,9 @@ namespace
 			UObject* Resource = Image->GetBrush().GetResourceObject();
 			if (!GLoggedTileLayout)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: tile %s image %s resource %s"),
-					*Tile->GetClass()->GetName(), *Image->GetName(), Resource ? *Resource->GetPathName() : TEXT("none"));
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: tile %s widget %s (%s) resource %s"),
+					*Tile->GetClass()->GetName(), *Image->GetName(), *Image->GetTypedOuter<UUserWidget>()->GetClass()->GetName(),
+					Resource ? *Resource->GetPathName() : TEXT("none"));
 			}
 			if (UTexture2D* Tex = Cast<UTexture2D>(Resource))
 			{
@@ -324,13 +349,7 @@ namespace
 			if (Icon && Icon->IsValid())
 			{
 				++Matches;
-				// The label may sit in a small nested widget; try the next tile level up as well.
-				UUserWidget* Tile = Label->GetTypedOuter<UUserWidget>();
-				PutIconInTile(Tile, Icon->Get());
-				if (UUserWidget* Parent = Tile ? Tile->GetTypedOuter<UUserWidget>() : nullptr)
-				{
-					PutIconInTile(Parent, Icon->Get());
-				}
+				PutIconInTile(Label->GetTypedOuter<UUserWidget>(), Icon->Get());
 			}
 		}
 		// Once per session, when the Road Lines tab is open but no tile was matched, log what the
