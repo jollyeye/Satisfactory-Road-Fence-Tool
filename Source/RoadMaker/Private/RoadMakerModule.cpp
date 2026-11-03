@@ -12,6 +12,9 @@
 #include "UObject/UnrealType.h"
 #include "FGPlayerController.h"
 #include "Net/RMRemoteCallObject.h"
+#include "Containers/Ticker.h"
+#include "Engine/Engine.h"
+#include "Camera/PlayerCameraManager.h"
 
 DEFINE_LOG_CATEGORY(LogRoadMaker);
 
@@ -72,6 +75,29 @@ void FRoadMakerModule::StartupModule()
 
 	// Road Lines tab in the customizer.
 	RMRoadLinePaint::InstallHooks();
+
+	// Detailed / far meshes of roads, intersections and fences, four times a second.
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+	{
+		if (!GEngine || IsRunningDedicatedServer())
+		{
+			return true;
+		}
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			UWorld* World = Context.World();
+			if (Context.WorldType != EWorldType::Game || !World)
+			{
+				continue;
+			}
+			APlayerController* PC = World->GetFirstPlayerController();
+			if (PC && PC->PlayerCameraManager)
+			{
+				ARMBuildableProcedural::UpdateLODsForCamera(World, PC->PlayerCameraManager->GetCameraLocation());
+			}
+		}
+		return true;
+	}), 0.25f);
 
 	// Multiplayer: every player gets Road Maker's remote call object (made on the server).
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGPlayerController::BeginPlay, GetMutableDefault<AFGPlayerController>(),

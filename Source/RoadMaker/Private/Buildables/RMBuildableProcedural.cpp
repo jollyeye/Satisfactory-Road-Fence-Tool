@@ -3,6 +3,7 @@
 #include "FGInventoryComponent.h"
 #include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
+#include "EngineUtils.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -43,11 +44,50 @@ void ARMBuildableProcedural::UpdateLODDistances()
 	{
 		return;
 	}
-	const bool bFar = mLODDistance > 0.f && !IsRunningDedicatedServer();
-	mMesh->SetCullDistance(bFar ? mLODDistance : 0.f);
-	mFarMesh->MinDrawDistance = bFar ? mLODDistance : 0.f;
-	mFarMesh->SetVisibility(bFar);
-	mFarMesh->MarkRenderStateDirty();
+	// Start detailed; UpdateLODsForCamera switches as the camera moves.
+	SetShowFar(false);
+}
+
+void ARMBuildableProcedural::SetShowFar(bool bFar)
+{
+	if (!mMesh || !mFarMesh)
+	{
+		return;
+	}
+	mShowingFar = bFar;
+	// Checked every time: the game's own build/dismantle effects may change visibility too.
+	if (mMesh->IsVisible() == bFar)
+	{
+		mMesh->SetVisibility(!bFar);   // collision is unaffected by visibility
+	}
+	if (mFarMesh->IsVisible() != bFar)
+	{
+		mFarMesh->SetVisibility(bFar);
+	}
+}
+
+void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& Camera)
+{
+	if (!World)
+	{
+		return;
+	}
+	for (TActorIterator<ARMBuildableProcedural> It(World); It; ++It)
+	{
+		ARMBuildableProcedural* Piece = *It;
+		if (!Piece || !Piece->mMesh || Piece->mLODDistance <= 0.f || Piece->mFarMesh->GetNumSections() == 0)
+		{
+			if (Piece)
+			{
+				Piece->SetShowFar(false);
+			}
+			continue;
+		}
+		const float DistSq = Piece->mMesh->Bounds.GetBox().ComputeSquaredDistanceToPoint(Camera);
+		// A little hysteresis so standing at the switch distance does not flicker.
+		const float Switch = Piece->mShowingFar ? Piece->mLODDistance * 0.9f : Piece->mLODDistance;
+		Piece->SetShowFar(DistSq > Switch * Switch);
+	}
 }
 
 void ARMBuildableProcedural::ClearFarMesh()

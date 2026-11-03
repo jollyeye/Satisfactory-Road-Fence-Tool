@@ -47,6 +47,18 @@ protected:
 	void ClearFarMesh();
 	void UpdateLODDistances();
 
+public:
+	/**
+	 * Shows the detailed or the far mesh of every Road Maker piece in the world for this camera.
+	 * Called a few times per second by the module (local player only); uses the distance to the
+	 * nearest point of each piece's bounds, so long roads switch where you actually are.
+	 */
+	static void UpdateLODsForCamera(UWorld* World, const FVector& Camera);
+
+protected:
+	void SetShowFar(bool bFar);
+	bool mShowingFar = false;
+
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mMesh;
 
