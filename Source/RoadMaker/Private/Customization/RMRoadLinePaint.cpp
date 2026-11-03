@@ -278,6 +278,13 @@ namespace
 		GLoggedTileLayout = true;
 	}
 
+	TArray<FString> GetKeysOf(const TMap<FString, TWeakObjectPtr<UTexture2D>>& Map)
+	{
+		TArray<FString> Keys;
+		Map.GetKeys(Keys);
+		return Keys;
+	}
+
 	bool FixCustomizerIcons(float)
 	{
 		UWorld* World = nullptr;
@@ -289,12 +296,18 @@ namespace
 				break;
 			}
 		}
+		// The customizer menu runs while the build gun is out (in its menu state, not the paint state).
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
-		if (!RMRoadLinePaint::IsPaintStateActive(PC))
+		AFGCharacterPlayer* Character = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
+		AFGBuildGun* Gun = Character ? Character->GetBuildGun() : nullptr;
+		if (!Gun || !Gun->IsEquipped())
 		{
 			return true;
 		}
 		BuildIconTable();
+		static bool bLoggedLabels = false;
+		TArray<FString> SeenLabels;
+		int32 Matches = 0;
 		for (TObjectIterator<UTextBlock> It; It; ++It)
 		{
 			UTextBlock* Label = *It;
@@ -302,9 +315,15 @@ namespace
 			{
 				continue;
 			}
-			const TWeakObjectPtr<UTexture2D>* Icon = GIconsByName.Find(Label->GetText().ToString());
+			const FString Text = Label->GetText().ToString();
+			if (!bLoggedLabels && SeenLabels.Num() < 60 && !Text.IsEmpty())
+			{
+				SeenLabels.Add(FString::Printf(TEXT("%s<%s>"), *Text, *Label->GetClass()->GetName()));
+			}
+			const TWeakObjectPtr<UTexture2D>* Icon = GIconsByName.Find(Text.TrimStartAndEnd());
 			if (Icon && Icon->IsValid())
 			{
+				++Matches;
 				// The label may sit in a small nested widget; try the next tile level up as well.
 				UUserWidget* Tile = Label->GetTypedOuter<UUserWidget>();
 				PutIconInTile(Tile, Icon->Get());
@@ -313,6 +332,14 @@ namespace
 					PutIconInTile(Parent, Icon->Get());
 				}
 			}
+		}
+		// Once per session, when the Road Lines tab is open but no tile was matched, log what the
+		// menu labels look like (helps if the game draws its labels differently).
+		if (!bLoggedLabels && Matches == 0 && RMRoadLinePaint::IsAnyLabelVisible(SeenLabels))
+		{
+			bLoggedLabels = true;
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: no tile matched. Labels: %s | Known: %s"),
+				*FString::Join(SeenLabels, TEXT(", ")), *FString::Join(GetKeysOf(GIconsByName), TEXT(", ")));
 		}
 		return true;
 	}

@@ -22,6 +22,19 @@ namespace RMRoadLinePaint
 	FText GetActiveText();
 	ARMBuildableRoad* TraceRoad(APlayerController* PC);
 	bool IsPaintStateActive(APlayerController* PC);
+
+	/** True if the labels include the "Road Lines" tab name (customizer open on or near our tab). */
+	inline bool IsAnyLabelVisible(const TArray<FString>& Labels)
+	{
+		for (const FString& L : Labels)
+		{
+			if (L.StartsWith(TEXT("Road Lines<")) || L.StartsWith(TEXT("Sidelines<")))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 /** "Road Lines: ..." / "Aim at a road" line while a Road Lines option is selected in the customizer. */
