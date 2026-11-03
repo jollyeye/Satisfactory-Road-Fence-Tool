@@ -99,6 +99,135 @@ namespace
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FLightState> GLightStates;
 
+
+	// --- Path / track alignment at road ends ------------------------------------------------------
+
+	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location);
+
+	/** Where a path hologram is snapped, so alignment is applied once per snap and scrolling still works. */
+	struct FPathState
+	{
+		TWeakObjectPtr<const UObject> Owner; // road or intersection of the snapped end
+		int32 EndIndex = -1;
+		bool bStartStep = true;
+		bool bSetCustomEnd = false;
+	};
+	TMap<TWeakObjectPtr<const AFGHologram>, FPathState> GPathStates;
+
+	bool IsStartStep(AFGHologram* Hologram)
+	{
+		if (AFGRailroadTrackHologram* Rail = Cast<AFGRailroadTrackHologram>(Hologram))
+		{
+			return Rail->GetCurrentBuildStep() == ESplineHologramBuildStep::SHBS_FindStart;
+		}
+		FProperty* Prop = FindFProperty<FProperty>(Hologram->GetClass(), TEXT("mBuildStep"));
+		if (FEnumProperty* Enum = CastField<FEnumProperty>(Prop))
+		{
+			return Enum->GetUnderlyingProperty()->GetUnsignedIntPropertyValue(Enum->ContainerPtrToValuePtr<void>(Hologram)) == 0;
+		}
+		if (FByteProperty* Byte = CastField<FByteProperty>(Prop))
+		{
+			return Byte->GetPropertyValue_InContainer(Hologram) == 0;
+		}
+		return true;
+	}
+
+	FVector* VectorField(UObject* Object, const TCHAR* Name)
+	{
+		FStructProperty* Prop = FindFProperty<FStructProperty>(Object->GetClass(), Name);
+		return Prop && Prop->Struct == TBaseStructure<FVector>::Get() ? Prop->ContainerPtrToValuePtr<FVector>(Object) : nullptr;
+	}
+
+	void SetBoolField(UObject* Object, const TCHAR* Name, bool bValue)
+	{
+		if (FBoolProperty* Prop = FindFProperty<FBoolProperty>(Object->GetClass(), Name))
+		{
+			Prop->SetPropertyValue_InContainer(Object, bValue);
+		}
+	}
+
+	/** The hologram left a road-end snap point: give the end direction back to the game. */
+	void ReleasePathSnap(AFGHologram* Hologram)
+	{
+		if (FPathState* State = GPathStates.Find(Hologram))
+		{
+			if (State->bSetCustomEnd)
+			{
+				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
+			}
+			GPathStates.Remove(Hologram);
+		}
+	}
+
+
+	/**
+	 * Snapped onto a road end: the path/track runs straight along the road there (perpendicular to
+	 * the end edge), in the direction closest to where it is going. The mouse wheel still turns it.
+	 * Start: the game takes the start direction from the aim, so the aim direction is replaced.
+	 * End: the custom end direction is set once when the snap begins; scrolling changes it later.
+	 */
+	FHitResult AlignToRoadEnd(AFGHologram* Hologram, const FHitResult& Hit, const FVector& Point, const FRMRoadEndRef& End)
+	{
+		FHitResult Moved = MoveHit(Hit, Point);
+		const FVector Axis = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
+		if (Axis.IsNearlyZero())
+		{
+			return Moved;
+		}
+		const UObject* Owner = End.Road ? static_cast<const UObject*>(End.Road) : static_cast<const UObject*>(End.Intersection);
+		const bool bStart = IsStartStep(Hologram);
+		FPathState& State = GPathStates.FindOrAdd(Hologram);
+		const bool bNewSnap = State.Owner.Get() != Owner || State.EndIndex != End.EndIndex || State.bStartStep != bStart;
+		if (bNewSnap && State.bSetCustomEnd && bStart)
+		{
+			SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
+			State.bSetCustomEnd = false;
+		}
+		State.Owner = Owner;
+		State.EndIndex = End.EndIndex;
+		State.bStartStep = bStart;
+
+		if (bStart)
+		{
+			const FVector View = Hit.TraceEnd - Hit.TraceStart;
+			const FVector Dir = FVector::DotProduct(View, Axis) >= 0.f ? Axis : -Axis;
+			if (bNewSnap)
+			{
+				Hologram->SetScrollRotateValue(0);
+				if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
+				{
+					*Exit = Dir;
+				}
+			}
+			const FVector NewView = Dir * FVector(View.X, View.Y, 0.f).Size() + FVector(0.f, 0.f, View.Z);
+			Moved.TraceStart = Point - NewView * 0.5f;
+			Moved.TraceEnd = Point + NewView * 0.5f;
+			return Moved;
+		}
+
+		if (bNewSnap)
+		{
+			const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
+			const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
+			const FVector Dir = FVector::DotProduct(Point - Start, Axis) >= 0.f ? Axis : -Axis;
+			bool bAny = false;
+			for (const TCHAR* Name : { TEXT("mEndPointEntryDirection"), TEXT("mHitTangent") })
+			{
+				if (FVector* Field = VectorField(Hologram, Name))
+				{
+					*Field = Name[1] == TEXT('H') ? Dir * FMath::Max(Field->Size(), 1.f) : Dir;
+					bAny = true;
+				}
+			}
+			if (bAny)
+			{
+				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
+				State.bSetCustomEnd = true;
+			}
+		}
+		return Moved;
+	}
+
 	FHitResult MoveHit(const FHitResult& Hit, const FVector& Location)
 	{
 		FHitResult Moved = Hit;
@@ -127,6 +256,7 @@ namespace
 			TArray<FRMRoadEndRef> Ends;
 			RMRoadUtils::FindFreeEnds(Hologram->GetWorld(), Hit.Location, 1200.f, 6, nullptr, Ends, true);
 			FVector Best = FVector::ZeroVector;
+			const FRMRoadEndRef* BestEnd = nullptr;
 			float BestDist = 600.f;
 			for (const FRMRoadEndRef& End : Ends)
 			{
@@ -137,14 +267,16 @@ namespace
 					{
 						BestDist = D;
 						Best = P;
+						BestEnd = &End;
 					}
 				}
 			}
-			if (BestDist >= 600.f)
+			if (!BestEnd)
 			{
+				ReleasePathSnap(Hologram);
 				return false;
 			}
-			Scope(Hologram, MoveHit(Hit, Best));
+			Scope(Hologram, AlignToRoadEnd(Hologram, Hit, Best, *BestEnd));
 			return true;
 		}
 
