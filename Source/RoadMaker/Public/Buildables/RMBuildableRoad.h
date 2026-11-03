@@ -19,6 +19,13 @@ public:
 
 	float GetRoadWidth() const { return mWidthInFoundations * RM::FoundationSize; }
 
+	/** Customizer: primary colour = dashed middle lines, secondary colour = side lines. */
+	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
+
+	/** Custom primitive data slots read by M_RoadAsphalt (after the 20 floats the game itself uses). */
+	static constexpr int32 PrimaryColorIndex = 24;
+	static constexpr int32 SecondaryColorIndex = 28;
+
 	/** Lane markings; changing them rebuilds the mesh (and replicates). */
 	void SetMarkings(const FRMMarkings& InMarkings);
 	const FRMMarkings& GetMarkings() const { return mMarkings; }
@@ -77,6 +84,9 @@ public:
 	UMaterialInterface* mBodyMaterial = nullptr;
 
 protected:
+	/** Pushes the resolved customizer colours to the mesh for the marking material. */
+	void ApplyMarkingColors(const FFactoryCustomizationData& Data);
+
 	UFUNCTION()
 	void OnRep_Markings() { RebuildMesh(); }
 

@@ -2,6 +2,7 @@
 #include "ProceduralMeshComponent.h"
 #include "Math/RotationMatrix.h"
 #include "Net/UnrealNetwork.h"
+#include "FGFactoryColoringTypes.h"
 
 ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -31,6 +32,7 @@ void ARMBuildableRoad::RebuildMesh()
 	Body.ApplyToSection(mMesh, 1, true);
 	ApplyMaterial(0, mTopMaterial);
 	ApplyMaterial(1, mBodyMaterial);
+	ApplyMarkingColors(mCustomizationData);
 
 	// Anchors sit on the top-centre of each end, facing outward.
 	const FRMFrame& First = Frames[0];
@@ -73,4 +75,24 @@ void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
 	{
 		RebuildMesh();
 	}
+}
+
+void ARMBuildableRoad::ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData)
+{
+	Super::ApplyCustomizationData_Implementation(customizationData);
+	ApplyMarkingColors(customizationData);
+}
+
+void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
+{
+	if (!mMesh)
+	{
+		return;
+	}
+	// Resolves swatch / colour slot / custom colours into the actual primary and secondary colour.
+	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
+	const FLinearColor P = Resolved.PrimaryColor;
+	const FLinearColor S = Resolved.SecondaryColor;
+	mMesh->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+	mMesh->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }

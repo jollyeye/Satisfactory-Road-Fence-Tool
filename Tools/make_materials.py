@@ -92,14 +92,15 @@ MARKINGS_HLSL = r"""
 float u = UV1.x; float v = UV1.y;
 float W = UV2.x; float e = UV2.y;
 float N = round(UV3.x); float sides = UV3.y;
-if (N < 0.5 || W < 0.5) return 0;
+if (N < 0.5 || W < 0.5) return float2(0, 0);
 float hw = 0.075;                       // 15 cm wide lines
 float aa = max(fwidth(u), 0.002);
-float m = 0;
+float side = 0;
+float mid = 0;
 if (sides > 0.5)
 {
     float d = min(abs(u - e), abs(u - (W - e)));
-    m = max(m, 1 - smoothstep(hw - aa, hw + aa, d));
+    side = 1 - smoothstep(hw - aa, hw + aa, d);
 }
 float L = W - 2 * e;
 if (N > 1.5 && L > 0.1)
@@ -111,9 +112,9 @@ if (N > 1.5 && L > 0.1)
     float p = frac(v / 9.0) * 9.0;      // 3 m dash, 6 m gap
     float av = max(fwidth(v), 0.002);
     float dash = smoothstep(0, av, p) * (1 - smoothstep(3 - av, 3 + av, p));
-    m = max(m, lineMask * dash);
+    mid = lineMask * dash;
 }
-return saturate(m);
+return float2(saturate(mid), saturate(side));
 """
 
 asphalt = new_material("M_RoadAsphalt")
@@ -124,7 +125,7 @@ uv2 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coor
 uv3 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 800, coordinate_index=3)
 marks = node(asphalt, unreal.MaterialExpressionCustom, -800, 650)
 marks.set_editor_property("code", MARKINGS_HLSL)
-marks.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT1)
+marks.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT2)
 marks.set_editor_property("description", "LaneMarkings")
 inputs = []
 for name in ("UV1", "UV2", "UV3"):
@@ -136,17 +137,39 @@ link(uv1, "", marks, "UV1")
 link(uv2, "", marks, "UV2")
 link(uv3, "", marks, "UV3")
 
-paint = color(asphalt, 0.8, 0.8, 0.76, -500, 500)
-col = node(asphalt, unreal.MaterialExpressionLinearInterpolate, -250, 150)
-link(base, "", col, "A")
-link(paint, "", col, "B")
-link(marks, "", col, "Alpha")
+# Customizer colours, pushed by ARMBuildableRoad as custom primitive data (24 = primary, 28 =
+# secondary). The defaults (off-white) show when no colour has been pushed.
+def cpd_color(name, index, y):
+    p = node(asphalt, unreal.MaterialExpressionVectorParameter, -600, y,
+             parameter_name=name, default_value=unreal.LinearColor(0.8, 0.8, 0.76, 1.0))
+    p.set_editor_property("use_custom_primitive_data", True)
+    p.set_editor_property("primitive_data_index", index)
+    return p
+
+primary = cpd_color("MiddleLineColor", 24, 900)
+secondary = cpd_color("SideLineColor", 28, 1000)
+mid_mask = node(asphalt, unreal.MaterialExpressionComponentMask, -550, 650, r=True, g=False, b=False, a=False)
+side_mask = node(asphalt, unreal.MaterialExpressionComponentMask, -550, 750, r=False, g=True, b=False, a=False)
+link(marks, "", mid_mask, "")
+link(marks, "", side_mask, "")
+
+with_sides = node(asphalt, unreal.MaterialExpressionLinearInterpolate, -350, 150)
+link(base, "", with_sides, "A")
+link(secondary, "", with_sides, "B")
+link(side_mask, "", with_sides, "Alpha")
+col = node(asphalt, unreal.MaterialExpressionLinearInterpolate, -200, 150)
+link(with_sides, "", col, "A")
+link(primary, "", col, "B")
+link(mid_mask, "", col, "Alpha")
 MEL.connect_material_property(col, "", MP.MP_BASE_COLOR)
 
-rough = node(asphalt, unreal.MaterialExpressionLinearInterpolate, -250, 400)
+any_line = node(asphalt, unreal.MaterialExpressionMax, -350, 450)
+link(mid_mask, "", any_line, "A")
+link(side_mask, "", any_line, "B")
+rough = node(asphalt, unreal.MaterialExpressionLinearInterpolate, -200, 400)
 link(const(asphalt, 0.85, -500, 350), "", rough, "A")
 link(const(asphalt, 0.6, -500, 420), "", rough, "B")
-link(marks, "", rough, "Alpha")
+link(any_line, "", rough, "Alpha")
 MEL.connect_material_property(rough, "", MP.MP_ROUGHNESS)
 finish(asphalt)
 log("Asphalt with lane markings")

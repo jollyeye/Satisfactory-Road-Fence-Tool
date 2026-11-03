@@ -91,9 +91,9 @@ struct ROADMAKER_API FRMMesh
 	 * UV2 = (road width m, side line inset m), UV3 = (lanes, side lines 0/1). Missing channels are
 	 * sent as zeros, which the asphalt material reads as "no markings".
 	 */
-	TArray<FVector2D> UV1;
-	TArray<FVector2D> UV2;
-	TArray<FVector2D> UV3;
+	TArray<FVector2D> MarkUV1;
+	TArray<FVector2D> MarkUV2;
+	TArray<FVector2D> MarkUV3;
 
 	void Reset();
 	bool IsEmpty() const { return Triangles.Num() == 0; }

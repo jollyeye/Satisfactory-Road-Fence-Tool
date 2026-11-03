@@ -253,6 +253,14 @@ TOOLS = [
 ]
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
+
+# Light default swatch for roads (lines would otherwise start FICSIT orange / grey).
+light_swatch = None
+for n in ("SwatchDesc_Concrete", "SwatchDesc_White", "SwatchDesc_Unpainted"):
+    light_swatch = load_game_class(n)
+    if light_swatch:
+        log("  default road swatch: " + n)
+        break
 recipes = []
 
 for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
@@ -269,6 +277,10 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     for k, m in mats.items():
         if m:
             setp(c, m, k)
+    if parent == RMBuildableRoad:
+        setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
+        if light_swatch:
+            setp(c, light_swatch, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
     finish(b)
 
     d = make_bp("Buildables", "Desc_" + name, BuildingDescriptor)
@@ -323,17 +335,13 @@ def make_schematic(name, display, recipe_list):
     return bp
 
 
-# Lane Paint has its own milestone so it also unlocks in saves that already bought Road Maker.
-paint_recipes = [r for r in recipes if "LanePaint" in r.get_name()]
-road_recipes = [r for r in recipes if "LanePaint" not in r.get_name()]
-sch = make_schematic("Schematic_RoadMaker", "Road Maker", road_recipes)
-sch_paint = make_schematic("Schematic_RoadMakerLanePaint", "Road Maker: Lane Paint", paint_recipes)
+sch = make_schematic("Schematic_RoadMaker", "Road Maker", recipes)
 
 log("== Game world module ==")
 gwm = make_bp("", "RootGameWorld_RoadMaker", GameWorldModule)
 g = cdo(gwm)
 setp(g, True, "root_module", "b_root_module", "bRootModule")
-setp(g, [sch.generated_class(), sch_paint.generated_class()], "m_schematics", "mSchematics")
+setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
 finish(gwm)
 
 log("DONE")

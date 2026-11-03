@@ -17,9 +17,9 @@ void FRMMesh::Reset()
 	Normals.Reset();
 	UVs.Reset();
 	Tangents.Reset();
-	UV1.Reset();
-	UV2.Reset();
-	UV3.Reset();
+	MarkUV1.Reset();
+	MarkUV2.Reset();
+	MarkUV3.Reset();
 }
 
 int32 FRMMesh::AddVertex(const FVector& P, const FVector& N, const FVector2D& UV, const FVector& TangentX)
@@ -105,7 +105,7 @@ void FRMMesh::ApplyToSection(UProceduralMeshComponent* Comp, int32 Section, bool
 		Zeros.Init(FVector2D::ZeroVector, Vertices.Num());
 		return Zeros;
 	};
-	Comp->CreateMeshSection_LinearColor(Section, Vertices, Triangles, Normals, UVs, Channel(UV1), Channel(UV2), Channel(UV3),
+	Comp->CreateMeshSection_LinearColor(Section, Vertices, Triangles, Normals, UVs, Channel(MarkUV1), Channel(MarkUV2), Channel(MarkUV3),
 		NoColors, Tangents, bCollision);
 }
 
@@ -407,9 +407,9 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	ExtrudeProfile(Frames, { FVector2D(-H, 0.f), FVector2D(H, 0.f) }, false, Centroid, UVScale, Top);
 
 	// Marking data in metres for the asphalt material.
-	Top.UV1.SetNumZeroed(Top.Vertices.Num());
-	Top.UV2.SetNumZeroed(Top.Vertices.Num());
-	Top.UV3.SetNumZeroed(Top.Vertices.Num());
+	Top.MarkUV1.SetNumZeroed(Top.Vertices.Num());
+	Top.MarkUV2.SetNumZeroed(Top.Vertices.Num());
+	Top.MarkUV3.SetNumZeroed(Top.Vertices.Num());
 	const FVector2D Layout(Width / 100.f, EdgeLineInset / 100.f);
 	const FVector2D Style(Markings.Lanes, Markings.bEdgeLines ? 1.f : 0.f);
 	for (int32 I = 0; I < Frames.Num(); ++I)
@@ -418,9 +418,9 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
 			const int32 V = TopBase + I * 2 + Side;
-			Top.UV1[V] = FVector2D(Side == 0 ? 0.f : Width / 100.f, Along);
-			Top.UV2[V] = Layout;
-			Top.UV3[V] = Style;
+			Top.MarkUV1[V] = FVector2D(Side == 0 ? 0.f : Width / 100.f, Along);
+			Top.MarkUV2[V] = Layout;
+			Top.MarkUV3[V] = Style;
 		}
 	}
 
