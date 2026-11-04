@@ -6,7 +6,9 @@
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Holograms/RMHologramLook.h"
-#include "Hologram/FGHologramBuildModeDescriptor.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 
 ARMIntersectionHologram::ARMIntersectionHologram()
@@ -22,6 +24,11 @@ ARMIntersectionHologram::ARMIntersectionHologram()
 	}
 	mPreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mPreviewMesh->SetCastShadow(false);
+
+	mOverlayMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("PickOverlay"));
+	mOverlayMesh->SetupAttachment(mPreviewMesh);
+	mOverlayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mOverlayMesh->SetCastShadow(false);
 }
 
 void ARMIntersectionHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -38,29 +45,6 @@ namespace
 	{
 		return A.Road == B.Road && A.Intersection == B.Intersection && A.EndIndex == B.EndIndex;
 	}
-}
-
-bool ARMIntersectionHologram::IsPickMode() const
-{
-	return mBuildModePick && IsCurrentBuildMode(mBuildModePick);
-}
-
-void ARMIntersectionHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
-{
-	Super::GetSupportedBuildModes_Implementation(out_buildmodes);
-	if (mBuildModePick)
-	{
-		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModePick.Get()));
-	}
-}
-
-void ARMIntersectionHologram::OnBuildModeChanged(TSubclassOf<UFGHologramBuildModeDescriptor> buildMode)
-{
-	Super::OnBuildModeChanged(buildMode);
-	mPicked.Reset();
-	mHasHover = false;
-	mLocalEnds.Reset();
-	RebuildPreview();
 }
 
 void ARMIntersectionHologram::RefreshPicks()
@@ -83,33 +67,20 @@ void ARMIntersectionHologram::RefreshPicks()
 
 void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
 {
-	TArray<FRMRoadEndRef> Found;
-	if (IsPickMode())
+	RefreshPicks();
+	TArray<FRMRoadEndRef> Near;
+	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mPickRadius, 1, nullptr, Near);
+	mHasHover = Near.Num() > 0;
+	if (mHasHover)
 	{
-		RefreshPicks();
-		TArray<FRMRoadEndRef> Near;
-		RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mPickRadius, 1, nullptr, Near);
-		mHasHover = Near.Num() > 0;
-		if (mHasHover)
-		{
-			mHover = Near[0];
-		}
-		Found = mPicked;
+		mHover = Near[0];
 	}
-	else
-	{
-		mHasHover = false;
-		RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSearchRadius, mMaxRoads, nullptr, Found);
-	}
-	ApplyEnds(Found, hitResult.Location);
+	ApplyEnds(mPicked, hitResult.Location);
+	RebuildOverlay();
 }
 
 bool ARMIntersectionHologram::DoMultiStepPlacement(bool isInputFromARelease)
 {
-	if (!IsPickMode())
-	{
-		return true;
-	}
 	if (mHasHover)
 	{
 		// One toggle per click, even if the game reports the click twice (press and release).
@@ -127,32 +98,22 @@ bool ARMIntersectionHologram::DoMultiStepPlacement(bool isInputFromARelease)
 			{
 				mPicked.Add(mHover);
 			}
-			mMarkerKey = 0; // redraw
+			mPickKey = 0; // redraw
 		}
 		return false;
 	}
 	return mPicked.Num() >= 2; // clicked away from the ends: build
 }
 
-uint32 ARMIntersectionHologram::MarkerKey() const
+void ARMIntersectionHologram::ApplyEnds(const TArray<FRMRoadEndRef>& Found, const FVector& FallbackLocation)
 {
 	uint32 Key = GetTypeHash(mPicked.Num()) + 1;
-	if (mHasHover)
-	{
-		Key = HashCombine(Key, HashCombine(GetTypeHash(mHover.Road), HashCombine(GetTypeHash(mHover.Intersection), GetTypeHash(mHover.EndIndex))));
-	}
 	for (const FRMRoadEndRef& R : mPicked)
 	{
 		Key = HashCombine(Key, HashCombine(GetTypeHash(R.Road), HashCombine(GetTypeHash(R.Intersection), GetTypeHash(R.EndIndex))));
 	}
-	return Key;
-}
-
-void ARMIntersectionHologram::ApplyEnds(const TArray<FRMRoadEndRef>& Found, const FVector& FallbackLocation)
-{
-	const uint32 Key = IsPickMode() ? MarkerKey() : 0;
-	const bool bMarkersChanged = Key != mMarkerKey;
-	mMarkerKey = Key;
+	const bool bPicksChanged = Key != mPickKey;
+	mPickKey = Key;
 
 	if (Found.Num() == 0)
 	{
@@ -186,8 +147,8 @@ void ARMIntersectionHologram::ApplyEnds(const TArray<FRMRoadEndRef>& Found, cons
 		Local.Add(E);
 	}
 
-	// Only rebuild the preview when the set of ends (or the pick markers) actually changed.
-	bool bChanged = bMarkersChanged || Local.Num() != mLocalEnds.Num() || !FMath::IsNearlyEqual(Height, mHeight);
+	// Only rebuild the preview when the set of ends actually changed.
+	bool bChanged = bPicksChanged || Local.Num() != mLocalEnds.Num() || !FMath::IsNearlyEqual(Height, mHeight);
 	for (int32 I = 0; !bChanged && I < Local.Num(); ++I)
 	{
 		bChanged = !Local[I].Center.Equals(mLocalEnds[I].Center, 1.f);
@@ -200,33 +161,117 @@ void ARMIntersectionHologram::ApplyEnds(const TArray<FRMRoadEndRef>& Found, cons
 	}
 }
 
-void ARMIntersectionHologram::BuildMarkers(FRMMesh& Out) const
+namespace
 {
-	const FVector Base = GetActorLocation();
-	auto EndAxes = [](const FRMRoadEndRef& R, FVector& In, FVector& Right)
+	/** Camera-facing strips and shapes for the pick overlay, in actor space. */
+	struct FOverlayBuilder
 	{
-		In = FVector(R.Outward.X, R.Outward.Y, 0.f).GetSafeNormal();
-		Right = FVector::CrossProduct(FVector::UpVector, In);
+		FVector Base;      // actor location (overlay vertices are relative to it)
+		FVector Camera;
+		float WorldPerPixel = 0.f; // at 1 cm distance
+		TArray<FVector> Vertices;
+		TArray<int32> Triangles;
+		TArray<FLinearColor> Colors;
+
+		float PixelsAt(const FVector& P, float Pixels) const
+		{
+			return Pixels * WorldPerPixel * FMath::Max(FVector::Dist(P, Camera), 10.f);
+		}
+
+		void Quad(const FVector& A, const FVector& B, const FVector& C, const FVector& D, const FLinearColor& Color)
+		{
+			const int32 I = Vertices.Num();
+			for (const FVector& P : { A, B, C, D })
+			{
+				Vertices.Add(P - Base);
+				Colors.Add(Color);
+			}
+			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
+		}
+
+		/** A line Pixels wide on screen, facing the camera. */
+		void Line(FVector A, FVector B, float Pixels, const FLinearColor& Color)
+		{
+			const FVector Dir = (B - A).GetSafeNormal();
+			const float HA = PixelsAt(A, Pixels) * 0.5f;
+			const float HB = PixelsAt(B, Pixels) * 0.5f;
+			A -= Dir * HA; // overlap at the corners
+			B += Dir * HB;
+			FVector SA = FVector::CrossProduct(Dir, Camera - A).GetSafeNormal();
+			FVector SB = FVector::CrossProduct(Dir, Camera - B).GetSafeNormal();
+			Quad(A - SA * HA, A + SA * HA, B + SB * HB, B - SB * HB, Color);
+		}
+
+		/** Outline of a road end's cap (its end face). */
+		void Cap(const FRMRoadEndRef& R, const FLinearColor& Color)
+		{
+			const FVector Out = FVector(R.Outward.X, R.Outward.Y, 0.f).GetSafeNormal();
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Out);
+			const FVector C = R.Location + Out * 2.f;
+			const FVector Down(0.f, 0.f, -FMath::Max(R.Height, 10.f));
+			const FVector TL = C - Right * R.Width * 0.5f;
+			const FVector TR = C + Right * R.Width * 0.5f;
+			Line(TL, TR, 4.f, Color);
+			Line(TR, TR + Down, 4.f, Color);
+			Line(TR + Down, TL + Down, 4.f, Color);
+			Line(TL + Down, TL, 4.f, Color);
+		}
+
+		/** A flat 4 m arrow pointing down at the end, turned towards the camera. */
+		void Arrow(const FRMRoadEndRef& R, const FLinearColor& Color)
+		{
+			const FVector Tip = R.Location + FVector(0.f, 0.f, 20.f);
+			FVector ToCam = Camera - Tip;
+			ToCam.Z = 0.f;
+			const FVector Side = FVector::CrossProduct(FVector::UpVector, ToCam.GetSafeNormal()).GetSafeNormal();
+			const FVector Up = FVector::UpVector;
+			const FVector HeadTop = Tip + Up * 150.f;
+			// Head: a triangle (as a quad with two corners at the tip).
+			Quad(Tip, Tip, HeadTop + Side * 110.f, HeadTop - Side * 110.f, Color);
+			// Shaft.
+			Quad(HeadTop - Side * 35.f, HeadTop + Side * 35.f, Tip + Up * 400.f + Side * 35.f, Tip + Up * 400.f - Side * 35.f, Color);
+		}
 	};
-	// Picked: a bar across the end.
+}
+
+void ARMIntersectionHologram::RebuildOverlay()
+{
+	mOverlayMesh->ClearAllMeshSections();
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager || (!mHasHover && mPicked.Num() == 0))
+	{
+		return;
+	}
+	int32 ViewW = 0, ViewH = 0;
+	PC->GetViewportSize(ViewW, ViewH);
+	FOverlayBuilder B;
+	B.Base = GetActorLocation();
+	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
+	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+
+	const FLinearColor White(1.f, 1.f, 1.f);
+	const FLinearColor Orange(1.f, 0.35f, 0.f);
 	for (const FRMRoadEndRef& R : mPicked)
 	{
-		FVector In, Right;
-		EndAxes(R, In, Right);
-		Out.AddBox(R.Location - Base + In * 100.f + FVector(0.f, 0.f, 20.f), In, Right, FVector::UpVector,
-			FVector(100.f, R.Width * 0.5f, 20.f), 0.01f);
+		if (!(mHasHover && SameEnd(R, mHover)))
+		{
+			B.Cap(R, White);
+		}
+		B.Arrow(R, White);
 	}
-	// Aimed at: two posts at the end's corners (a click picks it, or drops it if already picked).
 	if (mHasHover)
 	{
-		FVector In, Right;
-		EndAxes(mHover, In, Right);
-		for (const float Side : { -1.f, 1.f })
-		{
-			Out.AddBox(mHover.Location - Base + Right * (Side * (mHover.Width * 0.5f - 50.f)) + FVector(0.f, 0.f, 200.f),
-				In, Right, FVector::UpVector, FVector(50.f, 50.f, 200.f), 0.01f);
-		}
+		B.Cap(mHover, Orange);
 	}
+
+	static UMaterialInterface* Fallback = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	UMaterialInterface* Material = mOverlayMaterial ? mOverlayMaterial : Fallback;
+	mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
+	if (Material)
+	{
+		mOverlayMesh->SetMaterial(0, Material);
+	}
+	mOverlayMesh->SetRenderCustomDepth(false);
 }
 
 void ARMIntersectionHologram::RebuildPreview()
@@ -241,15 +286,6 @@ void ARMIntersectionHologram::RebuildPreview()
 		{
 			Top.ApplyToSection(mPreviewMesh, 0, false);
 			Body.ApplyToSection(mPreviewMesh, 1, false);
-		}
-	}
-	if (IsPickMode())
-	{
-		FRMMesh Markers;
-		BuildMarkers(Markers);
-		if (!Markers.IsEmpty())
-		{
-			Markers.ApplyToSection(mPreviewMesh, 2, false);
 		}
 	}
 	UpdateHologramLook();
@@ -270,6 +306,16 @@ void ARMIntersectionHologram::UpdateHologramLook()
 			? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
 	}
 	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+	// The pick overlay keeps its own material (the game may give every mesh the hologram material).
+	static UMaterialInterface* OverlayFallback = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	if (UMaterialInterface* Overlay = mOverlayMaterial ? mOverlayMaterial : OverlayFallback)
+	{
+		if (mOverlayMesh->GetNumSections() > 0)
+		{
+			mOverlayMesh->SetMaterial(0, Overlay);
+		}
+		mOverlayMesh->SetRenderCustomDepth(false);
+	}
 }
 
 
@@ -277,13 +323,13 @@ void ARMIntersectionHologram::CheckValidPlacement()
 {
 	// No Super call on purpose: the vanilla floor check ("Surface is too uneven") is meant for
 	// box-shaped buildings and rejects spline pieces. Placement rules are checked below instead.
-	if (IsPickMode() && mHasHover)
+	if (mHasHover)
 	{
 		return; // this click picks (or drops) the aimed road end
 	}
 	if (mLocalEnds.Num() < 2)
 	{
-		AddConstructDisqualifier(IsPickMode() ? URMCD_PickRoadEnds::StaticClass() : URMCD_NotEnoughRoads::StaticClass());
+		AddConstructDisqualifier(URMCD_PickRoadEnds::StaticClass());
 	}
 	else if (!mGeometryValid)
 	{
@@ -300,4 +346,19 @@ void ARMIntersectionHologram::ConfigureActor(AFGBuildable* inBuildable) const
 		X->SetEnds(mLocalEnds, mHeight);
 		X->SetCostMultiplier(GetBaseCostMultiplier());
 	}
+}
+
+AActor* ARMIntersectionHologram::Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID)
+{
+	AActor* Built = Super::Construct(out_children, constructionID);
+	// Built: start over with no picked ends (outlines and arrows go away). On a client the picked
+	// ends drop out by themselves once the new intersection arrives and takes them.
+	if (Built)
+	{
+		mPicked.Reset();
+		mHasHover = false;
+		mPickKey = 0;
+		mOverlayMesh->ClearAllMeshSections();
+	}
+	return Built;
 }

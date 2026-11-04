@@ -29,6 +29,8 @@
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "Buildables/FGBuildableFoundation.h"
+#include "Hologram/FGFoundationHologram.h"
 
 namespace
 {
@@ -41,7 +43,7 @@ namespace
 		}
 	};
 
-	enum class ESnapKind : uint8 { None, PowerPole, StreetLight, PathStart };
+	enum class ESnapKind : uint8 { None, PowerPole, StreetLight, PathStart, Foundation };
 
 	/** Correction between "facing" and the street light model's own forward axis (was 90 off in game). */
 	constexpr float StreetLightYawOffset = -90.f;
@@ -64,6 +66,14 @@ namespace
 		if (Hologram->IsA<AFGRailroadTrackHologram>() || Hologram->IsA<AFGVehiclePathSegmentHologram>())
 		{
 			return ESnapKind::PathStart;
+		}
+		if (Hologram->IsA<AFGFoundationHologram>() && Build->IsChildOf(AFGBuildableFoundation::StaticClass()))
+		{
+			const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(const_cast<UClass*>(Build));
+			if (Foundation && FMath::IsNearlyZero(Foundation->mElevation) && !Foundation->mIsFrame)
+			{
+				return ESnapKind::Foundation; // flat foundations (no ramps, no frames)
+			}
 		}
 		return ESnapKind::None;
 	}
@@ -1513,6 +1523,46 @@ namespace
 		return true;
 	}
 
+	/**
+	 * Foundations next to a free road end or intersection end: the foundation's edge sits on the end
+	 * face, its top level with the road, facing along the road, in 4 m steps across the end (road ends
+	 * are whole foundations wide, so the foundation lines up with the road's own grid).
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceFoundationAtRoadEnd(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(Hologram->GetBuildClass().Get());
+		UWorld* World = Hologram->GetWorld();
+		if (!Foundation || !World || Foundation->mDepth < 100.f || Foundation->mWidth < 100.f)
+		{
+			return false;
+		}
+		TArray<FRMRoadEndRef> Ends;
+		RMRoadUtils::FindFreeEnds(World, Hit.Location, Foundation->mDepth + 1200.f, 4, nullptr, Ends);
+		for (const FRMRoadEndRef& End : Ends)
+		{
+			const FVector Out = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Out);
+			const FVector D = Hit.Location - End.Location;
+			const float Along = FVector::DotProduct(D, Out);
+			const float Across = FVector::DotProduct(D, Right);
+			// Aiming at the ground (or a foundation) just beyond the end, or at the very end of the road.
+			if (Along < -400.f || Along > Foundation->mDepth + 400.f
+				|| FMath::Abs(Across) > End.Width * 0.5f + Foundation->mWidth * 0.5f || FMath::Abs(D.Z) > 800.f)
+			{
+				continue;
+			}
+			const float Step = FMath::RoundToFloat(Across / 400.f) * 400.f;
+			// Origin of a foundation is its centre (half way up).
+			const FVector Location = End.Location + Right * Step + Out * (Foundation->mDepth * 0.5f)
+				- FVector(0.f, 0.f, Foundation->mHeight * 0.5f);
+			Hologram->SetActorLocationAndRotation(Location, FRotator(0.f, Out.Rotation().Yaw, 0.f));
+			Scope.Cancel();
+			return true;
+		}
+		return false;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
@@ -1520,6 +1570,11 @@ namespace
 		if (Kind == ESnapKind::None || !Hologram->GetWorld() || GInPathReplace)
 		{
 			return false;
+		}
+
+		if (Kind == ESnapKind::Foundation)
+		{
+			return PlaceFoundationAtRoadEnd(Scope, Hologram, Hit);
 		}
 
 		if (Kind == ESnapKind::PathStart)
@@ -1764,6 +1819,7 @@ void RMVanillaSnapping::InstallHooks()
 	RM_HOOK_SET_LOCATION(AFGFloodlightHologram);
 	RM_HOOK_SET_LOCATION(AFGRailroadTrackHologram);
 	RM_HOOK_SET_LOCATION(AFGVehiclePathSegmentHologram);
+	RM_HOOK_SET_LOCATION(AFGFoundationHologram);
 
 #undef RM_HOOK_SET_LOCATION
 

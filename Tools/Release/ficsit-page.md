@@ -36,7 +36,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 ### Road Intersection
 ![A four-way intersection with side lines and fences on the curbs](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection.jpg)
 
-- Aim between road ends: joins up to 6 free road ends (or free intersection ends) with curved curbs.
+- Click the free road ends (or free intersection ends) you want to join, up to 6, then click away from them to build: they are joined with curved curbs. The aimed end is outlined in orange, picked ends in white with an arrow.
 - Free ends are capped and can be built on again; intersections can join each other.
 - Side lines along the curbs (Road Lines › Sidelines).
 
@@ -60,8 +60,8 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 ## Changelog for version 1.1.0
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane of a road: the path or track is laid along the whole lane, end to end — click to build. Scroll flips the direction; next to an existing path it continues that path's direction and joins it, and tracks connect to free track ends.
 - **One-click intersection connections:** hold a vehicle path or railway track and the snap key (Ctrl) and aim at an intersection: every arriving path is connected to every leaving path on the other ends (no U-turns), and every track end to the track in the same lane on each other end (left to left, middle to middle, right to right, in the travel direction; switches form on their own), shown at once; one click builds them all. If one connection is invalid (red), improve the intersection until all of them fit.
-- Intersections reach road ends up to 32 m from where you aim (was 25 m).
-- New **Pick Road Ends** build mode for big intersections: click each free road end to pick it (click again to drop it), then click away from the ends to build. Picked ends can be up to 200 m apart.
+- **New intersection placement:** click each free road end to pick it (up to 6, up to 200 m apart; click again to drop it), then click away from the ends to build. The aimed end gets an orange outline, picked ends a white outline and an arrow, visible through other buildings.
+- **Foundations snap to free road ends and intersection ends:** edge on the end, top level with the road, in 4 m steps across it.
 - Dismantling a road or intersection also dismantles the vehicle paths and railway tracks lying on it (refunded too).
 - Intersections of two roads at an angle (e.g. 90°) now build: the curved, ring-shaped piece is filled correctly, and big intersections get rounder curbs.
 - Roads without side lines use the full width for their lanes (lane lines and snap points).

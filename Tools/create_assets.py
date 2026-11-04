@@ -222,18 +222,13 @@ holo_fence = make_bp("Holograms", "Holo_Fence", RMFenceHologram)
 setp(cdo(holo_fence), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
 finish(holo_fence)
 
-bm_pick = make_bp("Holograms", "BM_PickEnds", BuildModeDescriptor)
-setp(cdo(bm_pick), text("Pick Road Ends"), "m_display_name", "mDisplayName")
-setp(cdo(bm_pick), text("For big intersections: click each free road end to pick it (click again to drop it), then click away from the ends to build."), "m_description", "mDescription")
-finish(bm_pick)
-
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
-setp(cdo(holo_x), bm_pick.generated_class(), "m_build_mode_pick", "mBuildModePick")
 finish(holo_x)
 
 # Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.
 for old in ("Unlocks/Recipe_LanePaint", "Buildables/Desc_LanePaint", "Buildables/Build_LanePaint",
-            "Holograms/Holo_LanePaint", "Holograms/BM_LaneMenu"):
+            "Holograms/Holo_LanePaint", "Holograms/BM_LaneMenu",
+            "Holograms/BM_PickEnds"):
     path = ROOT + "/" + old
     try:
         if unreal.load_asset(path + "." + old.split("/")[-1]):
@@ -268,7 +263,7 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("Fence_GridTall", RMBuildableFence, holo_fence, "Metal Grid Fence (4m tall)", "Tall metal grid fence, 4 m high. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
-    ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Aim between road ends: joins up to 6 nearby free road ends (or free intersection ends) with curved curbs. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
+    ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 

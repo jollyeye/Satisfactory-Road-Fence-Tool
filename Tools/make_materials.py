@@ -404,6 +404,22 @@ MEL.connect_material_property(const(grid, 1.0, -300, 300), "", MP.MP_METALLIC)
 MEL.connect_material_property(const(grid, 0.5, -300, 400), "", MP.MP_ROUGHNESS)
 finish(grid)
 
+# --- Overlay: picked / aimed road ends of the intersection tool ---------------------------------
+# Unlit, drawn over everything (no depth test), colour from the mesh's vertex colours.
+overlay = new_material("M_RM_Overlay")
+overlay.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+overlay.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+overlay.set_editor_property("two_sided", True)
+for prop in ("disable_depth_test", "allow_negative_emissive_color"):
+    try:
+        overlay.set_editor_property(prop, prop == "disable_depth_test")
+    except Exception as e:
+        log("  ! overlay %s: %s" % (prop, e))
+ovc = node(overlay, unreal.MaterialExpressionVertexColor, -500, 0)
+MEL.connect_material_property(ovc, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(const(overlay, 1.0, -500, 200), "", MP.MP_OPACITY)
+finish(overlay)
+
 # --- Assign ----------------------------------------------------------------------------------
 ASSIGN = {
     "Build_Road_1x": {"m_top_material": asphalt, "m_body_material": concrete},
@@ -429,6 +445,23 @@ for name, props in ASSIGN.items():
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     eal.save_loaded_asset(bp, only_if_is_dirty=False)
     log("Assigned materials to " + name)
+
+for path in ("/RoadMaker/Holograms/Holo_Intersection.Holo_Intersection", "/RoadMaker/Holograms/Holo_Intersection"):
+    try:
+        holo = unreal.load_asset(path)
+    except Exception:
+        holo = None
+    if holo:
+        try:
+            unreal.get_default_object(holo.generated_class()).set_editor_property("m_overlay_material", overlay)
+            unreal.BlueprintEditorLibrary.compile_blueprint(holo)
+            eal.save_loaded_asset(holo, only_if_is_dirty=False)
+            log("Assigned overlay material to Holo_Intersection")
+        except Exception as e:
+            log("  ! Holo_Intersection overlay: %s" % e)
+        break
+else:
+    log("  ! missing Holo_Intersection")
 
 log("DONE")
 _log.close()
