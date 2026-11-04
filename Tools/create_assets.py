@@ -222,7 +222,13 @@ holo_fence = make_bp("Holograms", "Holo_Fence", RMFenceHologram)
 setp(cdo(holo_fence), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
 finish(holo_fence)
 
+bm_pick = make_bp("Holograms", "BM_PickEnds", BuildModeDescriptor)
+setp(cdo(bm_pick), text("Pick Road Ends"), "m_display_name", "mDisplayName")
+setp(cdo(bm_pick), text("For big intersections: click each free road end to pick it (click again to drop it), then click away from the ends to build."), "m_description", "mDescription")
+finish(bm_pick)
+
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
+setp(cdo(holo_x), bm_pick.generated_class(), "m_build_mode_pick", "mBuildModePick")
 finish(holo_x)
 
 # Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.

@@ -48,6 +48,14 @@ public:
 };
 
 UCLASS()
+class ROADMAKER_API URMCD_PickRoadEnds : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_PickRoadEnds() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "PickRoadEnds", "Click at least 2 free road ends to pick them"); }
+};
+
+UCLASS()
 class ROADMAKER_API URMCD_AimAtRoad : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
