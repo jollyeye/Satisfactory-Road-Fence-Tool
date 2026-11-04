@@ -323,28 +323,39 @@ MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNE
 finish(concrete)
 
 # --- Concrete fence wall: the game's concrete wall texture, painted with the customizer colour -----
-# The wall mesh carries UV1 = (metres along, metres up), so the texture follows the curve. One
-# texture cell covers WALL_PERIOD (an 8 m x 4 m wall face) within WALL_RECT of the texture.
-# The wall pushes its primary colour as custom primitive data 24. Paint keeps the concrete's detail:
-# colour = paint * (concrete / its average brightness). The default (0.4 grey) gives plain concrete.
+# The wall mesh carries UV1 = (metres along, metres up from its base), so the texture follows the
+# curve. Layout of TX_WallSetConcrete_01 (read from the real texture): one HALF of an 8 m x 4 m wall
+# panel, with the panel centre at u = 0 and the panel edge at u ~ 0.856; mirrored for the other
+# half. About 0.214 texture units per metre; the top of the wall at v ~ 0.021, the bottom at ~0.888.
+# Paint: the wall pushes its primary colour as custom primitive data 24; the concrete is multiplied by
+# paint / WALL_PAINT_REF, so the default (light) concrete swatch shows the plain texture.
 WALL_TEX = "/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/"
 WALL_BC = WALL_TEX + "TX_WallSetConcrete_01_BC"
 WALL_N = WALL_TEX + "TX_WallSetConcrete_01_N"
-WALL_RECT = (0.0, 0.0, 1.0, 1.0)   # min u, min v, size u, size v (to be matched to the real atlas)
-WALL_PERIOD = (8.0, 4.0)           # metres along, metres up per cell
-CONCRETE_AVG = 0.4
+WALL_PAINT_REF = 0.85
 WALL_UV_HLSL = r"""
-float2 c = frac(float2(UV1.x / Period.x, 1.0 - UV1.y / Period.y));
-return Rect.xy + c * Rect.zw;
+float p = frac(UV1.x / 8.0) * 8.0 - 4.0;          // metres from the panel centre
+float u = abs(p) * 0.214;
+float v = 0.021 + (4.0 - clamp(UV1.y, 0.0, 4.0)) * 0.21675;
+return float2(u, v);
+"""
+# World-space normal from the map: the texture's +u runs away from the panel centre along the wall
+# (A = mesh tangent, the wall direction), +v runs down. Signs as for the foundation textures (checked
+# in game there): red tilts towards -u, green towards +v.
+WALL_NORMAL_HLSL = r"""
+float p = frac(UV1.x / 8.0) * 8.0 - 4.0;
+float s = p >= 0.0 ? 1.0 : -1.0;
+float3 Along = normalize(A);
+float3 Up = float3(0, 0, 1);
+float3 n = N * max(T.z, 0.2) - Along * (s * T.x * Str) - Up * (T.y * Str);
+return normalize(n);
 """
 fwall = new_material("M_RoadFenceWall")
 tex_wbc = load_tex(WALL_BC)
 tex_wn = load_tex(WALL_N)
 fu1 = node(fwall, unreal.MaterialExpressionTextureCoordinate, -1300, 0, coordinate_index=1)
-fuv = custom(fwall, WALL_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "Rect", "Period"], -1050, 0, "WallUV")
+fuv = custom(fwall, WALL_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1"], -1050, 0, "WallUV")
 link(fu1, "", fuv, "UV1")
-link(node(fwall, unreal.MaterialExpressionConstant4Vector, -1300, 100, constant=unreal.LinearColor(*WALL_RECT)), "", fuv, "Rect")
-link(node(fwall, unreal.MaterialExpressionConstant2Vector, -1300, 200, r=WALL_PERIOD[0], g=WALL_PERIOD[1]), "", fuv, "Period")
 if tex_wbc:
     fbase = node(fwall, unreal.MaterialExpressionTextureSample, -800, 0)
     fbase.set_editor_property("texture", tex_wbc)
@@ -353,25 +364,32 @@ if tex_wbc:
 else:
     fbase = noise_blend(fwall, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
 if tex_wn:
+    fwall.set_editor_property("tangent_space_normal", False)
     fn = node(fwall, unreal.MaterialExpressionTextureSample, -800, 500)
     fn.set_editor_property("texture", tex_wn)
     fn.set_editor_property("sampler_type", sampler_for(tex_wn))
     link(fuv, "", fn, "UVs")
-    MEL.connect_material_property(fn, "", MP.MP_NORMAL)
+    fwn = custom(fwall, WALL_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["T", "UV1", "N", "A", "Str"], -400, 600, "WallNormal")
+    link(fn, "", fwn, "T")
+    link(fu1, "", fwn, "UV1")
+    link(node(fwall, unreal.MaterialExpressionVertexNormalWS, -700, 800), "", fwn, "N")
+    link(node(fwall, unreal.MaterialExpressionVertexTangentWS, -700, 880), "", fwn, "A")
+    link(const(fwall, 1.5, -700, 960), "", fwn, "Str")
+    MEL.connect_material_property(fwn, "", MP.MP_NORMAL)
 fpaint = node(fwall, unreal.MaterialExpressionVectorParameter, -700, 300,
-              parameter_name="PaintColor", default_value=unreal.LinearColor(CONCRETE_AVG, CONCRETE_AVG, CONCRETE_AVG, 1.0))
+              parameter_name="PaintColor", default_value=unreal.LinearColor(WALL_PAINT_REF, WALL_PAINT_REF, WALL_PAINT_REF, 1.0))
 fpaint.set_editor_property("use_custom_primitive_data", True)
 fpaint.set_editor_property("primitive_data_index", 24)
 fdetail = node(fwall, unreal.MaterialExpressionDivide, -500, 100)
-link(fbase, "", fdetail, "A")
-link(const(fwall, CONCRETE_AVG, -700, 200), "", fdetail, "B")
+link(fpaint, "", fdetail, "A")
+link(const(fwall, WALL_PAINT_REF, -700, 200), "", fdetail, "B")
 fmul = node(fwall, unreal.MaterialExpressionMultiply, -350, 150)
-link(fdetail, "", fmul, "A")
-link(fpaint, "", fmul, "B")
+link(fbase, "", fmul, "A")
+link(fdetail, "", fmul, "B")
 fsat = node(fwall, unreal.MaterialExpressionSaturate, -200, 150)
 link(fmul, "", fsat, "")
 MEL.connect_material_property(fsat, "", MP.MP_BASE_COLOR)
-MEL.connect_material_property(const(fwall, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
+MEL.connect_material_property(const(fwall, 0.85, -300, 400), "", MP.MP_ROUGHNESS)
 finish(fwall)
 log("Concrete fence wall (paintable)")
 
