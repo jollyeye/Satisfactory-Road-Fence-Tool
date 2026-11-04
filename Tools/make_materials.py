@@ -327,12 +327,14 @@ finish(concrete)
 # curve. Layout of TX_WallSetConcrete_01 (read from the real texture): one HALF of an 8 m x 4 m wall
 # panel, with the panel centre at u = 0 and the panel edge at u ~ 0.856; mirrored for the other
 # half. About 0.214 texture units per metre; the top of the wall at v ~ 0.021, the bottom at ~0.888.
-# Paint: the wall pushes its primary colour as custom primitive data 24; the concrete is multiplied by
-# paint / WALL_PAINT_REF, so the default (light) concrete swatch shows the plain texture.
+# Paint: the wall pushes its primary colour as custom primitive data 24. Like the game's concrete
+# walls (compared in game with the same swatches), paint only stains the concrete: the texture is
+# multiplied by lerp(white, paint, WALL_PAINT_AMOUNT), so blue gives a bluish grey, red a reddish tan.
 WALL_TEX = "/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/"
 WALL_BC = WALL_TEX + "TX_WallSetConcrete_01_BC"
 WALL_N = WALL_TEX + "TX_WallSetConcrete_01_N"
-WALL_PAINT_REF = 0.85
+WALL_PAINT_REF = 0.85     # default paint (no colour pushed yet): light grey
+WALL_PAINT_AMOUNT = 0.45
 WALL_UV_HLSL = r"""
 float p = frac(UV1.x / 8.0) * 8.0 - 4.0;          // metres from the panel centre
 float u = abs(p) * 0.214;
@@ -380,9 +382,10 @@ fpaint = node(fwall, unreal.MaterialExpressionVectorParameter, -700, 300,
               parameter_name="PaintColor", default_value=unreal.LinearColor(WALL_PAINT_REF, WALL_PAINT_REF, WALL_PAINT_REF, 1.0))
 fpaint.set_editor_property("use_custom_primitive_data", True)
 fpaint.set_editor_property("primitive_data_index", 24)
-fdetail = node(fwall, unreal.MaterialExpressionDivide, -500, 100)
-link(fpaint, "", fdetail, "A")
-link(const(fwall, WALL_PAINT_REF, -700, 200), "", fdetail, "B")
+fdetail = node(fwall, unreal.MaterialExpressionLinearInterpolate, -500, 100)
+link(const(fwall, 1.0, -700, 150), "", fdetail, "A")
+link(fpaint, "", fdetail, "B")
+link(const(fwall, WALL_PAINT_AMOUNT, -700, 200), "", fdetail, "Alpha")
 fmul = node(fwall, unreal.MaterialExpressionMultiply, -350, 150)
 link(fbase, "", fmul, "A")
 link(fdetail, "", fmul, "B")
