@@ -184,6 +184,18 @@ namespace
 		return Prop && Prop->Struct == TBaseStructure<FVector>::Get() ? Prop->ContainerPtrToValuePtr<FVector>(Object) : nullptr;
 	}
 
+	/** Protected vehicle path hologram functions that rebuild its spline and redraw it. */
+	struct FRMPathAccess : public AFGVehiclePathSegmentHologram
+	{
+		static void Redraw(AFGVehiclePathSegmentHologram* Path)
+		{
+			FRMPathAccess* Self = static_cast<FRMPathAccess*>(Path);
+			Self->RouteHologramSpline();
+			Self->UpdateHologramVisualState();
+			Self->UpdatePathVisualizationHandle();
+		}
+	};
+
 	/** Writes a vehicle path hologram's spline points (world space in) and has the game redraw it. */
 	void SetPathSplineWorld(AFGHologram* Hologram, const TArray<FVector>& Points, const TArray<FVector>& Tangents)
 	{
@@ -226,12 +238,10 @@ namespace
 				// game is still drawing (otherwise it stays on screen next to the normal hologram).
 				SetBuildStep(Hologram, 0);
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
-				if (Hologram->IsA<AFGVehiclePathSegmentHologram>())
+				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
 				{
-					// The short 1 m stub the game shows in its start step.
-					const FVector P = Hologram->GetActorLocation();
-					const FVector F = Hologram->GetActorForwardVector() * 100.f;
-					SetPathSplineWorld(Hologram, { P, P + F }, { F, F });
+					// Let the game rebuild and redraw its start-step look (spline, meshes, overlay).
+					FRMPathAccess::Redraw(Path);
 				}
 			}
 			GPathStates.Remove(Hologram);
