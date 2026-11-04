@@ -58,6 +58,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.1.0
+- **One-click vehicle paths:** hold the vehicle path and aim at a lane of a road: the path is already laid along the whole lane, end to end — click to build. Scroll flips the direction; next to an existing path it continues that path's direction and joins it.
 - New **Smooth** build mode for roads: the height eases in and out and matches the slope of the roads it connects, so linking roads at different heights has no kinks when seen from the side. Allows up to 45°.
 - Vehicle paths and railway tracks follow the road's slope at road-end snap points (start and end).
 - Snap points follow the lanes: 1-lane roads every 2 m, 2- and 3-lane roads one point in the middle of each lane. Intersection ends use the lanes of the road joined there.

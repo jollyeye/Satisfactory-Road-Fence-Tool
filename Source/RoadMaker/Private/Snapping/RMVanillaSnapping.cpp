@@ -17,6 +17,9 @@
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
+#include "EngineUtils.h"
+#include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "WheeledVehicles/FGVehiclePathNode.h"
 #include "Buildables/RMBuildableIntersection.h"
 
 namespace
@@ -126,6 +129,7 @@ namespace
 		float EndYawOffset = 0.f;               // learned: 0 or 180 between scroll heading and travel
 		bool bEndOffsetLearned = false;
 		int32 EndTrim = 0;                      // learned: whole degrees the game's heading is off
+		bool bLaneMode = false;                 // one-click lane path: we put the hologram in its end step
 	};
 
 	/** Set while we place the hologram again ourselves, so our hook lets the game's code run. */
@@ -148,6 +152,20 @@ namespace
 			return Byte->GetPropertyValue_InContainer(Hologram) == 0;
 		}
 		return true;
+	}
+
+	/** Vehicle path hologram build step (0 = start point, 1 = end point). */
+	void SetBuildStep(AFGHologram* Hologram, uint8 Step)
+	{
+		FProperty* Prop = FindFProperty<FProperty>(Hologram->GetClass(), TEXT("mBuildStep"));
+		if (FEnumProperty* Enum = CastField<FEnumProperty>(Prop))
+		{
+			Enum->GetUnderlyingProperty()->SetIntPropertyValue(Enum->ContainerPtrToValuePtr<void>(Hologram), static_cast<int64>(Step));
+		}
+		else if (FByteProperty* Byte = CastField<FByteProperty>(Prop))
+		{
+			Byte->SetPropertyValue_InContainer(Hologram, Step);
+		}
 	}
 
 	void SetBoolField(UObject* Object, const TCHAR* Name, bool bValue)
@@ -173,6 +191,10 @@ namespace
 			{
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
 				Hologram->SetScrollRotateValue(State->SavedScroll);
+			}
+			if (State->bLaneMode)
+			{
+				SetBuildStep(Hologram, 0); // the player never clicked a start: back to the start step
 			}
 			GPathStates.Remove(Hologram);
 		}
@@ -361,8 +383,8 @@ namespace
 	 * the scroll value used as a world heading (seen in the log: scroll 0 = +X), so the scroll is set
 	 * to the road's heading; the result is checked and turned 180 once if it arrives backwards.
 	 */
-	template <typename TScope, typename THologram>
-	void PlacePathEnd(TScope& Scope, THologram* Hologram, const FHitResult& Placed, const FVector& Start, const FVector& Axis, FPathState& State)
+	template <typename TPlace, typename THologram>
+	void PlacePathEnd(TPlace&& Place, THologram* Hologram, const FHitResult& Placed, const FVector& Start, const FVector& Axis, FPathState& State)
 	{
 		if (!State.bSetCustomEnd)
 		{
@@ -378,7 +400,7 @@ namespace
 		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
 		const float Heading = FRotator::NormalizeAxis(WantYaw + State.EndYawOffset);
 		Hologram->SetScrollRotateValue(FMath::RoundToInt(Heading) + State.EndTrim);
-		Scope(Hologram, Placed);
+		Place(Placed);
 
 		// Fine trim: compare the heading the game actually used with the one wanted (whole degrees,
 		// the rotation step is 1 here, see the GetRotationStep hook).
@@ -434,6 +456,167 @@ namespace
 	}
 
 	/** Shared before-hook body; THologram is the hooked class, which the scope must be called with. */
+	/**
+	 * One-click lane path: holding the vehicle path and aiming at a lane of a road (before the first
+	 * click), the hologram is placed along the whole lane, end to end, and one click builds it.
+	 *  - Lane: 2-3 lane roads use the lane centre (between the edge lines), 1-lane roads the nearest
+	 *    2 m point, the same points the road-end snapping uses.
+	 *  - Direction: the road's build direction, unless a path on a neighbouring road already ends or
+	 *    starts at one of the lane points: then this one continues that flow and joins its node.
+	 *    Scroll flips it.
+	 *  - Ends that drop off move 5 m onto the road (the game needs floor under the whole vehicle).
+	 * The start is placed by the game's own code in its start step, then the hologram is switched to
+	 * its end step and the end is placed like a road-end snap (heading through the scroll value).
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceLanePath(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableRoad* Road)
+	{
+		UWorld* World = Hologram->GetWorld();
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 100.f);
+		if (!World || Frames.Num() < 2)
+		{
+			return false;
+		}
+
+		// Lane under the cursor.
+		int32 NearIdx = 0;
+		float NearDist = TNumericLimits<float>::Max();
+		for (int32 I = 0; I < Frames.Num(); ++I)
+		{
+			const float D = FVector::DistSquared(Frames[I].Pos, Hit.Location);
+			if (D < NearDist)
+			{
+				NearDist = D;
+				NearIdx = I;
+			}
+		}
+		const float U = FVector::DotProduct(Hit.Location - Frames[NearIdx].Pos, Frames[NearIdx].Right);
+		const float Width = Road->GetRoadWidth();
+		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 3);
+		TArray<float> Offsets;
+		if (Lanes <= 1)
+		{
+			const int32 Count = FMath::FloorToInt(Width * 0.5f / 200.f);
+			for (int32 K = -Count; K <= Count; ++K)
+			{
+				Offsets.Add(K * 200.f);
+			}
+		}
+		else
+		{
+			const float Inset = Road->mEdgeLineInset;
+			const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
+			for (int32 I = 0; I < Lanes; ++I)
+			{
+				Offsets.Add(-Width * 0.5f + Inset + Inner * (I + 0.5f) / Lanes);
+			}
+		}
+		int32 Lane = 0;
+		for (int32 I = 1; I < Offsets.Num(); ++I)
+		{
+			if (FMath::Abs(Offsets[I] - U) < FMath::Abs(Offsets[Lane] - U))
+			{
+				Lane = I;
+			}
+		}
+		const float Off = Offsets[Lane];
+		const FRMFrame& F0 = Frames[0];
+		const FRMFrame& FN = Frames.Last();
+		FVector A = F0.Pos + F0.Right * Off;   // at road end 0
+		FVector B = FN.Pos + FN.Right * Off;   // at road end 1
+		bool bJoinedA = false, bJoinedB = false;
+
+		// Existing paths at the lane points: continue their flow and use their nodes.
+		int32 Suggest = 0; // +1: start->end of the road, -1: the other way
+		auto NodeNear = [](const AFGVehiclePathNode* Node, const FVector& P, FVector& Out)
+		{
+			if (Node && FVector::Dist(Node->GetActorLocation(), P) < 150.f)
+			{
+				Out = Node->GetActorLocation();
+				return true;
+			}
+			return false;
+		};
+		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+		{
+			FVector Snap;
+			if (!bJoinedA && NodeNear(It->GetEndNode(), A, Snap))        { Suggest = Suggest ? Suggest : 1;  A = Snap; bJoinedA = true; }
+			else if (!bJoinedA && NodeNear(It->GetStartNode(), A, Snap)) { Suggest = Suggest ? Suggest : -1; A = Snap; bJoinedA = true; }
+			if (!bJoinedB && NodeNear(It->GetStartNode(), B, Snap))      { Suggest = Suggest ? Suggest : 1;  B = Snap; bJoinedB = true; }
+			else if (!bJoinedB && NodeNear(It->GetEndNode(), B, Snap))   { Suggest = Suggest ? Suggest : -1; B = Snap; bJoinedB = true; }
+		}
+
+		FPathState& State = GPathStates.FindOrAdd(Hologram);
+		if (!State.bLaneMode || State.Owner.Get() != Road || State.EndIndex != Lane)
+		{
+			State.bFlipped = false; // new road or lane: start from the suggested direction
+		}
+		State.bLaneMode = true;
+		State.Owner = Road;
+		State.EndIndex = Lane;
+		State.bStartStep = false;
+		State.StartDir = FVector::ZeroVector;
+
+		bool bForward = Suggest >= 0;
+		if (State.bFlipped)
+		{
+			bForward = !bForward;
+		}
+		FVector TA = F0.Fwd, TB = FN.Fwd; // travel directions at start and end
+		int32 EndA = 0, EndB = 1;
+		if (!bForward)
+		{
+			Swap(A, B);
+			Swap(bJoinedA, bJoinedB);
+			const FVector OldTA = TA;
+			TA = -TB;
+			TB = -OldTA;
+			EndA = 1;
+			EndB = 0;
+		}
+
+		// Ends without a road joined and nothing to drive on beyond them: move 5 m onto the road.
+		if (!bJoinedA && !RMRoadUtils::IsEndOccupied(World, Road, EndA) && !HasFloorBeyond(World, A, -TA))
+		{
+			A += TA * PathEndInset;
+		}
+		if (!bJoinedB && !RMRoadUtils::IsEndOccupied(World, Road, EndB) && !HasFloorBeyond(World, B, TB))
+		{
+			B -= TB * PathEndInset;
+		}
+		if (!bJoinedA)
+		{
+			A += FVector::UpVector * PathSnapLift;
+		}
+		if (!bJoinedB)
+		{
+			B += FVector::UpVector * PathSnapLift;
+		}
+
+		// Start: the game's own start step at A, then the direction along the lane (with slope).
+		SetBuildStep(Hologram, 0);
+		FHitResult HitA = MoveHit(Hit, A);
+		Scope(Hologram, HitA);
+		if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
+		{
+			*Exit = TA.GetSafeNormal();
+		}
+
+		// End: switch to the end step and place B with the lane's direction there.
+		SetBuildStep(Hologram, 1);
+		const FVector AxisB = FVector(TB.X, TB.Y, 0.f).GetSafeNormal();
+		const bool bWasFlipped = State.bFlipped;
+		State.bFlipped = false; // the direction is already decided above
+		PlacePathEnd([Hologram](const FHitResult& H)
+			{
+				TGuardValue<bool> Guard(GInPathReplace, true);
+				Hologram->SetHologramLocationAndRotation(H);
+			}, Hologram, MoveHit(Hit, B), B - AxisB * 100.f, AxisB, State);
+		State.bFlipped = bWasFlipped;
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
@@ -450,6 +633,24 @@ namespace
 			AActor* Aimed = Hit.GetActor();
 			const bool bAimRoad = Cast<ARMBuildableRoad>(Aimed) != nullptr;
 			const bool bAimIntersection = Cast<ARMBuildableIntersection>(Aimed) != nullptr;
+
+			// One-click lane path (vehicle paths, before the first click): aiming at a road's lane.
+			if (Hologram->template IsA<AFGVehiclePathSegmentHologram>())
+			{
+				FPathState* Lane = GPathStates.Find(Hologram);
+				const bool bLaneMode = Lane && Lane->bLaneMode;
+				if (bAimRoad && (bLaneMode || IsStartStep(Hologram)))
+				{
+					if (PlaceLanePath(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
+					{
+						return true;
+					}
+				}
+				else if (bLaneMode)
+				{
+					ReleasePathSnap(Hologram); // looked away from the road: back to a normal start
+				}
+			}
 			if ((!bAimRoad && !bAimIntersection) || HasVanillaSnapNear(Hologram, Hit.Location))
 			{
 				ReleasePathSnap(Hologram);
@@ -575,7 +776,7 @@ namespace
 			{
 				const FVector* StartField = VectorField(Hologram, TEXT("mStartLocation"));
 				const FVector Start = StartField && !StartField->IsNearlyZero() ? *StartField : Hologram->GetActorLocation();
-				PlacePathEnd(Scope, Hologram, Placed, Start, Axis, State);
+				PlacePathEnd([&](const FHitResult& H) { Scope(Hologram, H); }, Hologram, Placed, Start, Axis, State);
 			}
 			return true;
 		}
