@@ -301,14 +301,16 @@ namespace
 		}
 
 		/** Diagnostics (temporary): the track's points and what its spline component draws. */
-		static void LogTrack(AFGRailroadTrackHologram* Rail, const TArray<FVector>& WantPoints)
+		static void LogTrack(AFGRailroadTrackHologram* Rail, const TArray<FVector>& WantPoints, const TCHAR* Tag)
 		{
 			static double LastLog = 0.0;
+			static bool bPair = false;
 			const double Now = FPlatformTime::Seconds();
-			if (Now - LastLog < 0.7)
+			if (!bPair && Now - LastLog < 0.7)
 			{
 				return;
 			}
+			bPair = !bPair; // "game" and "lane" of the same frame are logged together
 			LastLog = Now;
 			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
 			FString Want, Data, Drawn;
@@ -332,8 +334,14 @@ namespace
 					Drawn += FString::Printf(TEXT(" (%.0f,%.0f,%.0f|yaw %.0f len %.0f)"), W.X, W.Y, W.Z, D.Rotation().Yaw, D.Size());
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag: step=%d actor=(%s yaw %.0f) | want[%d]:%s | data[%d]:%s | drawn:%s"),
-				(int32)Self->mBuildStep, *T.GetLocation().ToCompactString(), T.Rotator().Yaw,
+			const FVector* HitLoc = VectorField(Rail, TEXT("mHitLocation"));
+			const FVector* HitTan = VectorField(Rail, TEXT("mHitTangent"));
+			const FVector* SnapLoc = VectorField(Rail, TEXT("mSnappedStartLocation"));
+			const FVector* SnapTan = VectorField(Rail, TEXT("mSnappedStartTangent"));
+			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: step=%d actor=(%s yaw %.0f) hitLoc=%s hitTan=%s snapStart=%s snapTan=%s | want[%d]:%s | data[%d]:%s | drawn:%s"),
+				Tag, (int32)Self->mBuildStep, *T.GetLocation().ToCompactString(), T.Rotator().Yaw,
+				HitLoc ? *HitLoc->ToCompactString() : TEXT("?"), HitTan ? *HitTan->ToCompactString() : TEXT("?"),
+				SnapLoc ? *SnapLoc->ToCompactString() : TEXT("?"), SnapTan ? *SnapTan->ToCompactString() : TEXT("?"),
 				WantPoints.Num(), *Want, Self->mSplineData.Num(), *Data, *Drawn);
 		}
 
@@ -621,6 +629,21 @@ namespace
 		return Moved;
 	}
 
+	/**
+	 * Like MoveHit, but the trace itself also runs straight down through the point: the rail tool
+	 * traces again from the hit's trace (seen in the log: its end landed under the crosshair, not on
+	 * the point given), so the trace must lead to the point too.
+	 */
+	FHitResult MoveHitVertical(const FHitResult& Hit, const FVector& Location)
+	{
+		FHitResult Moved = MoveHit(Hit, Location);
+		Moved.TraceStart = Location + FVector(0.f, 0.f, 300.f);
+		Moved.TraceEnd = Location - FVector(0.f, 0.f, 300.f);
+		Moved.Distance = 300.f;
+		Moved.Time = 0.5f;
+		return Moved;
+	}
+
 	/** Shared before-hook body; THologram is the hooked class, which the scope must be called with. */
 	/**
 	 * One-click lane path: holding the vehicle path and aiming at a lane of a road (before the first
@@ -834,7 +857,7 @@ namespace
 	 * own rules every frame (end point and heading included), so the lane track looped or went off in
 	 * another direction. Road-end snapping for tracks (alignment and slope) is unaffected.
 	 */
-	constexpr bool bEnableLaneTracks = false;
+	constexpr bool bEnableLaneTracks = true;
 
 	/** Rail hologram spline step (ESplineHologramBuildStep: 0 = find start, 2 = place end). */
 	void SetRailStep(AFGHologram* Hologram, uint8 Step)
@@ -988,7 +1011,7 @@ namespace
 		// Start: the game's own start step (heading from the scroll value, as with road-end snaps).
 		SetRailStep(Hologram, 0);
 		Hologram->SetScrollRotateValue(FMath::RoundToInt(StartDir.Rotation().Yaw));
-		FHitResult HitA = MoveHit(Hit, Points[0]);
+		FHitResult HitA = MoveHitVertical(Hit, Points[0]);
 		Scope(Hologram, HitA);
 		SetRailSnappedConnection(Hologram, 0, StartConn);
 		if (FVector* SnappedLoc = VectorField(Hologram, TEXT("mSnappedStartLocation")))
@@ -1008,11 +1031,12 @@ namespace
 		Hologram->SetScrollRotateValue(FMath::RoundToInt(FRotator::NormalizeAxis(EndDir.Rotation().Yaw + 180.f)));
 		{
 			TGuardValue<bool> Guard(GInPathReplace, true);
-			Hologram->SetHologramLocationAndRotation(MoveHit(Hit, Points.Last()));
+			Hologram->SetHologramLocationAndRotation(MoveHitVertical(Hit, Points.Last()));
 		}
 		SetRailSnappedConnection(Hologram, 1, EndConn);
-		// The game's own rail routing draws the curve between the two ends (overriding its points
-		// fought with it every frame and made loops). Logged to compare with the lane.
+		FRMRailAccess::LogTrack(Rail, Points, TEXT("game"));
+		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+		FRMRailAccess::LogTrack(Rail, Points, TEXT("lane"));
 		return true;
 	}
 
