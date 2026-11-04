@@ -51,7 +51,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 				{
 					P.Location.Z += Shift;
 				}
-				mInwardSign = Under->GetInwardSign();
+				mInwardSign = Other->GetInwardSign();
 				mOnRoadEdge = true;
 				SetWorldPoints(Points);
 				return true;
