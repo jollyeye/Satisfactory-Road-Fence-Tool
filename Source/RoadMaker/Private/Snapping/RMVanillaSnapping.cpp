@@ -312,94 +312,6 @@ namespace
 			}
 		}
 
-		/** Diagnostics (temporary): the track's points and what its spline component draws. */
-		static void LogTrack(AFGRailroadTrackHologram* Rail, const TArray<FVector>& WantPoints, const TCHAR* Tag)
-		{
-			static double LastLog = 0.0;
-			static bool bPair = false;
-			const double Now = FPlatformTime::Seconds();
-			if (!bPair && Now - LastLog < 0.7)
-			{
-				return;
-			}
-			bPair = !bPair; // "game" and "lane" of the same frame are logged together
-			LastLog = Now;
-			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
-			FString Want, Data, Drawn;
-			for (const FVector& P : WantPoints)
-			{
-				Want += FString::Printf(TEXT(" (%.0f,%.0f,%.0f)"), P.X, P.Y, P.Z);
-			}
-			const FTransform T = Rail->GetActorTransform();
-			for (const FSplinePointData& P : Self->mSplineData)
-			{
-				const FVector W = T.TransformPosition(P.Location);
-				const FVector D = T.TransformVector(P.LeaveTangent);
-				Data += FString::Printf(TEXT(" (%.0f,%.0f,%.0f|yaw %.0f len %.0f)"), W.X, W.Y, W.Z, D.Rotation().Yaw, D.Size());
-			}
-			if (USplineComponent* Spline = Self->mSplineComponent)
-			{
-				for (int32 I = 0; I < Spline->GetNumberOfSplinePoints(); ++I)
-				{
-					const FVector W = Spline->GetLocationAtSplinePoint(I, ESplineCoordinateSpace::World);
-					const FVector D = Spline->GetTangentAtSplinePoint(I, ESplineCoordinateSpace::World);
-					Drawn += FString::Printf(TEXT(" (%.0f,%.0f,%.0f|yaw %.0f len %.0f)"), W.X, W.Y, W.Z, D.Rotation().Yaw, D.Size());
-				}
-			}
-			const FVector* HitLoc = VectorField(Rail, TEXT("mHitLocation"));
-			const FVector* HitTan = VectorField(Rail, TEXT("mHitTangent"));
-			const FVector* SnapLoc = VectorField(Rail, TEXT("mSnappedStartLocation"));
-			const FVector* SnapTan = VectorField(Rail, TEXT("mSnappedStartTangent"));
-			USplineComponent* SplineC = Self->mSplineComponent;
-			int32 NumMeshes = 0;
-			FString MeshInfo;
-			TInlineComponentArray<USplineMeshComponent*> Meshes(Rail);
-			for (USplineMeshComponent* M : Meshes)
-			{
-				if (M && M->IsVisible())
-				{
-					++NumMeshes;
-					if (NumMeshes <= 40)
-					{
-						const FVector W = M->GetComponentTransform().TransformPosition(M->GetStartPosition());
-						MeshInfo += FString::Printf(TEXT(" (%.0f,%.0f)"), W.X, W.Y);
-					}
-				}
-			}
-			// Why it cannot be placed, and every other visible part of the hologram (and its children).
-			TArray<TSubclassOf<UFGConstructDisqualifier>> Disq;
-			Rail->GetConstructDisqualifiers(Disq);
-			FString DisqText;
-			for (const TSubclassOf<UFGConstructDisqualifier>& D : Disq)
-			{
-				DisqText += FString::Printf(TEXT(" %s"), D ? *D->GetName() : TEXT("null"));
-			}
-			FString Parts;
-			TArray<AActor*> Owners = { Rail };
-			Rail->GetAttachedActors(Owners, false);
-			for (AActor* A : Owners)
-			{
-				TInlineComponentArray<UPrimitiveComponent*> Prims(A);
-				for (UPrimitiveComponent* C : Prims)
-				{
-					if (C && C->IsVisible() && C->IsRegistered() && !C->IsA<USplineMeshComponent>())
-					{
-						const FBox B = C->Bounds.GetBox();
-						Parts += FString::Printf(TEXT(" %s.%s[%s c(%.0f,%.0f) size(%.0f,%.0f)]"), *A->GetClass()->GetName(), *C->GetName(),
-							*C->GetClass()->GetName(), B.GetCenter().X, B.GetCenter().Y, B.GetSize().X, B.GetSize().Y);
-					}
-				}
-			}
-			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: disqualifiers:%s | other parts:%s"), Tag, *DisqText, *Parts);
-			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: closed=%d length=%.0f meshes=%d:%s"), Tag,
-				SplineC ? (int32)SplineC->IsClosedLoop() : -1, SplineC ? SplineC->GetSplineLength() : -1.f, NumMeshes, *MeshInfo);
-			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: step=%d actor=(%s yaw %.0f) hitLoc=%s hitTan=%s snapStart=%s snapTan=%s | want[%d]:%s | data[%d]:%s | drawn:%s"),
-				Tag, (int32)Self->mBuildStep, *T.GetLocation().ToCompactString(), T.Rotator().Yaw,
-				HitLoc ? *HitLoc->ToCompactString() : TEXT("?"), HitTan ? *HitTan->ToCompactString() : TEXT("?"),
-				SnapLoc ? *SnapLoc->ToCompactString() : TEXT("?"), SnapTan ? *SnapTan->ToCompactString() : TEXT("?"),
-				WantPoints.Num(), *Want, Self->mSplineData.Num(), *Data, *Drawn);
-		}
-
 		/** Back to the start step: drop the lane track's snapped connections. */
 		static void ResetToStart(AFGRailroadTrackHologram* Rail)
 		{
@@ -1092,8 +1004,6 @@ namespace
 		SetRailSnappedConnection(Hologram, 0, StartConn);
 		SetRailSnappedConnection(Hologram, 1, EndConn);
 		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
-		FRMRailAccess::LogTrack(Rail, Points, TEXT("lane"));
-		FRMRailAccess::LogTrack(Rail, Points, TEXT("lane2"));
 		return true;
 	}
 
