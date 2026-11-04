@@ -33,7 +33,22 @@ void ARMIntersectionHologram::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
 {
 	TArray<FRMRoadEndRef> Found;
-	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSearchRadius, mMaxRoads, nullptr, Found);
+	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSearchRadius, 0, nullptr, Found);
+	// Far ends join only when they point at the crosshair (within 60 degrees), so a big search does
+	// not pick up unrelated roads nearby. Then the nearest ones are kept (already sorted by distance).
+	Found.RemoveAll([this, &hitResult](const FRMRoadEndRef& R)
+	{
+		if (R.Distance <= mFacingCheckBeyond)
+		{
+			return false;
+		}
+		const FVector ToAim = FVector(hitResult.Location - R.Location).GetSafeNormal2D();
+		return FVector::DotProduct(R.Outward.GetSafeNormal2D(), ToAim) < 0.5f;
+	});
+	if (Found.Num() > mMaxRoads)
+	{
+		Found.SetNum(mMaxRoads);
+	}
 
 	if (Found.Num() == 0)
 	{
