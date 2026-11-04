@@ -16,9 +16,9 @@
 #if !WITH_EDITOR
 namespace
 {
-	TWeakObjectPtr<ARMBuildableFence> GPreviewWall;
+	TWeakObjectPtr<ARMBuildableFence> GFenceWallPreview;
 
-	UFGBuildGunStatePaint* PaintStateOf(APlayerController* PC)
+	UFGBuildGunStatePaint* FenceWallPaintStateOf(APlayerController* PC)
 	{
 		AFGCharacterPlayer* Character = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Character ? Character->GetBuildGun() : nullptr;
@@ -26,7 +26,7 @@ namespace
 	}
 
 	/** 1 concrete, 2 FICSIT, 3 steel for the game's wall materials; 0 for anything else. */
-	uint8 LookOfMaterial(TSubclassOf<UFGFactoryCustomizationDescriptor_Material> Material)
+	uint8 FenceWallLookOfMaterial(TSubclassOf<UFGFactoryCustomizationDescriptor_Material> Material)
 	{
 		if (!Material)
 		{
@@ -48,7 +48,7 @@ namespace
 		return 0;
 	}
 
-	ARMBuildableFence* TraceWall(APlayerController* PC)
+	ARMBuildableFence* FenceWallTrace(APlayerController* PC)
 	{
 		if (!PC || !PC->GetWorld())
 		{
@@ -67,16 +67,16 @@ namespace
 		return Wall && Wall->IsWall() ? Wall : nullptr;
 	}
 
-	void ClearPreview()
+	void FenceWallClearPreview()
 	{
-		if (ARMBuildableFence* Old = GPreviewWall.Get())
+		if (ARMBuildableFence* Old = GFenceWallPreview.Get())
 		{
 			Old->SetPreviewWallLook(0);
 		}
-		GPreviewWall.Reset();
+		GFenceWallPreview.Reset();
 	}
 
-	void ClearPaintDisqualifiers(UFGBuildGunStatePaint* State)
+	void FenceWallClearPaintDisqualifiers(UFGBuildGunStatePaint* State)
 	{
 		static FArrayProperty* Prop = FindFProperty<FArrayProperty>(UFGBuildGunStatePaint::StaticClass(), TEXT("mConstructDisqualifiers"));
 		if (State && Prop)
@@ -90,7 +90,7 @@ namespace
 	}
 
 	/** Local player: preview the selected wall material on the aimed fence wall. */
-	bool TickPreview(float)
+	bool FenceWallTickPreview(float)
 	{
 		if (!GEngine || IsRunningDedicatedServer())
 		{
@@ -105,18 +105,18 @@ namespace
 				break;
 			}
 		}
-		UFGBuildGunStatePaint* State = PaintStateOf(PC);
-		const uint8 Look = State ? LookOfMaterial(State->GetActiveMaterialDesc()) : 0;
-		ARMBuildableFence* Wall = Look ? TraceWall(PC) : nullptr;
-		if (Wall != GPreviewWall.Get())
+		UFGBuildGunStatePaint* State = FenceWallPaintStateOf(PC);
+		const uint8 Look = State ? FenceWallLookOfMaterial(State->GetActiveMaterialDesc()) : 0;
+		ARMBuildableFence* Wall = Look ? FenceWallTrace(PC) : nullptr;
+		if (Wall != GFenceWallPreview.Get())
 		{
-			ClearPreview();
+			FenceWallClearPreview();
 		}
 		if (Wall)
 		{
 			Wall->SetPreviewWallLook(Look);
-			GPreviewWall = Wall;
-			ClearPaintDisqualifiers(State);
+			GFenceWallPreview = Wall;
+			FenceWallClearPaintDisqualifiers(State);
 		}
 		return true;
 	}
@@ -124,26 +124,26 @@ namespace
 
 void RMFenceWallPaint::InstallHooks()
 {
-	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&TickPreview), 0.05f);
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FenceWallTickPreview), 0.05f);
 
 	// Fire with a wall material selected while aiming at a fence wall: switch its look in place.
 	SUBSCRIBE_METHOD(AFGBuildGun::OnPrimaryFirePressed, [](auto& Scope, AFGBuildGun* Gun)
 	{
 		UFGBuildGunStatePaint* State = Gun ? Cast<UFGBuildGunStatePaint>(Gun->GetCurrentState()) : nullptr;
-		const uint8 Look = State ? LookOfMaterial(State->GetActiveMaterialDesc()) : 0;
+		const uint8 Look = State ? FenceWallLookOfMaterial(State->GetActiveMaterialDesc()) : 0;
 		if (!Look)
 		{
 			return;
 		}
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-		ARMBuildableFence* Wall = TraceWall(PC);
+		ARMBuildableFence* Wall = FenceWallTrace(PC);
 		if (!Wall)
 		{
 			return; // not a fence wall: the game handles it
 		}
 		Scope.Cancel();
-		ClearPreview();
+		FenceWallClearPreview();
 		if (Wall->HasAuthority())
 		{
 			Wall->SetWallLook(Look);
