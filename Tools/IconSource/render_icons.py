@@ -221,10 +221,10 @@ def intersection(sc):
         end = (sx * (hw - e), sy * (hw + stub))
         lstrip([start] + path + [end] if (sx * sy) > 0 else [end] + path + [start])
 
-def fence_wall(sc):
-    # A 4 m concrete fence wall (0.5 m thick) along a curve, with a second one stacked on part of it.
+def fence_wall(sc, wall=None):
+    # A 4 m fence wall (0.5 m thick) along a curve, with a second one stacked on part of it.
     frs = frames_arc(10.0, 0.6, 30)
-    wall = CONCRETE * 0.95
+    wall = CONCRETE * 0.95 if wall is None else wall
     prof = [(0.0, 0.0), (0.5, 0.0), (0.5, 4.0), (0.0, 4.0)]
     extrude(sc, frs, prof, wall)
     cap(sc, frs[0], prof, wall); cap(sc, frs[-1], prof, wall)
@@ -244,4 +244,6 @@ elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
 elif what == "fencewall": fence_wall(sc)
+elif what == "fencewall_ficsit": fence_wall(sc, ORANGE)
+elif what == "fencewall_steel": fence_wall(sc, np.array([120, 126, 134.0]))
 render(sc, out)

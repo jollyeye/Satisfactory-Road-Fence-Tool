@@ -30,7 +30,21 @@ public:
 	 * Builds any fence type facing the road. Builders are written for a road on +Right; for
 	 * InwardSign < 0 the frames are mirrored first, so every fence type (also future ones) mirrors.
 	 */
-	static void BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel);
+	static void BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
+		const FRMWallTexLayout& WallLayout = FRMWallTexLayout());
+
+	/** Fence walls: where a wall panel sits in the texture of mMainMaterial (a game wall material). */
+	FRMWallTexLayout GetWallLayout() const;
+
+	/**
+	 * Customizer material swap (concrete / FICSIT / steel): the game builds the other fence wall
+	 * variant in place of this one. Its shape (spline, side) is handed over here, or picked up by the
+	 * new wall from PreUpgrade if the game does not call Upgrade.
+	 */
+	virtual void PreUpgrade_Implementation() override;
+	virtual void Upgrade_Implementation(AActor* newActor) override;
+	virtual void BeginPlay() override;
+	void CopyShapeTo(ARMBuildableFence* Other) const;
 
 	/** +1: the road is on the fence's right (+Right of its spline), -1: on its left. Set by the hologram. */
 	void SetInwardSign(float InSign) { mInwardSign = InSign >= 0.f ? 1.f : -1.f; }
@@ -58,6 +72,22 @@ public:
 	/** Section 0: steel for guard rail and grid posts, concrete for cement blocks. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mMainMaterial = nullptr;
+
+	/** Fence walls: texture layout of the wall panel in mMainMaterial (see FRMWallTexLayout). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mWallUCentre = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mWallUPerMetre = 0.214f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mWallVTop = 0.021f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	float mWallVPerMetre = 0.21675f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	bool mWallMirror = true;
 
 	/** Section 1: masked grid material for the grid fence panel. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")

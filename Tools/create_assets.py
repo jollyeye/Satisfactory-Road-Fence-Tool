@@ -147,6 +147,7 @@ VehicleCat = load_game_class("BC_Vehicles")
 WallsCat = load_game_class("BC_Walls")
 WallsSubCat = load_game_class("SC_Walls")
 VanillaConcreteWall = load_game_class("Build_Wall_Concrete_8x4")
+Desc_SteelBeam = load_game_class("Desc_SteelPlate")
 
 UnlockRecipe = load_game_class("BP_UnlockRecipe") or native_class("FGUnlockRecipe")
 
@@ -252,7 +253,15 @@ if VehiclePathSubCat:
 
 # Fence walls: build menu Walls tab, own section "Fence Walls"; unlocked by the game's Tier 1
 # Base Building milestone (added at runtime by the world module), not by the Road Maker milestone.
-FENCE_WALLS = {"FenceWall_Concrete"}
+FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel"}
+# Texture layout of each game wall material on the fence wall (see FRMWallTexLayout):
+# (u at panel centre, u per metre, v at the top, v per metre, mirrored half panel)
+WALL_LAYOUTS = {
+    "FenceWall_Concrete": (0.0, 0.214, 0.021, 0.21675, True),
+    "FenceWall_Ficsit": (0.0, 0.214, 0.021, 0.21675, True),
+    "FenceWall_Steel": (0.0, 0.214, 0.021, 0.21675, True),
+}
+fence_wall_classes = {}
 wall_subcat = None
 if WallsSubCat:
     wsc = make_bp("Buildables", "SC_FenceWalls", WallsSubCat)
@@ -276,6 +285,7 @@ if not base_building:
     base_building = load_game_class("Schematic_1-1")
     log("  ! 'Base Building' not found by name, using Schematic_1-1")
 wall_recipes = []
+fence_wall_recipes = {}
 
 # name, parent, hologram, display, description, props, recipe ingredients, icons, materials
 TOOLS = [
@@ -295,6 +305,10 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("FenceWall_Concrete", RMBuildableFence, holo_fence, "Concrete Fence Wall", "4 m concrete wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted. Cost is per 4 m.",
      {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
+    ("FenceWall_Ficsit", RMBuildableFence, holo_fence, "FICSIT Fence Wall", "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
+     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 1)], fence_icons, {"m_main_material": mat_concrete}),
+    ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
+     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
@@ -365,7 +379,13 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
                     setp(c, v, prop)
         elif light_swatch:
             setp(c, light_swatch, "m_default_swatch_customization_override")
+        lay = WALL_LAYOUTS.get(name)
+        if lay:
+            for prop, val in zip(("m_wall_u_centre", "m_wall_u_per_metre", "m_wall_v_top", "m_wall_v_per_metre", "m_wall_mirror"), lay):
+                setp(c, val, prop)
     finish(b)
+    if name in FENCE_WALLS:
+        fence_wall_classes[name] = b.generated_class()
 
     d = make_bp("Buildables", "Desc_" + name, BuildingDescriptor)
     dc = cdo(d)
@@ -399,6 +419,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         if not ok:
             setp(rc, [unreal.SoftClassPath(BuildGun.get_path_name())], "m_produced_in", "mProducedIn")
     finish(r)
+    if name in FENCE_WALLS:
+        fence_wall_recipes[name] = r.generated_class()
     if name in FENCE_WALLS and base_building:
         wall_recipes.append(r.generated_class())
     else:
@@ -561,6 +583,19 @@ setp(g, True, "root_module", "b_root_module", "bRootModule")
 setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
 if light_swatch:
     setp(g, light_swatch, "m_default_road_swatch", "mDefaultRoadSwatch")
+# Customizer Material tab: each game wall material swaps any fence wall to the variant in it.
+setp(g, list(fence_wall_classes.values()), "m_fence_wall_variants", "mFenceWallVariants")
+mat_map = {}
+for desc_name, variant in (("MaterialDesc_Wall_Concrete", "FenceWall_Concrete"), ("MaterialDesc_Wall_Orange", "FenceWall_Ficsit"),
+                           ("MaterialDesc_Wall_Steel", "FenceWall_Steel")):
+    dcls = load_game_class(desc_name)
+    if dcls and variant in fence_wall_recipes:
+        mat_map[dcls] = fence_wall_recipes[variant]
+        log("  material %s -> Recipe_%s" % (desc_name, variant))
+try:
+    g.set_editor_property("m_fence_wall_material_recipes", mat_map)
+except Exception as e:
+    log("  ! fence wall material map: %s" % e)
 if base_building:
     setp(g, base_building, "m_extra_recipes_schematic", "mExtraRecipesSchematic")
     setp(g, wall_recipes, "m_extra_recipes", "mExtraRecipes")

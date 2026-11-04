@@ -9,6 +9,8 @@
 #include "FGSwatchGroup.h"
 #include "Buildables/RMSwatchGroupRoads.h"
 #include "UObject/UnrealType.h"
+#include "FGFactoryColoringTypes.h"
+#include "Buildables/FGBuildable.h"
 #include "Kismet/KismetRenderingLibrary.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Texture.h"
@@ -22,6 +24,7 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	if (Phase == ELifecyclePhase::INITIALIZATION)
 	{
 		AddRecipesToGameSchematic();
+		RegisterFenceWallMaterials();
 	}
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{
@@ -51,7 +54,10 @@ void URMGameWorldModule::DumpGameTexturesForDevelopment()
 		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_01_BC.TX_WallSetConcrete_01_BC"), false },
 		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_01_N.TX_WallSetConcrete_01_N"), true },
 		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_8x1_BC.TX_WallSetConcrete_8x1_BC"), false },
-		{ TEXT("/Game/FactoryGame/Buildable/Building/Foundation/ConcreteSet/Textures/TX_Concrete_BC.TX_Concrete_BC"), false },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/FicsitWallSet/Textures/TX_WallSetOrange_BC.TX_WallSetOrange_BC"), false },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/FicsitWallSet/Textures/TX_WallSetOrange_N.TX_WallSetOrange_N"), true },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet/Textures/TX_WallSetSteel_01_BC.TX_WallSetSteel_01_BC"), false },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet/Textures/TX_WallSetSteel_01_N.TX_WallSetSteel_01_N"), true },
 	};
 	for (const FDump& D : Dumps)
 	{
@@ -112,6 +118,30 @@ void URMGameWorldModule::AddRecipesToGameSchematic()
 		}
 	}
 	UE_LOG(LogRoadMaker, Warning, TEXT("%s has no recipe unlock; extra recipes not added"), *mExtraRecipesSchematic->GetName());
+}
+
+void URMGameWorldModule::RegisterFenceWallMaterials()
+{
+	for (const TPair<TSubclassOf<UFGFactoryCustomizationDescriptor_Material>, TSubclassOf<UFGRecipe>>& Entry : mFenceWallMaterialRecipes)
+	{
+		UFGFactoryCustomizationDescriptor_Material* Desc = Entry.Key ? Entry.Key.GetDefaultObject() : nullptr;
+		if (!Desc || !Entry.Value)
+		{
+			continue;
+		}
+		int32 Added = 0;
+		for (const TSubclassOf<AFGBuildable>& Variant : mFenceWallVariants)
+		{
+			if (Variant && !Desc->GetBuildableMap().Contains(Variant) && Desc->AddType(Variant, Entry.Value))
+			{
+				++Added;
+			}
+		}
+		if (Added > 0)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Fence walls: %s -> %s for %d variant(s)"), *Entry.Key->GetName(), *Entry.Value->GetName(), Added);
+		}
+	}
 }
 
 void URMGameWorldModule::GrantExtraRecipesIfPurchased()

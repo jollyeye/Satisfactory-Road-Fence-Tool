@@ -187,7 +187,7 @@ void ARMFenceHologram::RebuildPreview()
 	}
 
 	FRMMesh Main, Panel;
-	ARMBuildableFence::BuildFenceMesh(Fence->mFenceType, Frames, 400.f, mInwardSign, Main, Panel);
+	ARMBuildableFence::BuildFenceMesh(Fence->mFenceType, Frames, 400.f, mInwardSign, Main, Panel, Fence->GetWallLayout());
 	Main.ApplyToSection(mPreviewMesh, 0, false);
 	Panel.ApplyToSection(mPreviewMesh, 1, false);
 }

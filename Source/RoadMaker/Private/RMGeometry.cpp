@@ -780,9 +780,6 @@ namespace
 	// one half of an 8 m x 4 m panel, panel centre at u = 0, panel edge at u ~ 0.856, mirrored for
 	// the other half; ~0.214 units per metre; top of the wall at v ~ 0.021, bottom at ~0.888.
 	constexpr float WallPanel = 800.f;        // cm
-	constexpr float WallUPerCm = 0.214f / 100.f;
-	constexpr float WallVPerCm = 0.21675f / 100.f;
-	constexpr float WallVTop = 0.021f;
 
 	/** Metres-free panel position: cm from the nearest panel centre (negative before it). */
 	float WallPanelOffset(float Dist)
@@ -792,8 +789,17 @@ namespace
 	}
 }
 
-void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height, float Thickness)
+void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height, float Thickness,
+	const FRMWallTexLayout& Layout)
 {
+	const float WallUPerCm = Layout.UPerMetre / 100.f;
+	const float WallVPerCm = Layout.VPerMetre / 100.f;
+	const float WallVTop = Layout.VTop;
+	// u across the panel: folded at the centre (mirrored half panel) or straight across it.
+	auto PanelU = [&Layout, WallUPerCm](float Offset)
+	{
+		return Layout.UCentre + (Layout.bMirror ? FMath::Abs(Offset) : Offset) * WallUPerCm;
+	};
 	if (Frames.Num() < 2)
 	{
 		return;
@@ -875,16 +881,16 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 				FVector2D UV0;
 				if (bVertical)
 				{
-					UV0 = FVector2D(FMath::Abs(Offset) * WallUPerCm, WallVTop + (Height - Up) * WallVPerCm);
+					UV0 = FVector2D(PanelU(Offset), WallVTop + (Height - Up) * WallVPerCm);
 				}
 				else
 				{
 					// Top and bottom: a plain stretch of the texture, mirrored every metre (no seams).
 					const float Mirror = FMath::Abs(FMath::Fmod(F.Dist / 100.f, 2.f) - 1.f);
-					UV0 = FVector2D(0.6f + (P.X + Half) * WallUPerCm, 0.2f + Mirror * 0.2f);
+					UV0 = FVector2D(Layout.UCentre + 0.6f * (Layout.bMirror ? 1.f : 0.5f) + (P.X + Half) * WallUPerCm, WallVTop + 0.2f + Mirror * 0.2f);
 				}
 				const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, UV0, F.Fwd);
-				SetTangent(V, bVertical && Offset < 0.f ? -F.Fwd : F.Fwd);
+				SetTangent(V, bVertical && Layout.bMirror && Offset < 0.f ? -F.Fwd : F.Fwd);
 				Mark(V, FVector2D(F.Dist / 100.f, (bVertical ? Up : P.X + Half) / 100.f));
 			}
 		}
@@ -905,7 +911,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		{
 			const FVector2D& P = Profile[V - First];
 			const float Up = FMath::Clamp(P.Y, 0.f, Height);
-			Out.UVs[V] = FVector2D(0.6f + (P.X + Half) * WallUPerCm, WallVTop + (Height - Up) * WallVPerCm);
+			Out.UVs[V] = FVector2D(Layout.UCentre + 0.6f * (Layout.bMirror ? 1.f : 0.5f) + (P.X + Half) * WallUPerCm, WallVTop + (Height - Up) * WallVPerCm);
 			SetTangent(V, F.Right);
 			Mark(V, FVector2D((P.X + Half) / 100.f, Up / 100.f));
 		}

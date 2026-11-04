@@ -33,6 +33,19 @@ protected:
 	 */
 	void DumpGameTexturesForDevelopment();
 
+	/**
+	 * Customizer materials for the fence walls: every fence wall variant is added to each game wall
+	 * material (concrete / FICSIT / steel) with the recipe of the variant in that material, so the
+	 * customizer's Material tab swaps a fence wall like a game wall.
+	 */
+	void RegisterFenceWallMaterials();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TArray<TSubclassOf<class AFGBuildable>> mFenceWallVariants;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TMap<TSubclassOf<class UFGFactoryCustomizationDescriptor_Material>, TSubclassOf<class UFGRecipe>> mFenceWallMaterialRecipes;
+
 	/** A game milestone that also unlocks mExtraRecipes (the fence wall: Tier 1 Base Building). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGSchematic> mExtraRecipesSchematic;

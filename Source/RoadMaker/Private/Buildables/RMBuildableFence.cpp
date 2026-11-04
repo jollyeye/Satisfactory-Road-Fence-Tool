@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "FGFactoryColoringTypes.h"
+#include "HAL/PlatformTime.h"
 
 ARMBuildableFence::ARMBuildableFence(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -29,7 +30,7 @@ void ARMBuildableFence::RebuildMesh()
 	}
 
 	FRMMesh Main, Panel;
-	BuildFenceMesh(mFenceType, Frames, mUVScale, mInwardSign, Main, Panel);
+	BuildFenceMesh(mFenceType, Frames, mUVScale, mInwardSign, Main, Panel, GetWallLayout());
 
 	Main.ApplyToSection(mMesh, 0, true);
 	Panel.ApplyToSection(mMesh, 1, true);
@@ -42,7 +43,7 @@ void ARMBuildableFence::RebuildMesh()
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarMain, FarPanel;
-		BuildFenceMesh(mFenceType, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel);
+		BuildFenceMesh(mFenceType, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout());
 		ApplyFarSection(FarMain, 0, mMainMaterial);
 		ApplyFarSection(FarPanel, 1, mPanelMaterial);
 	}
@@ -96,7 +97,97 @@ void ARMBuildableFence::ApplyPaintColors(const FFactoryCustomizationData& Data)
 	}
 }
 
-void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel)
+namespace
+{
+	/** Shape of a fence wall being swapped for another material, kept a moment for the new wall. */
+	struct FPendingWallSwap
+	{
+		FTransform Transform;
+		TArray<FRMSplinePoint> Points;
+		float InwardSign = 1.f;
+		int32 CostMultiplier = 1;
+		double Time = 0.0;
+	};
+	TArray<FPendingWallSwap> GPendingWallSwaps;
+}
+
+FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
+{
+	FRMWallTexLayout L;
+	L.UCentre = mWallUCentre;
+	L.UPerMetre = mWallUPerMetre;
+	L.VTop = mWallVTop;
+	L.VPerMetre = mWallVPerMetre;
+	L.bMirror = mWallMirror;
+	return L;
+}
+
+void ARMBuildableFence::CopyShapeTo(ARMBuildableFence* Other) const
+{
+	if (!Other || Other == this)
+	{
+		return;
+	}
+	Other->SetActorTransform(GetActorTransform());
+	Other->SetInwardSign(mInwardSign);
+	Other->SetCostMultiplier(mCostMultiplier);
+	Other->SetSplinePoints(mSplinePoints);
+	Other->RebuildMesh();
+	Other->ForceNetUpdate();
+}
+
+void ARMBuildableFence::PreUpgrade_Implementation()
+{
+	Super::PreUpgrade_Implementation();
+	if (!IsWall())
+	{
+		return;
+	}
+	const double Now = FPlatformTime::Seconds();
+	GPendingWallSwaps.RemoveAll([Now](const FPendingWallSwap& S) { return Now - S.Time > 5.0; });
+	FPendingWallSwap Swap;
+	Swap.Transform = GetActorTransform();
+	Swap.Points = mSplinePoints;
+	Swap.InwardSign = mInwardSign;
+	Swap.CostMultiplier = mCostMultiplier;
+	Swap.Time = Now;
+	GPendingWallSwaps.Add(Swap);
+}
+
+void ARMBuildableFence::Upgrade_Implementation(AActor* newActor)
+{
+	Super::Upgrade_Implementation(newActor);
+	if (ARMBuildableFence* Other = Cast<ARMBuildableFence>(newActor))
+	{
+		CopyShapeTo(Other);
+	}
+}
+
+void ARMBuildableFence::BeginPlay()
+{
+	// A fence wall built by a material swap may arrive without a shape: take the swapped wall's.
+	if (HasAuthority() && IsWall() && mSplinePoints.Num() < 2)
+	{
+		const double Now = FPlatformTime::Seconds();
+		const int32 Index = GPendingWallSwaps.IndexOfByPredicate([this, Now](const FPendingWallSwap& S)
+		{
+			return Now - S.Time < 5.0 && FVector::Dist(S.Transform.GetLocation(), GetActorLocation()) < 100.f;
+		});
+		if (Index != INDEX_NONE)
+		{
+			const FPendingWallSwap Swap = GPendingWallSwaps[Index];
+			GPendingWallSwaps.RemoveAt(Index);
+			SetActorTransform(Swap.Transform);
+			mInwardSign = Swap.InwardSign;
+			mCostMultiplier = Swap.CostMultiplier;
+			SetSplinePoints(Swap.Points);
+		}
+	}
+	Super::BeginPlay();
+}
+
+void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
+	const FRMWallTexLayout& WallLayout)
 {
 	if (InwardSign < 0.f)
 	{
@@ -117,7 +208,7 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel, 2.f);
 		break;
 	case ERMFenceType::ConcreteWall:
-		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f);
+		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout);
 		break;
 	}
 }

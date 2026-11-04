@@ -529,6 +529,16 @@ for path in ("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/MI_WallS
         break
 if not game_wall_mat:
     log("  ! game wall material not found, the fence wall uses M_RoadFenceWall")
+game_wall_mats = {}
+for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWallSet/MI_WallSetOrange_8x4.MI_WallSetOrange_8x4"),
+                  ("steel", "/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet/MI_SteelWall_8x4.MI_SteelWall_8x4")):
+    try:
+        m = unreal.load_asset(path)
+    except Exception:
+        m = None
+    log(("Fence wall %s uses " % key) + (path if m else "a fallback (not found: %s)" % path))
+    if m:
+        game_wall_mats[key] = m
 
 # --- Assign ----------------------------------------------------------------------------------
 ASSIGN = {
@@ -541,6 +551,8 @@ ASSIGN = {
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
     "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall},
+    "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall},
+    "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)

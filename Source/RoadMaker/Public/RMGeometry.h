@@ -81,6 +81,20 @@ struct ROADMAKER_API FRMFrame
 	FVector ProfileToWorld(const FVector2D& P) const { return Pos + Right * P.X + Up * P.Y; }
 };
 
+/**
+ * Where an 8 m x 4 m wall panel sits in a game wall texture (for the game's own wall materials):
+ * u at the panel centre, texture units per metre, v at the top of the wall. Mirrored: the texture
+ * holds half a panel (centre to edge) and is folded at the panel centre.
+ */
+struct ROADMAKER_API FRMWallTexLayout
+{
+	float UCentre = 0.f;
+	float UPerMetre = 0.214f;
+	float VTop = 0.021f;
+	float VPerMetre = 0.21675f;
+	bool bMirror = true;
+};
+
 /** Mesh buffers in the layout UProceduralMeshComponent wants. */
 struct ROADMAKER_API FRMMesh
 {
@@ -189,7 +203,8 @@ namespace RMGeometry
 	 * frames' line and reaching towards +Right (the road side), so its outer face is on the line.
 	 * Stays upright on slopes like the grid fence; the top follows the ground line.
 	 */
-	ROADMAKER_API void BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height = 400.f, float Thickness = 50.f);
+	ROADMAKER_API void BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height = 400.f, float Thickness = 50.f,
+		const FRMWallTexLayout& Layout = FRMWallTexLayout());
 
 	/**
 	 * Builds the slab that joins 2..N road ends. Ends are ordered by angle around their centroid, the

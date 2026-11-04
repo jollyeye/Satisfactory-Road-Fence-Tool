@@ -47,7 +47,8 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 
 ### Concrete Fence Wall — Walls › Fence Walls
 - A 4 m tall, 0.5 m thick concrete wall centred on the road edge (or an intersection's curb), following it like the fences.
-- Aim at the upper or lower half of a fence wall to stack another one above or below it. Paintable like the game's walls.
+- Aim at the upper or lower half of a fence wall to stack another one above or below it.
+- Uses the game's own wall materials: paints exactly like the game's walls, and the customizer's Material tab switches it between concrete, FICSIT and steel.
 - Unlocked with the Tier 1 **Base Building** milestone.
 
 ### Snapping for game buildings
@@ -63,7 +64,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.1.0
-- **New: Concrete Fence Wall** (Walls › Fence Walls, unlocked with Tier 1 Base Building): a 4 m concrete wall along the road edge or an intersection curb, stackable and paintable.
+- **New: Concrete Fence Wall** (Walls › Fence Walls, unlocked with Tier 1 Base Building): a 4 m wall along the road edge or an intersection curb, stackable, paintable, in concrete, FICSIT or steel (switchable in the customizer).
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane of a road: the path or track is laid along the whole lane, end to end — click to build. Scroll flips the direction; next to an existing path it continues that path's direction and joins it, and tracks connect to free track ends.
 - **One-click intersection connections:** hold a vehicle path or railway track and the snap key (Ctrl) and aim at an intersection: every arriving path is connected to every leaving path on the other ends (no U-turns), and every track end to the track in the same lane on each other end (left to left, middle to middle, right to right, in the travel direction; switches form on their own), shown at once; one click builds them all. If one connection is invalid (red), improve the intersection until all of them fit.
 - **New intersection placement:** click each free road end to pick it (up to 6, up to 200 m apart; click again to drop it), then click away from the ends to build. The aimed end gets an orange outline, picked ends a white outline and an arrow, visible through other buildings.
