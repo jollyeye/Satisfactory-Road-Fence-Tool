@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "UObject/UnrealType.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "Buildables/RMBuildableIntersection.h"
@@ -194,7 +195,22 @@ namespace
 			}
 			if (State->bLaneMode)
 			{
-				SetBuildStep(Hologram, 0); // the player never clicked a start: back to the start step
+				// The player never clicked a start: back to the start step, and drop the lane path the
+				// game is still drawing (otherwise it stays on screen next to the normal hologram).
+				SetBuildStep(Hologram, 0);
+				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
+				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
+				{
+					if (FArrayProperty* Data = FindFProperty<FArrayProperty>(Path->GetClass(), TEXT("mSplineData")))
+					{
+						FScriptArrayHelper(Data, Data->ContainerPtrToValuePtr<void>(Path)).EmptyValues();
+					}
+					// Protected UFUNCTION: called through reflection to rebuild the visuals.
+					if (UFunction* Rebuild = Path->FindFunction(TEXT("OnRep_SplineData")))
+					{
+						Path->ProcessEvent(Rebuild, nullptr);
+					}
+				}
 			}
 			GPathStates.Remove(Hologram);
 		}
@@ -639,7 +655,8 @@ namespace
 			{
 				FPathState* Lane = GPathStates.Find(Hologram);
 				const bool bLaneMode = Lane && Lane->bLaneMode;
-				if (bAimRoad && (bLaneMode || IsStartStep(Hologram)))
+				// Only while the snap key is held, so the normal placement stays available.
+				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
 				{
 					if (PlaceLanePath(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
 					{
