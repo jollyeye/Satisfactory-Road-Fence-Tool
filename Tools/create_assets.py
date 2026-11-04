@@ -147,6 +147,8 @@ VehicleCat = load_game_class("BC_Vehicles")
 WallsCat = load_game_class("BC_Walls")
 WallsSubCat = load_game_class("SC_Walls")
 VanillaConcreteWall = load_game_class("Build_Wall_Concrete_8x4")
+VanillaFicsitWall = load_game_class("Build_Wall_8x4_01") or load_game_class("Build_Wall_Orange_8x4_01")
+VanillaSteelWall = load_game_class("Build_SteelWall_8x4")
 Desc_SteelBeam = load_game_class("Desc_SteelPlate")
 
 UnlockRecipe = load_game_class("BP_UnlockRecipe") or native_class("FGUnlockRecipe")
@@ -370,12 +372,15 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     if name in FENCE_WALLS:
         # Paintable like the game's concrete wall, with the same swatch group and default swatch.
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
-        if VanillaConcreteWall:
-            vw = unreal.get_default_object(VanillaConcreteWall)
+        # Swatch group and default swatch of the matching game wall (FICSIT walls start in the
+        # FICSIT factory colours, concrete walls in concrete).
+        vanilla = {"FenceWall_Ficsit": VanillaFicsitWall, "FenceWall_Steel": VanillaSteelWall}.get(name) or VanillaConcreteWall
+        if vanilla:
+            vw = unreal.get_default_object(vanilla)
             for prop in ("m_swatch_group", "m_default_swatch_customization_override"):
                 v = getp(vw, prop)
-                log("  vanilla wall %s = %s" % (prop, v))
-                if v:
+                log("  %s: game wall %s %s = %s" % (name, vanilla.get_name(), prop, v))
+                if v or prop == "m_default_swatch_customization_override":
                     setp(c, v, prop)
         elif light_swatch:
             setp(c, light_swatch, "m_default_swatch_customization_override")

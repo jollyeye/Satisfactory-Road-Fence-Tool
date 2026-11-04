@@ -960,10 +960,11 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 	const float WallUPerCm = Layout.UPerMetre / 100.f;
 	const float WallVPerCm = Layout.VPerMetre / 100.f;
 	const float WallVTop = Layout.VTop;
-	// u across the panel: folded at the centre (mirrored half panel) or straight across it.
-	auto PanelU = [&Layout, WallUPerCm](float Offset)
+	// u along the wall: folded at each panel centre (mirrored half panel), or for a texture that tiles
+	// sideways simply growing along the wall (the texture repeats by itself, no seams).
+	auto PanelU = [&Layout, WallUPerCm](float Offset, float Dist)
 	{
-		return Layout.UCentre + (Layout.bMirror ? FMath::Abs(Offset) : Offset) * WallUPerCm;
+		return Layout.bMirror ? Layout.UCentre + FMath::Abs(Offset) * WallUPerCm : Layout.UCentre + Dist * WallUPerCm;
 	};
 	if (Frames.Num() < 2)
 	{
@@ -1046,7 +1047,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 				FVector2D UV0;
 				if (bVertical)
 				{
-					UV0 = FVector2D(PanelU(Offset), WallVTop + (Height - Up) * WallVPerCm);
+					UV0 = FVector2D(PanelU(Offset, F.Dist), WallVTop + (Height - Up) * WallVPerCm);
 				}
 				else
 				{

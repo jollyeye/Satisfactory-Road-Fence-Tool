@@ -178,10 +178,11 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 	FRMWallTexLayout L;
 	if (GetEffectiveType() == ERMFenceType::FicsitWall)
 	{
-		// FICSIT look: the game's 1 m FICSIT wall material (MI_WallSetOrange_8x1), one 8 m x 1 m
-		// texture repeated up the 4 m wall.
-		L.UCentre = 0.5f;
-		L.UPerMetre = 0.125f;
+		// FICSIT look: the game's 1 m FICSIT wall material (MI_WallSetOrange_8x1). Its texture is a
+		// 4 m x 1 m tile (256 texels per metre both ways) that repeats both ways; on the game's 4 m
+		// wall the grooves fall at 5.5 %, 43.5 %, 55.5 % and 93.5 % of 8 m, i.e. 0.11 / 0.87 of a 4 m tile.
+		L.UCentre = 0.f;
+		L.UPerMetre = 0.25f;
 		L.VTop = 0.f;
 		L.VPerMetre = 1.f;
 		L.bMirror = false;
