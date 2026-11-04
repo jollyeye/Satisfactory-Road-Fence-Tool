@@ -774,6 +774,28 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	});
 }
 
+void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height, float Thickness)
+{
+	if (Frames.Num() < 2)
+	{
+		return;
+	}
+	TArray<FRMFrame> Upright = Frames;
+	for (FRMFrame& F : Upright)
+	{
+		F.Up = FVector::UpVector;
+		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+	}
+	// A little below the ground line so no gap shows on uneven ground; stacked walls overlap there.
+	const float Bottom = -2.f;
+	const TArray<FVector2D> Profile = { FVector2D(0.f, Bottom), FVector2D(Thickness, Bottom),
+		FVector2D(Thickness, Height), FVector2D(0.f, Height) };
+	const FVector2D Centroid(Thickness * 0.5f, Height * 0.5f);
+	ExtrudeProfile(Upright, Profile, true, Centroid, UVScale, Out);
+	AddProfileCap(Upright[0], Profile, false, UVScale, Out);
+	AddProfileCap(Upright.Last(), Profile, true, UVScale, Out);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Intersections
 // ---------------------------------------------------------------------------------------------

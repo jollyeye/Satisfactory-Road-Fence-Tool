@@ -185,6 +185,13 @@ namespace RMGeometry
 	ROADMAKER_API void BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale = 1.f);
 
 	/**
+	 * Concrete fence wall: a solid upright slab Height tall and Thickness thick, standing on the
+	 * frames' line and reaching towards +Right (the road side), so its outer face is on the line.
+	 * Stays upright on slopes like the grid fence; the top follows the ground line.
+	 */
+	ROADMAKER_API void BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height = 400.f, float Thickness = 50.f);
+
+	/**
 	 * Builds the slab that joins 2..N road ends. Ends are ordered by angle around their centroid, the
 	 * corners of neighbouring ends are joined by curb fillets (quadratic Bezier whose control point is
 	 * where the two road edges meet), and the outline is fan-triangulated from the centroid.

@@ -12,6 +12,7 @@ enum class ERMFenceType : uint8
 	JerseyBarrier UMETA(DisplayName = "Cement Blocks"),
 	GridFence     UMETA(DisplayName = "Metal Grid Fence"),
 	GridFenceTall UMETA(DisplayName = "Metal Grid Fence (4m tall)"),
+	ConcreteWall  UMETA(DisplayName = "Concrete Fence Wall"),
 };
 
 UCLASS()
@@ -33,6 +34,19 @@ public:
 
 	/** +1: the road is on the fence's right (+Right of its spline), -1: on its left. Set by the hologram. */
 	void SetInwardSign(float InSign) { mInwardSign = InSign >= 0.f ? 1.f : -1.f; }
+	float GetInwardSign() const { return mInwardSign; }
+
+	/** Fence walls stack: a new wall aimed at one goes on top of it. */
+	bool IsWall() const { return mFenceType == ERMFenceType::ConcreteWall; }
+	static float GetWallHeight() { return 400.f; }
+
+	/** Spline points in world space (for stacking). */
+	void GetWorldSplinePoints(TArray<FRMSplinePoint>& Out) const;
+
+	/** Customizer colours: the fence wall's concrete takes the primary colour (custom primitive data). */
+	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
+	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
+	void ApplyPaintColors(const FFactoryCustomizationData& Data);
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")
 	ERMFenceType mFenceType = ERMFenceType::GuardRail;

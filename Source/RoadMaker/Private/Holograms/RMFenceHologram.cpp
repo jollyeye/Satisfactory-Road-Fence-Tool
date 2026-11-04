@@ -21,6 +21,27 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	{
 		return SnapToFoundationGrid(hitResult);
 	}
+	// Fence walls stack: aiming at a fence wall puts the new one right on top of it, same course.
+	if (GetFenceDefaults()->IsWall())
+	{
+		const ARMBuildableFence* Under = Cast<ARMBuildableFence>(hitResult.GetActor());
+		if (Under && Under->IsWall())
+		{
+			TArray<FRMSplinePoint> Points;
+			Under->GetWorldSplinePoints(Points);
+			if (Points.Num() >= 2)
+			{
+				for (FRMSplinePoint& P : Points)
+				{
+					P.Location.Z += ARMBuildableFence::GetWallHeight();
+				}
+				mInwardSign = Under->GetInwardSign();
+				mOnRoadEdge = true;
+				SetWorldPoints(Points);
+				return true;
+			}
+		}
+	}
 	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
 	{
 		return SnapToIntersectionCurb(X, hitResult.Location);

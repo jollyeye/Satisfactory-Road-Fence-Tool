@@ -144,6 +144,9 @@ Desc_Wire = load_game_class("Desc_Wire")
 BuildGun = load_game_class("BP_BuildGun")
 VehiclePathSubCat = load_game_class("SC_VehiclePaths")
 VehicleCat = load_game_class("BC_Vehicles")
+WallsCat = load_game_class("BC_Walls")
+WallsSubCat = load_game_class("SC_Walls")
+VanillaConcreteWall = load_game_class("Build_Wall_Concrete_8x4")
 
 UnlockRecipe = load_game_class("BP_UnlockRecipe") or native_class("FGUnlockRecipe")
 
@@ -247,6 +250,33 @@ if VehiclePathSubCat:
     finish(subcat_bp)
     subcat = subcat_bp.generated_class()
 
+# Fence walls: build menu Walls tab, own section "Fence Walls"; unlocked by the game's Tier 1
+# Base Building milestone (added at runtime by the world module), not by the Road Maker milestone.
+FENCE_WALLS = {"FenceWall_Concrete"}
+wall_subcat = None
+if WallsSubCat:
+    wsc = make_bp("Buildables", "SC_FenceWalls", WallsSubCat)
+    setp(cdo(wsc), text("Fence Walls"), "m_display_name", "mDisplayName")
+    setp(cdo(wsc), 90.0, "m_menu_priority", "mMenuPriority")
+    finish(wsc)
+    wall_subcat = wsc.generated_class()
+else:
+    log("  ! SC_Walls not found: fence walls go in the Roads section")
+
+base_building = None
+for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
+    scls = load_game_class(sname)
+    if not scls:
+        continue
+    dn = str(getp(unreal.get_default_object(scls), "m_display_name", "mDisplayName") or "")
+    log("  %s = '%s'" % (sname, dn))
+    if "base building" in dn.lower():
+        base_building = scls
+if not base_building:
+    base_building = load_game_class("Schematic_1-1")
+    log("  ! 'Base Building' not found by name, using Schematic_1-1")
+wall_recipes = []
+
 # name, parent, hologram, display, description, props, recipe ingredients, icons, materials
 TOOLS = [
     ("Road_1x", RMBuildableRoad, holo_road, "Road (1 wide)", "A road one foundation wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
@@ -263,6 +293,8 @@ TOOLS = [
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("Fence_GridTall", RMBuildableFence, holo_fence, "Metal Grid Fence (4m tall)", "Tall metal grid fence, 4 m high. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
+    ("FenceWall_Concrete", RMBuildableFence, holo_fence, "Concrete Fence Wall", "4 m concrete wall, 0.5 m thick. Aim at a road to follow its edge (on the very edge), or at an intersection to follow its curb; aim at a fence wall to stack another on top. Can be painted. Cost is per 4 m.",
+     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
@@ -321,6 +353,18 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     if parent in (RMBuildableRoad, RMBuildableIntersection):
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
         setp(c, None, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
+    if name in FENCE_WALLS:
+        # Paintable like the game's concrete wall, with the same swatch group and default swatch.
+        setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
+        if VanillaConcreteWall:
+            vw = unreal.get_default_object(VanillaConcreteWall)
+            for prop in ("m_swatch_group", "m_default_swatch_customization_override"):
+                v = getp(vw, prop)
+                log("  vanilla wall %s = %s" % (prop, v))
+                if v:
+                    setp(c, v, prop)
+        elif light_swatch:
+            setp(c, light_swatch, "m_default_swatch_customization_override")
     finish(b)
 
     d = make_bp("Buildables", "Desc_" + name, BuildingDescriptor)
@@ -328,10 +372,14 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, b.generated_class(), "m_buildable_class", "mBuildableClass")
     setp(dc, text(display), "m_display_name", "mDisplayName")
     setp(dc, text(desc), "m_description", "mDescription")
-    if VehicleCat:
-        setp(dc, VehicleCat, "m_category", "mCategory", "m_build_menu_category")
-    if subcat or VehiclePathSubCat:
-        setp(dc, [subcat or VehiclePathSubCat], "m_sub_categories", "mSubCategories")
+    if name in FENCE_WALLS and WallsCat and wall_subcat:
+        setp(dc, WallsCat, "m_category", "mCategory", "m_build_menu_category")
+        setp(dc, [wall_subcat], "m_sub_categories", "mSubCategories")
+    else:
+        if VehicleCat:
+            setp(dc, VehicleCat, "m_category", "mCategory", "m_build_menu_category")
+        if subcat or VehiclePathSubCat:
+            setp(dc, [subcat or VehiclePathSubCat], "m_sub_categories", "mSubCategories")
     own = tool_icon(name)  # stylised isometric icon from Tools/Icons, else a borrowed game icon
     small_icon = own or icons[0]
     big_icon = own or icons[1]
@@ -351,7 +399,10 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         if not ok:
             setp(rc, [unreal.SoftClassPath(BuildGun.get_path_name())], "m_produced_in", "mProducedIn")
     finish(r)
-    recipes.append(r.generated_class())
+    if name in FENCE_WALLS and base_building:
+        wall_recipes.append(r.generated_class())
+    else:
+        recipes.append(r.generated_class())
 
 # ---------------------------------------------------------------------------------------------
 # Customizer: "Road Lines" tab with Sidelines and Lanes
@@ -510,6 +561,10 @@ setp(g, True, "root_module", "b_root_module", "bRootModule")
 setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
 if light_swatch:
     setp(g, light_swatch, "m_default_road_swatch", "mDefaultRoadSwatch")
+if base_building:
+    setp(g, base_building, "m_extra_recipes_schematic", "mExtraRecipesSchematic")
+    setp(g, wall_recipes, "m_extra_recipes", "mExtraRecipes")
+    log("  fence wall recipes unlock with " + str(base_building.get_name()))
 finish(gwm)
 
 log("DONE")

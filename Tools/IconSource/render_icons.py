@@ -221,6 +221,18 @@ def intersection(sc):
         end = (sx * (hw - e), sy * (hw + stub))
         lstrip([start] + path + [end] if (sx * sy) > 0 else [end] + path + [start])
 
+def fence_wall(sc):
+    # A 4 m concrete fence wall (0.5 m thick) along a curve, with a second one stacked on part of it.
+    frs = frames_arc(10.0, 0.6, 30)
+    wall = CONCRETE * 0.95
+    prof = [(0.0, 0.0), (0.5, 0.0), (0.5, 4.0), (0.0, 4.0)]
+    extrude(sc, frs, prof, wall)
+    cap(sc, frs[0], prof, wall); cap(sc, frs[-1], prof, wall)
+    top = frs[:16]
+    prof2 = [(0.0, 4.08), (0.5, 4.08), (0.5, 8.0), (0.0, 8.0)]
+    extrude(sc, top, prof2, wall)
+    cap(sc, top[0], prof2, wall); cap(sc, top[-1], prof2, wall)
+
 what = sys.argv[1]; out = sys.argv[2]
 sc = Scene()
 if what == "road1": road(sc, 8, 1)
@@ -231,4 +243,5 @@ elif what == "jersey": jersey(sc)
 elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
+elif what == "fencewall": fence_wall(sc)
 render(sc, out)

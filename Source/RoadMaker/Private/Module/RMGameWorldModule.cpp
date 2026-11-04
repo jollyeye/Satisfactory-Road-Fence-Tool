@@ -13,10 +13,71 @@
 void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
 	Super::DispatchLifecycleEvent(Phase);
+	if (Phase == ELifecyclePhase::INITIALIZATION)
+	{
+		AddRecipesToGameSchematic();
+	}
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{
+		AddRecipesToGameSchematic(); // in case the earlier phase ran before the class was loaded
 		GrantRecipesOfPurchasedSchematics();
+		GrantExtraRecipesIfPurchased();
 		EnsureRoadSwatchGroup();
+	}
+}
+
+void URMGameWorldModule::AddRecipesToGameSchematic()
+{
+	if (!mExtraRecipesSchematic || mExtraRecipes.Num() == 0)
+	{
+		return;
+	}
+	// mRecipes of UFGUnlockRecipe is protected: write it through reflection. The schematic's default
+	// object holds the unlock objects the game reads, so the milestone shows and unlocks the recipes.
+	FArrayProperty* RecipesProp = FindFProperty<FArrayProperty>(UFGUnlockRecipe::StaticClass(), TEXT("mRecipes"));
+	if (!RecipesProp)
+	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("UFGUnlockRecipe::mRecipes not found; extra recipes not added"));
+		return;
+	}
+	for (UFGUnlock* Unlock : UFGSchematic::GetUnlocks(mExtraRecipesSchematic))
+	{
+		if (UFGUnlockRecipe* RecipeUnlock = Cast<UFGUnlockRecipe>(Unlock))
+		{
+			TArray<TSubclassOf<UFGRecipe>>* List = RecipesProp->ContainerPtrToValuePtr<TArray<TSubclassOf<UFGRecipe>>>(RecipeUnlock);
+			int32 Added = 0;
+			for (const TSubclassOf<UFGRecipe>& Recipe : mExtraRecipes)
+			{
+				if (Recipe && !List->Contains(Recipe))
+				{
+					List->Add(Recipe);
+					++Added;
+				}
+			}
+			if (Added > 0)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Added %d recipe(s) to %s"), Added, *mExtraRecipesSchematic->GetName());
+			}
+			return;
+		}
+	}
+	UE_LOG(LogRoadMaker, Warning, TEXT("%s has no recipe unlock; extra recipes not added"), *mExtraRecipesSchematic->GetName());
+}
+
+void URMGameWorldModule::GrantExtraRecipesIfPurchased()
+{
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() == NM_Client || !mExtraRecipesSchematic)
+	{
+		return;
+	}
+	AFGSchematicManager* Schematics = AFGSchematicManager::Get(World);
+	AFGRecipeManager* Recipes = AFGRecipeManager::Get(World);
+	if (Schematics && Recipes && Schematics->IsSchematicPurchased(mExtraRecipesSchematic))
+	{
+		TArray<TSubclassOf<UFGRecipe>> ToAdd = mExtraRecipes;
+		Recipes->AddAvailableRecipes(ToAdd);
+		UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d extra recipe(s) of bought %s"), ToAdd.Num(), *mExtraRecipesSchematic->GetName());
 	}
 }
 

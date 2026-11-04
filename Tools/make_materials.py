@@ -322,6 +322,34 @@ MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
 finish(concrete)
 
+# --- Concrete fence wall: the concrete with panel seams, painted with the customizer colour --------
+# The wall pushes its primary colour as custom primitive data 24. Paint keeps the concrete's detail:
+# colour = paint * (concrete / its average brightness). The default (0.4 grey) gives plain concrete.
+CONCRETE_AVG = 0.4
+fwall = new_material("M_RoadFenceWall")
+if tex_c:
+    fbase = atlas_sample(fwall, tex_c, RECT_TOP_LEFT, True, -900, 0)
+    if tex_cn:
+        world_normal(fwall, tex_cn, RECT_TOP_LEFT, True, None, -250, 900)
+else:
+    fbase = noise_blend(fwall, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
+fpaint = node(fwall, unreal.MaterialExpressionVectorParameter, -700, 300,
+              parameter_name="PaintColor", default_value=unreal.LinearColor(CONCRETE_AVG, CONCRETE_AVG, CONCRETE_AVG, 1.0))
+fpaint.set_editor_property("use_custom_primitive_data", True)
+fpaint.set_editor_property("primitive_data_index", 24)
+fdetail = node(fwall, unreal.MaterialExpressionDivide, -500, 100)
+link(fbase, "", fdetail, "A")
+link(const(fwall, CONCRETE_AVG, -700, 200), "", fdetail, "B")
+fmul = node(fwall, unreal.MaterialExpressionMultiply, -350, 150)
+link(fdetail, "", fmul, "A")
+link(fpaint, "", fmul, "B")
+fsat = node(fwall, unreal.MaterialExpressionSaturate, -200, 150)
+link(fmul, "", fsat, "")
+MEL.connect_material_property(fsat, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(fwall, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
+finish(fwall)
+log("Concrete fence wall (paintable)")
+
 # --- Cement blocks: the earlier procedural concrete, finer, with block joints ----------------------
 # The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint
 # is a thin dark groove with a small bevel on both blocks (tangent X runs along the fence).
@@ -430,6 +458,7 @@ ASSIGN = {
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
+    "Build_FenceWall_Concrete": {"m_main_material": fwall},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)

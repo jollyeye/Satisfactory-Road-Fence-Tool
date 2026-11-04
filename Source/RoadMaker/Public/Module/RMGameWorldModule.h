@@ -21,6 +21,19 @@ protected:
 	/** Adds "Roads" to the game's swatch groups (customizer "set as default for" list) if missing. */
 	void EnsureRoadSwatchGroup();
 
+	/** Adds mExtraRecipes to the recipe unlock of mExtraRecipesSchematic (a game milestone). */
+	void AddRecipesToGameSchematic();
+
+	/** If that game milestone is already bought in this save, unlock the extra recipes now. */
+	void GrantExtraRecipesIfPurchased();
+
+	/** A game milestone that also unlocks mExtraRecipes (the fence wall: Tier 1 Base Building). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<class UFGSchematic> mExtraRecipesSchematic;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TArray<TSubclassOf<class UFGRecipe>> mExtraRecipes;
+
 	/** Swatch new roads use until the player picks another default for "Roads". */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGFactoryCustomizationDescriptor_Swatch> mDefaultRoadSwatch;
