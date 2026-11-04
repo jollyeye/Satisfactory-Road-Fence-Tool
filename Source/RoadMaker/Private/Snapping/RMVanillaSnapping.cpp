@@ -19,6 +19,7 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "FGConstructDisqualifier.h"
 #include "FGRailroadTrackConnectionComponent.h"
 #include "Buildables/FGBuildableRailroadTrack.h"
 #include "Algo/Reverse.h"
@@ -365,6 +366,31 @@ namespace
 					}
 				}
 			}
+			// Why it cannot be placed, and every other visible part of the hologram (and its children).
+			TArray<TSubclassOf<UFGConstructDisqualifier>> Disq;
+			Rail->GetConstructDisqualifiers(Disq);
+			FString DisqText;
+			for (const TSubclassOf<UFGConstructDisqualifier>& D : Disq)
+			{
+				DisqText += FString::Printf(TEXT(" %s"), D ? *D->GetName() : TEXT("null"));
+			}
+			FString Parts;
+			TArray<AActor*> Owners = { Rail };
+			Rail->GetAttachedActors(Owners, false);
+			for (AActor* A : Owners)
+			{
+				TInlineComponentArray<UPrimitiveComponent*> Prims(A);
+				for (UPrimitiveComponent* C : Prims)
+				{
+					if (C && C->IsVisible() && C->IsRegistered() && !C->IsA<USplineMeshComponent>())
+					{
+						const FBox B = C->Bounds.GetBox();
+						Parts += FString::Printf(TEXT(" %s.%s[%s c(%.0f,%.0f) size(%.0f,%.0f)]"), *A->GetClass()->GetName(), *C->GetName(),
+							*C->GetClass()->GetName(), B.GetCenter().X, B.GetCenter().Y, B.GetSize().X, B.GetSize().Y);
+					}
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: disqualifiers:%s | other parts:%s"), Tag, *DisqText, *Parts);
 			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: closed=%d length=%.0f meshes=%d:%s"), Tag,
 				SplineC ? (int32)SplineC->IsClosedLoop() : -1, SplineC ? SplineC->GetSplineLength() : -1.f, NumMeshes, *MeshInfo);
 			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: step=%d actor=(%s yaw %.0f) hitLoc=%s hitTan=%s snapStart=%s snapTan=%s | want[%d]:%s | data[%d]:%s | drawn:%s"),
