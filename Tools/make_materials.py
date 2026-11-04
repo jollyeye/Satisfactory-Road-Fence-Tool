@@ -226,10 +226,11 @@ if (sides > 0.5)
     float d = min(abs(u - e), abs(u - (W - e)));
     side = 1 - smoothstep(hw - aa, hw + aa, d);
 }
-float L = W - 2 * e;
+float le = sides > 0.5 ? e : 0.0;      // no side lines: lanes use the whole width
+float L = W - 2 * le;
 if (N > 1.5 && L > 0.1)
 {
-    float t = (u - e) / L * N;
+    float t = (u - le) / L * N;
     float k = clamp(round(t), 1, N - 1);
     float d = abs(t - k) * L / N;
     float lineMask = 1 - smoothstep(hw - aa, hw + aa, d);

@@ -19,6 +19,8 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "FGRailroadTrackConnectionComponent.h"
+#include "Buildables/FGBuildableRailroadTrack.h"
 #include "Algo/Reverse.h"
 #include "UObject/UnrealType.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
@@ -70,18 +72,17 @@ namespace
 		float Distance = TNumericLimits<float>::Max();
 	};
 
-	/** Closest point on any nearby road's fence lines (both edges). */
+	/** Closest point on the edge of any nearby road (both sides), like the game's own edge snapping. */
 	bool FindFenceLinePoint(UWorld* World, const FVector& Aim, float MaxDistance, FFenceLinePoint& Out)
 	{
 		TArray<ARMBuildableRoad*> Roads;
 		RMRoadUtils::GatherNearby(World, Aim, MaxDistance + RM::FoundationSize * 2.f, Roads);
-		const float Inset = GetDefault<ARMBuildableFence>()->mEdgeInset;
 		bool bFound = false;
 		for (ARMBuildableRoad* Road : Roads)
 		{
 			TArray<FRMFrame> Frames;
 			Road->GetWorldFrames(Frames, 25.f);
-			const float Offset = Road->GetRoadWidth() * 0.5f - Inset;
+			const float Offset = Road->GetRoadWidth() * 0.5f; // exactly on the road edge
 			for (const FRMFrame& F : Frames)
 			{
 				for (float Side : { 1.f, -1.f })
@@ -243,6 +244,70 @@ namespace
 		}
 	}
 
+	/** Protected rail hologram members: its spline points and the update that rebuilds the preview. */
+	struct FRMRailAccess : public AFGRailroadTrackHologram
+	{
+		/**
+		 * Gives the spline point at the start (or end) the road's slope: the horizontal direction the
+		 * game chose stays, only the height part of the tangents changes. Then the preview, spline and
+		 * clearance are rebuilt from the edited points (the built track uses the same points).
+		 */
+		static void ApplySlope(AFGRailroadTrackHologram* Rail, bool bAtStart, float Slope)
+		{
+			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
+			if (Self->mSplineData.Num() < 2)
+			{
+				return;
+			}
+			FSplinePointData& P = bAtStart ? Self->mSplineData[0] : Self->mSplineData.Last();
+			auto Tilt = [Slope](FVector& T)
+			{
+				const float Flat = FVector(T.X, T.Y, 0.f).Size();
+				T.Z = Flat * Slope;
+			};
+			Tilt(P.ArriveTangent);
+			Tilt(P.LeaveTangent);
+			Self->UpdateSplineComponent();
+			Self->UpdateClearanceData();
+		}
+
+		/** Replaces the track's spline points (world space in) and rebuilds preview and clearance. */
+		static void SetSplineWorld(AFGRailroadTrackHologram* Rail, const TArray<FVector>& Points, const TArray<FVector>& Tangents)
+		{
+			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
+			const FTransform T = Rail->GetActorTransform();
+			Self->mSplineData.Reset();
+			for (int32 I = 0; I < Points.Num(); ++I)
+			{
+				FSplinePointData P;
+				P.Location = T.InverseTransformPosition(Points[I]);
+				P.ArriveTangent = T.InverseTransformVector(Tangents[I]);
+				P.LeaveTangent = P.ArriveTangent;
+				Self->mSplineData.Add(P);
+			}
+			Self->UpdateSplineComponent();
+			Self->UpdateClearanceData();
+		}
+
+		/** Back to the start step: drop the lane track's snapped connections. */
+		static void ResetToStart(AFGRailroadTrackHologram* Rail)
+		{
+			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
+			Self->mBuildStep = ESplineHologramBuildStep::SHBS_FindStart;
+		}
+	};
+
+
+	/** Sets one of the rail hologram's snapped connection slots (0 = start, 1 = end); private, by reflection. */
+	void SetRailSnappedConnection(AFGHologram* Hologram, int32 Index, UFGRailroadTrackConnectionComponent* Connection)
+	{
+		FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(Hologram->GetClass(), TEXT("mSnappedConnectionComponents"));
+		if (Prop && Index < Prop->ArrayDim)
+		{
+			Prop->SetObjectPropertyValue(Prop->ContainerPtrToValuePtr<void>(Hologram, Index), Connection);
+		}
+	}
+
 	/** Left the road-end snap points: give the end direction back to the game. */
 	void ReleasePathSnap(AFGHologram* Hologram)
 	{
@@ -259,6 +324,12 @@ namespace
 				// game is still drawing (otherwise it stays on screen next to the normal hologram).
 				SetBuildStep(Hologram, 0);
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
+				if (AFGRailroadTrackHologram* Rail = Cast<AFGRailroadTrackHologram>(Hologram))
+				{
+					FRMRailAccess::ResetToStart(Rail);
+					SetRailSnappedConnection(Hologram, 0, nullptr);
+					SetRailSnappedConnection(Hologram, 1, nullptr);
+				}
 				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
 				{
 					// Remove the lane path's meshes, then let the game redraw its start-step look.
@@ -336,33 +407,6 @@ namespace
 		return Flat > KINDA_SMALL_NUMBER ? End.Outward.Z / Flat : 0.f;
 	}
 
-	/** Protected rail hologram members: its spline points and the update that rebuilds the preview. */
-	struct FRMRailAccess : public AFGRailroadTrackHologram
-	{
-		/**
-		 * Gives the spline point at the start (or end) the road's slope: the horizontal direction the
-		 * game chose stays, only the height part of the tangents changes. Then the preview, spline and
-		 * clearance are rebuilt from the edited points (the built track uses the same points).
-		 */
-		static void ApplySlope(AFGRailroadTrackHologram* Rail, bool bAtStart, float Slope)
-		{
-			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
-			if (Self->mSplineData.Num() < 2)
-			{
-				return;
-			}
-			FSplinePointData& P = bAtStart ? Self->mSplineData[0] : Self->mSplineData.Last();
-			auto Tilt = [Slope](FVector& T)
-			{
-				const float Flat = FVector(T.X, T.Y, 0.f).Size();
-				T.Z = Flat * Slope;
-			};
-			Tilt(P.ArriveTangent);
-			Tilt(P.LeaveTangent);
-			Self->UpdateSplineComponent();
-			Self->UpdateClearanceData();
-		}
-	};
 
 	/**
 	 * Rail track on a road-end snap point. The track's start direction (and its end direction once
@@ -575,7 +619,7 @@ namespace
 		}
 		else
 		{
-			const float Inset = Road->mEdgeLineInset;
+			const float Inset = Road->GetMarkings().bEdgeLines ? Road->mEdgeLineInset : 0.f; // no side lines: full width
 			const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
 			for (int32 I = 0; I < Lanes; ++I)
 			{
@@ -733,6 +777,183 @@ namespace
 		return true;
 	}
 
+	/** Rail hologram spline step (ESplineHologramBuildStep: 0 = find start, 2 = place end). */
+	void SetRailStep(AFGHologram* Hologram, uint8 Step)
+	{
+		SetBuildStep(Hologram, Step); // same property name (mBuildStep) on the spline hologram
+	}
+
+
+	/** A free track end (connection with nothing attached) within 1.5 m of a point. */
+	UFGRailroadTrackConnectionComponent* FindFreeTrackEnd(UWorld* World, const FVector& Point)
+	{
+		for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
+		{
+			for (int32 C = 0; C < 2; ++C)
+			{
+				UFGRailroadTrackConnectionComponent* Conn = It->GetConnection(C);
+				if (Conn && !Conn->IsConnected() && FVector::Dist(Conn->GetConnectorLocation(), Point) < 150.f)
+				{
+					return Conn;
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * One-click lane track (snap key held, before the first click): the rail hologram is laid along
+	 * the whole lane, end to end, and one click builds it. Same lanes as vehicle paths; rails run both
+	 * ways, so the direction only follows the road (scroll flips it). Free track ends at the lane ends
+	 * are connected to. The start is placed by the game's own start step, then the hologram is put
+	 * in its end step, the end placed, and the lane points replace the game's single curve.
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceLaneTrack(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableRoad* Road)
+	{
+		UWorld* World = Hologram->GetWorld();
+		AFGRailroadTrackHologram* Rail = Cast<AFGRailroadTrackHologram>(Hologram);
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 100.f);
+		if (!World || !Rail || Frames.Num() < 2)
+		{
+			return false;
+		}
+
+		// Lane under the cursor (same rules as vehicle paths).
+		int32 NearIdx = 0;
+		float NearDist = TNumericLimits<float>::Max();
+		for (int32 I = 0; I < Frames.Num(); ++I)
+		{
+			const float D = FVector::DistSquared(Frames[I].Pos, Hit.Location);
+			if (D < NearDist)
+			{
+				NearDist = D;
+				NearIdx = I;
+			}
+		}
+		const float U = FVector::DotProduct(Hit.Location - Frames[NearIdx].Pos, Frames[NearIdx].Right);
+		const float Width = Road->GetRoadWidth();
+		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 3);
+		TArray<float> Offsets;
+		if (Lanes <= 1)
+		{
+			const int32 Count = FMath::FloorToInt(Width * 0.5f / 200.f);
+			for (int32 K = -Count; K <= Count; ++K)
+			{
+				Offsets.Add(K * 200.f);
+			}
+		}
+		else
+		{
+			const float Inset = Road->GetMarkings().bEdgeLines ? Road->mEdgeLineInset : 0.f;
+			const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
+			for (int32 I = 0; I < Lanes; ++I)
+			{
+				Offsets.Add(-Width * 0.5f + Inset + Inner * (I + 0.5f) / Lanes);
+			}
+		}
+		int32 Lane = 0;
+		for (int32 I = 1; I < Offsets.Num(); ++I)
+		{
+			if (FMath::Abs(Offsets[I] - U) < FMath::Abs(Offsets[Lane] - U))
+			{
+				Lane = I;
+			}
+		}
+		const float Off = Offsets[Lane];
+
+		FPathState& State = GPathStates.FindOrAdd(Hologram);
+		if (!State.bLaneMode || State.Owner.Get() != Road || State.EndIndex != Lane)
+		{
+			State.bFlipped = false;
+		}
+		if (!State.bLaneMode)
+		{
+			State.SavedScroll = Hologram->GetScrollRotateValue();
+		}
+		State.bLaneMode = true;
+		State.bSetCustomEnd = true; // 1 degree rotation steps, scroll restored on leaving
+		State.Owner = Road;
+		State.EndIndex = Lane;
+		State.bStartStep = false;
+
+		// Lane points every ~4 m, right on the asphalt.
+		const float Total = Frames.Last().Dist;
+		const int32 Keys = FMath::Max(1, FMath::CeilToInt(Total / 400.f));
+		TArray<FVector> Points, Tangents;
+		for (int32 K = 0; K <= Keys; ++K)
+		{
+			const float D = Total * K / Keys;
+			int32 Seg = 0;
+			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
+			{
+				++Seg;
+			}
+			const FRMFrame& Fa = Frames[Seg];
+			const FRMFrame& Fb = Frames[Seg + 1];
+			const float T = Fb.Dist > Fa.Dist ? FMath::Clamp((D - Fa.Dist) / (Fb.Dist - Fa.Dist), 0.f, 1.f) : 0.f;
+			const FVector Right = FMath::Lerp(Fa.Right, Fb.Right, T).GetSafeNormal();
+			Points.Add(FMath::Lerp(Fa.Pos, Fb.Pos, T) + Right * Off);
+			Tangents.Add(FMath::Lerp(Fa.Fwd, Fb.Fwd, T).GetSafeNormal());
+		}
+		for (int32 K = 0; K < Points.Num(); ++K)
+		{
+			const FVector& Prev = Points[FMath::Max(K - 1, 0)];
+			const FVector& Next = Points[FMath::Min(K + 1, Points.Num() - 1)];
+			Tangents[K] *= FVector::Dist(Prev, Next) / (K == 0 || K == Points.Num() - 1 ? 1.f : 2.f);
+		}
+		if (State.bFlipped)
+		{
+			Algo::Reverse(Points);
+			Algo::Reverse(Tangents);
+			for (FVector& T : Tangents)
+			{
+				T = -T;
+			}
+		}
+
+		// Existing free track ends at the lane ends: start/end exactly there and connect.
+		UFGRailroadTrackConnectionComponent* StartConn = FindFreeTrackEnd(World, Points[0]);
+		UFGRailroadTrackConnectionComponent* EndConn = FindFreeTrackEnd(World, Points.Last());
+		if (StartConn)
+		{
+			Points[0] = StartConn->GetConnectorLocation();
+		}
+		if (EndConn)
+		{
+			Points.Last() = EndConn->GetConnectorLocation();
+		}
+		const FVector StartDir = Tangents[0].GetSafeNormal();
+		const FVector EndDir = Tangents.Last().GetSafeNormal();
+		// Start: the game's own start step (heading from the scroll value, as with road-end snaps).
+		SetRailStep(Hologram, 0);
+		Hologram->SetScrollRotateValue(FMath::RoundToInt(StartDir.Rotation().Yaw));
+		FHitResult HitA = MoveHit(Hit, Points[0]);
+		Scope(Hologram, HitA);
+		SetRailSnappedConnection(Hologram, 0, StartConn);
+		if (FVector* SnappedLoc = VectorField(Hologram, TEXT("mSnappedStartLocation")))
+		{
+			*SnappedLoc = Points[0];
+		}
+		if (FVector* SnappedTan = VectorField(Hologram, TEXT("mSnappedStartTangent")))
+		{
+			*SnappedTan = StartDir;
+		}
+
+		// End step: place the end, then the lane points replace the game's curve.
+		SetRailStep(Hologram, 2);
+		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
+		Hologram->SetScrollRotateValue(FMath::RoundToInt(EndDir.Rotation().Yaw));
+		{
+			TGuardValue<bool> Guard(GInPathReplace, true);
+			Hologram->SetHologramLocationAndRotation(MoveHit(Hit, Points.Last()));
+		}
+		SetRailSnappedConnection(Hologram, 1, EndConn);
+		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
@@ -766,6 +987,22 @@ namespace
 				else if (bLaneMode)
 				{
 					ReleasePathSnap(Hologram); // looked away from the road: back to a normal start
+				}
+			}
+			else if (Hologram->template IsA<AFGRailroadTrackHologram>())
+			{
+				FPathState* Lane = GPathStates.Find(Hologram);
+				const bool bLaneMode = Lane && Lane->bLaneMode;
+				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
+				{
+					if (PlaceLaneTrack(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
+					{
+						return true;
+					}
+				}
+				else if (bLaneMode)
+				{
+					ReleasePathSnap(Hologram);
 				}
 			}
 			if ((!bAimRoad && !bAimIntersection) || HasVanillaSnapNear(Hologram, Hit.Location))

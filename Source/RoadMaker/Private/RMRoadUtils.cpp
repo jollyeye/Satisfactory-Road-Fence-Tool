@@ -231,7 +231,8 @@ TArray<FVector> FRMRoadEndRef::GetSnapPoints(UWorld* World) const
 
 	TArray<FVector> Points;
 	const FVector Across = FVector::CrossProduct(FVector::UpVector, FVector(Outward.X, Outward.Y, 0.f)).GetSafeNormal();
-	const float Inset = LaneRoad->mEdgeLineInset;
+	// Without side lines the lanes use the whole road width.
+	const float Inset = LaneRoad->GetMarkings().bEdgeLines ? LaneRoad->mEdgeLineInset : 0.f;
 	const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
 	for (int32 I = 0; I < Lanes; ++I)
 	{
