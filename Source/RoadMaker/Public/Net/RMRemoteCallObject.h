@@ -19,6 +19,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerApplyRoadLines(AActor* Target, TSubclassOf<URMRoadLineDescriptor> Sides, TSubclassOf<URMRoadLineDescriptor> Lanes);
 
+	/** Switches a fence wall's look (customizer Material tab), on the server. */
+	UFUNCTION(Server, Reliable)
+	void ServerSetFenceWallLook(class ARMBuildableFence* Wall, uint8 Look);
+
 	/** Registers this RCO for a player controller (call on the server). */
 	static void RegisterFor(class AFGPlayerController* PC);
 

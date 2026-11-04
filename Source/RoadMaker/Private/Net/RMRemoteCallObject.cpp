@@ -1,4 +1,5 @@
 #include "Net/RMRemoteCallObject.h"
+#include "Buildables/RMBuildableFence.h"
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMRoadLineDescriptor.h"
 #include "FGPlayerController.h"
@@ -13,6 +14,14 @@ void URMRemoteCallObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 void URMRemoteCallObject::ServerApplyRoadLines_Implementation(AActor* Target, TSubclassOf<URMRoadLineDescriptor> Sides, TSubclassOf<URMRoadLineDescriptor> Lanes)
 {
 	RMRoadLinePaint::ApplyToTarget(Target, Sides, Lanes);
+}
+
+void URMRemoteCallObject::ServerSetFenceWallLook_Implementation(ARMBuildableFence* Wall, uint8 Look)
+{
+	if (Wall)
+	{
+		Wall->SetWallLook(Look);
+	}
 }
 
 void URMRemoteCallObject::RegisterFor(AFGPlayerController* PC)

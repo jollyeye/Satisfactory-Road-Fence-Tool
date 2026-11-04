@@ -928,18 +928,25 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 			});
 	}
 
-	// Close both ends (panel and rails) with flat caps on the dark part of the texture.
+	// Close both ends with the wall's own cross-section (top rail, sheet, kick rail): the cut-out
+	// shape, on the dark frame part of the texture.
+	const TArray<TArray<FVector2D>> Sections = {
+		{ FVector2D(-PostDepth, RailBottom), FVector2D(PostDepth, RailBottom), FVector2D(PostDepth, Height), FVector2D(-PostDepth, Height) },
+		{ FVector2D(-PanelHalf, KickTop), FVector2D(PanelHalf, KickTop), FVector2D(PanelHalf, RailBottom), FVector2D(-PanelHalf, RailBottom) },
+		{ FVector2D(-PostDepth + 5.f, -2.f), FVector2D(PostDepth - 5.f, -2.f), FVector2D(PostDepth - 5.f, KickTop), FVector2D(-PostDepth + 5.f, KickTop) },
+	};
 	for (const bool bEnd : { false, true })
 	{
 		const FRMFrame& F = bEnd ? Frames.Last() : Frames[0];
-		const TArray<FVector2D> Cap = { FVector2D(-PostDepth, -2.f), FVector2D(PostDepth, -2.f),
-			FVector2D(PostDepth, Height), FVector2D(-PostDepth, Height) };
-		const int32 First = Out.Vertices.Num();
-		AddProfileCap(F, Cap, bEnd, 100.f, Out);
-		for (int32 V = First; V < Out.Vertices.Num(); ++V)
+		for (const TArray<FVector2D>& Cap : Sections)
 		{
-			const FVector2D& P = Cap[V - First];
-			Out.UVs[V] = FVector2D(0.91f + 0.07f * (P.X > 0.f ? 1.f : 0.f), 0.22f + 0.66f * (1.f - FMath::Clamp(P.Y, 0.f, Height) / Height));
+			const int32 First = Out.Vertices.Num();
+			AddProfileCap(F, Cap, bEnd, 100.f, Out);
+			for (int32 V = First; V < Out.Vertices.Num(); ++V)
+			{
+				const FVector2D& P = Cap[V - First];
+				Out.UVs[V] = FVector2D(0.91f + 0.07f * (P.X + PostDepth) / (2.f * PostDepth), 0.22f + 0.66f * (1.f - FMath::Clamp(P.Y, 0.f, Height) / Height));
+			}
 		}
 	}
 }

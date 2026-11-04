@@ -16,6 +16,7 @@ void ARMBuildableFence::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableFence, mInwardSign);
+	DOREPLIFETIME(ARMBuildableFence, mWallLook);
 }
 
 void ARMBuildableFence::RebuildMesh()
@@ -30,11 +31,13 @@ void ARMBuildableFence::RebuildMesh()
 	}
 
 	FRMMesh Main, Panel;
-	BuildFenceMesh(mFenceType, Frames, mUVScale, mInwardSign, Main, Panel, GetWallLayout());
+	const ERMFenceType Type = GetEffectiveType();
+	UMaterialInterface* MainMaterial = GetEffectiveMainMaterial();
+	BuildFenceMesh(Type, Frames, mUVScale, mInwardSign, Main, Panel, GetWallLayout());
 
 	Main.ApplyToSection(mMesh, 0, true);
 	Panel.ApplyToSection(mMesh, 1, true);
-	ApplyMaterial(0, mMainMaterial);
+	ApplyMaterial(0, MainMaterial);
 	ApplyMaterial(1, mPanelMaterial);
 
 	// Far version: the same fence sampled every 4 m instead of every 50 cm.
@@ -43,8 +46,8 @@ void ARMBuildableFence::RebuildMesh()
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarMain, FarPanel;
-		BuildFenceMesh(mFenceType, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout());
-		ApplyFarSection(FarMain, 0, mMainMaterial);
+		BuildFenceMesh(Type, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout());
+		ApplyFarSection(FarMain, 0, MainMaterial);
 		ApplyFarSection(FarPanel, 1, mPanelMaterial);
 	}
 	ApplyPaintColors(mCustomizationData);
@@ -111,6 +114,64 @@ namespace
 	TArray<FPendingWallSwap> GPendingWallSwaps;
 }
 
+uint8 ARMBuildableFence::LookOfType(ERMFenceType Type)
+{
+	switch (Type)
+	{
+	case ERMFenceType::ConcreteWall: return 1;
+	case ERMFenceType::FicsitWall: return 2;
+	case ERMFenceType::SteelWall: return 3;
+	default: return 0;
+	}
+}
+
+ERMFenceType ARMBuildableFence::GetEffectiveType() const
+{
+	if (!IsWall())
+	{
+		return mFenceType;
+	}
+	switch (mPreviewWallLook ? mPreviewWallLook : mWallLook)
+	{
+	case 1: return ERMFenceType::ConcreteWall;
+	case 2: return ERMFenceType::FicsitWall;
+	case 3: return ERMFenceType::SteelWall;
+	default: return mFenceType;
+	}
+}
+
+UMaterialInterface* ARMBuildableFence::GetEffectiveMainMaterial() const
+{
+	const uint8 Look = IsWall() ? (mPreviewWallLook ? mPreviewWallLook : mWallLook) : 0;
+	if (Look > 0 && mWallLookMaterials.IsValidIndex(Look - 1) && mWallLookMaterials[Look - 1])
+	{
+		return mWallLookMaterials[Look - 1];
+	}
+	return mMainMaterial;
+}
+
+void ARMBuildableFence::SetWallLook(uint8 Look)
+{
+	if (!IsWall() || Look > 3)
+	{
+		return;
+	}
+	// Back to the look it was built with: store 0, so the saved value stays "as built".
+	mWallLook = Look == LookOfType(mFenceType) ? 0 : Look;
+	RebuildMesh();
+	ForceNetUpdate();
+}
+
+void ARMBuildableFence::SetPreviewWallLook(uint8 Look)
+{
+	if (!IsWall() || Look == mPreviewWallLook)
+	{
+		return;
+	}
+	mPreviewWallLook = Look;
+	RebuildMesh();
+}
+
 FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 {
 	FRMWallTexLayout L;
@@ -130,6 +191,7 @@ void ARMBuildableFence::CopyShapeTo(ARMBuildableFence* Other) const
 	}
 	Other->SetActorTransform(GetActorTransform());
 	Other->SetInwardSign(mInwardSign);
+	Other->mWallLook = mWallLook;
 	Other->SetCostMultiplier(mCostMultiplier);
 	Other->SetSplinePoints(mSplinePoints);
 	Other->RebuildMesh();

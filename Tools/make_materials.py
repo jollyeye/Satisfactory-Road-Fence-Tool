@@ -540,6 +540,10 @@ for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWa
     if m:
         game_wall_mats[key] = m
 
+# Fence wall looks for the customizer's Material tab: concrete, FICSIT, steel (switched in place).
+wall_looks = [game_wall_mat or fwall, game_wall_mats.get("ficsit") or game_wall_mat or fwall,
+              game_wall_mats.get("steel") or game_wall_mat or fwall]
+
 # --- Assign ----------------------------------------------------------------------------------
 ASSIGN = {
     "Build_Road_1x": {"m_top_material": asphalt, "m_body_material": concrete},
@@ -550,9 +554,9 @@ ASSIGN = {
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
-    "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall},
-    "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall},
-    "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall},
+    "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)

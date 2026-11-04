@@ -24,7 +24,8 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	if (Phase == ELifecyclePhase::INITIALIZATION)
 	{
 		AddRecipesToGameSchematic();
-		RegisterFenceWallMaterials();
+		// Fence wall materials are switched in place (RMFenceWallPaint), not by the game's building
+		// swap, which loses the wall's course. RegisterFenceWallMaterials is kept but not used.
 	}
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{

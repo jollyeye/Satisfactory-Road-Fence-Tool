@@ -52,6 +52,18 @@ public:
 	void SetInwardSign(float InSign) { mInwardSign = InSign >= 0.f ? 1.f : -1.f; }
 	float GetInwardSign() const { return mInwardSign; }
 
+	/**
+	 * Fence wall look chosen in the customizer's Material tab (concrete / FICSIT / steel), switched
+	 * in place: 0 = as built, 1 = concrete, 2 = FICSIT, 3 = steel. The preview look is local only
+	 * (shown while the customizer aims at the wall).
+	 */
+	void SetWallLook(uint8 Look);
+	void SetPreviewWallLook(uint8 Look);
+	uint8 GetWallLook() const { return mWallLook; }
+	ERMFenceType GetEffectiveType() const;
+	UMaterialInterface* GetEffectiveMainMaterial() const;
+	static uint8 LookOfType(ERMFenceType Type);
+
 	/** Fence walls stack: a new wall aimed at one goes on top of it. */
 	bool IsWall() const { return IsWallType(mFenceType); }
 	static bool IsWallType(ERMFenceType Type)
@@ -95,6 +107,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	bool mWallMirror = true;
 
+	/** Fence walls: the game wall material for each look (concrete, FICSIT, steel). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	TArray<UMaterialInterface*> mWallLookMaterials;
+
 	/** Section 1: masked grid material for the grid fence panel. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mPanelMaterial = nullptr;
@@ -102,6 +118,14 @@ public:
 protected:
 	UFUNCTION()
 	void OnRep_InwardSign() { RebuildMesh(); }
+
+	UFUNCTION()
+	void OnRep_WallLook() { RebuildMesh(); }
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_WallLook)
+	uint8 mWallLook = 0;
+
+	uint8 mPreviewWallLook = 0;
 
 	/** Which side of the fence the road is on; the guard rail beam faces that way. */
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_InwardSign)
