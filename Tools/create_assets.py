@@ -426,8 +426,11 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     finish(r)
     if name in FENCE_WALLS:
         fence_wall_recipes[name] = r.generated_class()
-    if name == "FenceWall_Ficsit" and base_building:
-        wall_recipes.append(r.generated_class())  # concrete / steel unlock with their wall materials
+    if name in FENCE_WALLS:
+        # Fence walls are never in the Road Maker milestone: FICSIT unlocks with Base Building,
+        # concrete and steel with the game's concrete / steel wall materials (AWESOME Shop).
+        if name == "FenceWall_Ficsit" and base_building:
+            wall_recipes.append(r.generated_class())
     else:
         recipes.append(r.generated_class())
 
