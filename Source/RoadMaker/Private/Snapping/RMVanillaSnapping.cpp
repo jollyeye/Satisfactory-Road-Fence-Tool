@@ -1004,7 +1004,8 @@ namespace
 			Hologram->SetHologramLocationAndRotation(MoveHit(Hit, Points.Last()));
 		}
 		SetRailSnappedConnection(Hologram, 1, EndConn);
-		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+		// The game's own rail routing draws the curve between the two ends (overriding its points
+		// fought with it every frame and made loops). Logged to compare with the lane.
 		FRMRailAccess::LogTrack(Rail, Points);
 		return true;
 	}
