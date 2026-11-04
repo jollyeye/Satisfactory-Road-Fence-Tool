@@ -7,7 +7,7 @@ Road Maker
 RoadMaker
 
 ## Short description (max 128 characters)
-Curved roads with lane lines, intersections, road fences and 4 m fence walls, plus snapping for paths, rails, poles and foundations.
+Curved roads with lane lines, intersections, fences and fence walls, plus snapping for paths, rails, poles and foundations.
 
 ## Full description (paste as Markdown)
 
