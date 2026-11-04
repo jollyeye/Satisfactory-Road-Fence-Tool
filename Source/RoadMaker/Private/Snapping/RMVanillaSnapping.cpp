@@ -19,6 +19,8 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "FGInventoryComponent.h"
+#include "FGCharacterPlayer.h"
 #include "FGConstructDisqualifier.h"
 #include "FGRailroadTrackConnectionComponent.h"
 #include "Buildables/FGBuildableRailroadTrack.h"
@@ -1007,6 +1009,246 @@ namespace
 		return true;
 	}
 
+	// --- Intersection connections (vehicle path + snap key, aiming at an intersection) --------------
+
+	/** A path end at an intersection end: arriving (a path ends there) or leaving (a path starts there). */
+	struct FJunctionNode
+	{
+		AFGVehiclePathNode* Node = nullptr;
+		FVector Location = FVector::ZeroVector;
+		FVector Dir = FVector::ForwardVector; // travel direction, horizontal
+		int32 Mouth = -1;
+	};
+
+	struct FJunctionLink
+	{
+		FJunctionNode In;
+		FJunctionNode Out;
+	};
+
+	/** Child holograms used for the connections beyond the first, per parent hologram. */
+	TMap<TWeakObjectPtr<const AFGHologram>, TArray<TWeakObjectPtr<AFGHologram>>> GJunctionChildren;
+
+	/** Which connection the main hologram shows (moved to a valid one when it is not). */
+	TMap<TWeakObjectPtr<const AFGHologram>, int32> GJunctionParentLink;
+
+	/** Every sensible connection through an intersection: each arriving path to each leaving path on another end. */
+	void FindJunctionLinks(UWorld* World, const ARMBuildableIntersection* X, TArray<FJunctionLink>& OutLinks)
+	{
+		OutLinks.Reset();
+		TArray<FRMRoadEnd> Mouths;
+		X->GetWorldEnds(Mouths);
+		TArray<FJunctionNode> Ins, Outs;
+		TSet<TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>> Existing;
+
+		auto MouthOf = [&Mouths](const FVector& P) -> int32
+		{
+			for (int32 M = 0; M < Mouths.Num(); ++M)
+			{
+				const FVector In = FVector(Mouths[M].Inward.X, Mouths[M].Inward.Y, 0.f).GetSafeNormal();
+				const FVector Across = FVector::CrossProduct(FVector::UpVector, In);
+				const FVector D = P - Mouths[M].Center;
+				if (FMath::Abs(FVector::DotProduct(D, In)) < 300.f && FMath::Abs(FVector::DotProduct(D, Across)) < Mouths[M].Width * 0.5f + 100.f
+					&& FMath::Abs(D.Z) < 400.f)
+				{
+					return M;
+				}
+			}
+			return -1;
+		};
+
+		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+		{
+			USplineComponent* Spline = It->GetSplineComponent();
+			AFGVehiclePathNode* StartNode = It->GetStartNode();
+			AFGVehiclePathNode* EndNode = It->GetEndNode();
+			if (!Spline || Spline->GetNumberOfSplinePoints() < 2 || !StartNode || !EndNode)
+			{
+				continue;
+			}
+			Existing.Add(TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>(StartNode, EndNode));
+			const int32 Last = Spline->GetNumberOfSplinePoints() - 1;
+			const FVector EndDir = Spline->GetDirectionAtSplinePoint(Last, ESplineCoordinateSpace::World).GetSafeNormal2D();
+			const FVector StartDir = Spline->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World).GetSafeNormal2D();
+			const int32 EndMouth = MouthOf(EndNode->GetActorLocation());
+			if (EndMouth >= 0 && FVector::DotProduct(EndDir, Mouths[EndMouth].Inward.GetSafeNormal2D()) > 0.5f)
+			{
+				Ins.Add({ EndNode, EndNode->GetActorLocation(), EndDir, EndMouth });   // arrives into the intersection
+			}
+			const int32 StartMouth = MouthOf(StartNode->GetActorLocation());
+			if (StartMouth >= 0 && FVector::DotProduct(StartDir, Mouths[StartMouth].Inward.GetSafeNormal2D()) < -0.5f)
+			{
+				Outs.Add({ StartNode, StartNode->GetActorLocation(), StartDir, StartMouth }); // leaves the intersection
+			}
+		}
+		for (const FJunctionNode& In : Ins)
+		{
+			for (const FJunctionNode& Out : Outs)
+			{
+				if (In.Mouth == Out.Mouth || In.Node == Out.Node
+					|| Existing.Contains(TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>(In.Node, Out.Node)))
+				{
+					continue; // no U-turns, no connection that is already built
+				}
+				OutLinks.Add({ In, Out });
+				if (OutLinks.Num() >= 24)
+				{
+					return;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Sets up a vehicle path hologram (main or child) for one connection, without its own placement
+	 * input: start step at the arriving node, join it, end step at the leaving node, join it, and a
+	 * smooth curve between them as the path's points. Placement calls go through the guard so our
+	 * hook lets the game's code run.
+	 */
+	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link)
+	{
+		FPathState& State = GPathStates.FindOrAdd(H);
+		State.bLaneMode = true;
+		State.bStartStep = false;
+		State.StartDir = FVector::ZeroVector;
+
+		TArray<FRMSplinePoint> Curve;
+		RMGeometry::MakeFixedEnds(Link.In.Location, Link.In.Dir, Link.Out.Location, Link.Out.Dir, Curve);
+		if (Curve.Num() < 2)
+		{
+			return;
+		}
+		auto PlaceGuarded = [H](const FHitResult& Hit)
+		{
+			TGuardValue<bool> Guard(GInPathReplace, true);
+			H->SetHologramLocationAndRotation(Hit);
+		};
+		SetBuildStep(H, 0);
+		PlaceGuarded(MoveHit(BaseHit, Link.In.Location));
+		FRMPathAccess::SnapToNode(H, Link.In.Node);
+		if (FVector* Exit = VectorField(H, TEXT("mStartPointExitDirection")))
+		{
+			*Exit = Link.In.Dir;
+		}
+		SetBuildStep(H, 1);
+		const bool bWasFlipped = State.bFlipped;
+		State.bFlipped = false;
+		PlacePathEnd(PlaceGuarded, H, MoveHit(BaseHit, Link.Out.Location), Link.Out.Location - Link.Out.Dir * 100.f, Link.Out.Dir, State);
+		State.bFlipped = bWasFlipped;
+		FRMPathAccess::SnapToNode(H, Link.Out.Node);
+		SetPathSplineWorld(H, { Curve[0].Location, Curve[1].Location }, { Curve[0].Tangent, Curve[1].Tangent });
+	}
+
+	/** Hides and switches off the connection children (leaving junction mode). */
+	void ReleaseJunction(AFGHologram* Parent)
+	{
+		if (TArray<TWeakObjectPtr<AFGHologram>>* Children = GJunctionChildren.Find(Parent))
+		{
+			for (const TWeakObjectPtr<AFGHologram>& C : *Children)
+			{
+				if (AFGHologram* Child = C.Get())
+				{
+					Child->SetDisabled(true);
+					Child->SetActorHiddenInGame(true);
+				}
+			}
+		}
+		GJunctionParentLink.Remove(Parent);
+	}
+
+	/**
+	 * Vehicle path + snap key aiming at an intersection: every connection between the paths at its
+	 * ends is shown at once (main hologram + child holograms) and one click builds the valid ones.
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceJunction(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableIntersection* X)
+	{
+		AFGVehiclePathSegmentHologram* Parent = Cast<AFGVehiclePathSegmentHologram>(Hologram);
+		UWorld* World = Hologram->GetWorld();
+		if (!Parent || !World)
+		{
+			return false;
+		}
+		TArray<FJunctionLink> Links;
+		FindJunctionLinks(World, X, Links);
+		if (Links.Num() == 0)
+		{
+			return false;
+		}
+		Scope.Cancel(); // everything is placed below, through the game's code
+
+		// The main hologram shows a connection that was valid last frame (it cannot be switched off).
+		int32& ParentLink = GJunctionParentLink.FindOrAdd(Parent);
+		ParentLink = FMath::Clamp(ParentLink, 0, Links.Num() - 1);
+		SetupJunctionHologram(Parent, Hit, Links[ParentLink]);
+
+		// Children for the other connections.
+		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
+		AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(Parent->GetConstructionInstigator());
+		UFGInventoryComponent* Inventory = Player ? Player->GetInventory() : nullptr;
+		int32 ChildIndex = 0;
+		int32 FirstValidChildLink = -1;
+		for (int32 L = 0; L < Links.Num(); ++L)
+		{
+			if (L == ParentLink)
+			{
+				continue;
+			}
+			if (!Children.IsValidIndex(ChildIndex) || !Children[ChildIndex].IsValid())
+			{
+				const FName Name(*FString::Printf(TEXT("RMJunction%d"), ChildIndex));
+				AFGHologram* NewChild = AFGHologram::SpawnChildHologramFromRecipe(Parent, Name, Parent->GetRecipe(), Parent->GetOwner(), Links[L].In.Location);
+				if (!NewChild)
+				{
+					break;
+				}
+				if (Children.IsValidIndex(ChildIndex))
+				{
+					Children[ChildIndex] = NewChild;
+				}
+				else
+				{
+					Children.Add(NewChild);
+				}
+			}
+			AFGVehiclePathSegmentHologram* Child = Cast<AFGVehiclePathSegmentHologram>(Children[ChildIndex].Get());
+			++ChildIndex;
+			if (!Child)
+			{
+				continue;
+			}
+			Child->SetDisabled(false);
+			Child->SetActorHiddenInGame(false);
+			SetupJunctionHologram(Child, Hit, Links[L]);
+			// The game's own check for this one connection; invalid ones are switched off (not built).
+			if (Inventory)
+			{
+				Child->ValidatePlacementAndCost(Inventory);
+			}
+			const bool bValid = Child->CanConstruct();
+			Child->SetDisabled(!bValid);
+			Child->SetActorHiddenInGame(!bValid);
+			if (bValid && FirstValidChildLink < 0)
+			{
+				FirstValidChildLink = L;
+			}
+		}
+		for (int32 C = ChildIndex; C < Children.Num(); ++C)
+		{
+			if (AFGHologram* Unused = Children[C].Get())
+			{
+				Unused->SetDisabled(true);
+				Unused->SetActorHiddenInGame(true);
+			}
+		}
+		// If the main hologram's connection was refused last frame, show a valid one there next frame.
+		if (!Parent->CanConstruct() && FirstValidChildLink >= 0)
+		{
+			ParentLink = FirstValidChildLink;
+		}
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
@@ -1032,13 +1274,27 @@ namespace
 				// Only while the snap key is held, so the normal placement stays available.
 				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
 				{
+					ReleaseJunction(Hologram);
 					if (PlaceLanePath(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
 					{
 						return true;
 					}
 				}
+				else if (bAimIntersection && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
+				{
+					if (PlaceJunction(Scope, Hologram, Hit, Cast<ARMBuildableIntersection>(Aimed)))
+					{
+						return true;
+					}
+					ReleaseJunction(Hologram);
+					if (bLaneMode)
+					{
+						ReleasePathSnap(Hologram);
+					}
+				}
 				else if (bLaneMode)
 				{
+					ReleaseJunction(Hologram);
 					ReleasePathSnap(Hologram); // looked away from the road: back to a normal start
 				}
 			}
