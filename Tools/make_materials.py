@@ -395,26 +395,11 @@ MEL.connect_material_property(const(fwall, 0.85, -300, 400), "", MP.MP_ROUGHNESS
 finish(fwall)
 log("Concrete fence wall (paintable)")
 
-# --- Texture dump helpers (temporary): the editor only has placeholder game textures, so the mod
-# draws the real ones into PNG files once in game, to read the texture layout.
-for dname, dtex, normal in (("M_RM_TextureDump", tex_wbc, False), ("M_RM_TextureDumpN", tex_wn, True)):
-    dm = new_material(dname)
-    dm.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-    tp = node(dm, unreal.MaterialExpressionTextureSampleParameter2D, -600, 0, parameter_name="Tex")
-    if dtex:
-        tp.set_editor_property("texture", dtex)
-        tp.set_editor_property("sampler_type", sampler_for(dtex))
-    if normal:
-        half = node(dm, unreal.MaterialExpressionMultiply, -350, 0)
-        link(tp, "", half, "A")
-        link(const(dm, 0.5, -500, 150), "", half, "B")
-        plus = node(dm, unreal.MaterialExpressionAdd, -200, 0)
-        link(half, "", plus, "A")
-        link(const(dm, 0.5, -350, 150), "", plus, "B")
-        MEL.connect_material_property(plus, "", MP.MP_EMISSIVE_COLOR)
-    else:
-        MEL.connect_material_property(tp, "", MP.MP_EMISSIVE_COLOR)
-    finish(dm)
+# The temporary texture-dump materials (used during development) are removed from the mod.
+for old in ("M_RM_TextureDump", "M_RM_TextureDumpN"):
+    if eal.does_asset_exist(ROOT + "/" + old):
+        eal.delete_asset(ROOT + "/" + old)
+        log("Deleted " + ROOT + "/" + old)
 
 # --- Cement blocks: the earlier procedural concrete, finer, with block joints ----------------------
 # The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint

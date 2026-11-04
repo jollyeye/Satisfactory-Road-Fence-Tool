@@ -28,12 +28,6 @@ protected:
 	void GrantExtraRecipesIfPurchased();
 
 	/**
-	 * Development only: draws a few game textures into PNG files in D:/SFMods/TextureDump (only if
-	 * D:/SFMods exists), because the editor project has placeholder textures only.
-	 */
-	void DumpGameTexturesForDevelopment();
-
-	/**
 	 * Customizer materials for the fence walls: every fence wall variant is added to each game wall
 	 * material (concrete / FICSIT / steel) with the recipe of the variant in that material, so the
 	 * customizer's Material tab swaps a fence wall like a game wall.
