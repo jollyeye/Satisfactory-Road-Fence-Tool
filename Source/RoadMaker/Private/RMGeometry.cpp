@@ -874,18 +874,17 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
 	}
 	const float Length = Frames.Last().Dist;
-	const float Cell = 800.f;          // one wall panel between posts
-	const float PostHalf = 17.5f;      // posts 35 cm along the wall
+	const float Cell = 400.f;          // the panel texture repeats every 4 m (as on the game's wall)
 	const float PostDepth = 25.f;      // half thickness (50 cm wall)
 	const float KickTop = 37.f;        // kick rail at the bottom
 	const float RailBottom = Height - 21.f; // top rail
 	const float PanelHalf = 8.f;       // ribbed sheet, recessed between the rails
 
-	// Panel UVs (measured from the game's texture and wall): u 0..0.885 from one post to the next,
+	// Panel UVs (measured from the game's texture and wall): u 0..0.885 over 4 m, repeated,
 	// v 0.2 at the top rail down to 0.9 at the kick rail.
 	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelU1 = 0.885f;
 
-	// Cells of 8 m; each is built on its own so the panel texture restarts at every post.
+	// Cells of 4 m; each is built on its own so the panel texture restarts cleanly.
 	const int32 Cells = FMath::Max(1, FMath::CeilToInt((Length - 1.f) / Cell));
 	for (int32 C = 0; C < Cells; ++C)
 	{
@@ -929,24 +928,18 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 			});
 	}
 
-	// Posts: at both ends (just inside) and at every 8 m between, on the dark strip right of the panel.
-	TArray<float> PostDists = { FMath::Min(PostHalf, Length * 0.5f) };
-	for (float D = Cell; D < Length - PostHalf; D += Cell)
+	// Close both ends (panel and rails) with flat caps on the dark part of the texture.
+	for (const bool bEnd : { false, true })
 	{
-		PostDists.Add(D);
-	}
-	PostDists.Add(FMath::Max(Length - PostHalf, Length * 0.5f));
-	for (const float D : PostDists)
-	{
-		const FRMFrame F = FrameAtDist(Frames, D);
+		const FRMFrame& F = bEnd ? Frames.Last() : Frames[0];
+		const TArray<FVector2D> Cap = { FVector2D(-PostDepth, -2.f), FVector2D(PostDepth, -2.f),
+			FVector2D(PostDepth, Height), FVector2D(-PostDepth, Height) };
 		const int32 First = Out.Vertices.Num();
-		Out.AddBox(F.Pos + FVector(0.f, 0.f, (Height - 2.f) * 0.5f), F.Fwd, F.Right, FVector::UpVector,
-			FVector(PostHalf, PostDepth + 2.f, (Height + 2.f) * 0.5f), 100.f);
+		AddProfileCap(F, Cap, bEnd, 100.f, Out);
 		for (int32 V = First; V < Out.Vertices.Num(); ++V)
 		{
-			const float Up = FMath::Clamp(Out.Vertices[V].Z - F.Pos.Z, 0.f, Height);
-			const float Side = FVector::DotProduct(Out.Vertices[V] - F.Pos, F.Fwd) > 0.f ? 1.f : 0.f;
-			Out.UVs[V] = FVector2D(0.91f + 0.07f * Side, 0.22f + 0.66f * (1.f - Up / Height));
+			const FVector2D& P = Cap[V - First];
+			Out.UVs[V] = FVector2D(0.91f + 0.07f * (P.X > 0.f ? 1.f : 0.f), 0.22f + 0.66f * (1.f - FMath::Clamp(P.Y, 0.f, Height) / Height));
 		}
 	}
 }
