@@ -286,7 +286,18 @@ namespace
 				P.LeaveTangent = P.ArriveTangent;
 				Self->mSplineData.Add(P);
 			}
+			// The game's track meshes are laid along the spline component by distance; a closed loop
+			// or a stale distance table would wrap them back around like a ring.
+			if (USplineComponent* Spline = Self->mSplineComponent)
+			{
+				Spline->SetClosedLoop(false, false);
+			}
 			Self->UpdateSplineComponent();
+			if (USplineComponent* Spline = Self->mSplineComponent)
+			{
+				Spline->SetClosedLoop(false, false);
+				Spline->UpdateSpline();
+			}
 			Self->UpdateClearanceData();
 			Redraw(Rail);
 		}
@@ -338,6 +349,24 @@ namespace
 			const FVector* HitTan = VectorField(Rail, TEXT("mHitTangent"));
 			const FVector* SnapLoc = VectorField(Rail, TEXT("mSnappedStartLocation"));
 			const FVector* SnapTan = VectorField(Rail, TEXT("mSnappedStartTangent"));
+			USplineComponent* SplineC = Self->mSplineComponent;
+			int32 NumMeshes = 0;
+			FString MeshInfo;
+			TInlineComponentArray<USplineMeshComponent*> Meshes(Rail);
+			for (USplineMeshComponent* M : Meshes)
+			{
+				if (M && M->IsVisible())
+				{
+					++NumMeshes;
+					if (NumMeshes <= 40)
+					{
+						const FVector W = M->GetComponentTransform().TransformPosition(M->GetStartPosition());
+						MeshInfo += FString::Printf(TEXT(" (%.0f,%.0f)"), W.X, W.Y);
+					}
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: closed=%d length=%.0f meshes=%d:%s"), Tag,
+				SplineC ? (int32)SplineC->IsClosedLoop() : -1, SplineC ? SplineC->GetSplineLength() : -1.f, NumMeshes, *MeshInfo);
 			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag[%s]: step=%d actor=(%s yaw %.0f) hitLoc=%s hitTan=%s snapStart=%s snapTan=%s | want[%d]:%s | data[%d]:%s | drawn:%s"),
 				Tag, (int32)Self->mBuildStep, *T.GetLocation().ToCompactString(), T.Rotator().Yaw,
 				HitLoc ? *HitLoc->ToCompactString() : TEXT("?"), HitTan ? *HitTan->ToCompactString() : TEXT("?"),
