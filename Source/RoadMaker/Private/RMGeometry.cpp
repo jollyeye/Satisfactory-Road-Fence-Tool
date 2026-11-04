@@ -880,10 +880,11 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 	const float RailBottom = Height - 21.f; // top rail
 	const float PanelHalf = 8.f;       // ribbed sheet, recessed between the rails
 
-	// Panel UVs (measured from the game's texture and wall): the stretch between the two columns of
-	// bolts, u 0.19..0.65, every 2 m, so it repeats without a seam (the cut falls on a bolt column and
-	// the ribs run straight through); v 0.2 at the top rail down to 0.9 at the kick rail.
-	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelUStart = 0.19f, PanelUSize = 0.46f;
+	// Panel UVs (measured from the game's texture and wall): one bolt-column spacing (0.46 in u) every
+	// 2 m, cut half way between the texture's two bolt columns (0.19 and 0.65), so every 2 m piece holds
+	// exactly one column and the ribs run straight through the cut; v 0.2 at the top rail down to 0.9
+	// at the kick rail.
+	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelUStart = 0.415f, PanelUSize = 0.46f;
 
 	// Cells of 2 m; each is built on its own so the panel texture restarts cleanly.
 	const int32 Cells = FMath::Max(1, FMath::CeilToInt((Length - 1.f) / Cell));
