@@ -88,12 +88,25 @@ void URMGameWorldModule::DumpGameTexturesForDevelopment()
 	}
 }
 
+TMap<TSubclassOf<UFGSchematic>, TArray<TSubclassOf<UFGRecipe>>> URMGameWorldModule::GetGameSchematicRecipes() const
+{
+	TMap<TSubclassOf<UFGSchematic>, TArray<TSubclassOf<UFGRecipe>>> Out;
+	if (mExtraRecipesSchematic)
+	{
+		Out.FindOrAdd(mExtraRecipesSchematic).Append(mExtraRecipes);
+	}
+	for (const TPair<TSubclassOf<UFGRecipe>, TSubclassOf<UFGSchematic>>& Pair : mRecipeUnlockedBy)
+	{
+		if (Pair.Key && Pair.Value)
+		{
+			Out.FindOrAdd(Pair.Value).AddUnique(Pair.Key);
+		}
+	}
+	return Out;
+}
+
 void URMGameWorldModule::AddRecipesToGameSchematic()
 {
-	if (!mExtraRecipesSchematic || mExtraRecipes.Num() == 0)
-	{
-		return;
-	}
 	// mRecipes of UFGUnlockRecipe is protected: write it through reflection. The schematic's default
 	// object holds the unlock objects the game reads, so the milestone shows and unlocks the recipes.
 	FArrayProperty* RecipesProp = FindFProperty<FArrayProperty>(UFGUnlockRecipe::StaticClass(), TEXT("mRecipes"));
@@ -102,28 +115,36 @@ void URMGameWorldModule::AddRecipesToGameSchematic()
 		UE_LOG(LogRoadMaker, Warning, TEXT("UFGUnlockRecipe::mRecipes not found; extra recipes not added"));
 		return;
 	}
-	for (UFGUnlock* Unlock : UFGSchematic::GetUnlocks(mExtraRecipesSchematic))
+	for (const TPair<TSubclassOf<UFGSchematic>, TArray<TSubclassOf<UFGRecipe>>>& Entry : GetGameSchematicRecipes())
 	{
-		if (UFGUnlockRecipe* RecipeUnlock = Cast<UFGUnlockRecipe>(Unlock))
+		bool bDone = false;
+		for (UFGUnlock* Unlock : UFGSchematic::GetUnlocks(Entry.Key))
 		{
-			TArray<TSubclassOf<UFGRecipe>>* List = RecipesProp->ContainerPtrToValuePtr<TArray<TSubclassOf<UFGRecipe>>>(RecipeUnlock);
-			int32 Added = 0;
-			for (const TSubclassOf<UFGRecipe>& Recipe : mExtraRecipes)
+			if (UFGUnlockRecipe* RecipeUnlock = Cast<UFGUnlockRecipe>(Unlock))
 			{
-				if (Recipe && !List->Contains(Recipe))
+				TArray<TSubclassOf<UFGRecipe>>* List = RecipesProp->ContainerPtrToValuePtr<TArray<TSubclassOf<UFGRecipe>>>(RecipeUnlock);
+				int32 Added = 0;
+				for (const TSubclassOf<UFGRecipe>& Recipe : Entry.Value)
 				{
-					List->Add(Recipe);
-					++Added;
+					if (Recipe && !List->Contains(Recipe))
+					{
+						List->Add(Recipe);
+						++Added;
+					}
 				}
+				if (Added > 0)
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("Added %d recipe(s) to %s"), Added, *Entry.Key->GetName());
+				}
+				bDone = true;
+				break;
 			}
-			if (Added > 0)
-			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Added %d recipe(s) to %s"), Added, *mExtraRecipesSchematic->GetName());
-			}
-			return;
+		}
+		if (!bDone)
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("%s has no recipe unlock; extra recipes not added"), *Entry.Key->GetName());
 		}
 	}
-	UE_LOG(LogRoadMaker, Warning, TEXT("%s has no recipe unlock; extra recipes not added"), *mExtraRecipesSchematic->GetName());
 }
 
 void URMGameWorldModule::RegisterFenceWallMaterials()
@@ -201,17 +222,24 @@ void URMGameWorldModule::AddRecipesAlongsideGameRecipes()
 void URMGameWorldModule::GrantExtraRecipesIfPurchased()
 {
 	UWorld* World = GetWorld();
-	if (!World || World->GetNetMode() == NM_Client || !mExtraRecipesSchematic)
+	if (!World || World->GetNetMode() == NM_Client)
 	{
 		return;
 	}
 	AFGSchematicManager* Schematics = AFGSchematicManager::Get(World);
 	AFGRecipeManager* Recipes = AFGRecipeManager::Get(World);
-	if (Schematics && Recipes && Schematics->IsSchematicPurchased(mExtraRecipesSchematic))
+	if (!Schematics || !Recipes)
 	{
-		TArray<TSubclassOf<UFGRecipe>> ToAdd = mExtraRecipes;
-		Recipes->AddAvailableRecipes(ToAdd);
-		UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d extra recipe(s) of bought %s"), ToAdd.Num(), *mExtraRecipesSchematic->GetName());
+		return;
+	}
+	for (const TPair<TSubclassOf<UFGSchematic>, TArray<TSubclassOf<UFGRecipe>>>& Entry : GetGameSchematicRecipes())
+	{
+		if (Schematics->IsSchematicPurchased(Entry.Key))
+		{
+			TArray<TSubclassOf<UFGRecipe>> ToAdd = Entry.Value;
+			Recipes->AddAvailableRecipes(ToAdd);
+			UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d extra recipe(s) of bought %s"), ToAdd.Num(), *Entry.Key->GetName());
+		}
 	}
 }
 

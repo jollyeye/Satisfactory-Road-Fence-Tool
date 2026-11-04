@@ -11,7 +11,7 @@ enum class ERMFenceType : uint8
 	GuardRail     UMETA(DisplayName = "Metal Guard Rail"),
 	JerseyBarrier UMETA(DisplayName = "Cement Blocks"),
 	GridFence     UMETA(DisplayName = "Metal Grid Fence"),
-	GridFenceTall UMETA(DisplayName = "Metal Grid Fence (4m tall)"),
+	GridFenceTall UMETA(DisplayName = "Steel Mesh Fence Wall"),
 	ConcreteWall  UMETA(DisplayName = "Concrete Fence Wall"),
 	SteelWall     UMETA(DisplayName = "Steel Fence Wall"),
 	FicsitWall    UMETA(DisplayName = "FICSIT Fence Wall"),
@@ -72,8 +72,16 @@ public:
 	static uint8 LookOfType(ERMFenceType Type);
 
 	/** Fence walls stack: a new wall aimed at one goes on top of it. */
+	/** Fence walls (4 m, stack, replace each other): the concrete / FICSIT / steel walls and the steel mesh wall. */
 	bool IsWall() const { return IsWallType(mFenceType); }
 	static bool IsWallType(ERMFenceType Type)
+	{
+		return HasLooksType(Type) || Type == ERMFenceType::GridFenceTall;
+	}
+
+	/** Fence walls whose look the customizer's Material tab switches (concrete / FICSIT / steel). */
+	bool HasLooks() const { return HasLooksType(mFenceType); }
+	static bool HasLooksType(ERMFenceType Type)
 	{
 		return Type == ERMFenceType::ConcreteWall || Type == ERMFenceType::SteelWall || Type == ERMFenceType::FicsitWall;
 	}

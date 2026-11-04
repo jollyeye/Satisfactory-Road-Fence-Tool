@@ -256,6 +256,21 @@ if VehiclePathSubCat:
 # Fence walls: build menu Walls tab, own section "Fence Walls"; unlocked by the game's Tier 1
 # Base Building milestone (added at runtime by the world module), not by the Road Maker milestone.
 FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel"}
+# Everything in the Walls tab, Fence Walls section (the steel mesh wall too).
+WALLS_MENU = FENCE_WALLS | {"Fence_GridTall"}
+
+basic_steel = None
+for sname in ("Schematic_3-1", "Schematic_3-2", "Schematic_3-3", "Schematic_3-4"):
+    scls = load_game_class(sname)
+    if not scls:
+        continue
+    dn = str(getp(unreal.get_default_object(scls), "m_display_name", "mDisplayName") or "")
+    log("  %s = '%s'" % (sname, dn))
+    if "steel" in dn.lower():
+        basic_steel = scls
+if not basic_steel:
+    log("  ! 'Basic Steel Production' not found by name")
+recipe_unlocked_by = {}
 # Texture layout of each game wall material on the fence wall (see FRMWallTexLayout):
 # (u at panel centre, u per metre, v at the top, v per metre, mirrored half panel)
 WALL_LAYOUTS = {
@@ -303,8 +318,8 @@ TOOLS = [
      {"m_fence_type": "JERSEY_BARRIER"}, [(Desc_Cement, 3)], fence_icons, {"m_main_material": mat_concrete}),
     ("Fence_Grid", RMBuildableFence, holo_fence, "Metal Grid Fence", "Metal grid fence. Aim at a road to follow its edge. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE"}, [(Desc_IronRod, 1), (Desc_Wire, 2)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
-    ("Fence_GridTall", RMBuildableFence, holo_fence, "Metal Grid Fence (4m tall)", "Tall metal grid fence, 4 m high. Aim at a road to follow its edge. Cost is per 4 m.",
-     {"m_fence_type": "GRID_FENCE_TALL"}, [(Desc_IronRod, 2), (Desc_Wire, 4)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
+    ("Fence_GridTall", RMBuildableFence, holo_fence, "Steel Mesh Fence Wall", "4 m steel frame with a diamond wire mesh. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it, or hold the snap key to replace it. Cost is per 4 m.",
+     {"m_fence_type": "GRID_FENCE_TALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("FenceWall_Concrete", RMBuildableFence, holo_fence, "Concrete Fence Wall", "4 m concrete wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted. Cost is per 4 m.",
      {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Ficsit", RMBuildableFence, holo_fence, "FICSIT Fence Wall", "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
@@ -397,7 +412,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, b.generated_class(), "m_buildable_class", "mBuildableClass")
     setp(dc, text(display), "m_display_name", "mDisplayName")
     setp(dc, text(desc), "m_description", "mDescription")
-    if name in FENCE_WALLS and WallsCat and wall_subcat:
+    if name in WALLS_MENU and WallsCat and wall_subcat:
         setp(dc, WallsCat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [wall_subcat], "m_sub_categories", "mSubCategories")
     else:
@@ -426,11 +441,14 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     finish(r)
     if name in FENCE_WALLS:
         fence_wall_recipes[name] = r.generated_class()
-    if name in FENCE_WALLS:
+    if name in WALLS_MENU:
         # Fence walls are never in the Road Maker milestone: FICSIT unlocks with Base Building,
-        # concrete and steel with the game's concrete / steel wall materials (AWESOME Shop).
+        # concrete and steel with the game's concrete / steel wall materials (AWESOME Shop), the
+        # steel mesh wall with Tier 3 Basic Steel Production.
         if name == "FenceWall_Ficsit" and base_building:
             wall_recipes.append(r.generated_class())
+        if name == "Fence_GridTall" and basic_steel:
+            recipe_unlocked_by[r.generated_class()] = basic_steel
     else:
         recipes.append(r.generated_class())
 
@@ -624,6 +642,11 @@ try:
     g.set_editor_property("m_fence_wall_material_recipes", mat_map)
 except Exception as e:
     log("  ! fence wall material map: %s" % e)
+try:
+    g.set_editor_property("m_recipe_unlocked_by", recipe_unlocked_by)
+    log("  steel mesh fence wall unlocks with %s" % (basic_steel.get_name() if basic_steel else "nothing"))
+except Exception as e:
+    log("  ! recipe unlocked by: %s" % e)
 if base_building:
     setp(g, base_building, "m_extra_recipes_schematic", "mExtraRecipesSchematic")
     setp(g, wall_recipes, "m_extra_recipes", "mExtraRecipes")

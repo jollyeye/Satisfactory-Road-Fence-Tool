@@ -41,11 +41,12 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Side lines along the curbs (Road Lines › Sidelines).
 
 ### Fences
-- **Guard Rail**, **Cement Blocks** (with block joints), **Metal Grid Fence** and **Metal Grid Fence (4m tall)**.
+- **Guard Rail**, **Cement Blocks** (with block joints) and **Metal Grid Fence**.
 - Aim at a road: the fence follows the whole edge on the side you look at, facing the road. On an intersection it follows the curb.
 - Free placement anywhere, snapping to the foundation grid.
 
-### Concrete Fence Wall — Walls › Fence Walls
+### Fence Walls — Walls › Fence Walls
+- **Steel Mesh Fence Wall** (the former 4 m metal grid fence): a 4 m steel frame with diamond mesh, unlocked with Tier 3 **Basic Steel Production**, built and stacked like the other fence walls.
 - A 4 m tall, 0.5 m thick concrete wall centred on the road edge (or an intersection's curb), following it like the fences.
 - Aim at the upper or lower half of a fence wall to stack another one above or below it. Hold the snap key (Ctrl) to replace the aimed fence wall instead, like the game's walls.
 - Uses the game's own wall materials: paints exactly like the game's walls, and the customizer's Material tab switches it between concrete, FICSIT and steel in place (with a preview while aiming).
@@ -64,7 +65,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.1.0
-- **New: Fence Walls** (Walls › Fence Walls; FICSIT with Tier 1 Base Building, concrete and steel with their wall materials): a 4 m wall along the road edge or an intersection curb, stackable, paintable, in concrete, FICSIT or steel (switchable in the customizer).
+- **New: Fence Walls** (Walls › Fence Walls; the 4 m metal grid fence is now the Steel Mesh Fence Wall, unlocked with Basic Steel Production; FICSIT with Tier 1 Base Building, concrete and steel with their wall materials): a 4 m wall along the road edge or an intersection curb, stackable, paintable, in concrete, FICSIT or steel (switchable in the customizer).
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane of a road: the path or track is laid along the whole lane, end to end — click to build. Scroll flips the direction; next to an existing path it continues that path's direction and joins it, and tracks connect to free track ends.
 - **One-click intersection connections:** hold a vehicle path or railway track and the snap key (Ctrl) and aim at an intersection: every arriving path is connected to every leaving path on the other ends (no U-turns), and every track end to the track in the same lane on each other end (left to left, middle to middle, right to right, in the travel direction; switches form on their own), shown at once; one click builds them all. If one connection is invalid (red), improve the intersection until all of them fit.
 - **New intersection placement:** click each free road end to pick it (up to 6, up to 200 m apart; click again to drop it), then click away from the ends to build. The aimed end gets an orange outline, picked ends a white outline and an arrow, visible through other buildings.

@@ -30,7 +30,10 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	if (GetFenceDefaults()->IsWall())
 	{
 		ARMBuildableFence* Other = Cast<ARMBuildableFence>(hitResult.GetActor());
-		if (Other && Other->IsWall() && mSnapToGuideLines)
+		// Replacing needs a different wall: another type, or the same type showing another look.
+		const ERMFenceType OwnType = GetFenceDefaults()->mFenceType;
+		const bool bSameWall = Other && Other->GetEffectiveType() == OwnType;
+		if (Other && Other->IsWall() && mSnapToGuideLines && !bSameWall)
 		{
 			TArray<FRMSplinePoint> Points;
 			Other->GetWorldSplinePoints(Points);

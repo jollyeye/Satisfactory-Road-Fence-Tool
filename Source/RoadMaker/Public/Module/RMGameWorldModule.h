@@ -62,6 +62,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TArray<TSubclassOf<class UFGRecipe>> mExtraRecipes;
 
+	/** More recipes unlocked by game milestones: recipe -> the milestone that unlocks it. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TMap<TSubclassOf<class UFGRecipe>, TSubclassOf<class UFGSchematic>> mRecipeUnlockedBy;
+
+	/** All game milestones that unlock our recipes, with those recipes. */
+	TMap<TSubclassOf<class UFGSchematic>, TArray<TSubclassOf<class UFGRecipe>>> GetGameSchematicRecipes() const;
+
 	/** Swatch new roads use until the player picks another default for "Roads". */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGFactoryCustomizationDescriptor_Swatch> mDefaultRoadSwatch;

@@ -130,7 +130,7 @@ uint8 ARMBuildableFence::LookOfType(ERMFenceType Type)
 
 ERMFenceType ARMBuildableFence::GetEffectiveType() const
 {
-	if (!IsWall())
+	if (!HasLooks())
 	{
 		return mFenceType;
 	}
@@ -145,7 +145,7 @@ ERMFenceType ARMBuildableFence::GetEffectiveType() const
 
 UMaterialInterface* ARMBuildableFence::GetEffectiveMainMaterial() const
 {
-	const uint8 Look = IsWall() ? (mPreviewWallLook ? mPreviewWallLook : mWallLook) : 0;
+	const uint8 Look = HasLooks() ? (mPreviewWallLook ? mPreviewWallLook : mWallLook) : 0;
 	if (Look > 0 && mWallLookMaterials.IsValidIndex(Look - 1) && mWallLookMaterials[Look - 1])
 	{
 		return mWallLookMaterials[Look - 1];
@@ -172,7 +172,7 @@ namespace
 void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const
 {
 	const uint8 Look = GetShownLook();
-	if (!IsWall() || mWallLook == 0 || !mWallLookRecipes.IsValidIndex(Look - 1) || !mWallLookRecipes[Look - 1])
+	if (!HasLooks() || mWallLook == 0 || !mWallLookRecipes.IsValidIndex(Look - 1) || !mWallLookRecipes[Look - 1])
 	{
 		Super::GetDismantleRefund_Implementation(out_refund, noBuildCostEnabled);
 		return;
@@ -192,7 +192,7 @@ void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack
 
 bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 {
-	if (!IsWall() || Look < 1 || Look > 3 || Look == GetShownLook())
+	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook())
 	{
 		return false;
 	}
@@ -236,7 +236,7 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 
 void ARMBuildableFence::SetPreviewWallLook(uint8 Look)
 {
-	if (!IsWall() || Look == mPreviewWallLook)
+	if (!HasLooks() || Look == mPreviewWallLook)
 	{
 		return;
 	}

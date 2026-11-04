@@ -64,7 +64,7 @@ namespace
 			return nullptr;
 		}
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
-		return Wall && Wall->IsWall() ? Wall : nullptr;
+		return Wall && Wall->HasLooks() ? Wall : nullptr;
 	}
 
 	void FenceWallClearPreview()
