@@ -1011,6 +1011,9 @@ namespace
 
 	// --- Intersection connections (vehicle path + snap key, aiming at an intersection) --------------
 
+	/** Main and child holograms currently showing intersection connections (softer rules apply). */
+	TSet<TWeakObjectPtr<const AFGHologram>> GJunctionHolograms;
+
 	/** A path end at an intersection end: arriving (a path ends there) or leaving (a path starts there). */
 	struct FJunctionNode
 	{
@@ -1107,6 +1110,7 @@ namespace
 	 */
 	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link)
 	{
+		GJunctionHolograms.Add(H);
 		FPathState& State = GPathStates.FindOrAdd(H);
 		State.bLaneMode = true;
 		State.bStartStep = false;
@@ -1157,11 +1161,44 @@ namespace
 		}
 	};
 
+	/**
+	 * Intersection connections ignore the game's path rules (turn sharpness, shape, floor,
+	 * clearance), keeping only cost: tight intersections would otherwise lose most turns.
+	 */
+	struct FRMDisqualifierAccess : public AFGHologram
+	{
+		static void DropSoftRules(AFGHologram* Hologram)
+		{
+			FRMDisqualifierAccess* Self = static_cast<FRMDisqualifierAccess*>(Hologram);
+			static TSet<FString> Logged;
+			const int32 Before = Self->mConstructDisqualifiers.Num();
+			Self->mConstructDisqualifiers.RemoveAll([](const TSubclassOf<UFGConstructDisqualifier>& D)
+			{
+				const FString Name = D ? D->GetName() : FString();
+				if (Name.Contains(TEXT("Afford")) || Name.Contains(TEXT("Cost")) || Name.Contains(TEXT("Resource")))
+				{
+					return false; // keep: cannot pay for it
+				}
+				if (!Logged.Contains(Name))
+				{
+					Logged.Add(Name);
+					UE_LOG(LogRoadMaker, Display, TEXT("Intersection connections: ignoring rule %s"), *Name);
+				}
+				return true;
+			});
+			if (Before > 0 && Self->mConstructDisqualifiers.Num() == 0)
+			{
+				Hologram->SetPlacementMaterialState(EHologramMaterialState::HMS_OK);
+			}
+		}
+	};
+
 	/** Detaches and deletes one connection child. */
 	void RemoveJunctionChild(AFGHologram* Parent, TWeakObjectPtr<AFGHologram>& Slot)
 	{
 		if (AFGHologram* Child = Slot.Get())
 		{
+			GJunctionHolograms.Remove(Child);
 			FRMChildAccess::Detach(Parent, Child);
 			GPathStates.Remove(Child);
 			Child->Destroy();
@@ -1191,6 +1228,7 @@ namespace
 		}
 		GJunctionParentLink.Remove(Parent);
 		GJunctionCache.Remove(Parent);
+		GJunctionHolograms.Remove(Parent);
 	}
 
 	/**
@@ -1613,6 +1651,15 @@ void RMVanillaSnapping::InstallHooks()
 				Scope.Cancel();
 			}
 		});
+
+	// Intersection connections: softer path rules (see FRMDisqualifierAccess).
+	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Hologram, UFGInventoryComponent* Inventory)
+	{
+		if (Hologram && GJunctionHolograms.Contains(Hologram))
+		{
+			FRMDisqualifierAccess::DropSoftRules(Hologram);
+		}
+	});
 
 	// Lane tracks: after placing the hologram the game runs a post-placement step in which the rail
 	// tool routes its own track again from the crosshair hit; in lane mode that second track showed up
