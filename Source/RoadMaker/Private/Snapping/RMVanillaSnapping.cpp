@@ -996,7 +996,9 @@ namespace
 		// End step: place the end, then the lane points replace the game's curve.
 		SetRailStep(Hologram, 2);
 		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
-		Hologram->SetScrollRotateValue(FMath::RoundToInt(EndDir.Rotation().Yaw));
+		// The game's own end heading here points back out of the track (its curve looped back on
+		// itself with the travel direction), so it gets the opposite of the travel direction.
+		Hologram->SetScrollRotateValue(FMath::RoundToInt(FRotator::NormalizeAxis(EndDir.Rotation().Yaw + 180.f)));
 		{
 			TGuardValue<bool> Guard(GInPathReplace, true);
 			Hologram->SetHologramLocationAndRotation(MoveHit(Hit, Points.Last()));
