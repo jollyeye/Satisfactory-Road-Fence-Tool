@@ -1139,6 +1139,15 @@ namespace
 		SetPathSplineWorld(H, { Curve[0].Location, Curve[1].Location }, { Curve[0].Tangent, Curve[1].Tangent });
 	}
 
+	/** What the junction holograms were last set up for, so unchanged frames cost nothing. */
+	struct FJunctionCache
+	{
+		TWeakObjectPtr<const ARMBuildableIntersection> Intersection;
+		TArray<TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>> Signature;
+		double LastScan = 0.0;
+	};
+	TMap<TWeakObjectPtr<const AFGHologram>, FJunctionCache> GJunctionCache;
+
 	/** Hides and switches off the connection children (leaving junction mode). */
 	void ReleaseJunction(AFGHologram* Parent)
 	{
@@ -1154,12 +1163,14 @@ namespace
 			}
 		}
 		GJunctionParentLink.Remove(Parent);
+		GJunctionCache.Remove(Parent);
 	}
 
 	/**
 	 * Vehicle path + snap key aiming at an intersection: every connection between the paths at its
 	 * ends is shown at once (main hologram + child holograms) and one click builds the valid ones.
 	 */
+
 	template <typename TScope, typename THologram>
 	bool PlaceJunction(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableIntersection* X)
 	{
@@ -1169,31 +1180,49 @@ namespace
 		{
 			return false;
 		}
+
+		// Unchanged since last set up (same intersection, scanned recently): leave everything in place.
+		FJunctionCache& Cache = GJunctionCache.FindOrAdd(Parent);
+		const double Now = FPlatformTime::Seconds();
+		const FPathState* Existing = GPathStates.Find(Parent);
+		if (Cache.Intersection.Get() == X && Existing && Existing->bLaneMode && Now - Cache.LastScan < 0.5)
+		{
+			Scope.Cancel();
+			return true;
+		}
+
 		TArray<FJunctionLink> Links;
 		FindJunctionLinks(World, X, Links);
 		if (Links.Num() == 0)
 		{
+			Cache = FJunctionCache();
 			return false;
 		}
+		TArray<TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>> Signature;
+		for (const FJunctionLink& L : Links)
+		{
+			Signature.Add(TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>(L.In.Node, L.Out.Node));
+		}
 		Scope.Cancel(); // everything is placed below, through the game's code
+		Cache.LastScan = Now;
+		if (Cache.Intersection.Get() == X && Cache.Signature == Signature && Existing && Existing->bLaneMode)
+		{
+			return true; // same connections as before: already placed and checked
+		}
+		Cache.Intersection = X;
+		Cache.Signature = Signature;
 
-		// The main hologram shows a connection that was valid last frame (it cannot be switched off).
-		int32& ParentLink = GJunctionParentLink.FindOrAdd(Parent);
-		ParentLink = FMath::Clamp(ParentLink, 0, Links.Num() - 1);
-		SetupJunctionHologram(Parent, Hit, Links[ParentLink]);
-
-		// Children for the other connections.
-		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
 		AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(Parent->GetConstructionInstigator());
 		UFGInventoryComponent* Inventory = Player ? Player->GetInventory() : nullptr;
-		int32 ChildIndex = 0;
-		int32 FirstValidChildLink = -1;
-		for (int32 L = 0; L < Links.Num(); ++L)
+
+		// Pass 1: place every connection (main hologram takes link 0 for now, children the rest).
+		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
+		TArray<AFGVehiclePathSegmentHologram*> LinkHolograms; // per link
+		LinkHolograms.Add(Parent);
+		SetupJunctionHologram(Parent, Hit, Links[0]);
+		for (int32 L = 1; L < Links.Num(); ++L)
 		{
-			if (L == ParentLink)
-			{
-				continue;
-			}
+			const int32 ChildIndex = L - 1;
 			if (!Children.IsValidIndex(ChildIndex) || !Children[ChildIndex].IsValid())
 			{
 				const FName Name(*FString::Printf(TEXT("RMJunction%d"), ChildIndex));
@@ -1212,28 +1241,16 @@ namespace
 				}
 			}
 			AFGVehiclePathSegmentHologram* Child = Cast<AFGVehiclePathSegmentHologram>(Children[ChildIndex].Get());
-			++ChildIndex;
 			if (!Child)
 			{
-				continue;
+				break;
 			}
 			Child->SetDisabled(false);
 			Child->SetActorHiddenInGame(false);
 			SetupJunctionHologram(Child, Hit, Links[L]);
-			// The game's own check for this one connection; invalid ones are switched off (not built).
-			if (Inventory)
-			{
-				Child->ValidatePlacementAndCost(Inventory);
-			}
-			const bool bValid = Child->CanConstruct();
-			Child->SetDisabled(!bValid);
-			Child->SetActorHiddenInGame(!bValid);
-			if (bValid && FirstValidChildLink < 0)
-			{
-				FirstValidChildLink = L;
-			}
+			LinkHolograms.Add(Child);
 		}
-		for (int32 C = ChildIndex; C < Children.Num(); ++C)
+		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
 		{
 			if (AFGHologram* Unused = Children[C].Get())
 			{
@@ -1241,10 +1258,48 @@ namespace
 				Unused->SetActorHiddenInGame(true);
 			}
 		}
-		// If the main hologram's connection was refused last frame, show a valid one there next frame.
-		if (!Parent->CanConstruct() && FirstValidChildLink >= 0)
+
+		// Pass 2: check each connection with all the others in place; switch off the invalid ones.
+		TArray<bool> Valid;
+		Valid.Init(true, LinkHolograms.Num());
+		for (int32 L = 0; L < LinkHolograms.Num(); ++L)
 		{
-			ParentLink = FirstValidChildLink;
+			AFGVehiclePathSegmentHologram* H = LinkHolograms[L];
+			if (Inventory)
+			{
+				// Children are checked on their own; the main hologram's own check would include them.
+				if (L > 0)
+				{
+					H->ValidatePlacementAndCost(Inventory);
+				}
+			}
+			if (L > 0)
+			{
+				Valid[L] = H->CanConstruct();
+				H->SetDisabled(!Valid[L]);
+				H->SetActorHiddenInGame(!Valid[L]);
+			}
+		}
+		if (Inventory)
+		{
+			Parent->ValidatePlacementAndCost(Inventory); // the main connection (children now settled)
+			Valid[0] = Parent->CanConstruct();
+		}
+
+		// The main hologram cannot be switched off: if its connection is invalid, give it a valid
+		// connection instead and switch off the child that had it.
+		if (!Valid[0])
+		{
+			for (int32 L = 1; L < LinkHolograms.Num(); ++L)
+			{
+				if (Valid[L])
+				{
+					SetupJunctionHologram(Parent, Hit, Links[L]);
+					LinkHolograms[L]->SetDisabled(true);
+					LinkHolograms[L]->SetActorHiddenInGame(true);
+					break;
+				}
+			}
 		}
 		return true;
 	}
