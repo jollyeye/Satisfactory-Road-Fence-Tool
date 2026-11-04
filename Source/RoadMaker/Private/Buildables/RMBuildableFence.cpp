@@ -282,7 +282,6 @@ void ARMBuildableFence::CopyShapeTo(ARMBuildableFence* Other) const
 	}
 	Other->SetActorTransform(GetActorTransform());
 	Other->SetInwardSign(mInwardSign);
-	Other->mWallLook = mWallLook;
 	Other->SetCostMultiplier(mCostMultiplier);
 	Other->SetSplinePoints(mSplinePoints);
 	Other->RebuildMesh();

@@ -47,7 +47,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 
 ### Concrete Fence Wall — Walls › Fence Walls
 - A 4 m tall, 0.5 m thick concrete wall centred on the road edge (or an intersection's curb), following it like the fences.
-- Aim at the upper or lower half of a fence wall to stack another one above or below it.
+- Aim at the upper or lower half of a fence wall to stack another one above or below it. Hold the snap key (Ctrl) to replace the aimed fence wall instead, like the game's walls.
 - Uses the game's own wall materials: paints exactly like the game's walls, and the customizer's Material tab switches it between concrete, FICSIT and steel in place (with a preview while aiming).
 - The FICSIT fence wall unlocks with the Tier 1 **Base Building** milestone; the concrete and steel fence walls unlock with the game's concrete and steel wall materials. Switching material costs the difference, like the game's walls.
 

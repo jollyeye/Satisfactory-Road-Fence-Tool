@@ -31,6 +31,11 @@ public:
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** Fence wall + snap key aimed at a fence wall: this one replaces it (the game's upgrade flow). */
+	virtual AActor* GetUpgradedActor() const override { return mReplaceTarget; }
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
+
 protected:
 	/** Aiming at a road: follow its edge on the side you look at. */
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
@@ -50,6 +55,14 @@ protected:
 	float mFoundationGridStep = 100.f;
 
 	bool mOnRoadEdge = false;
+
+	/** The fence wall this hologram replaces (snap key held, aiming at it), else null. */
+	UPROPERTY(Replicated, CustomSerialization)
+	AActor* mReplaceTarget = nullptr;
+
+	/** That wall, hidden locally while the hologram stands in its place. */
+	TWeakObjectPtr<AActor> mHiddenTarget;
+	void SetHiddenTarget(AActor* Target);
 
 	/** Side of the fence the road is on (see ARMBuildableFence::SetInwardSign). */
 	UPROPERTY(Replicated, CustomSerialization)

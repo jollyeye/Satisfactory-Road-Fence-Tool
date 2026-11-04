@@ -6,6 +6,9 @@
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "RMRoadUtils.h"
+#include "FGCharacterPlayer.h"
+#include "FGInventoryComponent.h"
+#include "FGDismantleInterface.h"
 
 const ARMBuildableFence* ARMFenceHologram::GetFenceDefaults() const
 {
@@ -22,10 +25,25 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 		return SnapToFoundationGrid(hitResult);
 	}
 	// Fence walls stack: aiming at the upper half of a fence wall puts the new one right on top of
-	// it, the lower half right below it, same course.
+	// it, the lower half right below it, same course. With the snap key held the new wall takes the
+	// aimed wall's place instead and replaces it on click, like the game's walls.
 	if (GetFenceDefaults()->IsWall())
 	{
-		const ARMBuildableFence* Other = Cast<ARMBuildableFence>(hitResult.GetActor());
+		ARMBuildableFence* Other = Cast<ARMBuildableFence>(hitResult.GetActor());
+		if (Other && Other->IsWall() && mSnapToGuideLines)
+		{
+			TArray<FRMSplinePoint> Points;
+			Other->GetWorldSplinePoints(Points);
+			if (Points.Num() >= 2)
+			{
+				mInwardSign = Other->GetInwardSign();
+				mOnRoadEdge = true;
+				mReplaceTarget = Other;
+				SetHiddenTarget(Other);
+				SetWorldPoints(Points);
+				return true;
+			}
+		}
 		if (Other && Other->IsWall())
 		{
 			TArray<FRMSplinePoint> Points;
@@ -163,7 +181,65 @@ void ARMFenceHologram::SetHologramLocationAndRotation(const FHitResult& hitResul
 {
 	mOnRoadEdge = false;
 	mInwardSign = 1.f;
+	mReplaceTarget = nullptr;
 	Super::SetHologramLocationAndRotation(hitResult);
+	if (!mReplaceTarget)
+	{
+		SetHiddenTarget(nullptr);
+	}
+}
+
+void ARMFenceHologram::SetHiddenTarget(AActor* Target)
+{
+	if (mHiddenTarget.Get() == Target)
+	{
+		return;
+	}
+	if (AActor* Old = mHiddenTarget.Get())
+	{
+		Old->SetActorHiddenInGame(false);
+	}
+	mHiddenTarget = Target;
+	if (Target)
+	{
+		Target->SetActorHiddenInGame(true); // the hologram stands exactly where it is
+	}
+}
+
+AActor* ARMFenceHologram::Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID)
+{
+	AActor* Target = mReplaceTarget;
+	AActor* Built = Super::Construct(out_children, constructionID);
+	// Replacing a fence wall: if the game's upgrade flow did not remove the old wall, remove it here
+	// and give its cost back to the player (as dismantling would).
+	ARMBuildableFence* Old = Cast<ARMBuildableFence>(Target);
+	if (Built && Old && Old != Built && IsValid(Old) && !Old->IsActorBeingDestroyed() && !Old->GetIsDismantled()
+		&& !Old->GetIsPendingDismantleRemoval() && Old->HasAuthority())
+	{
+		TArray<FInventoryStack> Refund;
+		IFGDismantleInterface::Execute_GetDismantleRefund(Old, Refund, false);
+		IFGDismantleInterface::Execute_PreUpgrade(Old);
+		IFGDismantleInterface::Execute_Upgrade(Old, Built);
+		IFGDismantleInterface::Execute_Dismantle(Old);
+		if (AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(GetConstructionInstigator()))
+		{
+			if (UFGInventoryComponent* Inventory = Player->GetInventory())
+			{
+				for (const FInventoryStack& Stack : Refund)
+				{
+					Inventory->AddStack(Stack, true);
+				}
+			}
+		}
+	}
+	SetHiddenTarget(nullptr);
+	return Built;
+}
+
+void ARMFenceHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	SetHiddenTarget(nullptr);
+	Super::EndPlay(EndPlayReason);
 }
 
 bool ARMFenceHologram::DoMultiStepPlacement(bool isInputFromARelease)
@@ -211,6 +287,7 @@ void ARMFenceHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMFenceHologram, mInwardSign);
+	DOREPLIFETIME(ARMFenceHologram, mReplaceTarget);
 }
 
 void ARMFenceHologram::ConfigureActor(AFGBuildable* inBuildable) const
