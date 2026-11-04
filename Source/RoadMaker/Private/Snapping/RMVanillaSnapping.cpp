@@ -1139,6 +1139,36 @@ namespace
 		SetPathSplineWorld(H, { Curve[0].Location, Curve[1].Location }, { Curve[0].Tangent, Curve[1].Tangent });
 	}
 
+	/** Protected hologram child lists: detaching a child so the main hologram no longer checks or builds it. */
+	struct FRMChildAccess : public AFGHologram
+	{
+		static void Detach(AFGHologram* Parent, AFGHologram* Child)
+		{
+			FRMChildAccess* Self = static_cast<FRMChildAccess*>(Parent);
+			Self->mChildren.Remove(Child);
+			for (auto It = Self->mChildrenNameLookupMap.CreateIterator(); It; ++It)
+			{
+				if (It.Value() == Child)
+				{
+					It.RemoveCurrent();
+				}
+			}
+			static_cast<FRMChildAccess*>(Child)->mParent = nullptr;
+		}
+	};
+
+	/** Detaches and deletes one connection child. */
+	void RemoveJunctionChild(AFGHologram* Parent, TWeakObjectPtr<AFGHologram>& Slot)
+	{
+		if (AFGHologram* Child = Slot.Get())
+		{
+			FRMChildAccess::Detach(Parent, Child);
+			GPathStates.Remove(Child);
+			Child->Destroy();
+		}
+		Slot.Reset();
+	}
+
 	/** What the junction holograms were last set up for, so unchanged frames cost nothing. */
 	struct FJunctionCache
 	{
@@ -1153,14 +1183,11 @@ namespace
 	{
 		if (TArray<TWeakObjectPtr<AFGHologram>>* Children = GJunctionChildren.Find(Parent))
 		{
-			for (const TWeakObjectPtr<AFGHologram>& C : *Children)
+			for (TWeakObjectPtr<AFGHologram>& C : *Children)
 			{
-				if (AFGHologram* Child = C.Get())
-				{
-					Child->SetDisabled(true);
-					Child->SetActorHiddenInGame(true);
-				}
+				RemoveJunctionChild(Parent, C);
 			}
+			Children->Reset();
 		}
 		GJunctionParentLink.Remove(Parent);
 		GJunctionCache.Remove(Parent);
@@ -1252,11 +1279,7 @@ namespace
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
 		{
-			if (AFGHologram* Unused = Children[C].Get())
-			{
-				Unused->SetDisabled(true);
-				Unused->SetActorHiddenInGame(true);
-			}
+			RemoveJunctionChild(Parent, Children[C]); // not needed now
 		}
 
 		// Pass 2: check each connection with all the others in place; switch off the invalid ones.
@@ -1276,8 +1299,15 @@ namespace
 			if (L > 0)
 			{
 				Valid[L] = H->CanConstruct();
-				H->SetDisabled(!Valid[L]);
-				H->SetActorHiddenInGame(!Valid[L]);
+			}
+		}
+		// Invalid connections are taken out completely (switching them off still blocked the click).
+		for (int32 L = 1; L < LinkHolograms.Num(); ++L)
+		{
+			if (!Valid[L])
+			{
+				RemoveJunctionChild(Parent, Children[L - 1]);
+				LinkHolograms[L] = nullptr;
 			}
 		}
 		if (Inventory)
@@ -1292,11 +1322,10 @@ namespace
 		{
 			for (int32 L = 1; L < LinkHolograms.Num(); ++L)
 			{
-				if (Valid[L])
+				if (Valid[L] && LinkHolograms[L])
 				{
 					SetupJunctionHologram(Parent, Hit, Links[L]);
-					LinkHolograms[L]->SetDisabled(true);
-					LinkHolograms[L]->SetActorHiddenInGame(true);
+					RemoveJunctionChild(Parent, Children[L - 1]); // the main hologram has it now
 					break;
 				}
 			}
