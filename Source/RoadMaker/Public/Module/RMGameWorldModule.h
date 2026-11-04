@@ -27,6 +27,12 @@ protected:
 	/** If that game milestone is already bought in this save, unlock the extra recipes now. */
 	void GrantExtraRecipesIfPurchased();
 
+	/**
+	 * Development only: draws a few game textures into PNG files in D:/SFMods/TextureDump (only if
+	 * D:/SFMods exists), because the editor project has placeholder textures only.
+	 */
+	void DumpGameTexturesForDevelopment();
+
 	/** A game milestone that also unlocks mExtraRecipes (the fence wall: Tier 1 Base Building). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGSchematic> mExtraRecipesSchematic;

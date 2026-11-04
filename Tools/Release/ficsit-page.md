@@ -46,8 +46,8 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - Free placement anywhere, snapping to the foundation grid.
 
 ### Concrete Fence Wall — Walls › Fence Walls
-- A 4 m tall, 0.5 m thick concrete wall that follows the road edge (right on the edge) or an intersection's curb, like the fences.
-- Aim at a fence wall to stack another one on top. Paintable like the game's walls.
+- A 4 m tall, 0.5 m thick concrete wall centred on the road edge (or an intersection's curb), following it like the fences.
+- Aim at the upper or lower half of a fence wall to stack another one above or below it. Paintable like the game's walls.
 - Unlocked with the Tier 1 **Base Building** milestone.
 
 ### Snapping for game buildings

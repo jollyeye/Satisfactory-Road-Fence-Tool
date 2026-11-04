@@ -322,17 +322,42 @@ MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
 finish(concrete)
 
-# --- Concrete fence wall: the concrete with panel seams, painted with the customizer colour --------
+# --- Concrete fence wall: the game's concrete wall texture, painted with the customizer colour -----
+# The wall mesh carries UV1 = (metres along, metres up), so the texture follows the curve. One
+# texture cell covers WALL_PERIOD (an 8 m x 4 m wall face) within WALL_RECT of the texture.
 # The wall pushes its primary colour as custom primitive data 24. Paint keeps the concrete's detail:
 # colour = paint * (concrete / its average brightness). The default (0.4 grey) gives plain concrete.
+WALL_TEX = "/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/"
+WALL_BC = WALL_TEX + "TX_WallSetConcrete_01_BC"
+WALL_N = WALL_TEX + "TX_WallSetConcrete_01_N"
+WALL_RECT = (0.0, 0.0, 1.0, 1.0)   # min u, min v, size u, size v (to be matched to the real atlas)
+WALL_PERIOD = (8.0, 4.0)           # metres along, metres up per cell
 CONCRETE_AVG = 0.4
+WALL_UV_HLSL = r"""
+float2 c = frac(float2(UV1.x / Period.x, 1.0 - UV1.y / Period.y));
+return Rect.xy + c * Rect.zw;
+"""
 fwall = new_material("M_RoadFenceWall")
-if tex_c:
-    fbase = atlas_sample(fwall, tex_c, RECT_TOP_LEFT, True, -900, 0)
-    if tex_cn:
-        world_normal(fwall, tex_cn, RECT_TOP_LEFT, True, None, -250, 900)
+tex_wbc = load_tex(WALL_BC)
+tex_wn = load_tex(WALL_N)
+fu1 = node(fwall, unreal.MaterialExpressionTextureCoordinate, -1300, 0, coordinate_index=1)
+fuv = custom(fwall, WALL_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "Rect", "Period"], -1050, 0, "WallUV")
+link(fu1, "", fuv, "UV1")
+link(node(fwall, unreal.MaterialExpressionConstant4Vector, -1300, 100, constant=unreal.LinearColor(*WALL_RECT)), "", fuv, "Rect")
+link(node(fwall, unreal.MaterialExpressionConstant2Vector, -1300, 200, r=WALL_PERIOD[0], g=WALL_PERIOD[1]), "", fuv, "Period")
+if tex_wbc:
+    fbase = node(fwall, unreal.MaterialExpressionTextureSample, -800, 0)
+    fbase.set_editor_property("texture", tex_wbc)
+    fbase.set_editor_property("sampler_type", sampler_for(tex_wbc))
+    link(fuv, "", fbase, "UVs")
 else:
     fbase = noise_blend(fwall, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
+if tex_wn:
+    fn = node(fwall, unreal.MaterialExpressionTextureSample, -800, 500)
+    fn.set_editor_property("texture", tex_wn)
+    fn.set_editor_property("sampler_type", sampler_for(tex_wn))
+    link(fuv, "", fn, "UVs")
+    MEL.connect_material_property(fn, "", MP.MP_NORMAL)
 fpaint = node(fwall, unreal.MaterialExpressionVectorParameter, -700, 300,
               parameter_name="PaintColor", default_value=unreal.LinearColor(CONCRETE_AVG, CONCRETE_AVG, CONCRETE_AVG, 1.0))
 fpaint.set_editor_property("use_custom_primitive_data", True)
@@ -349,6 +374,27 @@ MEL.connect_material_property(fsat, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(fwall, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
 finish(fwall)
 log("Concrete fence wall (paintable)")
+
+# --- Texture dump helpers (temporary): the editor only has placeholder game textures, so the mod
+# draws the real ones into PNG files once in game, to read the texture layout.
+for dname, dtex, normal in (("M_RM_TextureDump", tex_wbc, False), ("M_RM_TextureDumpN", tex_wn, True)):
+    dm = new_material(dname)
+    dm.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    tp = node(dm, unreal.MaterialExpressionTextureSampleParameter2D, -600, 0, parameter_name="Tex")
+    if dtex:
+        tp.set_editor_property("texture", dtex)
+        tp.set_editor_property("sampler_type", sampler_for(dtex))
+    if normal:
+        half = node(dm, unreal.MaterialExpressionMultiply, -350, 0)
+        link(tp, "", half, "A")
+        link(const(dm, 0.5, -500, 150), "", half, "B")
+        plus = node(dm, unreal.MaterialExpressionAdd, -200, 0)
+        link(half, "", plus, "A")
+        link(const(dm, 0.5, -350, 150), "", plus, "B")
+        MEL.connect_material_property(plus, "", MP.MP_EMISSIVE_COLOR)
+    else:
+        MEL.connect_material_property(tp, "", MP.MP_EMISSIVE_COLOR)
+    finish(dm)
 
 # --- Cement blocks: the earlier procedural concrete, finer, with block joints ----------------------
 # The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint

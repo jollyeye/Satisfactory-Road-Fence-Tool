@@ -9,6 +9,12 @@
 #include "FGSwatchGroup.h"
 #include "Buildables/RMSwatchGroupRoads.h"
 #include "UObject/UnrealType.h"
+#include "Kismet/KismetRenderingLibrary.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "Engine/Texture.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 
 void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
@@ -23,6 +29,50 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 		GrantRecipesOfPurchasedSchematics();
 		GrantExtraRecipesIfPurchased();
 		EnsureRoadSwatchGroup();
+		DumpGameTexturesForDevelopment();
+	}
+}
+
+void URMGameWorldModule::DumpGameTexturesForDevelopment()
+{
+	static bool bDone = false;
+	UWorld* World = GetWorld();
+	const FString Dir = TEXT("D:/SFMods/TextureDump");
+	if (bDone || !World || World->GetNetMode() == NM_DedicatedServer || !IFileManager::Get().DirectoryExists(TEXT("D:/SFMods")))
+	{
+		return;
+	}
+	bDone = true;
+	IFileManager::Get().MakeDirectory(*Dir, true);
+	UMaterialInterface* ColorMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_TextureDump.M_RM_TextureDump"));
+	UMaterialInterface* NormalMat = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_TextureDumpN.M_RM_TextureDumpN"));
+	struct FDump { const TCHAR* Path; bool bNormal; };
+	const FDump Dumps[] = {
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_01_BC.TX_WallSetConcrete_01_BC"), false },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_01_N.TX_WallSetConcrete_01_N"), true },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/Textures/TX_WallSetConcrete_8x1_BC.TX_WallSetConcrete_8x1_BC"), false },
+		{ TEXT("/Game/FactoryGame/Buildable/Building/Foundation/ConcreteSet/Textures/TX_Concrete_BC.TX_Concrete_BC"), false },
+	};
+	for (const FDump& D : Dumps)
+	{
+		UTexture* Tex = LoadObject<UTexture>(nullptr, D.Path);
+		UMaterialInterface* Mat = D.bNormal ? NormalMat : ColorMat;
+		if (!Tex || !Mat)
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("Texture dump: cannot load %s (material %s)"), D.Path, Mat ? TEXT("ok") : TEXT("missing"));
+			continue;
+		}
+		const int32 W = FMath::Clamp(FMath::RoundToInt(Tex->GetSurfaceWidth()), 64, 4096);
+		const int32 H = FMath::Clamp(FMath::RoundToInt(Tex->GetSurfaceHeight()), 64, 4096);
+		UTextureRenderTarget2D* RT = UKismetRenderingLibrary::CreateRenderTarget2D(World, W, H, RTF_RGBA8_SRGB);
+		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Mat, this);
+		MID->SetTextureParameterValue(TEXT("Tex"), Tex);
+		UKismetRenderingLibrary::DrawMaterialToRenderTarget(World, RT, MID);
+		FString Package, Object;
+		FString(D.Path).Split(TEXT("."), &Package, &Object);
+		const FString Name = Object + TEXT(".png");
+		UKismetRenderingLibrary::ExportRenderTarget(World, RT, Dir, Name);
+		UE_LOG(LogRoadMaker, Display, TEXT("Texture dump: %s (%dx%d) -> %s/%s"), D.Path, W, H, *Dir, *Name);
 	}
 }
 

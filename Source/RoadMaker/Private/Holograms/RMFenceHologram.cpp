@@ -21,19 +21,35 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	{
 		return SnapToFoundationGrid(hitResult);
 	}
-	// Fence walls stack: aiming at a fence wall puts the new one right on top of it, same course.
+	// Fence walls stack: aiming at the upper half of a fence wall puts the new one right on top of
+	// it, the lower half right below it, same course.
 	if (GetFenceDefaults()->IsWall())
 	{
-		const ARMBuildableFence* Under = Cast<ARMBuildableFence>(hitResult.GetActor());
-		if (Under && Under->IsWall())
+		const ARMBuildableFence* Other = Cast<ARMBuildableFence>(hitResult.GetActor());
+		if (Other && Other->IsWall())
 		{
 			TArray<FRMSplinePoint> Points;
-			Under->GetWorldSplinePoints(Points);
-			if (Points.Num() >= 2)
+			Other->GetWorldSplinePoints(Points);
+			TArray<FRMFrame> Frames;
+			Other->GetWorldFrames(Frames, 100.f);
+			if (Points.Num() >= 2 && Frames.Num() >= 2)
 			{
+				float BaseZ = Frames[0].Pos.Z;
+				float Best = TNumericLimits<float>::Max();
+				for (const FRMFrame& F : Frames)
+				{
+					const float D = FVector::DistSquared2D(F.Pos, hitResult.Location);
+					if (D < Best)
+					{
+						Best = D;
+						BaseZ = F.Pos.Z;
+					}
+				}
+				const float Wall = ARMBuildableFence::GetWallHeight();
+				const float Shift = hitResult.Location.Z - BaseZ < Wall * 0.5f ? -Wall : Wall;
 				for (FRMSplinePoint& P : Points)
 				{
-					P.Location.Z += ARMBuildableFence::GetWallHeight();
+					P.Location.Z += Shift;
 				}
 				mInwardSign = Under->GetInwardSign();
 				mOnRoadEdge = true;

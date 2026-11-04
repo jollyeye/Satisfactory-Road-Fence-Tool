@@ -786,14 +786,65 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		F.Up = FVector::UpVector;
 		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
 	}
-	// A little below the ground line so no gap shows on uneven ground; stacked walls overlap there.
+	// Centred on the line (like the street lights on the road edge). A little below the ground line
+	// so no gap shows on uneven ground; stacked walls overlap there.
+	const float Half = Thickness * 0.5f;
 	const float Bottom = -2.f;
-	const TArray<FVector2D> Profile = { FVector2D(0.f, Bottom), FVector2D(Thickness, Bottom),
-		FVector2D(Thickness, Height), FVector2D(0.f, Height) };
-	const FVector2D Centroid(Thickness * 0.5f, Height * 0.5f);
-	ExtrudeProfile(Upright, Profile, true, Centroid, UVScale, Out);
-	AddProfileCap(Upright[0], Profile, false, UVScale, Out);
-	AddProfileCap(Upright.Last(), Profile, true, UVScale, Out);
+	const TArray<FVector2D> Profile = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom),
+		FVector2D(Half, Height), FVector2D(-Half, Height) };
+	const float S = 1.f / FMath::Max(UVScale, 1.f);
+
+	// UV1 = (metres along the wall, metres up from its base), so the material's texture follows the
+	// curve and the height. Faces are written by hand to know each vertex's place.
+	auto Mark = [&Out](int32 Index, const FVector2D& UV1)
+	{
+		if (Out.MarkUV1.Num() <= Index)
+		{
+			Out.MarkUV1.SetNumZeroed(Index + 1);
+		}
+		Out.MarkUV1[Index] = UV1;
+	};
+	for (int32 E = 0; E < Profile.Num(); ++E)
+	{
+		const FVector2D A = Profile[E];
+		const FVector2D B = Profile[(E + 1) % Profile.Num()];
+		FVector2D N2(B.Y - A.Y, -(B.X - A.X));
+		N2.Normalize();
+		if (FVector2D::DotProduct(N2, (A + B) * 0.5f - FVector2D(0.f, Height * 0.5f)) < 0.f)
+		{
+			N2 = -N2;
+		}
+		const bool bVertical = FMath::IsNearlyEqual(A.X, B.X);
+		const int32 Base = Out.Vertices.Num();
+		for (const FRMFrame& F : Upright)
+		{
+			const FVector N = (F.Right * N2.X + F.Up * N2.Y).GetSafeNormal();
+			const float Along = F.Dist / 100.f;
+			for (const FVector2D& P : { A, B })
+			{
+				const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, FVector2D(Along * 100.f * S, (bVertical ? P.Y : P.X) * S), F.Fwd);
+				Mark(V, FVector2D(Along, (bVertical ? FMath::Max(P.Y, 0.f) : P.X + Half) / 100.f));
+			}
+		}
+		for (int32 I = 0; I + 1 < Upright.Num(); ++I)
+		{
+			const int32 A0 = Base + I * 2;
+			const FVector N = Out.Normals[A0];
+			Out.AddTriangle(A0, A0 + 1, A0 + 3, N);
+			Out.AddTriangle(A0, A0 + 3, A0 + 2, N);
+		}
+	}
+	for (const bool bEnd : { false, true })
+	{
+		const int32 First = Out.Vertices.Num();
+		AddProfileCap(bEnd ? Upright.Last() : Upright[0], Profile, bEnd, UVScale, Out);
+		for (int32 V = First; V < Out.Vertices.Num(); ++V)
+		{
+			const FVector2D& P = Profile[V - First];
+			Mark(V, FVector2D((P.X + Half) / 100.f, FMath::Max(P.Y, 0.f) / 100.f));
+		}
+	}
+	Out.MarkUV1.SetNumZeroed(Out.Vertices.Num());
 }
 
 // ---------------------------------------------------------------------------------------------
