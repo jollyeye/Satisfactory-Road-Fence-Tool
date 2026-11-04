@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
+#include "Algo/Reverse.h"
 #include "UObject/UnrealType.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
@@ -183,6 +184,32 @@ namespace
 		return Prop && Prop->Struct == TBaseStructure<FVector>::Get() ? Prop->ContainerPtrToValuePtr<FVector>(Object) : nullptr;
 	}
 
+	/** Writes a vehicle path hologram's spline points (world space in) and has the game redraw it. */
+	void SetPathSplineWorld(AFGHologram* Hologram, const TArray<FVector>& Points, const TArray<FVector>& Tangents)
+	{
+		FArrayProperty* Data = FindFProperty<FArrayProperty>(Hologram->GetClass(), TEXT("mSplineData"));
+		if (!Data)
+		{
+			return;
+		}
+		TArray<FSplinePointData>* Array = Data->ContainerPtrToValuePtr<TArray<FSplinePointData>>(Hologram);
+		const FTransform T = Hologram->GetActorTransform();
+		Array->Reset();
+		for (int32 I = 0; I < Points.Num(); ++I)
+		{
+			FSplinePointData P;
+			P.Location = T.InverseTransformPosition(Points[I]);
+			P.ArriveTangent = T.InverseTransformVector(Tangents[I]);
+			P.LeaveTangent = P.ArriveTangent;
+			Array->Add(P);
+		}
+		// Protected UFUNCTION: called through reflection; rebuilds the spline and its visuals.
+		if (UFunction* Rebuild = Hologram->FindFunction(TEXT("OnRep_SplineData")))
+		{
+			Hologram->ProcessEvent(Rebuild, nullptr);
+		}
+	}
+
 	/** Left the road-end snap points: give the end direction back to the game. */
 	void ReleasePathSnap(AFGHologram* Hologram)
 	{
@@ -199,17 +226,12 @@ namespace
 				// game is still drawing (otherwise it stays on screen next to the normal hologram).
 				SetBuildStep(Hologram, 0);
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
-				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
+				if (Hologram->IsA<AFGVehiclePathSegmentHologram>())
 				{
-					if (FArrayProperty* Data = FindFProperty<FArrayProperty>(Path->GetClass(), TEXT("mSplineData")))
-					{
-						FScriptArrayHelper(Data, Data->ContainerPtrToValuePtr<void>(Path)).EmptyValues();
-					}
-					// Protected UFUNCTION: called through reflection to rebuild the visuals.
-					if (UFunction* Rebuild = Path->FindFunction(TEXT("OnRep_SplineData")))
-					{
-						Path->ProcessEvent(Rebuild, nullptr);
-					}
+					// The short 1 m stub the game shows in its start step.
+					const FVector P = Hologram->GetActorLocation();
+					const FVector F = Hologram->GetActorForwardVector() * 100.f;
+					SetPathSplineWorld(Hologram, { P, P + F }, { F, F });
 				}
 			}
 			GPathStates.Remove(Hologram);
@@ -579,57 +601,89 @@ namespace
 		{
 			bForward = !bForward;
 		}
-		FVector TA = F0.Fwd, TB = FN.Fwd; // travel directions at start and end
-		int32 EndA = 0, EndB = 1;
+
+		// The lane as road distance range: ends without a road or path joined and nothing to drive
+		// on beyond them start 5 m onto the road (the game needs floor under the whole vehicle).
+		const float Total = FN.Dist;
+		const bool bInset0 = !bJoinedA && !RMRoadUtils::IsEndOccupied(World, Road, 0) && !HasFloorBeyond(World, A, -F0.Fwd);
+		const bool bInset1 = !bJoinedB && !RMRoadUtils::IsEndOccupied(World, Road, 1) && !HasFloorBeyond(World, B, FN.Fwd);
+		const float S0 = bInset0 ? FMath::Min(PathEndInset, Total * 0.3f) : 0.f;
+		const float S1 = bInset1 ? Total - FMath::Min(PathEndInset, Total * 0.3f) : Total;
+
+		// Lane points every ~4 m along the road, following its curve exactly (the game's own path
+		// would be a single curve between the ends and leave the lane on bends).
+		auto LaneAt = [&Frames, Off](float D, FVector& OutPos, FVector& OutDir)
+		{
+			int32 Seg = 0;
+			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
+			{
+				++Seg;
+			}
+			const FRMFrame& Fa = Frames[Seg];
+			const FRMFrame& Fb = Frames[Seg + 1];
+			const float T = Fb.Dist > Fa.Dist ? FMath::Clamp((D - Fa.Dist) / (Fb.Dist - Fa.Dist), 0.f, 1.f) : 0.f;
+			const FVector Right = FMath::Lerp(Fa.Right, Fb.Right, T).GetSafeNormal();
+			OutPos = FMath::Lerp(Fa.Pos, Fb.Pos, T) + Right * Off;
+			OutDir = FMath::Lerp(Fa.Fwd, Fb.Fwd, T).GetSafeNormal();
+		};
+		const int32 Keys = FMath::Max(1, FMath::CeilToInt((S1 - S0) / 400.f));
+		TArray<FVector> Points, Dirs;
+		for (int32 K = 0; K <= Keys; ++K)
+		{
+			FVector P, D;
+			LaneAt(S0 + (S1 - S0) * K / Keys, P, D);
+			Points.Add(P + FVector::UpVector * PathSnapLift);
+			Dirs.Add(D);
+		}
+		if (bJoinedA)
+		{
+			Points[0] = A; // exactly on the existing path's node
+		}
+		if (bJoinedB)
+		{
+			Points.Last() = B;
+		}
+		TArray<FVector> Tangents;
+		for (int32 K = 0; K < Points.Num(); ++K)
+		{
+			const FVector& Prev = Points[FMath::Max(K - 1, 0)];
+			const FVector& Next = Points[FMath::Min(K + 1, Points.Num() - 1)];
+			const float Span = FVector::Dist(Prev, Next) / (K == 0 || K == Points.Num() - 1 ? 1.f : 2.f);
+			Tangents.Add(Dirs[K] * Span);
+		}
 		if (!bForward)
 		{
-			Swap(A, B);
-			Swap(bJoinedA, bJoinedB);
-			const FVector OldTA = TA;
-			TA = -TB;
-			TB = -OldTA;
-			EndA = 1;
-			EndB = 0;
+			Algo::Reverse(Points);
+			Algo::Reverse(Tangents);
+			for (FVector& T : Tangents)
+			{
+				T = -T;
+			}
 		}
+		const FVector StartP = Points[0];
+		const FVector EndP = Points.Last();
+		const FVector StartDir = Tangents[0].GetSafeNormal();
+		const FVector EndDir = Tangents.Last().GetSafeNormal();
 
-		// Ends without a road joined and nothing to drive on beyond them: move 5 m onto the road.
-		if (!bJoinedA && !RMRoadUtils::IsEndOccupied(World, Road, EndA) && !HasFloorBeyond(World, A, -TA))
-		{
-			A += TA * PathEndInset;
-		}
-		if (!bJoinedB && !RMRoadUtils::IsEndOccupied(World, Road, EndB) && !HasFloorBeyond(World, B, TB))
-		{
-			B -= TB * PathEndInset;
-		}
-		if (!bJoinedA)
-		{
-			A += FVector::UpVector * PathSnapLift;
-		}
-		if (!bJoinedB)
-		{
-			B += FVector::UpVector * PathSnapLift;
-		}
-
-		// Start: the game's own start step at A, then the direction along the lane (with slope).
+		// Start: the game's own start step (so it can join an existing node there), then the end
+		// step; finally the lane points replace the game's single curve, which is what gets built.
 		SetBuildStep(Hologram, 0);
-		FHitResult HitA = MoveHit(Hit, A);
-		Scope(Hologram, HitA);
+		Scope(Hologram, MoveHit(Hit, StartP));
 		if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
 		{
-			*Exit = TA.GetSafeNormal();
+			*Exit = StartDir;
 		}
-
-		// End: switch to the end step and place B with the lane's direction there.
 		SetBuildStep(Hologram, 1);
-		const FVector AxisB = FVector(TB.X, TB.Y, 0.f).GetSafeNormal();
+		const FVector AxisB = FVector(EndDir.X, EndDir.Y, 0.f).GetSafeNormal();
 		const bool bWasFlipped = State.bFlipped;
 		State.bFlipped = false; // the direction is already decided above
 		PlacePathEnd([Hologram](const FHitResult& H)
 			{
 				TGuardValue<bool> Guard(GInPathReplace, true);
 				Hologram->SetHologramLocationAndRotation(H);
-			}, Hologram, MoveHit(Hit, B), B - AxisB * 100.f, AxisB, State);
+			}, Hologram, MoveHit(Hit, EndP), EndP - AxisB * 100.f, AxisB, State);
 		State.bFlipped = bWasFlipped;
+		SetPathSplineWorld(Hologram, Points, Tangents);
 		return true;
 	}
 
