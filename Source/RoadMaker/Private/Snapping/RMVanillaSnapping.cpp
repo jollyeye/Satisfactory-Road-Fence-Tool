@@ -1364,6 +1364,19 @@ void RMVanillaSnapping::InstallHooks()
 			}
 		});
 
+	// Lane tracks: after placing the hologram the game runs a post-placement step in which the rail
+	// tool routes its own track again from the crosshair hit; in lane mode that second track showed up
+	// next to the lane track (a ring) and failed the checks. Skipped while a lane track is shown.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGRailroadTrackHologram::PostHologramPlacement, GetMutableDefault<AFGRailroadTrackHologram>(),
+		[](auto& Scope, AFGRailroadTrackHologram* Hologram, const FHitResult& HitResult, bool bCallForChildren)
+		{
+			const FPathState* State = GPathStates.Find(Hologram);
+			if (State && State->bLaneMode)
+			{
+				Scope.Cancel();
+			}
+		});
+
 	SUBSCRIBE_METHOD_VIRTUAL(AFGRailroadTrackHologram::GetRotationStep, GetMutableDefault<AFGRailroadTrackHologram>(),
 		[](auto& Scope, const AFGRailroadTrackHologram* Hologram)
 		{
