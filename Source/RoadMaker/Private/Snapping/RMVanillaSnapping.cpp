@@ -15,6 +15,7 @@
 #include "Hologram/FGVehiclePathSegmentHologram.h"
 #include "Patching/NativeHookManager.h"
 #include "Components/SplineComponent.h"
+#include "Components/SplineMeshComponent.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
@@ -194,6 +195,26 @@ namespace
 			Self->UpdateHologramVisualState();
 			Self->UpdatePathVisualizationHandle();
 		}
+
+		/** The game's own "snap this end to that node": joins the new path to the existing network. */
+		static bool SnapToNode(AFGVehiclePathSegmentHologram* Path, AFGVehiclePathNode* Node)
+		{
+			return Node && static_cast<FRMPathAccess*>(Path)->TrySnapToPathNode(Node);
+		}
+
+		/** Removes the path meshes drawn in the end step (the start step never touches them). */
+		static void RemovePathMeshes(AFGVehiclePathSegmentHologram* Path)
+		{
+			FRMPathAccess* Self = static_cast<FRMPathAccess*>(Path);
+			for (USplineMeshComponent* Mesh : Self->mSplineMeshComponents)
+			{
+				if (Mesh)
+				{
+					Mesh->DestroyComponent();
+				}
+			}
+			Self->mSplineMeshComponents.Empty();
+		}
 	};
 
 	/** Writes a vehicle path hologram's spline points (world space in) and has the game redraw it. */
@@ -240,7 +261,8 @@ namespace
 				SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), false);
 				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
 				{
-					// Let the game rebuild and redraw its start-step look (spline, meshes, overlay).
+					// Remove the lane path's meshes, then let the game redraw its start-step look.
+					FRMPathAccess::RemovePathMeshes(Path);
 					FRMPathAccess::Redraw(Path);
 				}
 			}
@@ -577,11 +599,14 @@ namespace
 
 		// Existing paths at the lane points: continue their flow and use their nodes.
 		int32 Suggest = 0; // +1: start->end of the road, -1: the other way
-		auto NodeNear = [](const AFGVehiclePathNode* Node, const FVector& P, FVector& Out)
+		AFGVehiclePathNode* NodeA = nullptr;
+		AFGVehiclePathNode* NodeB = nullptr;
+		auto NodeNear = [](AFGVehiclePathNode* Node, const FVector& P, FVector& Out, AFGVehiclePathNode*& OutNode)
 		{
 			if (Node && FVector::Dist(Node->GetActorLocation(), P) < 150.f)
 			{
 				Out = Node->GetActorLocation();
+				OutNode = Node;
 				return true;
 			}
 			return false;
@@ -589,10 +614,10 @@ namespace
 		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
 		{
 			FVector Snap;
-			if (!bJoinedA && NodeNear(It->GetEndNode(), A, Snap))        { Suggest = Suggest ? Suggest : 1;  A = Snap; bJoinedA = true; }
-			else if (!bJoinedA && NodeNear(It->GetStartNode(), A, Snap)) { Suggest = Suggest ? Suggest : -1; A = Snap; bJoinedA = true; }
-			if (!bJoinedB && NodeNear(It->GetStartNode(), B, Snap))      { Suggest = Suggest ? Suggest : 1;  B = Snap; bJoinedB = true; }
-			else if (!bJoinedB && NodeNear(It->GetEndNode(), B, Snap))   { Suggest = Suggest ? Suggest : -1; B = Snap; bJoinedB = true; }
+			if (!bJoinedA && NodeNear(It->GetEndNode(), A, Snap, NodeA))        { Suggest = Suggest ? Suggest : 1;  A = Snap; bJoinedA = true; }
+			else if (!bJoinedA && NodeNear(It->GetStartNode(), A, Snap, NodeA)) { Suggest = Suggest ? Suggest : -1; A = Snap; bJoinedA = true; }
+			if (!bJoinedB && NodeNear(It->GetStartNode(), B, Snap, NodeB))      { Suggest = Suggest ? Suggest : 1;  B = Snap; bJoinedB = true; }
+			else if (!bJoinedB && NodeNear(It->GetEndNode(), B, Snap, NodeB))   { Suggest = Suggest ? Suggest : -1; B = Snap; bJoinedB = true; }
 		}
 
 		FPathState& State = GPathStates.FindOrAdd(Hologram);
@@ -672,6 +697,9 @@ namespace
 		}
 		const FVector StartP = Points[0];
 		const FVector EndP = Points.Last();
+		AFGVehiclePathNode* StartNode = bForward ? NodeA : NodeB;
+		AFGVehiclePathNode* EndNode = bForward ? NodeB : NodeA;
+		AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram);
 		const FVector StartDir = Tangents[0].GetSafeNormal();
 		const FVector EndDir = Tangents.Last().GetSafeNormal();
 
@@ -679,6 +707,10 @@ namespace
 		// step; finally the lane points replace the game's single curve, which is what gets built.
 		SetBuildStep(Hologram, 0);
 		Scope(Hologram, MoveHit(Hit, StartP));
+		if (Path && StartNode)
+		{
+			FRMPathAccess::SnapToNode(Path, StartNode); // joins the existing path there
+		}
 		if (FVector* Exit = VectorField(Hologram, TEXT("mStartPointExitDirection")))
 		{
 			*Exit = StartDir;
@@ -693,6 +725,10 @@ namespace
 				Hologram->SetHologramLocationAndRotation(H);
 			}, Hologram, MoveHit(Hit, EndP), EndP - AxisB * 100.f, AxisB, State);
 		State.bFlipped = bWasFlipped;
+		if (Path && EndNode)
+		{
+			FRMPathAccess::SnapToNode(Path, EndNode); // joins the existing path there
+		}
 		SetPathSplineWorld(Hologram, Points, Tangents);
 		return true;
 	}
