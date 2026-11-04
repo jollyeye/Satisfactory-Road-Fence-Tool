@@ -300,6 +300,43 @@ namespace
 			}
 		}
 
+		/** Diagnostics (temporary): the track's points and what its spline component draws. */
+		static void LogTrack(AFGRailroadTrackHologram* Rail, const TArray<FVector>& WantPoints)
+		{
+			static double LastLog = 0.0;
+			const double Now = FPlatformTime::Seconds();
+			if (Now - LastLog < 0.7)
+			{
+				return;
+			}
+			LastLog = Now;
+			FRMRailAccess* Self = static_cast<FRMRailAccess*>(Rail);
+			FString Want, Data, Drawn;
+			for (const FVector& P : WantPoints)
+			{
+				Want += FString::Printf(TEXT(" (%.0f,%.0f,%.0f)"), P.X, P.Y, P.Z);
+			}
+			const FTransform T = Rail->GetActorTransform();
+			for (const FSplinePointData& P : Self->mSplineData)
+			{
+				const FVector W = T.TransformPosition(P.Location);
+				const FVector D = T.TransformVector(P.LeaveTangent);
+				Data += FString::Printf(TEXT(" (%.0f,%.0f,%.0f|yaw %.0f len %.0f)"), W.X, W.Y, W.Z, D.Rotation().Yaw, D.Size());
+			}
+			if (USplineComponent* Spline = Self->mSplineComponent)
+			{
+				for (int32 I = 0; I < Spline->GetNumberOfSplinePoints(); ++I)
+				{
+					const FVector W = Spline->GetLocationAtSplinePoint(I, ESplineCoordinateSpace::World);
+					const FVector D = Spline->GetTangentAtSplinePoint(I, ESplineCoordinateSpace::World);
+					Drawn += FString::Printf(TEXT(" (%.0f,%.0f,%.0f|yaw %.0f len %.0f)"), W.X, W.Y, W.Z, D.Rotation().Yaw, D.Size());
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("TrackDiag: step=%d actor=(%s yaw %.0f) | want[%d]:%s | data[%d]:%s | drawn:%s"),
+				(int32)Self->mBuildStep, *T.GetLocation().ToCompactString(), T.Rotator().Yaw,
+				WantPoints.Num(), *Want, Self->mSplineData.Num(), *Data, *Drawn);
+		}
+
 		/** Back to the start step: drop the lane track's snapped connections. */
 		static void ResetToStart(AFGRailroadTrackHologram* Rail)
 		{
@@ -966,6 +1003,7 @@ namespace
 		}
 		SetRailSnappedConnection(Hologram, 1, EndConn);
 		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+		FRMRailAccess::LogTrack(Rail, Points);
 		return true;
 	}
 
