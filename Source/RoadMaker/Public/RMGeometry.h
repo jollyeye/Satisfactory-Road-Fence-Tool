@@ -206,7 +206,7 @@ namespace RMGeometry
 	/**
 	 * Steel fence wall, shaped like the game's steel wall: a ribbed panel between a top rail and a
 	 * kick rail, ends closed. UVs are laid out for the game's steel wall texture (TX_WallSetSteel_01):
-	 * panel in u 0..0.885 per 4 m (repeated) / v 0.2..0.9, rails and ends on its dark bands.
+	 * panel in u 0.19..0.65 per 2 m (repeated) / v 0.2..0.9, rails and ends on its dark bands.
 	 */
 	ROADMAKER_API void BuildSteelFenceWall(const TArray<FRMFrame>& Frames, FRMMesh& Out, float Height = 400.f);
 

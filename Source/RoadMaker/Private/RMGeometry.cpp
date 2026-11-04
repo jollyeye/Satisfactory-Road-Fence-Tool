@@ -874,17 +874,18 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
 	}
 	const float Length = Frames.Last().Dist;
-	const float Cell = 400.f;          // the panel texture repeats every 4 m (as on the game's wall)
+	const float Cell = 200.f;          // the panel texture repeats every 2 m (as on the game's wall)
 	const float PostDepth = 25.f;      // half thickness (50 cm wall)
 	const float KickTop = 37.f;        // kick rail at the bottom
 	const float RailBottom = Height - 21.f; // top rail
 	const float PanelHalf = 8.f;       // ribbed sheet, recessed between the rails
 
-	// Panel UVs (measured from the game's texture and wall): u 0..0.885 over 4 m, repeated,
-	// v 0.2 at the top rail down to 0.9 at the kick rail.
-	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelU1 = 0.885f;
+	// Panel UVs (measured from the game's texture and wall): the stretch between the two columns of
+	// bolts, u 0.19..0.65, every 2 m, so it repeats without a seam (the cut falls on a bolt column and
+	// the ribs run straight through); v 0.2 at the top rail down to 0.9 at the kick rail.
+	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelUStart = 0.19f, PanelUSize = 0.46f;
 
-	// Cells of 4 m; each is built on its own so the panel texture restarts cleanly.
+	// Cells of 2 m; each is built on its own so the panel texture restarts cleanly.
 	const int32 Cells = FMath::Max(1, FMath::CeilToInt((Length - 1.f) / Cell));
 	for (int32 C = 0; C < Cells; ++C)
 	{
@@ -903,7 +904,7 @@ void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& 
 
 		auto PanelU = [&](const FRMFrame& F)
 		{
-			return FMath::Clamp((F.Dist - D0) / Cell, 0.f, 1.f) * PanelU1;
+			return PanelUStart + FMath::Clamp((F.Dist - D0) / Cell, 0.f, 1.f) * PanelUSize;
 		};
 		// Ribbed sheet.
 		ExtrudeBox(Part, { FVector2D(-PanelHalf, KickTop - 2.f), FVector2D(PanelHalf, KickTop - 2.f),
