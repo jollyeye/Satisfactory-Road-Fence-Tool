@@ -35,6 +35,14 @@ public:
 	static void BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
 		const FRMWallTexLayout& WallLayout = FRMWallTexLayout());
 
+	/**
+	 * Lowest-detail version (second distance level): one simple shape per fence type, few rings.
+	 * Guard rail: the beam only; cement blocks: a plain wedge; grid fences: the mesh sheet only;
+	 * fence walls: a plain slab with the wall's texture.
+	 */
+	static void BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> Frames, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
+		const FRMWallTexLayout& WallLayout = FRMWallTexLayout());
+
 	/** Fence walls: where a wall panel sits in the texture of mMainMaterial (a game wall material). */
 	FRMWallTexLayout GetWallLayout() const;
 

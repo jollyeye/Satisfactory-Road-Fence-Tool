@@ -49,6 +49,9 @@ protected:
 	 */
 	void ApplyFarSection(const FRMMesh& Data, int32 Section, UMaterialInterface* Material);
 	void ClearFarMesh();
+
+	/** Second distance level (beyond mLOD2Distance): an even simpler shape, no shadows. */
+	void ApplyFar2Section(const FRMMesh& Data, int32 Section, UMaterialInterface* Material);
 	void UpdateLODDistances();
 
 public:
@@ -60,8 +63,9 @@ public:
 	static void UpdateLODsForCamera(UWorld* World, const FVector& Camera);
 
 protected:
-	void SetShowFar(bool bFar);
-	bool mShowingFar = false;
+	/** 0 = detailed, 1 = far mesh, 2 = second far mesh. */
+	void SetShownLOD(int32 Level);
+	int32 mShownLOD = 0;
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mMesh;
@@ -70,9 +74,17 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mFarMesh;
 
+	/** Lowest-detail copy drawn beyond mLOD2Distance (no collision, no shadows). */
+	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
+	UProceduralMeshComponent* mFar2Mesh;
+
 	/** Switch distance in cm between the detailed and the far mesh. 0 = no far mesh. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|LOD")
 	float mLODDistance = 8000.f;
+
+	/** Switch distance in cm between the far mesh and the second far mesh. 0 = no second level. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|LOD")
+	float mLOD2Distance = 0.f;
 
 	/** How many recipe units this piece cost. Saved so the refund matches what was paid. */
 	UPROPERTY(SaveGame, Replicated)

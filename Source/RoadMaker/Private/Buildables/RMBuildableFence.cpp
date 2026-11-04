@@ -43,7 +43,12 @@ void ARMBuildableFence::RebuildMesh()
 	ApplyMaterial(0, MainMaterial);
 	ApplyMaterial(1, mPanelMaterial);
 
-	// Far version: the same fence sampled every 4 m instead of every 50 cm.
+	// Distance levels, like the game's walls (detailed, simpler, simplest): fence walls are big and
+	// seen from further away, so they switch later than the road fences.
+	mLODDistance = IsWall() ? 8000.f : 6000.f;   // 80 m / 60 m
+	mLOD2Distance = IsWall() ? 20000.f : 15000.f; // 200 m / 150 m
+
+	// Level 1: the same fence sampled every 4 m instead of every 50 cm.
 	TArray<FRMFrame> FarFrames;
 	GetLocalFrames(FarFrames, 400.f);
 	if (FarFrames.Num() >= 2)
@@ -52,6 +57,17 @@ void ARMBuildableFence::RebuildMesh()
 		BuildFenceMesh(Type, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout());
 		ApplyFarSection(FarMain, 0, MainMaterial);
 		ApplyFarSection(FarPanel, 1, mPanelMaterial);
+	}
+
+	// Level 2: the simplest shape, sampled every 8 m.
+	TArray<FRMFrame> Far2Frames;
+	GetLocalFrames(Far2Frames, 800.f);
+	if (Far2Frames.Num() >= 2)
+	{
+		FRMMesh Far2Main, Far2Panel;
+		BuildFenceFar2Mesh(Type, Far2Frames, mInwardSign, Far2Main, Far2Panel, GetWallLayout());
+		ApplyFar2Section(Far2Main, 0, MainMaterial);
+		ApplyFar2Section(Far2Panel, 1, mPanelMaterial);
 	}
 	ApplyPaintColors(mCustomizationData);
 }
@@ -90,7 +106,7 @@ void ARMBuildableFence::ApplyPaintColors(const FFactoryCustomizationData& Data)
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
+	for (UProceduralMeshComponent* M : { mMesh, mFarMesh, mFar2Mesh })
 	{
 		if (M)
 		{
@@ -336,6 +352,82 @@ void ARMBuildableFence::BeginPlay()
 		}
 	}
 	Super::BeginPlay();
+}
+
+void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> Frames, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
+	const FRMWallTexLayout& WallLayout)
+{
+	if (InwardSign < 0.f)
+	{
+		RMGeometry::MirrorFrames(Frames);
+	}
+	for (FRMFrame& F : Frames)
+	{
+		F.Up = FVector::UpVector;
+		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+	}
+	auto Lifted = [&Frames](float Z)
+	{
+		TArray<FRMFrame> Out = Frames;
+		for (FRMFrame& F : Out)
+		{
+			F.Pos.Z += Z;
+		}
+		return Out;
+	};
+	switch (Type)
+	{
+	case ERMFenceType::GuardRail:
+	{
+		// The beam as a plain bar (posts dropped).
+		const TArray<FVector2D> Bar = { FVector2D(-4.f, -16.f), FVector2D(5.f, -16.f), FVector2D(5.f, 16.f), FVector2D(-4.f, 16.f) };
+		const TArray<FRMFrame> Rail = Lifted(60.f);
+		RMGeometry::ExtrudeProfile(Rail, Bar, true, FVector2D(0.5f, 0.f), 400.f, Main);
+		break;
+	}
+	case ERMFenceType::JerseyBarrier:
+	{
+		// A plain wedge; UV1.y = 1 tells the material "no block joints here".
+		const TArray<FVector2D> Wedge = { FVector2D(-30.f, 0.f), FVector2D(30.f, 0.f), FVector2D(7.5f, 80.f), FVector2D(-7.5f, 80.f) };
+		RMGeometry::ExtrudeProfile(Frames, Wedge, true, FVector2D(0.f, 30.f), 400.f, Main);
+		RMGeometry::AddProfileCap(Frames[0], Wedge, false, 400.f, Main);
+		RMGeometry::AddProfileCap(Frames.Last(), Wedge, true, 400.f, Main);
+		Main.MarkUV1.Init(FVector2D(0.f, 1.f), Main.Vertices.Num());
+		Main.MarkUV2.Init(FVector2D(2.f, 0.f), Main.Vertices.Num());
+		break;
+	}
+	case ERMFenceType::GridFence:
+	case ERMFenceType::GridFenceTall:
+	{
+		// The mesh sheet only (UV1.x = metres along, as the grid material wants), plus a thin top bar.
+		const float Height = Type == ERMFenceType::GridFenceTall ? 400.f : 200.f;
+		RMGeometry::ExtrudeProfile(Frames, { FVector2D(-3.f, Height), FVector2D(-3.f, 8.f) }, false, FVector2D(7.f, Height * 0.5f), 200.f, Panel);
+		Panel.MarkUV1.SetNumZeroed(Panel.Vertices.Num());
+		for (int32 I = 0; I < Panel.Vertices.Num(); ++I)
+		{
+			Panel.MarkUV1[I] = FVector2D(Panel.UVs[I].Y * 2.f, 0.f);
+		}
+		const TArray<FVector2D> Bar = { FVector2D(-6.f, Height - 6.f), FVector2D(0.f, Height - 6.f), FVector2D(0.f, Height + 2.f), FVector2D(-6.f, Height + 2.f) };
+		RMGeometry::ExtrudeProfile(Frames, Bar, true, FVector2D(-3.f, Height - 2.f), 400.f, Main);
+		break;
+	}
+	case ERMFenceType::SteelWall:
+	{
+		// A plain slab on the ribbed part of the steel wall texture.
+		FRMWallTexLayout Steel;
+		Steel.UCentre = 0.3f;
+		Steel.UPerMetre = 0.f;
+		Steel.VTop = 0.2f;
+		Steel.VPerMetre = 0.175f;
+		Steel.bMirror = false;
+		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, Steel);
+		break;
+	}
+	case ERMFenceType::ConcreteWall:
+	case ERMFenceType::FicsitWall:
+		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, WallLayout);
+		break;
+	}
 }
 
 void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,

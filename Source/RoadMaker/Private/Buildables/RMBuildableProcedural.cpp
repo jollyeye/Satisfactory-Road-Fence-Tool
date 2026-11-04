@@ -34,6 +34,12 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 	mFarMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mFarMesh->SetCanEverAffectNavigation(false);
 	mFarMesh->SetCastShadow(true);
+
+	mFar2Mesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ProceduralMeshFar2"));
+	mFar2Mesh->SetupAttachment(mMesh);
+	mFar2Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mFar2Mesh->SetCanEverAffectNavigation(false);
+	mFar2Mesh->SetCastShadow(false);
 }
 
 void ARMBuildableProcedural::BeginPlay()
@@ -45,30 +51,28 @@ void ARMBuildableProcedural::BeginPlay()
 
 void ARMBuildableProcedural::UpdateLODDistances()
 {
-	if (!mMesh || !mFarMesh)
-	{
-		return;
-	}
 	// Start detailed; UpdateLODsForCamera switches as the camera moves.
-	SetShowFar(false);
+	SetShownLOD(0);
 }
 
-void ARMBuildableProcedural::SetShowFar(bool bFar)
+void ARMBuildableProcedural::SetShownLOD(int32 Level)
 {
-	if (!mMesh || !mFarMesh)
+	if (!mMesh || !mFarMesh || !mFar2Mesh)
 	{
 		return;
 	}
-	mShowingFar = bFar;
+	mShownLOD = Level;
 	// Checked every time: the game's own build/dismantle effects may change visibility too.
-	if (mMesh->IsVisible() == bFar)
+	auto Show = [](UProceduralMeshComponent* M, bool bVisible)
 	{
-		mMesh->SetVisibility(!bFar);   // collision is unaffected by visibility
-	}
-	if (mFarMesh->IsVisible() != bFar)
-	{
-		mFarMesh->SetVisibility(bFar);
-	}
+		if (M->IsVisible() != bVisible)
+		{
+			M->SetVisibility(bVisible); // collision (on mMesh) is unaffected by visibility
+		}
+	};
+	Show(mMesh, Level == 0);
+	Show(mFarMesh, Level == 1);
+	Show(mFar2Mesh, Level == 2);
 }
 
 void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& Camera)
@@ -84,14 +88,20 @@ void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& C
 		{
 			if (Piece)
 			{
-				Piece->SetShowFar(false);
+				Piece->SetShownLOD(0);
 			}
 			continue;
 		}
-		const float DistSq = Piece->mMesh->Bounds.GetBox().ComputeSquaredDistanceToPoint(Camera);
-		// A little hysteresis so standing at the switch distance does not flicker.
-		const float Switch = Piece->mShowingFar ? Piece->mLODDistance * 0.9f : Piece->mLODDistance;
-		Piece->SetShowFar(DistSq > Switch * Switch);
+		const float Dist = FMath::Sqrt(Piece->mMesh->Bounds.GetBox().ComputeSquaredDistanceToPoint(Camera));
+		// A little hysteresis so standing at a switch distance does not flicker.
+		auto Beyond = [Dist](float Switch, bool bBeyondNow) { return Dist > (bBeyondNow ? Switch * 0.9f : Switch); };
+		int32 Level = Beyond(Piece->mLODDistance, Piece->mShownLOD >= 1) ? 1 : 0;
+		if (Level == 1 && Piece->mLOD2Distance > Piece->mLODDistance && Piece->mFar2Mesh->GetNumSections() > 0
+			&& Beyond(Piece->mLOD2Distance, Piece->mShownLOD >= 2))
+		{
+			Level = 2;
+		}
+		Piece->SetShownLOD(Level);
 	}
 }
 
@@ -100,6 +110,10 @@ void ARMBuildableProcedural::ClearFarMesh()
 	if (mFarMesh)
 	{
 		mFarMesh->ClearAllMeshSections();
+	}
+	if (mFar2Mesh)
+	{
+		mFar2Mesh->ClearAllMeshSections();
 	}
 }
 
@@ -111,6 +125,16 @@ void ARMBuildableProcedural::ApplyFarSection(const FRMMesh& Data, int32 Section,
 	}
 	Data.ApplyToSection(mFarMesh, Section, false);
 	mFarMesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
+}
+
+void ARMBuildableProcedural::ApplyFar2Section(const FRMMesh& Data, int32 Section, UMaterialInterface* Material)
+{
+	if (!mFar2Mesh || mLOD2Distance <= 0.f || IsRunningDedicatedServer())
+	{
+		return;
+	}
+	Data.ApplyToSection(mFar2Mesh, Section, false);
+	mFar2Mesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
 }
 
 void ARMBuildableProcedural::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

@@ -57,7 +57,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - **Vehicle paths** and **railway tracks** snap to road and intersection ends — one point per lane (every 2 m on 1-lane roads) — and line up with the road, slope included; scroll flips them 180°.
 
 ### Performance
-- Far-away roads, intersections and fences switch to simpler meshes.
+- Far-away roads, intersections and fences switch to simpler meshes; fences and fence walls have two distance levels (simpler, then simplest).
 - Saves stay small: only a few numbers per piece are saved, meshes are rebuilt on load.
 
 ### Notes
@@ -72,6 +72,7 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - **Foundations snap to free road ends and intersection ends:** edge on the end, top level with the road, in 4 m steps across it; scroll turns them 90°. Works for foundations, frames, ramps (high or low side at the road) and inverted ramps.
 - Dismantling a road or intersection also dismantles the vehicle paths and railway tracks lying on it (refunded too).
 - Intersections of two roads at an angle (e.g. 90°) now build: the curved, ring-shaped piece is filled correctly, and big intersections get rounder curbs.
+- Fences and fence walls get a second, simplest distance level (beyond 150 m / 200 m).
 - Roads without side lines use the full width for their lanes (lane lines and snap points).
 - Power poles and street lights snap exactly on the road edge.
 - New **Smooth** build mode for roads: the height eases in and out and matches the slope of the roads it connects, so linking roads at different heights has no kinks when seen from the side. Allows up to 45°.
