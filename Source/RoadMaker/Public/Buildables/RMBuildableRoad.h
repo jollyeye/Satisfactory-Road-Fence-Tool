@@ -14,6 +14,7 @@ public:
 	ARMBuildableRoad(const FObjectInitializer& ObjectInitializer);
 
 	virtual void RebuildMesh() override;
+	virtual bool DismantlesRiders() const override { return true; }
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

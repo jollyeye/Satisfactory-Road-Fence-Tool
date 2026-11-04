@@ -28,6 +28,10 @@ public:
 	// Scale the refund by how big this piece is (the recipe holds the cost of one unit).
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
 
+	/** Roads and intersections take the vehicle paths and railway tracks lying on them along when dismantled. */
+	virtual void GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const override;
+	virtual bool DismantlesRiders() const { return false; }
+
 	/** Regenerates the mesh from the saved inputs. */
 	virtual void RebuildMesh() PURE_VIRTUAL(ARMBuildableProcedural::RebuildMesh, );
 
@@ -77,4 +81,9 @@ protected:
 	/** Texture tiling distance in cm. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	float mUVScale = 400.f;
+
+private:
+	/** Paths and tracks found on this piece, kept for a moment (the dismantle highlight asks every frame). */
+	mutable TArray<TWeakObjectPtr<AActor>> mRiderCache;
+	mutable double mRiderCacheTime = -1.0;
 };

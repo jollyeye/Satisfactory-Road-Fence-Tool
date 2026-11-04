@@ -129,6 +129,114 @@ namespace
 	{
 		return A.X * B.Y - A.Y * B.X;
 	}
+
+	/** True if segments AB and CD cross (touching at shared end points does not count). */
+	bool SegmentsCross2D(const FVector& A, const FVector& B, const FVector& C, const FVector& D)
+	{
+		const float D1 = Cross2D(B - A, C - A);
+		const float D2 = Cross2D(B - A, D - A);
+		const float D3 = Cross2D(D - C, A - C);
+		const float D4 = Cross2D(D - C, B - C);
+		return ((D1 > 1.f && D2 < -1.f) || (D1 < -1.f && D2 > 1.f)) && ((D3 > 1.f && D4 < -1.f) || (D3 < -1.f && D4 > 1.f));
+	}
+
+	/**
+	 * Triangulates a simple polygon (seen from above) by ear clipping, so concave outlines work too
+	 * (e.g. two roads at 90 degrees joined by a curved, ring-shaped piece). Returns false if the
+	 * outline crosses itself.
+	 */
+	bool TriangulatePolygon2D(const TArray<FVector>& P, TArray<int32>& OutTris)
+	{
+		OutTris.Reset();
+		const int32 N = P.Num();
+		if (N < 3)
+		{
+			return false;
+		}
+		for (int32 I = 0; I < N; ++I)
+		{
+			for (int32 J = I + 2; J < N; ++J)
+			{
+				if (I == 0 && J == N - 1)
+				{
+					continue; // neighbours through the wrap
+				}
+				if (SegmentsCross2D(P[I], P[(I + 1) % N], P[J], P[(J + 1) % N]))
+				{
+					return false;
+				}
+			}
+		}
+		float Area = 0.f;
+		for (int32 I = 0; I < N; ++I)
+		{
+			Area += Cross2D(P[I], P[(I + 1) % N]);
+		}
+		TArray<int32> V;
+		for (int32 I = 0; I < N; ++I)
+		{
+			V.Add(Area >= 0.f ? I : N - 1 - I); // counter-clockwise
+		}
+		int32 Guard = N * N + 10;
+		while (V.Num() > 3 && Guard-- > 0)
+		{
+			bool bClipped = false;
+			for (int32 K = 0; K < V.Num(); ++K)
+			{
+				const int32 IA = V[(K + V.Num() - 1) % V.Num()];
+				const int32 IB = V[K];
+				const int32 IC = V[(K + 1) % V.Num()];
+				const FVector& A = P[IA];
+				const FVector& B = P[IB];
+				const FVector& C = P[IC];
+				const float Turn = Cross2D(B - A, C - B);
+				if (FMath::Abs(Turn) <= 1e-4f * FVector::Dist2D(A, B) * FVector::Dist2D(B, C) && FVector::DotProduct(B - A, C - B) >= 0.f)
+				{
+					V.RemoveAt(K); // straight through: no triangle needed
+					bClipped = true;
+					break;
+				}
+				if (Turn <= 0.f)
+				{
+					continue; // reflex corner
+				}
+				bool bEmpty = true;
+				for (const int32 IO : V)
+				{
+					if (IO == IA || IO == IB || IO == IC)
+					{
+						continue;
+					}
+					const FVector& O = P[IO];
+					if (Cross2D(B - A, O - A) >= 0.f && Cross2D(C - B, O - B) >= 0.f && Cross2D(A - C, O - C) >= 0.f)
+					{
+						bEmpty = false;
+						break;
+					}
+				}
+				if (bEmpty)
+				{
+					OutTris.Add(IA);
+					OutTris.Add(IB);
+					OutTris.Add(IC);
+					V.RemoveAt(K);
+					bClipped = true;
+					break;
+				}
+			}
+			if (!bClipped)
+			{
+				return false;
+			}
+		}
+		if (V.Num() == 3)
+		{
+			OutTris.Add(V[0]);
+			OutTris.Add(V[1]);
+			OutTris.Add(V[2]);
+		}
+		return OutTris.Num() >= 3;
+	}
 }
 
 void RMGeometry::SampleSpline(const TArray<FRMSplinePoint>& Points, float Step, TArray<FRMFrame>& OutFrames)
@@ -747,9 +855,13 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		}
 		Control.Z = (P.Z + Q.Z) * 0.5f;
 
-		for (int32 K = 1; K < FilletSegments; ++K)
+		// Long curbs (big intersections) get more points so they stay round: about every 4 m
+		// (every 16 m for the far mesh, which asks for few segments).
+		const float CurbLength = FVector::Dist2D(P, Control) + FVector::Dist2D(Control, Q);
+		const int32 Segments = FMath::Clamp(FMath::Max(FilletSegments, FMath::CeilToInt(CurbLength / (FilletSegments <= 3 ? 1600.f : 400.f))), 1, 64);
+		for (int32 K = 1; K < Segments; ++K)
 		{
-			const float T = static_cast<float>(K) / FilletSegments;
+			const float T = static_cast<float>(K) / Segments;
 			const float A = (1.f - T) * (1.f - T);
 			const float B = 2.f * (1.f - T) * T;
 			const float C = T * T;
@@ -788,45 +900,44 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		return false;
 	}
 
-	// The fan from the centre only works if no edge turns backwards around it (straight is fine).
-	for (int32 K = 0; K < Ring.Num(); ++K)
+	// Top and bottom: the outline triangulated (works for concave outlines too), planar UVs so the
+	// asphalt matches across pieces.
+	TArray<int32> Tris;
+	if (!TriangulatePolygon2D(Ring, Tris))
 	{
-		const FVector& A = Ring[K];
-		const FVector& B = Ring[(K + 1) % Ring.Num()];
-		if (Cross2D(A - Center, B - Center) < -1.f)
-		{
-			return false;
-		}
+		return false;
 	}
-
-	// Top: fan around the centre, planar UVs so the asphalt matches across pieces.
 	{
-		const int32 C = Top.AddVertex(Center, FVector::UpVector, FVector2D(Center.X, Center.Y) * S, FVector::ForwardVector);
 		const int32 Base = Top.Vertices.Num();
 		for (const FVector& P : Ring)
 		{
 			Top.AddVertex(P, FVector::UpVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
 		}
-		for (int32 K = 0; K < Ring.Num(); ++K)
+		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
 		{
-			Top.AddTriangle(C, Base + K, Base + (K + 1) % Ring.Num(), FVector::UpVector);
+			Top.AddTriangle(Base + Tris[T], Base + Tris[T + 1], Base + Tris[T + 2], FVector::UpVector);
 		}
 	}
-
-	// Bottom: same fan, lowered and facing down.
 	{
 		const FVector Down(0.f, 0.f, -Height);
-		const int32 C = Body.AddVertex(Center + Down, FVector::DownVector, FVector2D(Center.X, Center.Y) * S, FVector::ForwardVector);
 		const int32 Base = Body.Vertices.Num();
 		for (const FVector& P : Ring)
 		{
 			Body.AddVertex(P + Down, FVector::DownVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
 		}
-		for (int32 K = 0; K < Ring.Num(); ++K)
+		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
 		{
-			Body.AddTriangle(C, Base + K, Base + (K + 1) % Ring.Num(), FVector::DownVector);
+			Body.AddTriangle(Base + Tris[T], Base + Tris[T + 1], Base + Tris[T + 2], FVector::DownVector);
 		}
 	}
+
+	// Outward side of each edge, from the outline's winding (the centre can lie outside concave outlines).
+	float RingArea = 0.f;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		RingArea += Cross2D(Ring[K], Ring[(K + 1) % Ring.Num()]);
+	}
+	const float OutSign = RingArea >= 0.f ? 1.f : -1.f;
 
 	// Curb sides, and an end face (cap) on every road mouth: the mouth stays closed when its road is
 	// removed. Where a road is attached its own end cap meets this face inside the solid, unseen.
@@ -838,12 +949,8 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		const float EdgeLen = FVector::Dist(A, B);
 		if (EdgeLen > 0.5f)
 		{
-			const FVector Mid = (A + B) * 0.5f;
-			FVector N = FVector::CrossProduct(B - A, FVector::UpVector).GetSafeNormal();
-			if (FVector::DotProduct(N, Mid - Center) < 0.f)
-			{
-				N = -N;
-			}
+			const FVector Edge = B - A;
+			const FVector N = (FVector(Edge.Y, -Edge.X, 0.f) * OutSign).GetSafeNormal();
 			const FVector Down(0.f, 0.f, -Height);
 			const float U1 = U + EdgeLen * S;
 			Body.AddQuad(A, B, B + Down, A + Down, N,

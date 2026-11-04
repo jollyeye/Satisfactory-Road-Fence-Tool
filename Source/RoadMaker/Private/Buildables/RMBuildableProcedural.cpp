@@ -4,6 +4,11 @@
 #include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
 #include "EngineUtils.h"
+#include "Components/SplineComponent.h"
+#include "Buildables/FGBuildableRailroadTrack.h"
+#include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "FGDismantleInterface.h"
+#include "HAL/PlatformTime.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -137,5 +142,81 @@ void ARMBuildableProcedural::ApplyMaterial(int32 Section, UMaterialInterface* Ma
 	if (mMesh)
 	{
 		mMesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
+	}
+}
+
+void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const
+{
+	Super::GetChildDismantleActors_Implementation(out_ChildDismantleActors);
+	UWorld* World = GetWorld();
+	if (!DismantlesRiders() || !mMesh || !World)
+	{
+		return;
+	}
+
+	const double Now = FPlatformTime::Seconds();
+	if (mRiderCacheTime < 0.0 || Now - mRiderCacheTime > 1.0)
+	{
+		mRiderCacheTime = Now;
+		mRiderCache.Reset();
+		const FBox Box = mMesh->Bounds.GetBox().ExpandBy(FVector(200.f, 200.f, 500.f));
+
+		// On this piece = right above its surface (a short trace down hits this piece's mesh).
+		auto IsOnThis = [this](const FVector& P)
+		{
+			FHitResult Hit;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(RMRiders), true);
+			return mMesh->LineTraceComponent(Hit, P + FVector(0.f, 0.f, 150.f), P - FVector(0.f, 0.f, 250.f), Params);
+		};
+		// Most of the spline (at least 4 of 7 samples) must lie on this piece, so a path or track that
+		// only touches it at one end stays with the road or intersection it really runs on.
+		auto MostlyOnThis = [&IsOnThis](const USplineComponent* Spline)
+		{
+			const float Length = Spline->GetSplineLength();
+			int32 On = 0;
+			for (int32 K = 0; K <= 6; ++K)
+			{
+				if (IsOnThis(Spline->GetLocationAtDistanceAlongSpline(Length * K / 6.f, ESplineCoordinateSpace::World)))
+				{
+					++On;
+				}
+			}
+			return On >= 4;
+		};
+		auto Consider = [&](AActor* Actor, const USplineComponent* Spline)
+		{
+			if (Actor && Spline && IsValid(Actor) && Box.Intersect(Spline->Bounds.GetBox()) && MostlyOnThis(Spline))
+			{
+				mRiderCache.Add(Actor);
+			}
+		};
+		for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
+		{
+			Consider(*It, It->GetSplineComponent());
+		}
+		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+		{
+			Consider(*It, It->GetSplineComponent());
+		}
+	}
+
+	for (const TWeakObjectPtr<AActor>& Weak : mRiderCache)
+	{
+		AActor* Actor = Weak.Get();
+		if (!Actor || out_ChildDismantleActors.Contains(Actor))
+		{
+			continue;
+		}
+		out_ChildDismantleActors.Add(Actor);
+		// Their own attached pieces too (e.g. a track's switch control).
+		if (Actor->Implements<UFGDismantleInterface>())
+		{
+			TArray<AActor*> Sub;
+			IFGDismantleInterface::Execute_GetChildDismantleActors(Actor, Sub);
+			for (AActor* S : Sub)
+			{
+				out_ChildDismantleActors.AddUnique(S);
+			}
+		}
 	}
 }

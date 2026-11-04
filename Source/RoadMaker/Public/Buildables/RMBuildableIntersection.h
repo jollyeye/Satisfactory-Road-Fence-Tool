@@ -16,6 +16,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void RebuildMesh() override;
+	virtual bool DismantlesRiders() const override { return true; }
 
 	/** Ends in actor-local space, plus the slab thickness taken from the connected roads. */
 	void SetEnds(const TArray<FRMRoadEnd>& LocalEnds, float Height);

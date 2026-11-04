@@ -62,6 +62,8 @@ Everything unlocks in the **Road Maker** milestone in Tier 1. Roads and intersec
 - **One-click intersection connections:** hold a vehicle path or railway track and the snap key (Ctrl) and aim at an intersection: every arriving path is connected to every leaving path on the other ends (no U-turns), and every track end to the track in the same lane on each other end (left to left, middle to middle, right to right, in the travel direction; switches form on their own), shown at once; one click builds them all. If one connection is invalid (red), improve the intersection until all of them fit.
 - Intersections reach road ends up to 32 m from where you aim (was 25 m).
 - New **Pick Road Ends** build mode for big intersections: click each free road end to pick it (click again to drop it), then click away from the ends to build. Picked ends can be up to 200 m apart.
+- Dismantling a road or intersection also dismantles the vehicle paths and railway tracks lying on it (refunded too).
+- Intersections of two roads at an angle (e.g. 90°) now build: the curved, ring-shaped piece is filled correctly, and big intersections get rounder curbs.
 - Roads without side lines use the full width for their lanes (lane lines and snap points).
 - Power poles and street lights snap exactly on the road edge.
 - New **Smooth** build mode for roads: the height eases in and out and matches the slope of the roads it connects, so linking roads at different heights has no kinks when seen from the side. Allows up to 45°.
