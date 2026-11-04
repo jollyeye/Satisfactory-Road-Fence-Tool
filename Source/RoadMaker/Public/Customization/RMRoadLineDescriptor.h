@@ -17,6 +17,12 @@ class ROADMAKER_API URMRoadLineDescriptor : public UFGFactoryCustomizationDescri
 	GENERATED_BODY()
 
 public:
+	/**
+	 * Not a physical item: an invalid resource form keeps the options out of item lists (e.g. the
+	 * creative mode "give items" menu), like the game's own customizer entries.
+	 */
+	URMRoadLineDescriptor() { mForm = EResourceForm::RF_INVALID; }
+
 	/** True: this option sets side lines. False: it sets the lane layout. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
 	bool mIsSideLineOption = false;

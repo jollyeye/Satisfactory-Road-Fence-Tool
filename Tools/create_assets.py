@@ -552,6 +552,10 @@ for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIO
         setp(c, tex, "m_small_icon", "mSmallIcon")
         setp(c, tex, "m_persistent_big_icon", "mPersistentBigIcon")
     setp(c, is_side, "m_is_side_line_option", "mIsSideLineOption")
+    # Not a physical item (keeps it out of item lists such as creative mode's "give items").
+    rf = getattr(unreal, "ResourceForm", None)
+    if rf is not None and hasattr(rf, "RF_INVALID"):
+        setp(c, rf.RF_INVALID, "m_form", "mForm")
     setp(c, sides, "m_side_lines", "mSideLines")
     setp(c, max(lanes, 1), "m_lanes", "mLanes")
     setp(c, continuous, "m_continuous", "mContinuous")
