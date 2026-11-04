@@ -203,6 +203,13 @@ namespace RMGeometry
 	 * frames' line and reaching towards +Right (the road side), so its outer face is on the line.
 	 * Stays upright on slopes like the grid fence; the top follows the ground line.
 	 */
+	/**
+	 * Steel fence wall, shaped like the game's steel wall: a ribbed panel between a top rail and a
+	 * kick rail, and posts every 8 m (and at both ends). UVs are laid out for the game's steel wall
+	 * texture (TX_WallSetSteel_01): panel in u 0..0.885 / v 0.2..0.9, frame parts on its dark bands.
+	 */
+	ROADMAKER_API void BuildSteelFenceWall(const TArray<FRMFrame>& Frames, FRMMesh& Out, float Height = 400.f);
+
 	ROADMAKER_API void BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height = 400.f, float Thickness = 50.f,
 		const FRMWallTexLayout& Layout = FRMWallTexLayout());
 

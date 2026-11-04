@@ -210,5 +210,11 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 	case ERMFenceType::ConcreteWall:
 		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout);
 		break;
+	case ERMFenceType::SteelWall:
+		RMGeometry::BuildSteelFenceWall(Frames, Main, GetWallHeight());
+		break;
+	case ERMFenceType::FicsitWall:
+		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout); // shape to follow
+		break;
 	}
 }

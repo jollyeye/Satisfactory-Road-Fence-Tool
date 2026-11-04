@@ -789,6 +789,168 @@ namespace
 	}
 }
 
+namespace
+{
+	/** Frame at a distance along the frames (interpolated), upright. */
+	FRMFrame FrameAtDist(const TArray<FRMFrame>& Frames, float D)
+	{
+		int32 I = 1;
+		while (I < Frames.Num() - 1 && Frames[I].Dist < D)
+		{
+			++I;
+		}
+		const FRMFrame& A = Frames[I - 1];
+		const FRMFrame& B = Frames[I];
+		const float T = FMath::Clamp((D - A.Dist) / FMath::Max(B.Dist - A.Dist, 0.01f), 0.f, 1.f);
+		FRMFrame F;
+		F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+		F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+		F.Right = FVector(FMath::Lerp(A.Right, B.Right, T).X, FMath::Lerp(A.Right, B.Right, T).Y, 0.f).GetSafeNormal();
+		F.Up = FVector::UpVector;
+		F.Dist = D;
+		return F;
+	}
+
+	/**
+	 * Extrudes a closed rectangle profile (X across, Y up) along the frames with hard edges. UVOf gives
+	 * each vertex's UV0 from (frame, profile point, is a vertical face). Tangents run along the wall,
+	 * binormals down the wall (the way a wall texture's v grows).
+	 */
+	template <typename TUV>
+	void ExtrudeBox(const TArray<FRMFrame>& Frames, const TArray<FVector2D>& Profile, FRMMesh& Out, TUV UVOf)
+	{
+		if (Frames.Num() < 2)
+		{
+			return;
+		}
+		FVector2D Centroid = FVector2D::ZeroVector;
+		for (const FVector2D& P : Profile)
+		{
+			Centroid += P / Profile.Num();
+		}
+		for (int32 E = 0; E < Profile.Num(); ++E)
+		{
+			const FVector2D A = Profile[E];
+			const FVector2D B = Profile[(E + 1) % Profile.Num()];
+			FVector2D N2(B.Y - A.Y, -(B.X - A.X));
+			N2.Normalize();
+			if (FVector2D::DotProduct(N2, (A + B) * 0.5f - Centroid) < 0.f)
+			{
+				N2 = -N2;
+			}
+			const bool bVertical = FMath::IsNearlyEqual(A.X, B.X);
+			const int32 Base = Out.Vertices.Num();
+			for (const FRMFrame& F : Frames)
+			{
+				const FVector N = (F.Right * N2.X + F.Up * N2.Y).GetSafeNormal();
+				for (const FVector2D& P : { A, B })
+				{
+					const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, UVOf(F, P, bVertical), F.Fwd);
+					const bool bFlip = FVector::DotProduct(FVector::CrossProduct(N, F.Fwd), FVector::UpVector) > 0.f;
+					Out.Tangents[V] = FProcMeshTangent(F.Fwd, bFlip);
+				}
+			}
+			for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+			{
+				const int32 A0 = Base + I * 2;
+				const FVector N = Out.Normals[A0];
+				Out.AddTriangle(A0, A0 + 1, A0 + 3, N);
+				Out.AddTriangle(A0, A0 + 3, A0 + 2, N);
+			}
+		}
+	}
+}
+
+void RMGeometry::BuildSteelFenceWall(const TArray<FRMFrame>& InFrames, FRMMesh& Out, float Height)
+{
+	if (InFrames.Num() < 2)
+	{
+		return;
+	}
+	TArray<FRMFrame> Frames = InFrames;
+	for (FRMFrame& F : Frames)
+	{
+		F.Up = FVector::UpVector;
+		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+	}
+	const float Length = Frames.Last().Dist;
+	const float Cell = 800.f;          // one wall panel between posts
+	const float PostHalf = 17.5f;      // posts 35 cm along the wall
+	const float PostDepth = 25.f;      // half thickness (50 cm wall)
+	const float KickTop = 37.f;        // kick rail at the bottom
+	const float RailBottom = Height - 21.f; // top rail
+	const float PanelHalf = 8.f;       // ribbed sheet, recessed between the rails
+
+	// Panel UVs (measured from the game's texture and wall): u 0..0.885 from one post to the next,
+	// v 0.2 at the top rail down to 0.9 at the kick rail.
+	const float PanelV0 = 0.2f, PanelV1 = 0.9f, PanelU1 = 0.885f;
+
+	// Cells of 8 m; each is built on its own so the panel texture restarts at every post.
+	const int32 Cells = FMath::Max(1, FMath::CeilToInt((Length - 1.f) / Cell));
+	for (int32 C = 0; C < Cells; ++C)
+	{
+		const float D0 = C * Cell;
+		const float D1 = FMath::Min((C + 1) * Cell, Length);
+		TArray<FRMFrame> Part;
+		Part.Add(FrameAtDist(Frames, D0));
+		for (const FRMFrame& F : Frames)
+		{
+			if (F.Dist > D0 + 1.f && F.Dist < D1 - 1.f)
+			{
+				Part.Add(F);
+			}
+		}
+		Part.Add(FrameAtDist(Frames, D1));
+
+		auto PanelU = [&](const FRMFrame& F)
+		{
+			return FMath::Clamp((F.Dist - D0) / Cell, 0.f, 1.f) * PanelU1;
+		};
+		// Ribbed sheet.
+		ExtrudeBox(Part, { FVector2D(-PanelHalf, KickTop - 2.f), FVector2D(PanelHalf, KickTop - 2.f),
+			FVector2D(PanelHalf, RailBottom + 2.f), FVector2D(-PanelHalf, RailBottom + 2.f) }, Out,
+			[&](const FRMFrame& F, const FVector2D& P, bool bVertical)
+			{
+				const float T = FMath::Clamp((RailBottom - P.Y) / (RailBottom - KickTop), 0.f, 1.f);
+				return bVertical ? FVector2D(PanelU(F), FMath::Lerp(PanelV0, PanelV1, T)) : FVector2D(PanelU(F), PanelV0);
+			});
+		// Top rail and kick rail: the dark bands above and below the panel in the texture.
+		ExtrudeBox(Part, { FVector2D(-PostDepth, RailBottom), FVector2D(PostDepth, RailBottom),
+			FVector2D(PostDepth, Height), FVector2D(-PostDepth, Height) }, Out,
+			[&](const FRMFrame& F, const FVector2D& P, bool bVertical)
+			{
+				return FVector2D(PanelU(F), 0.06f + 0.1f * (Height - P.Y) / FMath::Max(Height - RailBottom, 1.f) + (bVertical ? 0.f : 0.02f));
+			});
+		ExtrudeBox(Part, { FVector2D(-PostDepth + 5.f, -2.f), FVector2D(PostDepth - 5.f, -2.f),
+			FVector2D(PostDepth - 5.f, KickTop), FVector2D(-PostDepth + 5.f, KickTop) }, Out,
+			[&](const FRMFrame& F, const FVector2D& P, bool)
+			{
+				return FVector2D(PanelU(F), 0.92f + 0.06f * FMath::Clamp((KickTop - P.Y) / KickTop, 0.f, 1.f));
+			});
+	}
+
+	// Posts: at both ends (just inside) and at every 8 m between, on the dark strip right of the panel.
+	TArray<float> PostDists = { FMath::Min(PostHalf, Length * 0.5f) };
+	for (float D = Cell; D < Length - PostHalf; D += Cell)
+	{
+		PostDists.Add(D);
+	}
+	PostDists.Add(FMath::Max(Length - PostHalf, Length * 0.5f));
+	for (const float D : PostDists)
+	{
+		const FRMFrame F = FrameAtDist(Frames, D);
+		const int32 First = Out.Vertices.Num();
+		Out.AddBox(F.Pos + FVector(0.f, 0.f, (Height - 2.f) * 0.5f), F.Fwd, F.Right, FVector::UpVector,
+			FVector(PostHalf, PostDepth + 2.f, (Height + 2.f) * 0.5f), 100.f);
+		for (int32 V = First; V < Out.Vertices.Num(); ++V)
+		{
+			const float Up = FMath::Clamp(Out.Vertices[V].Z - F.Pos.Z, 0.f, Height);
+			const float Side = FVector::DotProduct(Out.Vertices[V] - F.Pos, F.Fwd) > 0.f ? 1.f : 0.f;
+			Out.UVs[V] = FVector2D(0.91f + 0.07f * Side, 0.22f + 0.66f * (1.f - Up / Height));
+		}
+	}
+}
+
 void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height, float Thickness,
 	const FRMWallTexLayout& Layout)
 {

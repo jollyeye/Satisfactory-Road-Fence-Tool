@@ -132,6 +132,11 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		int32 Added = 0;
 		for (const TSubclassOf<AFGBuildable>& Variant : mFenceWallVariants)
 		{
+			// The game's wall materials only apply to the buildables they list (the game's walls).
+			if (Variant && Desc->mValidBuildables.Num() > 0)
+			{
+				Desc->mValidBuildables.AddUnique(Variant);
+			}
 			if (Variant && !Desc->GetBuildableMap().Contains(Variant) && Desc->AddType(Variant, Entry.Value))
 			{
 				++Added;

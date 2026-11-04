@@ -13,6 +13,8 @@ enum class ERMFenceType : uint8
 	GridFence     UMETA(DisplayName = "Metal Grid Fence"),
 	GridFenceTall UMETA(DisplayName = "Metal Grid Fence (4m tall)"),
 	ConcreteWall  UMETA(DisplayName = "Concrete Fence Wall"),
+	SteelWall     UMETA(DisplayName = "Steel Fence Wall"),
+	FicsitWall    UMETA(DisplayName = "FICSIT Fence Wall"),
 };
 
 UCLASS()
@@ -51,7 +53,11 @@ public:
 	float GetInwardSign() const { return mInwardSign; }
 
 	/** Fence walls stack: a new wall aimed at one goes on top of it. */
-	bool IsWall() const { return mFenceType == ERMFenceType::ConcreteWall; }
+	bool IsWall() const { return IsWallType(mFenceType); }
+	static bool IsWallType(ERMFenceType Type)
+	{
+		return Type == ERMFenceType::ConcreteWall || Type == ERMFenceType::SteelWall || Type == ERMFenceType::FicsitWall;
+	}
 	static float GetWallHeight() { return 400.f; }
 
 	/** Spline points in world space (for stacking). */
