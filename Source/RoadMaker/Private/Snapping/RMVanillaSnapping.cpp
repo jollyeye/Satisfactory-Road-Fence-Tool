@@ -69,11 +69,7 @@ namespace
 		}
 		if (Hologram->IsA<AFGFoundationHologram>() && Build->IsChildOf(AFGBuildableFoundation::StaticClass()))
 		{
-			const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(const_cast<UClass*>(Build));
-			if (Foundation && FMath::IsNearlyZero(Foundation->mElevation) && !Foundation->mIsFrame)
-			{
-				return ESnapKind::Foundation; // flat foundations (no ramps, no frames)
-			}
+			return ESnapKind::Foundation; // foundations, frames and ramps (normal and inverted)
 		}
 		return ESnapKind::None;
 	}
@@ -1523,22 +1519,41 @@ namespace
 		return true;
 	}
 
+	/** Foundations snapped to a road end: quarter turns set with the scroll wheel (per hologram). */
+	TMap<TWeakObjectPtr<const AFGHologram>, int32> GFoundationQuarter;
+	TSet<TWeakObjectPtr<const AFGHologram>> GFoundationSnapped;
+
 	/**
 	 * Foundations next to a free road end or intersection end: the foundation's edge sits on the end
-	 * face, its top level with the road, facing along the road, in 4 m steps across the end (road ends
-	 * are whole foundations wide, so the foundation lines up with the road's own grid).
+	 * face, its top level with the road, in 4 m steps across the end (road ends are whole foundations
+	 * wide, so it lines up with the road's own grid). The scroll wheel turns it in 90 degree steps.
+	 * Ramps: turned so the high side touches the road its top is level with the road (the ramp goes
+	 * down away from it); turned around, the low side is (it goes up). Inverted ramps have a flat top.
 	 */
 	template <typename TScope, typename THologram>
 	bool PlaceFoundationAtRoadEnd(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(Hologram->GetBuildClass().Get());
 		UWorld* World = Hologram->GetWorld();
+		GFoundationSnapped.Remove(Hologram);
 		if (!Foundation || !World || Foundation->mDepth < 100.f || Foundation->mWidth < 100.f)
 		{
 			return false;
 		}
+		const int32 Quarter = ((GFoundationQuarter.FindRef(Hologram) % 4) + 4) % 4;
+		const bool bSideways = (Quarter % 2) == 1;
+		const float AlongSize = bSideways ? Foundation->mWidth : Foundation->mDepth;
+		const float AcrossSize = bSideways ? Foundation->mDepth : Foundation->mWidth;
+		const bool bInverted = Hologram->GetBuildClass()->GetName().Contains(TEXT("Inverted"));
+		// Top of the side touching the road, above the origin (which is half way up).
+		float TopAtRoad = Foundation->mHeight * 0.5f;
+		if (Quarter == 2 && !bInverted)
+		{
+			TopAtRoad -= Foundation->mElevation; // the ramp's low side faces the road
+		}
+
 		TArray<FRMRoadEndRef> Ends;
-		RMRoadUtils::FindFreeEnds(World, Hit.Location, Foundation->mDepth + 1200.f, 4, nullptr, Ends);
+		RMRoadUtils::FindFreeEnds(World, Hit.Location, AlongSize + 1200.f, 4, nullptr, Ends);
 		for (const FRMRoadEndRef& End : Ends)
 		{
 			const FVector Out = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
@@ -1547,16 +1562,15 @@ namespace
 			const float Along = FVector::DotProduct(D, Out);
 			const float Across = FVector::DotProduct(D, Right);
 			// Aiming at the ground (or a foundation) just beyond the end, or at the very end of the road.
-			if (Along < -400.f || Along > Foundation->mDepth + 400.f
-				|| FMath::Abs(Across) > End.Width * 0.5f + Foundation->mWidth * 0.5f || FMath::Abs(D.Z) > 800.f)
+			if (Along < -400.f || Along > AlongSize + 400.f
+				|| FMath::Abs(Across) > End.Width * 0.5f + AcrossSize * 0.5f || FMath::Abs(D.Z) > 800.f)
 			{
 				continue;
 			}
 			const float Step = FMath::RoundToFloat(Across / 400.f) * 400.f;
-			// Origin of a foundation is its centre (half way up).
-			const FVector Location = End.Location + Right * Step + Out * (Foundation->mDepth * 0.5f)
-				- FVector(0.f, 0.f, Foundation->mHeight * 0.5f);
-			Hologram->SetActorLocationAndRotation(Location, FRotator(0.f, Out.Rotation().Yaw, 0.f));
+			const FVector Location = End.Location + Right * Step + Out * (AlongSize * 0.5f) - FVector(0.f, 0.f, TopAtRoad);
+			Hologram->SetActorLocationAndRotation(Location, FRotator(0.f, Out.Rotation().Yaw + 90.f * Quarter, 0.f));
+			GFoundationSnapped.Add(Hologram);
 			Scope.Cancel();
 			return true;
 		}
@@ -1820,6 +1834,17 @@ void RMVanillaSnapping::InstallHooks()
 	RM_HOOK_SET_LOCATION(AFGRailroadTrackHologram);
 	RM_HOOK_SET_LOCATION(AFGVehiclePathSegmentHologram);
 	RM_HOOK_SET_LOCATION(AFGFoundationHologram);
+
+	// Foundations snapped to a road end turn 90 degrees per scroll step.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::ScrollRotate, GetMutableDefault<AFGFoundationHologram>(),
+		[](auto& Scope, AFGBuildableHologram* Hologram, int32 Delta, int32 Step)
+		{
+			if (Delta != 0 && GFoundationSnapped.Contains(Hologram))
+			{
+				GFoundationQuarter.FindOrAdd(Hologram) += Delta > 0 ? 1 : -1;
+				Scope.Cancel();
+			}
+		});
 
 #undef RM_HOOK_SET_LOCATION
 
