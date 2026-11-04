@@ -774,13 +774,56 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	});
 }
 
+namespace
+{
+	// Layout of the game's concrete wall texture (TX_WallSetConcrete_01, read from the real texture):
+	// one half of an 8 m x 4 m panel, panel centre at u = 0, panel edge at u ~ 0.856, mirrored for
+	// the other half; ~0.214 units per metre; top of the wall at v ~ 0.021, bottom at ~0.888.
+	constexpr float WallPanel = 800.f;        // cm
+	constexpr float WallUPerCm = 0.214f / 100.f;
+	constexpr float WallVPerCm = 0.21675f / 100.f;
+	constexpr float WallVTop = 0.021f;
+
+	/** Metres-free panel position: cm from the nearest panel centre (negative before it). */
+	float WallPanelOffset(float Dist)
+	{
+		const float InPanel = FMath::Fmod(Dist, WallPanel);
+		return (InPanel < 0.f ? InPanel + WallPanel : InPanel) - WallPanel * 0.5f;
+	}
+}
+
 void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height, float Thickness)
 {
 	if (Frames.Num() < 2)
 	{
 		return;
 	}
-	TArray<FRMFrame> Upright = Frames;
+	// Upright frames, with extra frames at every panel centre and edge (every 4 m) so the mirrored
+	// texture folds exactly there.
+	TArray<FRMFrame> Upright;
+	for (int32 I = 0; I < Frames.Num(); ++I)
+	{
+		if (I > 0)
+		{
+			const FRMFrame& A = Frames[I - 1];
+			const FRMFrame& B = Frames[I];
+			for (float D = FMath::FloorToFloat(A.Dist / 400.f) * 400.f + 400.f; D < B.Dist - 1.f; D += 400.f)
+			{
+				if (D <= A.Dist + 1.f)
+				{
+					continue;
+				}
+				const float T = (D - A.Dist) / FMath::Max(B.Dist - A.Dist, 1.f);
+				FRMFrame F;
+				F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+				F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+				F.Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal();
+				F.Dist = D;
+				Upright.Add(F);
+			}
+		}
+		Upright.Add(Frames[I]);
+	}
 	for (FRMFrame& F : Upright)
 	{
 		F.Up = FVector::UpVector;
@@ -792,10 +835,10 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 	const float Bottom = -2.f;
 	const TArray<FVector2D> Profile = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom),
 		FVector2D(Half, Height), FVector2D(-Half, Height) };
-	const float S = 1.f / FMath::Max(UVScale, 1.f);
 
-	// UV1 = (metres along the wall, metres up from its base), so the material's texture follows the
-	// curve and the height. Faces are written by hand to know each vertex's place.
+	// UV0 = the game's wall texture layout (for the game's own wall material); UV1 = (metres along,
+	// metres up) for Road Maker's own wall material. The tangent runs the way the texture's u grows
+	// (away from the panel centre), the binormal down the wall (the way v grows).
 	auto Mark = [&Out](int32 Index, const FVector2D& UV1)
 	{
 		if (Out.MarkUV1.Num() <= Index)
@@ -803,6 +846,12 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 			Out.MarkUV1.SetNumZeroed(Index + 1);
 		}
 		Out.MarkUV1[Index] = UV1;
+	};
+	auto SetTangent = [&Out](int32 Index, const FVector& TangentX)
+	{
+		const FVector N = Out.Normals[Index];
+		const bool bFlip = FVector::DotProduct(FVector::CrossProduct(N, TangentX), FVector::UpVector) > 0.f;
+		Out.Tangents[Index] = FProcMeshTangent(TangentX, bFlip);
 	};
 	for (int32 E = 0; E < Profile.Num(); ++E)
 	{
@@ -819,11 +868,24 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		for (const FRMFrame& F : Upright)
 		{
 			const FVector N = (F.Right * N2.X + F.Up * N2.Y).GetSafeNormal();
-			const float Along = F.Dist / 100.f;
+			const float Offset = WallPanelOffset(F.Dist);
 			for (const FVector2D& P : { A, B })
 			{
-				const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, FVector2D(Along * 100.f * S, (bVertical ? P.Y : P.X) * S), F.Fwd);
-				Mark(V, FVector2D(Along, (bVertical ? FMath::Max(P.Y, 0.f) : P.X + Half) / 100.f));
+				const float Up = FMath::Clamp(P.Y, 0.f, Height);
+				FVector2D UV0;
+				if (bVertical)
+				{
+					UV0 = FVector2D(FMath::Abs(Offset) * WallUPerCm, WallVTop + (Height - Up) * WallVPerCm);
+				}
+				else
+				{
+					// Top and bottom: a plain stretch of the texture, mirrored every metre (no seams).
+					const float Mirror = FMath::Abs(FMath::Fmod(F.Dist / 100.f, 2.f) - 1.f);
+					UV0 = FVector2D(0.6f + (P.X + Half) * WallUPerCm, 0.2f + Mirror * 0.2f);
+				}
+				const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, UV0, F.Fwd);
+				SetTangent(V, bVertical && Offset < 0.f ? -F.Fwd : F.Fwd);
+				Mark(V, FVector2D(F.Dist / 100.f, (bVertical ? Up : P.X + Half) / 100.f));
 			}
 		}
 		for (int32 I = 0; I + 1 < Upright.Num(); ++I)
@@ -836,12 +898,16 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 	}
 	for (const bool bEnd : { false, true })
 	{
+		const FRMFrame& F = bEnd ? Upright.Last() : Upright[0];
 		const int32 First = Out.Vertices.Num();
-		AddProfileCap(bEnd ? Upright.Last() : Upright[0], Profile, bEnd, UVScale, Out);
+		AddProfileCap(F, Profile, bEnd, UVScale, Out);
 		for (int32 V = First; V < Out.Vertices.Num(); ++V)
 		{
 			const FVector2D& P = Profile[V - First];
-			Mark(V, FVector2D((P.X + Half) / 100.f, FMath::Max(P.Y, 0.f) / 100.f));
+			const float Up = FMath::Clamp(P.Y, 0.f, Height);
+			Out.UVs[V] = FVector2D(0.6f + (P.X + Half) * WallUPerCm, WallVTop + (Height - Up) * WallVPerCm);
+			SetTangent(V, F.Right);
+			Mark(V, FVector2D((P.X + Half) / 100.f, Up / 100.f));
 		}
 	}
 	Out.MarkUV1.SetNumZeroed(Out.Vertices.Num());

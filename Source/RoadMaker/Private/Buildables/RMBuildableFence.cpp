@@ -87,6 +87,9 @@ void ARMBuildableFence::ApplyPaintColors(const FFactoryCustomizationData& Data)
 	{
 		if (M)
 		{
+			// The game's own way of passing paint (colours, finish, pattern) to its materials: used by
+			// the game's wall material on the fence wall. Road Maker's materials read 24 / 28 below.
+			Resolved.ApplyToMeshComponent(M);
 			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
 			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 		}

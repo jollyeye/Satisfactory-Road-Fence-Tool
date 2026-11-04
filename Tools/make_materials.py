@@ -341,12 +341,11 @@ float u = abs(p) * 0.214;
 float v = 0.021 + (4.0 - clamp(UV1.y, 0.0, 4.0)) * 0.21675;
 return float2(u, v);
 """
-# World-space normal from the map: the texture's +u runs away from the panel centre along the wall
-# (A = mesh tangent, the wall direction), +v runs down. Signs as for the foundation textures (checked
-# in game there): red tilts towards -u, green towards +v.
+# World-space normal from the map: the mesh tangent A already runs the way the texture's +u grows
+# (away from the panel centre), +v runs down. Signs as for the foundation textures (checked in game
+# there): red tilts towards -u, green towards +v.
 WALL_NORMAL_HLSL = r"""
-float p = frac(UV1.x / 8.0) * 8.0 - 4.0;
-float s = p >= 0.0 ? 1.0 : -1.0;
+float s = 1.0;
 float3 Along = normalize(A);
 float3 Up = float3(0, 0, 1);
 float3 n = N * max(T.z, 0.2) - Along * (s * T.x * Str) - Up * (T.y * Str);
@@ -515,6 +514,22 @@ MEL.connect_material_property(ovc, "", MP.MP_EMISSIVE_COLOR)
 MEL.connect_material_property(const(overlay, 1.0, -500, 200), "", MP.MP_OPACITY)
 finish(overlay)
 
+# The game's own concrete wall material: the wall mesh carries the same texture layout (UV0) and the
+# wall passes the paint to it the way the game does, so it looks and paints like the game's walls.
+# Road Maker's M_RoadFenceWall stays as the fallback.
+game_wall_mat = None
+for path in ("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/MI_WallSetConcrete_8x4.MI_WallSetConcrete_8x4",
+             "/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/MI_WallSetConcrete_8x4"):
+    try:
+        game_wall_mat = unreal.load_asset(path)
+    except Exception:
+        game_wall_mat = None
+    if game_wall_mat:
+        log("Fence wall uses the game's material " + path)
+        break
+if not game_wall_mat:
+    log("  ! game wall material not found, the fence wall uses M_RoadFenceWall")
+
 # --- Assign ----------------------------------------------------------------------------------
 ASSIGN = {
     "Build_Road_1x": {"m_top_material": asphalt, "m_body_material": concrete},
@@ -525,7 +540,7 @@ ASSIGN = {
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
-    "Build_FenceWall_Concrete": {"m_main_material": fwall},
+    "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)
