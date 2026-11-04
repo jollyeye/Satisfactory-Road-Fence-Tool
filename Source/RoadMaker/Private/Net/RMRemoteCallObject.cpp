@@ -1,5 +1,6 @@
 #include "Net/RMRemoteCallObject.h"
 #include "Buildables/RMBuildableFence.h"
+#include "FGCharacterPlayer.h"
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMRoadLineDescriptor.h"
 #include "FGPlayerController.h"
@@ -20,7 +21,7 @@ void URMRemoteCallObject::ServerSetFenceWallLook_Implementation(ARMBuildableFenc
 {
 	if (Wall)
 	{
-		Wall->SetWallLook(Look);
+		Wall->SetWallLook(Look, GetOwnerPlayerCharacter());
 	}
 }
 

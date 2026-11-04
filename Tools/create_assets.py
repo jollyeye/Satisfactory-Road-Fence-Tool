@@ -426,8 +426,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     finish(r)
     if name in FENCE_WALLS:
         fence_wall_recipes[name] = r.generated_class()
-    if name in FENCE_WALLS and base_building:
-        wall_recipes.append(r.generated_class())
+    if name == "FenceWall_Ficsit" and base_building:
+        wall_recipes.append(r.generated_class())  # concrete / steel unlock with their wall materials
     else:
         recipes.append(r.generated_class())
 
@@ -588,6 +588,26 @@ setp(g, True, "root_module", "b_root_module", "bRootModule")
 setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
 if light_swatch:
     setp(g, light_swatch, "m_default_road_swatch", "mDefaultRoadSwatch")
+# Each fence wall knows the recipe of every look (cost of switching in the customizer).
+look_recipes = [fence_wall_recipes.get(n) for n in ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")]
+for wname, wcls in fence_wall_classes.items():
+    wbp = unreal.load_asset("%s/Buildables/Build_%s.Build_%s" % (ROOT, wname, wname))
+    if wbp and all(look_recipes):
+        setp(cdo(wbp), look_recipes, "m_wall_look_recipes", "mWallLookRecipes")
+        finish(wbp)
+
+# Concrete and steel fence walls unlock with the game's concrete / steel wall materials.
+alongside = {}
+for game_recipe, variant in (("Recipe_Material_Wall_Concrete", "FenceWall_Concrete"), ("Recipe_Material_Wall_Steel", "FenceWall_Steel")):
+    gr = load_game_class(game_recipe)
+    if gr and variant in fence_wall_recipes:
+        alongside[gr] = fence_wall_recipes[variant]
+        log("  %s unlocks with %s" % (variant, game_recipe))
+try:
+    g.set_editor_property("m_unlock_alongside", alongside)
+except Exception as e:
+    log("  ! unlock alongside: %s" % e)
+
 # Customizer Material tab: each game wall material swaps any fence wall to the variant in it.
 setp(g, list(fence_wall_classes.values()), "m_fence_wall_variants", "mFenceWallVariants")
 mat_map = {}

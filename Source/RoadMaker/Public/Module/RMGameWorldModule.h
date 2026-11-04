@@ -46,6 +46,15 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TMap<TSubclassOf<class UFGFactoryCustomizationDescriptor_Material>, TSubclassOf<class UFGRecipe>> mFenceWallMaterialRecipes;
 
+	/**
+	 * Recipes unlocked together with a game recipe (key): our recipe is added to every schematic that
+	 * unlocks the game's one, e.g. the concrete fence wall with the customizer's concrete wall material.
+	 */
+	void AddRecipesAlongsideGameRecipes();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TMap<TSubclassOf<class UFGRecipe>, TSubclassOf<class UFGRecipe>> mUnlockAlongside;
+
 	/** A game milestone that also unlocks mExtraRecipes (the fence wall: Tier 1 Base Building). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<class UFGSchematic> mExtraRecipesSchematic;

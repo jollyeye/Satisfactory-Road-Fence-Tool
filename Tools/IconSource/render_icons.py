@@ -221,17 +221,43 @@ def intersection(sc):
         end = (sx * (hw - e), sy * (hw + stub))
         lstrip([start] + path + [end] if (sx * sy) > 0 else [end] + path + [start])
 
-def fence_wall(sc, wall=None):
-    # A 4 m fence wall (0.5 m thick) along a curve, with a second one stacked on part of it.
-    frs = frames_arc(10.0, 0.6, 30)
-    wall = CONCRETE * 0.95 if wall is None else wall
-    prof = [(0.0, 0.0), (0.5, 0.0), (0.5, 4.0), (0.0, 4.0)]
-    extrude(sc, frs, prof, wall)
-    cap(sc, frs[0], prof, wall); cap(sc, frs[-1], prof, wall)
-    top = frs[:16]
-    prof2 = [(0.0, 4.08), (0.5, 4.08), (0.5, 8.0), (0.0, 8.0)]
-    extrude(sc, top, prof2, wall)
-    cap(sc, top[0], prof2, wall); cap(sc, top[-1], prof2, wall)
+def fence_wall(sc, kind="concrete"):
+    # One straight 4 m tall fence wall piece, 0.5 m thick, with the look of its material on the face.
+    L, H, T = 6.0, 4.0, 0.5
+    y = T / 2 + 0.01   # visible face (towards the camera)
+    def stripe(x0, x1, z0, z1, col):
+        sc.quad((x0, y, z0), (x1, y, z0), (x1, y, z1), (x0, y, z1), col, layer=1, two=True, shade=False)
+    if kind == "concrete":
+        base = CONCRETE * 0.92
+        box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, base)
+        seam = CONCRETE * 0.62
+        stripe(0.0, L, 0.45, 0.52, seam)          # bottom band
+        stripe(0.0, L, 1.96, 2.04, seam)          # middle seam
+        stripe(0.0, L, 3.50, 3.57, seam)          # top band
+        for x in (0.3, L - 0.3):
+            stripe(x - 0.04, x + 0.04, 0.5, 3.55, seam)
+        for x in (1.6, 4.4):                      # tie holes
+            for z in (1.7, 2.3):
+                stripe(x - 0.08, x + 0.08, z - 0.08, z + 0.08, seam)
+    elif kind == "steel":
+        dark = np.array([58, 60, 64.0])
+        panel = np.array([150, 156, 164.0])
+        box(sc, (L / 2, 0, 0.2), L / 2, T / 2, 0.2, dark)            # kick rail
+        box(sc, (L / 2, 0, H - 0.12), L / 2, T / 2, 0.12, dark)      # top rail
+        box(sc, (L / 2, 0, H / 2), L / 2, 0.1, H / 2 - 0.3, panel)   # ribbed sheet
+        yy = 0.11
+        rib = panel * 0.62
+        z = 0.55
+        while z < H - 0.3:
+            sc.quad((0, yy, z), (L, yy, z), (L, yy, z + 0.06), (0, yy, z + 0.06), rib, layer=1, two=True, shade=False)
+            z += 0.24
+    else:  # ficsit
+        base = ORANGE * 0.95
+        box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, base)
+        groove = ORANGE * 0.62
+        for x in (0.45, 3.45, 4.45):
+            stripe(x - 0.09, x - 0.04, 0.0, H, groove)
+            stripe(x + 0.04, x + 0.09, 0.0, H, groove)
 
 what = sys.argv[1]; out = sys.argv[2]
 sc = Scene()
@@ -243,7 +269,7 @@ elif what == "jersey": jersey(sc)
 elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
-elif what == "fencewall": fence_wall(sc)
-elif what == "fencewall_ficsit": fence_wall(sc, ORANGE)
-elif what == "fencewall_steel": fence_wall(sc, np.array([120, 126, 134.0]))
+elif what == "fencewall": fence_wall(sc, "concrete")
+elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
+elif what == "fencewall_steel": fence_wall(sc, "steel")
 render(sc, out)

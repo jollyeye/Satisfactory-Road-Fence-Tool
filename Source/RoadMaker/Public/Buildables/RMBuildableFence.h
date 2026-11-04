@@ -57,7 +57,14 @@ public:
 	 * in place: 0 = as built, 1 = concrete, 2 = FICSIT, 3 = steel. The preview look is local only
 	 * (shown while the customizer aims at the wall).
 	 */
-	void SetWallLook(uint8 Look);
+	/**
+	 * Switches the look on the server. With a player, the new look's cost is taken from their
+	 * inventory and the old look's cost given back (like the game's material swap); false if they
+	 * cannot pay.
+	 */
+	bool SetWallLook(uint8 Look, class AFGCharacterPlayer* Payer = nullptr);
+	uint8 GetShownLook() const { return mWallLook ? mWallLook : LookOfType(mFenceType); }
+	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
 	void SetPreviewWallLook(uint8 Look);
 	uint8 GetWallLook() const { return mWallLook; }
 	ERMFenceType GetEffectiveType() const;
@@ -106,6 +113,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	bool mWallMirror = true;
+
+	/** Fence walls: the recipe of each look (concrete, FICSIT, steel), for its cost. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	TArray<TSubclassOf<class UFGRecipe>> mWallLookRecipes;
 
 	/** Fence walls: the game wall material for each look (concrete, FICSIT, steel). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")

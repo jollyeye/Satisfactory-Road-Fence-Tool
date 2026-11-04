@@ -146,7 +146,7 @@ void RMFenceWallPaint::InstallHooks()
 		FenceWallClearPreview();
 		if (Wall->HasAuthority())
 		{
-			Wall->SetWallLook(Look);
+			Wall->SetWallLook(Look, Cast<AFGCharacterPlayer>(Pawn));
 		}
 		else if (URMRemoteCallObject* RCO = URMRemoteCallObject::Get(PC))
 		{

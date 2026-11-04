@@ -24,12 +24,14 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 	if (Phase == ELifecyclePhase::INITIALIZATION)
 	{
 		AddRecipesToGameSchematic();
-		// Fence wall materials are switched in place (RMFenceWallPaint), not by the game's building
-		// swap, which loses the wall's course. RegisterFenceWallMaterials is kept but not used.
+		// The game's wall materials list the fence walls (so the build menu can treat them like the
+		// game's walls), but the customizer switches them in place (RMFenceWallPaint).
+		RegisterFenceWallMaterials();
 	}
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{
 		AddRecipesToGameSchematic(); // in case the earlier phase ran before the class was loaded
+		AddRecipesAlongsideGameRecipes();
 		GrantRecipesOfPurchasedSchematics();
 		GrantExtraRecipesIfPurchased();
 		EnsureRoadSwatchGroup();
@@ -136,11 +138,6 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		int32 Added = 0;
 		for (const TSubclassOf<AFGBuildable>& Variant : mFenceWallVariants)
 		{
-			// The game's wall materials only apply to the buildables they list (the game's walls).
-			if (Variant && Desc->mValidBuildables.Num() > 0)
-			{
-				Desc->mValidBuildables.AddUnique(Variant);
-			}
 			if (Variant && !Desc->GetBuildableMap().Contains(Variant) && Desc->AddType(Variant, Entry.Value))
 			{
 				++Added;
@@ -149,6 +146,54 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		if (Added > 0)
 		{
 			UE_LOG(LogRoadMaker, Display, TEXT("Fence walls: %s -> %s for %d variant(s)"), *Entry.Key->GetName(), *Entry.Value->GetName(), Added);
+		}
+	}
+}
+
+void URMGameWorldModule::AddRecipesAlongsideGameRecipes()
+{
+	UWorld* World = GetWorld();
+	AFGSchematicManager* Schematics = World ? AFGSchematicManager::Get(World) : nullptr;
+	FArrayProperty* RecipesProp = FindFProperty<FArrayProperty>(UFGUnlockRecipe::StaticClass(), TEXT("mRecipes"));
+	if (!Schematics || !RecipesProp || mUnlockAlongside.Num() == 0)
+	{
+		return;
+	}
+	AFGRecipeManager* Recipes = AFGRecipeManager::Get(World);
+	TArray<TSubclassOf<UFGSchematic>> All;
+	Schematics->GetAllSchematics(All);
+	for (const TSubclassOf<UFGSchematic>& Schematic : All)
+	{
+		if (!Schematic)
+		{
+			continue;
+		}
+		for (UFGUnlock* Unlock : UFGSchematic::GetUnlocks(Schematic))
+		{
+			UFGUnlockRecipe* RecipeUnlock = Cast<UFGUnlockRecipe>(Unlock);
+			if (!RecipeUnlock)
+			{
+				continue;
+			}
+			TArray<TSubclassOf<UFGRecipe>>* List = RecipesProp->ContainerPtrToValuePtr<TArray<TSubclassOf<UFGRecipe>>>(RecipeUnlock);
+			TArray<TSubclassOf<UFGRecipe>> ToAdd;
+			for (const TPair<TSubclassOf<UFGRecipe>, TSubclassOf<UFGRecipe>>& Pair : mUnlockAlongside)
+			{
+				if (Pair.Key && Pair.Value && List->Contains(Pair.Key) && !List->Contains(Pair.Value))
+				{
+					ToAdd.Add(Pair.Value);
+				}
+			}
+			if (ToAdd.Num() == 0)
+			{
+				continue;
+			}
+			List->Append(ToAdd);
+			UE_LOG(LogRoadMaker, Display, TEXT("%d recipe(s) now also unlock with %s"), ToAdd.Num(), *Schematic->GetName());
+			if (Recipes && World->GetNetMode() != NM_Client && Schematics->IsSchematicPurchased(Schematic))
+			{
+				Recipes->AddAvailableRecipes(ToAdd);
+			}
 		}
 	}
 }

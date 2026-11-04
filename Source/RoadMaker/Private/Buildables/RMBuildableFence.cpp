@@ -4,6 +4,9 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "FGFactoryColoringTypes.h"
 #include "HAL/PlatformTime.h"
+#include "FGRecipe.h"
+#include "FGCharacterPlayer.h"
+#include "FGInventoryComponent.h"
 
 ARMBuildableFence::ARMBuildableFence(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -150,16 +153,85 @@ UMaterialInterface* ARMBuildableFence::GetEffectiveMainMaterial() const
 	return mMainMaterial;
 }
 
-void ARMBuildableFence::SetWallLook(uint8 Look)
+namespace
 {
-	if (!IsWall() || Look > 3)
+	/** Ingredients of a recipe, times a count, merged per item. */
+	void AddRecipeCost(const UObject* Context, TSubclassOf<UFGRecipe> Recipe, int32 Times, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out)
+	{
+		if (!Recipe)
+		{
+			return;
+		}
+		for (const FItemAmount& A : UFGRecipe::GetIngredients(Context, Recipe))
+		{
+			Out.FindOrAdd(A.ItemClass) += A.Amount * Times;
+		}
+	}
+}
+
+void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const
+{
+	const uint8 Look = GetShownLook();
+	if (!IsWall() || mWallLook == 0 || !mWallLookRecipes.IsValidIndex(Look - 1) || !mWallLookRecipes[Look - 1])
+	{
+		Super::GetDismantleRefund_Implementation(out_refund, noBuildCostEnabled);
+		return;
+	}
+	// A switched wall gives back what its current look costs.
+	if (noBuildCostEnabled)
 	{
 		return;
+	}
+	TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+	AddRecipeCost(this, mWallLookRecipes[Look - 1], mCostMultiplier, Cost);
+	for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+	{
+		out_refund.Add(FInventoryStack(C.Value, C.Key));
+	}
+}
+
+bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
+{
+	if (!IsWall() || Look < 1 || Look > 3 || Look == GetShownLook())
+	{
+		return false;
+	}
+	// Pay the difference: the new look's cost, minus what the old look gives back.
+	UFGInventoryComponent* Inventory = Payer ? Payer->GetInventory() : nullptr;
+	if (Inventory && mWallLookRecipes.IsValidIndex(Look - 1) && mWallLookRecipes.IsValidIndex(GetShownLook() - 1))
+	{
+		TMap<TSubclassOf<UFGItemDescriptor>, int32> Net;
+		AddRecipeCost(this, mWallLookRecipes[Look - 1], mCostMultiplier, Net);
+		TMap<TSubclassOf<UFGItemDescriptor>, int32> Refund;
+		AddRecipeCost(this, mWallLookRecipes[GetShownLook() - 1], mCostMultiplier, Refund);
+		for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& R : Refund)
+		{
+			Net.FindOrAdd(R.Key) -= R.Value;
+		}
+		for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& N : Net)
+		{
+			if (N.Value > 0 && !Inventory->HasItems(N.Key, N.Value))
+			{
+				return false; // cannot pay
+			}
+		}
+		for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& N : Net)
+		{
+			if (N.Value > 0)
+			{
+				Inventory->Remove(N.Key, N.Value);
+			}
+			else if (N.Value < 0)
+			{
+				Inventory->AddStack(FInventoryStack(-N.Value, N.Key), true);
+			}
+		}
 	}
 	// Back to the look it was built with: store 0, so the saved value stays "as built".
 	mWallLook = Look == LookOfType(mFenceType) ? 0 : Look;
 	RebuildMesh();
 	ForceNetUpdate();
+	return true;
 }
 
 void ARMBuildableFence::SetPreviewWallLook(uint8 Look)
@@ -179,12 +251,14 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 	if (GetEffectiveType() == ERMFenceType::FicsitWall)
 	{
 		// FICSIT look: the game's 1 m FICSIT wall material (MI_WallSetOrange_8x1). Its texture is a
-		// 4 m x 1 m tile (256 texels per metre both ways) that repeats both ways; on the game's 4 m
-		// wall the grooves fall at 5.5 %, 43.5 %, 55.5 % and 93.5 % of 8 m, i.e. 0.11 / 0.87 of a 4 m tile.
+		// 4 m x 1 m tile (256 texels per metre) that repeats sideways; on the game's 4 m wall the
+		// grooves fall at 5.5 %, 43.5 %, 55.5 % and 93.5 % of 8 m, i.e. 0.11 / 0.87 of a 4 m tile.
+		// Its top and bottom edges break the grooves, so it is not repeated upwards: the 4 m height
+		// uses the plain middle band of the tile (v 0.3 to 0.7), where the grooves run straight.
 		L.UCentre = 0.f;
 		L.UPerMetre = 0.25f;
-		L.VTop = 0.f;
-		L.VPerMetre = 1.f;
+		L.VTop = 0.3f;
+		L.VPerMetre = 0.1f;
 		L.bMirror = false;
 		return L;
 	}
