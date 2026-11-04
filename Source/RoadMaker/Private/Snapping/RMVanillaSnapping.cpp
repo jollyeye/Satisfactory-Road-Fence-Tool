@@ -829,6 +829,13 @@ namespace
 		return true;
 	}
 
+	/**
+	 * One-click lane tracks are switched off for now: the game's rail tool rebuilds its curve from its
+	 * own rules every frame (end point and heading included), so the lane track looped or went off in
+	 * another direction. Road-end snapping for tracks (alignment and slope) is unaffected.
+	 */
+	constexpr bool bEnableLaneTracks = false;
+
 	/** Rail hologram spline step (ESplineHologramBuildStep: 0 = find start, 2 = place end). */
 	void SetRailStep(AFGHologram* Hologram, uint8 Step)
 	{
@@ -1006,7 +1013,6 @@ namespace
 		SetRailSnappedConnection(Hologram, 1, EndConn);
 		// The game's own rail routing draws the curve between the two ends (overriding its points
 		// fought with it every frame and made loops). Logged to compare with the lane.
-		FRMRailAccess::LogTrack(Rail, Points);
 		return true;
 	}
 
@@ -1045,7 +1051,7 @@ namespace
 					ReleasePathSnap(Hologram); // looked away from the road: back to a normal start
 				}
 			}
-			else if (Hologram->template IsA<AFGRailroadTrackHologram>())
+			else if (bEnableLaneTracks && Hologram->template IsA<AFGRailroadTrackHologram>())
 			{
 				FPathState* Lane = GPathStates.Find(Hologram);
 				const bool bLaneMode = Lane && Lane->bLaneMode;
