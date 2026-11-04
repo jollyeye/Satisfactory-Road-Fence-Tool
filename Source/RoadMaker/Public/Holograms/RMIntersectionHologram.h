@@ -35,11 +35,7 @@ protected:
 
 	/** Road ends within this distance (cm) of the crosshair are joined (50 m: big enough for rail curves). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
-	float mSearchRadius = 15000.f;
-
-	/** Ends farther than this from the crosshair only count when they face it (keeps big searches tidy). */
-	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
-	float mFacingCheckBeyond = 2500.f;
+	float mSearchRadius = 3200.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	int32 mMaxRoads = 6;

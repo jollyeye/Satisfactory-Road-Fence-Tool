@@ -1320,9 +1320,14 @@ namespace
 		FVector Location = FVector::ZeroVector;
 		FVector Dir = FVector::ForwardVector; // out of its track, into the intersection
 		int32 Mouth = -1;
+		float Across = 0.f; // sideways position at its intersection end, -1 (one side) .. 1 (other side)
 	};
 
-	/** Free track ends at the intersection's ends, paired with every free track end on another end. */
+	/**
+	 * Free track ends at the intersection's ends, each paired with the track end in the same lane on
+	 * every other end. Lanes are counted in the travel direction: a train coming in on the left lane
+	 * leaves on the left lane, the middle one on the middle, and so on.
+	 */
 	void FindRailJunctionLinks(UWorld* World, const ARMBuildableIntersection* X, TArray<TPair<FRailJunctionEnd, FRailJunctionEnd>>& OutLinks)
 	{
 		OutLinks.Reset();
@@ -1343,17 +1348,67 @@ namespace
 				const FVector Dir = Conn->GetConnectorNormal();
 				if (Mouth >= 0 && FVector::DotProduct(Dir.GetSafeNormal2D(), Mouths[Mouth].Inward.GetSafeNormal2D()) > 0.5f)
 				{
-					Ends.Add({ Conn, Loc, Dir.GetSafeNormal(), Mouth });
+					const FVector In = Mouths[Mouth].Inward.GetSafeNormal2D();
+					const FVector Right = FVector::CrossProduct(FVector::UpVector, In);
+					const float Across = FVector::DotProduct(Loc - Mouths[Mouth].Center, Right) / FMath::Max(Mouths[Mouth].Width * 0.5f, 1.f);
+					Ends.Add({ Conn, Loc, Dir.GetSafeNormal(), Mouth, Across });
 				}
 			}
 		}
-		for (int32 A = 0; A < Ends.Num(); ++A)
+		// Track ends per intersection end, sorted left to right as seen coming in.
+		TArray<TArray<int32>> PerMouth;
+		PerMouth.SetNum(Mouths.Num());
+		for (int32 I = 0; I < Ends.Num(); ++I)
 		{
-			for (int32 B = A + 1; B < Ends.Num(); ++B)
+			PerMouth[Ends[I].Mouth].Add(I);
+		}
+		for (TArray<int32>& List : PerMouth)
+		{
+			List.Sort([&Ends](int32 A, int32 B) { return Ends[A].Across < Ends[B].Across; });
+		}
+		// Coming in at end MA, right is +Across; leaving at end MB the travel direction is reversed,
+		// so the same lane (counted from the train's left) is -Across there, i.e. counted from the other side.
+		for (int32 MA = 0; MA < Mouths.Num(); ++MA)
+		{
+			for (int32 MB = MA + 1; MB < Mouths.Num(); ++MB)
 			{
-				if (Ends[A].Mouth != Ends[B].Mouth)
+				const TArray<int32>& LA = PerMouth[MA];
+				const TArray<int32>& LB = PerMouth[MB];
+				if (LA.Num() == 0 || LB.Num() == 0)
 				{
-					OutLinks.Add(TPair<FRailJunctionEnd, FRailJunctionEnd>(Ends[A], Ends[B]));
+					continue;
+				}
+				TArray<TPair<int32, int32>> Pairs;
+				if (LA.Num() == LB.Num())
+				{
+					// Same number of tracks: K-th from the left coming in = K-th from the left going out.
+					for (int32 K = 0; K < LA.Num(); ++K)
+					{
+						Pairs.Add(TPair<int32, int32>(LA[K], LB[LB.Num() - 1 - K]));
+					}
+				}
+				else
+				{
+					// Different counts: each track on the end with fewer tracks goes to the closest lane position.
+					const bool bAFewer = LA.Num() < LB.Num();
+					const TArray<int32>& Few = bAFewer ? LA : LB;
+					const TArray<int32>& Many = bAFewer ? LB : LA;
+					for (int32 F : Few)
+					{
+						int32 Best = Many[0];
+						for (int32 M : Many)
+						{
+							if (FMath::Abs(Ends[M].Across + Ends[F].Across) < FMath::Abs(Ends[Best].Across + Ends[F].Across))
+							{
+								Best = M;
+							}
+						}
+						Pairs.Add(bAFewer ? TPair<int32, int32>(F, Best) : TPair<int32, int32>(Best, F));
+					}
+				}
+				for (const TPair<int32, int32>& P : Pairs)
+				{
+					OutLinks.Add(TPair<FRailJunctionEnd, FRailJunctionEnd>(Ends[P.Key], Ends[P.Value]));
 					if (OutLinks.Num() >= 24)
 					{
 						return;
