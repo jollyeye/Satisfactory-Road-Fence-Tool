@@ -1008,12 +1008,12 @@ namespace
 		}
 		const FVector StartDir = Tangents[0].GetSafeNormal();
 		const FVector EndDir = Tangents.Last().GetSafeNormal();
-		// Start: the game's own start step (heading from the scroll value, as with road-end snaps).
-		SetRailStep(Hologram, 0);
-		Hologram->SetScrollRotateValue(FMath::RoundToInt(StartDir.Rotation().Yaw));
-		FHitResult HitA = MoveHitVertical(Hit, Points[0]);
-		Scope(Hologram, HitA);
-		SetRailSnappedConnection(Hologram, 0, StartConn);
+		// The rail tool's own placement is not run here: each frame it writes its curve into only the
+		// first two spline points and leaves the rest, mixing it into the lane (loops, invalid). So the
+		// hologram is set up directly: end step, start at the lane start, lane points, connections.
+		Scope.Cancel();
+		Hologram->SetActorLocationAndRotation(Points[0], FRotator::ZeroRotator);
+		SetRailStep(Hologram, 2);
 		if (FVector* SnappedLoc = VectorField(Hologram, TEXT("mSnappedStartLocation")))
 		{
 			*SnappedLoc = Points[0];
@@ -1022,21 +1022,20 @@ namespace
 		{
 			*SnappedTan = StartDir;
 		}
-
-		// End step: place the end, then the lane points replace the game's curve.
-		SetRailStep(Hologram, 2);
-		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
-		// The game's own end heading here points back out of the track (its curve looped back on
-		// itself with the travel direction), so it gets the opposite of the travel direction.
-		Hologram->SetScrollRotateValue(FMath::RoundToInt(FRotator::NormalizeAxis(EndDir.Rotation().Yaw + 180.f)));
+		if (FVector* HitLoc = VectorField(Hologram, TEXT("mHitLocation")))
 		{
-			TGuardValue<bool> Guard(GInPathReplace, true);
-			Hologram->SetHologramLocationAndRotation(MoveHitVertical(Hit, Points.Last()));
+			*HitLoc = Points.Last();
 		}
+		if (FVector* HitTan = VectorField(Hologram, TEXT("mHitTangent")))
+		{
+			*HitTan = EndDir;
+		}
+		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
+		SetRailSnappedConnection(Hologram, 0, StartConn);
 		SetRailSnappedConnection(Hologram, 1, EndConn);
-		FRMRailAccess::LogTrack(Rail, Points, TEXT("game"));
 		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
 		FRMRailAccess::LogTrack(Rail, Points, TEXT("lane"));
+		FRMRailAccess::LogTrack(Rail, Points, TEXT("lane2"));
 		return true;
 	}
 
