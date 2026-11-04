@@ -15,7 +15,7 @@ Curved roads with lane lines, intersections, fences and fence walls, plus snappi
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
-![A curved road with grid fence, cement blocks and power poles](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-and-fences.jpg)
+![A curved road through the jungle with a grid fence, cement blocks and street lights](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro.jpg)
 
 ![Road Maker buildables in the build menu](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu.png)
 
@@ -36,6 +36,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 ### Road Intersection
 ![A four-way intersection with side lines and fences on the curbs](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection.jpg)
 
+![Picking two road ends (outlined, with arrows) and the finished intersection](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection-picking.jpg)
+
 - Click the free road ends (or free intersection ends) you want to join, up to 6 and up to 200 m apart, then click away from them to build: they are joined with curved curbs. The aimed end is outlined in orange, picked ends in white with an arrow.
 - Free ends are capped and can be built on again; intersections can join each other.
 - Side lines along the curbs (Road Lines › Sidelines).
@@ -46,6 +48,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Free placement anywhere, snapping to the foundation grid.
 
 ### Fence Walls — Walls › Fence Walls
+![Steel, Steel Mesh and FICSIT fence walls along a curved, sloped road](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/fence-walls.jpg)
+
 4 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
 - **FICSIT**, **Concrete** and **Steel Fence Wall** use the game's own wall materials and paint exactly like the game's walls. The customizer's **Material** tab switches a fence wall between concrete, FICSIT and steel in place, with a preview while aiming; switching costs the difference, like the game's walls.
 - **Steel Mesh Fence Wall**: a steel frame with a diamond wire mesh (the former 4 m metal grid fence).
@@ -53,6 +57,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Unlocks: FICSIT with Tier 1 **Base Building**, Steel Mesh with Tier 3 **Basic Steel Production**, Concrete and Steel together with the game's concrete and steel wall materials (AWESOME Shop).
 
 ### Lanes: paths and tracks
+![One-click vehicle paths: a lane path, an intersection with an invalid connection (red), and all connections of an intersection](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection-connections.jpg)
+
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane: the path or track runs the whole lane, click to build. Scroll flips the direction.
 - **Intersection connections:** hold a vehicle path or track and Ctrl and aim at an intersection: every connection through it is shown at once (paths by direction, tracks lane to lane), one click builds them all.
 
