@@ -853,6 +853,41 @@ namespace
 	}
 
 	/**
+	 * Sets a rail hologram up directly in its end step with the given track points. The rail tool's
+	 * own placement is not run: each frame it writes its curve into only the first two spline points
+	 * and leaves the rest (loops, invalid), and its post-placement re-route is skipped in this mode.
+	 */
+	void SetupRailDirect(AFGRailroadTrackHologram* Rail, const TArray<FVector>& Points, const TArray<FVector>& Tangents,
+		UFGRailroadTrackConnectionComponent* StartConn, UFGRailroadTrackConnectionComponent* EndConn)
+	{
+		const FVector StartDir = Tangents[0].GetSafeNormal();
+		const FVector EndDir = Tangents.Last().GetSafeNormal();
+		Rail->SetActorLocationAndRotation(Points[0], FRotator::ZeroRotator);
+		SetRailStep(Rail, 2);
+		if (FVector* SnappedLoc = VectorField(Rail, TEXT("mSnappedStartLocation")))
+		{
+			*SnappedLoc = Points[0];
+		}
+		if (FVector* SnappedTan = VectorField(Rail, TEXT("mSnappedStartTangent")))
+		{
+			*SnappedTan = StartDir;
+		}
+		if (FVector* HitLoc = VectorField(Rail, TEXT("mHitLocation")))
+		{
+			*HitLoc = Points.Last();
+		}
+		// The rail tool's end tangent points out of the track end, against the travel direction.
+		if (FVector* HitTan = VectorField(Rail, TEXT("mHitTangent")))
+		{
+			*HitTan = -EndDir;
+		}
+		SetBoolField(Rail, TEXT("mUseCustomEndRotation"), true);
+		SetRailSnappedConnection(Rail, 0, StartConn);
+		SetRailSnappedConnection(Rail, 1, EndConn);
+		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+	}
+
+	/**
 	 * One-click lane track (snap key held, before the first click): the rail hologram is laid along
 	 * the whole lane, end to end, and one click builds it. Same lanes as vehicle paths; rails run both
 	 * ways, so the direction only follows the road (scroll flips it). Free track ends at the lane ends
@@ -975,43 +1010,14 @@ namespace
 		{
 			Points.Last() = EndConn->GetConnectorLocation();
 		}
-		const FVector StartDir = Tangents[0].GetSafeNormal();
-		const FVector EndDir = Tangents.Last().GetSafeNormal();
-		// The rail tool's own placement is not run here: each frame it writes its curve into only the
-		// first two spline points and leaves the rest, mixing it into the lane (loops, invalid). So the
-		// hologram is set up directly: end step, start at the lane start, lane points, connections.
-		Scope.Cancel();
-		Hologram->SetActorLocationAndRotation(Points[0], FRotator::ZeroRotator);
-		SetRailStep(Hologram, 2);
-		if (FVector* SnappedLoc = VectorField(Hologram, TEXT("mSnappedStartLocation")))
-		{
-			*SnappedLoc = Points[0];
-		}
-		if (FVector* SnappedTan = VectorField(Hologram, TEXT("mSnappedStartTangent")))
-		{
-			*SnappedTan = StartDir;
-		}
-		if (FVector* HitLoc = VectorField(Hologram, TEXT("mHitLocation")))
-		{
-			*HitLoc = Points.Last();
-		}
-		// The rail tool re-routes the track from its start and "hit" values after placement (its check
-		// then drew a ring when given the travel direction): its end tangent points out of the track
-		// end, i.e. against the travel direction.
-		if (FVector* HitTan = VectorField(Hologram, TEXT("mHitTangent")))
-		{
-			*HitTan = -EndDir;
-		}
-		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
-		SetRailSnappedConnection(Hologram, 0, StartConn);
-		SetRailSnappedConnection(Hologram, 1, EndConn);
-		FRMRailAccess::SetSplineWorld(Rail, Points, Tangents);
+		Scope.Cancel(); // the rail tool's own placement is not run (see SetupRailDirect)
+		SetupRailDirect(Rail, Points, Tangents, StartConn, EndConn);
 		return true;
 	}
 
-	// --- Intersection connections (vehicle path + snap key, aiming at an intersection) --------------
+	// --- Intersection connections (vehicle path / rail track + snap key, aiming at an intersection) ---
 
-	/** Main and child holograms currently showing intersection connections (softer rules apply). */
+	/** Main and child holograms currently showing intersection connections. */
 	TSet<TWeakObjectPtr<const AFGHologram>> GJunctionHolograms;
 
 	/** A path end at an intersection end: arriving (a path ends there) or leaving (a path starts there). */
@@ -1161,37 +1167,6 @@ namespace
 		}
 	};
 
-	/**
-	 * Intersection connections ignore the game's path rules (turn sharpness, shape, floor,
-	 * clearance), keeping only cost: tight intersections would otherwise lose most turns.
-	 */
-	struct FRMDisqualifierAccess : public AFGHologram
-	{
-		static void DropSoftRules(AFGHologram* Hologram)
-		{
-			FRMDisqualifierAccess* Self = static_cast<FRMDisqualifierAccess*>(Hologram);
-			static TSet<FString> Logged;
-			const int32 Before = Self->mConstructDisqualifiers.Num();
-			Self->mConstructDisqualifiers.RemoveAll([](const TSubclassOf<UFGConstructDisqualifier>& D)
-			{
-				const FString Name = D ? D->GetName() : FString();
-				if (Name.Contains(TEXT("Afford")) || Name.Contains(TEXT("Cost")) || Name.Contains(TEXT("Resource")))
-				{
-					return false; // keep: cannot pay for it
-				}
-				if (!Logged.Contains(Name))
-				{
-					Logged.Add(Name);
-					UE_LOG(LogRoadMaker, Display, TEXT("Intersection connections: ignoring rule %s"), *Name);
-				}
-				return true;
-			});
-			if (Before > 0 && Self->mConstructDisqualifiers.Num() == 0)
-			{
-				Hologram->SetPlacementMaterialState(EHologramMaterialState::HMS_OK);
-			}
-		}
-	};
 
 	/** Detaches and deletes one connection child. */
 	void RemoveJunctionChild(AFGHologram* Parent, TWeakObjectPtr<AFGHologram>& Slot)
@@ -1210,7 +1185,7 @@ namespace
 	struct FJunctionCache
 	{
 		TWeakObjectPtr<const ARMBuildableIntersection> Intersection;
-		TArray<TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>> Signature;
+		TArray<TPair<const void*, const void*>> Signature;
 		double LastScan = 0.0;
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FJunctionCache> GJunctionCache;
@@ -1263,10 +1238,10 @@ namespace
 			Cache = FJunctionCache();
 			return false;
 		}
-		TArray<TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>> Signature;
+		TArray<TPair<const void*, const void*>> Signature;
 		for (const FJunctionLink& L : Links)
 		{
-			Signature.Add(TPair<const AFGVehiclePathNode*, const AFGVehiclePathNode*>(L.In.Node, L.Out.Node));
+			Signature.Add(TPair<const void*, const void*>(L.In.Node, L.Out.Node));
 		}
 		Scope.Cancel(); // everything is placed below, through the game's code
 		Cache.LastScan = Now;
@@ -1277,10 +1252,7 @@ namespace
 		Cache.Intersection = X;
 		Cache.Signature = Signature;
 
-		AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(Parent->GetConstructionInstigator());
-		UFGInventoryComponent* Inventory = Player ? Player->GetInventory() : nullptr;
-
-		// Pass 1: place every connection (main hologram takes link 0 for now, children the rest).
+		// Place every connection (main hologram takes link 0 for now, children the rest).
 		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
 		TArray<AFGVehiclePathSegmentHologram*> LinkHolograms; // per link
 		LinkHolograms.Add(Parent);
@@ -1320,53 +1292,168 @@ namespace
 			RemoveJunctionChild(Parent, Children[C]); // not needed now
 		}
 
-		// Pass 2: check each connection with all the others in place; switch off the invalid ones.
-		TArray<bool> Valid;
-		Valid.Init(true, LinkHolograms.Num());
-		for (int32 L = 0; L < LinkHolograms.Num(); ++L)
+		// Every connection is kept with the game's normal rules: if one is invalid the click is
+		// refused, so the intersection can be improved until all connections are valid.
+		return true;
+	}
+
+	/** Index of the intersection end a point sits at (within 3 m of it, inside its width), or -1. */
+	int32 MouthIndexOf(const TArray<FRMRoadEnd>& Mouths, const FVector& P)
+	{
+		for (int32 M = 0; M < Mouths.Num(); ++M)
 		{
-			AFGVehiclePathSegmentHologram* H = LinkHolograms[L];
-			if (Inventory)
+			const FVector In = FVector(Mouths[M].Inward.X, Mouths[M].Inward.Y, 0.f).GetSafeNormal();
+			const FVector Across = FVector::CrossProduct(FVector::UpVector, In);
+			const FVector D = P - Mouths[M].Center;
+			if (FMath::Abs(FVector::DotProduct(D, In)) < 300.f && FMath::Abs(FVector::DotProduct(D, Across)) < Mouths[M].Width * 0.5f + 100.f
+				&& FMath::Abs(D.Z) < 400.f)
 			{
-				// Children are checked on their own; the main hologram's own check would include them.
-				if (L > 0)
+				return M;
+			}
+		}
+		return -1;
+	}
+
+	struct FRailJunctionEnd
+	{
+		UFGRailroadTrackConnectionComponent* Conn = nullptr;
+		FVector Location = FVector::ZeroVector;
+		FVector Dir = FVector::ForwardVector; // out of its track, into the intersection
+		int32 Mouth = -1;
+	};
+
+	/** Free track ends at the intersection's ends, paired with every free track end on another end. */
+	void FindRailJunctionLinks(UWorld* World, const ARMBuildableIntersection* X, TArray<TPair<FRailJunctionEnd, FRailJunctionEnd>>& OutLinks)
+	{
+		OutLinks.Reset();
+		TArray<FRMRoadEnd> Mouths;
+		X->GetWorldEnds(Mouths);
+		TArray<FRailJunctionEnd> Ends;
+		for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
+		{
+			for (int32 C = 0; C < 2; ++C)
+			{
+				UFGRailroadTrackConnectionComponent* Conn = It->GetConnection(C);
+				if (!Conn || Conn->IsConnected())
 				{
-					H->ValidatePlacementAndCost(Inventory);
+					continue;
+				}
+				const FVector Loc = Conn->GetConnectorLocation();
+				const int32 Mouth = MouthIndexOf(Mouths, Loc);
+				const FVector Dir = Conn->GetConnectorNormal();
+				if (Mouth >= 0 && FVector::DotProduct(Dir.GetSafeNormal2D(), Mouths[Mouth].Inward.GetSafeNormal2D()) > 0.5f)
+				{
+					Ends.Add({ Conn, Loc, Dir.GetSafeNormal(), Mouth });
 				}
 			}
-			if (L > 0)
-			{
-				Valid[L] = H->CanConstruct();
-			}
 		}
-		// Invalid connections are taken out completely (switching them off still blocked the click).
-		for (int32 L = 1; L < LinkHolograms.Num(); ++L)
+		for (int32 A = 0; A < Ends.Num(); ++A)
 		{
-			if (!Valid[L])
+			for (int32 B = A + 1; B < Ends.Num(); ++B)
 			{
-				RemoveJunctionChild(Parent, Children[L - 1]);
-				LinkHolograms[L] = nullptr;
-			}
-		}
-		if (Inventory)
-		{
-			Parent->ValidatePlacementAndCost(Inventory); // the main connection (children now settled)
-			Valid[0] = Parent->CanConstruct();
-		}
-
-		// The main hologram cannot be switched off: if its connection is invalid, give it a valid
-		// connection instead and switch off the child that had it.
-		if (!Valid[0])
-		{
-			for (int32 L = 1; L < LinkHolograms.Num(); ++L)
-			{
-				if (Valid[L] && LinkHolograms[L])
+				if (Ends[A].Mouth != Ends[B].Mouth)
 				{
-					SetupJunctionHologram(Parent, Hit, Links[L]);
-					RemoveJunctionChild(Parent, Children[L - 1]); // the main hologram has it now
+					OutLinks.Add(TPair<FRailJunctionEnd, FRailJunctionEnd>(Ends[A], Ends[B]));
+					if (OutLinks.Num() >= 24)
+					{
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	/** One rail connection through the intersection: a smooth curve from one track end to the other. */
+	void SetupRailJunctionHologram(AFGRailroadTrackHologram* Rail, const FRailJunctionEnd& A, const FRailJunctionEnd& B)
+	{
+		GJunctionHolograms.Add(Rail);
+		FPathState& State = GPathStates.FindOrAdd(Rail);
+		State.bLaneMode = true; // skips the rail tool's post-placement re-route
+		State.bStartStep = false;
+		TArray<FRMSplinePoint> Curve;
+		RMGeometry::MakeFixedEnds(A.Location, A.Dir, B.Location, -B.Dir, Curve);
+		if (Curve.Num() < 2)
+		{
+			return;
+		}
+		SetupRailDirect(Rail, { Curve[0].Location, Curve[1].Location }, { Curve[0].Tangent, Curve[1].Tangent }, A.Conn, B.Conn);
+	}
+
+	/** Rail track + snap key aiming at an intersection: all connections between its track ends at once. */
+	template <typename TScope, typename THologram>
+	bool PlaceRailJunction(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableIntersection* X)
+	{
+		AFGRailroadTrackHologram* Parent = Cast<AFGRailroadTrackHologram>(Hologram);
+		UWorld* World = Hologram->GetWorld();
+		if (!Parent || !World)
+		{
+			return false;
+		}
+		FJunctionCache& Cache = GJunctionCache.FindOrAdd(Parent);
+		const double Now = FPlatformTime::Seconds();
+		const FPathState* Existing = GPathStates.Find(Parent);
+		if (Cache.Intersection.Get() == X && Existing && Existing->bLaneMode && Now - Cache.LastScan < 0.5)
+		{
+			Scope.Cancel();
+			return true;
+		}
+		TArray<TPair<FRailJunctionEnd, FRailJunctionEnd>> Links;
+		FindRailJunctionLinks(World, X, Links);
+		if (Links.Num() == 0)
+		{
+			Cache = FJunctionCache();
+			return false;
+		}
+		TArray<TPair<const void*, const void*>> Signature;
+		for (const auto& L : Links)
+		{
+			Signature.Add(TPair<const void*, const void*>(L.Key.Conn, L.Value.Conn));
+		}
+		Scope.Cancel();
+		Cache.LastScan = Now;
+		if (Cache.Intersection.Get() == X && Cache.Signature == Signature && Existing && Existing->bLaneMode)
+		{
+			return true;
+		}
+		Cache.Intersection = X;
+		Cache.Signature = Signature;
+
+		SetupRailJunctionHologram(Parent, Links[0].Key, Links[0].Value);
+		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
+		int32 Used = 0;
+		for (int32 L = 1; L < Links.Num(); ++L)
+		{
+			const int32 ChildIndex = L - 1;
+			if (!Children.IsValidIndex(ChildIndex) || !Children[ChildIndex].IsValid())
+			{
+				const FName Name(*FString::Printf(TEXT("RMRailJunction%d"), ChildIndex));
+				AFGHologram* NewChild = AFGHologram::SpawnChildHologramFromRecipe(Parent, Name, Parent->GetRecipe(), Parent->GetOwner(), Links[L].Key.Location);
+				if (!NewChild)
+				{
 					break;
 				}
+				if (Children.IsValidIndex(ChildIndex))
+				{
+					Children[ChildIndex] = NewChild;
+				}
+				else
+				{
+					Children.Add(NewChild);
+				}
 			}
+			AFGRailroadTrackHologram* Child = Cast<AFGRailroadTrackHologram>(Children[ChildIndex].Get());
+			if (!Child)
+			{
+				break;
+			}
+			Child->SetDisabled(false);
+			Child->SetActorHiddenInGame(false);
+			SetupRailJunctionHologram(Child, Links[L].Key, Links[L].Value);
+			Used = ChildIndex + 1;
+		}
+		for (int32 C = Used; C < Children.Num(); ++C)
+		{
+			RemoveJunctionChild(Parent, Children[C]);
 		}
 		return true;
 	}
@@ -1426,13 +1513,27 @@ namespace
 				const bool bLaneMode = Lane && Lane->bLaneMode;
 				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
 				{
+					ReleaseJunction(Hologram);
 					if (PlaceLaneTrack(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
 					{
 						return true;
 					}
 				}
+				else if (bAimIntersection && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
+				{
+					if (PlaceRailJunction(Scope, Hologram, Hit, Cast<ARMBuildableIntersection>(Aimed)))
+					{
+						return true;
+					}
+					ReleaseJunction(Hologram);
+					if (bLaneMode)
+					{
+						ReleasePathSnap(Hologram);
+					}
+				}
 				else if (bLaneMode)
 				{
+					ReleaseJunction(Hologram);
 					ReleasePathSnap(Hologram);
 				}
 			}
@@ -1651,15 +1752,6 @@ void RMVanillaSnapping::InstallHooks()
 				Scope.Cancel();
 			}
 		});
-
-	// Intersection connections: softer path rules (see FRMDisqualifierAccess).
-	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Hologram, UFGInventoryComponent* Inventory)
-	{
-		if (Hologram && GJunctionHolograms.Contains(Hologram))
-		{
-			FRMDisqualifierAccess::DropSoftRules(Hologram);
-		}
-	});
 
 	// Lane tracks: after placing the hologram the game runs a post-placement step in which the rail
 	// tool routes its own track again from the crosshair hit; in lane mode that second track showed up
