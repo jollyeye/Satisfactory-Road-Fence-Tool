@@ -1081,9 +1081,12 @@ namespace
 		{
 			*HitLoc = Points.Last();
 		}
+		// The rail tool re-routes the track from its start and "hit" values after placement (its check
+		// then drew a ring when given the travel direction): its end tangent points out of the track
+		// end, i.e. against the travel direction.
 		if (FVector* HitTan = VectorField(Hologram, TEXT("mHitTangent")))
 		{
-			*HitTan = EndDir;
+			*HitTan = -EndDir;
 		}
 		SetBoolField(Hologram, TEXT("mUseCustomEndRotation"), true);
 		SetRailSnappedConnection(Hologram, 0, StartConn);
