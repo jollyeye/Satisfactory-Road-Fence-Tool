@@ -269,6 +269,7 @@ namespace
 			Tilt(P.LeaveTangent);
 			Self->UpdateSplineComponent();
 			Self->UpdateClearanceData();
+			Redraw(Rail);
 		}
 
 		/** Replaces the track's spline points (world space in) and rebuilds preview and clearance. */
@@ -287,6 +288,16 @@ namespace
 			}
 			Self->UpdateSplineComponent();
 			Self->UpdateClearanceData();
+			Redraw(Rail);
+		}
+
+		/** Rebuilds what is drawn from the spline points (protected UFUNCTION, through reflection). */
+		static void Redraw(AFGRailroadTrackHologram* Rail)
+		{
+			if (UFunction* Rebuild = Rail->FindFunction(TEXT("OnRep_SplineData")))
+			{
+				Rail->ProcessEvent(Rebuild, nullptr);
+			}
 		}
 
 		/** Back to the start step: drop the lane track's snapped connections. */
@@ -329,6 +340,10 @@ namespace
 					FRMRailAccess::ResetToStart(Rail);
 					SetRailSnappedConnection(Hologram, 0, nullptr);
 					SetRailSnappedConnection(Hologram, 1, nullptr);
+					// Replace the lane track with a short stub so nothing of it stays on screen.
+					const FVector P = Rail->GetActorLocation();
+					const FVector F = Rail->GetActorForwardVector() * 100.f;
+					FRMRailAccess::SetSplineWorld(Rail, { P, P + F }, { F, F });
 				}
 				if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(Hologram))
 				{
