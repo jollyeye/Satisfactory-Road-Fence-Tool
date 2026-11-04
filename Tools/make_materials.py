@@ -530,7 +530,7 @@ for path in ("/Game/FactoryGame/Buildable/Building/Wall/ConcreteWallSet/MI_WallS
 if not game_wall_mat:
     log("  ! game wall material not found, the fence wall uses M_RoadFenceWall")
 game_wall_mats = {}
-for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWallSet/MI_WallSetOrange_8x4.MI_WallSetOrange_8x4"),
+for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWallSet/MI_WallSetOrange_8x1.MI_WallSetOrange_8x1"),
                   ("steel", "/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet/MI_SteelWall_8x4.MI_SteelWall_8x4")):
     try:
         m = unreal.load_asset(path)

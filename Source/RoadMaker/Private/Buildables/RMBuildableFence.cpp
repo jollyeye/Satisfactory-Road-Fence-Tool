@@ -174,12 +174,28 @@ void ARMBuildableFence::SetPreviewWallLook(uint8 Look)
 
 FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 {
+	// The layout belongs to the game material of the look shown (a wall can switch looks).
 	FRMWallTexLayout L;
+	if (GetEffectiveType() == ERMFenceType::FicsitWall)
+	{
+		// FICSIT look: the game's 1 m FICSIT wall material (MI_WallSetOrange_8x1), one 8 m x 1 m
+		// texture repeated up the 4 m wall.
+		L.UCentre = 0.5f;
+		L.UPerMetre = 0.125f;
+		L.VTop = 0.f;
+		L.VPerMetre = 1.f;
+		L.bMirror = false;
+		return L;
+	}
 	L.UCentre = mWallUCentre;
 	L.UPerMetre = mWallUPerMetre;
 	L.VTop = mWallVTop;
 	L.VPerMetre = mWallVPerMetre;
 	L.bMirror = mWallMirror;
+	if (mFenceType != ERMFenceType::ConcreteWall && GetEffectiveType() == ERMFenceType::ConcreteWall)
+	{
+		L = FRMWallTexLayout(); // concrete look on another variant: the concrete layout (the defaults)
+	}
 	return L;
 }
 
