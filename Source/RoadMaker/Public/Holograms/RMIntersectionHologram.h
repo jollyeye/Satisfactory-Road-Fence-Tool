@@ -33,9 +33,9 @@ public:
 protected:
 	void RebuildPreview();
 
-	/** Road ends within this distance (cm) of the crosshair are joined. */
+	/** Road ends within this distance (cm) of the crosshair are joined (50 m: big enough for rail curves). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
-	float mSearchRadius = 2500.f;
+	float mSearchRadius = 5000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	int32 mMaxRoads = 6;
