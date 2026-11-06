@@ -105,6 +105,22 @@ History, so nobody repeats it:
 5. Swatch tiles then showed pictures: our restore put back `IsColor = 0` on a tile the game had
    just made a colour swatch. Never restore `IsColor` → fixed (*tested 2026-11*).
 
+### Our options on the hotbar
+Hovering a tile and pressing a hotbar key binds it (`UFGFactoryCustomizationShortcut`, holding the
+customization recipe). Logged (*tested 2026-11-06*):
+
+| Widget | Vanilla material (concrete wall) | Our Road Lines option |
+|---|---|---|
+| `Widget_HotbarEntry_C` > `mIconBG` | MID `MM_UI_HotbarEntryBackground`, `IsCustomiser = 1` | same |
+| `BPW_CustomiserIcon_C` (`mCustomiserIcon`) > `mIcon` | MID of `MM_UI_CustomiserIcon`, `Texture = IconDesc_ConcWall8x4_512`, `IsColor = 0` | **bare `MM_UI_CustomiserIcon` material** (defaults: white / magenta swatch) |
+| `GetDisplayImage()` of the shortcut | the icon | our icon (correct) |
+
+So the shortcut is fine, but the entry's Blueprint only fills the picture for the game's own
+descriptor types. Fix (`FixRoadLinesHotbarIcons` in `RMRoadLinePaint.cpp`): every 0.2 s, for each
+visible `*HotbarEntry*` widget, read its shortcut through the first object property of type
+`UFGHotbarShortcut` (reflection), and if it holds a Road Lines recipe, give the `mIcon` image a MID
+of the same material (if it has none) with `Texture` = `GetDisplayImage()` and `IsColor` = 0.
+
 ### Icons themselves
 `Tools/IconSource/render_icons.py` (Python + PIL) draws the pictures into `Tools/Icons`;
 `create_assets.py` imports every PNG there as a texture.

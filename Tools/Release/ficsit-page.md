@@ -84,6 +84,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Customizer icons stay correct after visiting the Road Lines tab (no more wrong pictures or colours in other tabs).
 - **Road fences replace each other:** hold the snap key and aim at a guard rail, cement blocks or metal grid fence with another road fence selected: it takes its place on click (the old one is refunded). Fence walls still only replace fence walls.
 - Fixed the end caps of the cement blocks (a wedge stuck out past the sloped sides).
+- Road Lines options bound to the hotbar show their own picture (they showed a blank white / magenta swatch).
 
 ## Changelog for version 1.1.0
 - **New: Fence Walls** (Walls › Fence Walls; the 4 m metal grid fence is now the Steel Mesh Fence Wall, unlocked with Basic Steel Production; FICSIT with Tier 1 Base Building, concrete and steel with their wall materials): a 4 m wall along the road edge or an intersection curb, stackable, paintable, in concrete, FICSIT or steel (switchable in the customizer).

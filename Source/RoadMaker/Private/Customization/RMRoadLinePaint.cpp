@@ -8,6 +8,7 @@
 #include "Equipment/FGBuildGun.h"
 #include "Equipment/FGBuildGunPaint.h"
 #include "FGCustomizationRecipe.h"
+#include "FGFactoryCustomizationShortcut.h"
 #include "FGCharacterPlayer.h"
 #include "Patching/NativeHookManager.h"
 #include "Blueprint/UserWidget.h"
@@ -550,6 +551,95 @@ namespace
 
 namespace
 {
+	/** The hotbar shortcut a hotbar entry widget shows (found once per widget class by reflection). */
+	UFGHotbarShortcut* GetEntryShortcut(UUserWidget* Entry)
+	{
+		static TMap<TWeakObjectPtr<UClass>, FObjectPropertyBase*> PropByClass;
+		UClass* Class = Entry->GetClass();
+		FObjectPropertyBase** Found = PropByClass.Find(Class);
+		if (!Found)
+		{
+			FObjectPropertyBase* Prop = nullptr;
+			for (TFieldIterator<FObjectPropertyBase> It(Class); It; ++It)
+			{
+				if (It->PropertyClass && It->PropertyClass->IsChildOf(UFGHotbarShortcut::StaticClass()))
+				{
+					Prop = *It;
+					break;
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines hotbar: %s shortcut property = %s"), *Class->GetName(), Prop ? *Prop->GetName() : TEXT("none"));
+			Found = &PropByClass.Add(Class, Prop);
+		}
+		return *Found ? Cast<UFGHotbarShortcut>((*Found)->GetObjectPropertyValue_InContainer(Entry)) : nullptr;
+	}
+
+	/**
+	 * The hotbar draws customizer shortcuts with the customizer icon material, but its Blueprint only
+	 * fills it in for the game's own swatches, patterns and materials: a Road Lines shortcut is left
+	 * with the bare material (a white / magenta swatch). Fill it in the way the game does for
+	 * materials: a dynamic instance with Texture = the option's icon and IsColor = 0.
+	 */
+	bool FixRoadLinesHotbarIcons(float)
+	{
+		for (TObjectIterator<UUserWidget> It; It; ++It)
+		{
+			UUserWidget* Entry = *It;
+			if (!Entry || Entry->IsTemplate() || !Entry->IsVisible() || !Entry->GetClass()->GetName().Contains(TEXT("HotbarEntry")))
+			{
+				continue;
+			}
+			UFGFactoryCustomizationShortcut* Shortcut = Cast<UFGFactoryCustomizationShortcut>(GetEntryShortcut(Entry));
+			TSubclassOf<UFGCustomizationRecipe> Recipe = Shortcut ? Shortcut->GetCustomizationRecipe() : nullptr;
+			TSubclassOf<UFGFactoryCustomizationDescriptor> Desc = Recipe ? UFGCustomizationRecipe::GetCustomizationDescriptor(Recipe) : nullptr;
+			if (!Desc || !Desc->IsChildOf(URMRoadLineDescriptor::StaticClass()))
+			{
+				continue;
+			}
+			UTexture2D* Icon = Shortcut->GetDisplayImage();
+			if (!Icon)
+			{
+				continue;
+			}
+			TArray<UWidget*> Widgets;
+			CollectWidgets(Entry, Widgets);
+			for (UWidget* W : Widgets)
+			{
+				UImage* Image = Cast<UImage>(W);
+				UUserWidget* Owner = W->GetTypedOuter<UUserWidget>();
+				if (!Image || Image->GetName() != TEXT("mIcon") || !Owner || !Owner->GetClass()->GetName().Contains(TEXT("CustomiserIcon")))
+				{
+					continue;
+				}
+				UObject* Res = Image->GetBrush().GetResourceObject();
+				UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Res);
+				if (!Mid)
+				{
+					UMaterialInterface* Base = Cast<UMaterialInterface>(Res);
+					if (!Base)
+					{
+						continue;
+					}
+					Mid = UMaterialInstanceDynamic::Create(Base, Image);
+					Image->SetBrushFromMaterial(Mid);
+				}
+				UTexture* Current = nullptr;
+				Mid->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Texture")), Current);
+				float IsColor = 1.f;
+				Mid->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("IsColor")), IsColor);
+				if (Current != Icon || IsColor != 0.f)
+				{
+					Mid->SetTextureParameterValue(TEXT("Texture"), Icon);
+					Mid->SetScalarParameterValue(TEXT("IsColor"), 0.f);
+				}
+			}
+		}
+		return true;
+	}
+}
+
+namespace
+{
 	/**
 	 * Road Lines options are material-type options that no building maps to, so the paint gun's own
 	 * check flags every target as "Invalid customization target!". Our hint shows the real state, so
@@ -583,6 +673,9 @@ void RMRoadLinePaint::InstallHooks()
 
 	// Road Lines tiles in the customizer menu: put our icons in, ten times a second while it is open.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixCustomizerIcons), 0.1f);
+
+	// Road Lines shortcuts on the hotbar: their picture (the game leaves it as a blank swatch).
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixRoadLinesHotbarIcons), 0.2f);
 
 	SUBSCRIBE_METHOD_AFTER(UFGBuildGunStatePaint::SetActiveCustomization,
 		[](UFGBuildGunStatePaint* State, TSubclassOf<UFGFactoryCustomizationDescriptor> Desc)
