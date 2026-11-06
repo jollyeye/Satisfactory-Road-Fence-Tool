@@ -211,7 +211,7 @@ void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack
 
 bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 {
-	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook())
+	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook() || GetIsDismantled() || IsActorBeingDestroyed())
 	{
 		return false;
 	}
@@ -269,6 +269,9 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 			New->SetSplinePoints(mSplinePoints);
 			New->SetCustomizationData_Native(mCustomizationData);
 			UGameplayStatics::FinishSpawningActor(New, T);
+			// Out of the way at once (the dismantle takes a moment): aiming must find the new wall.
+			SetActorEnableCollision(false);
+			SetActorHiddenInGame(true);
 			IFGDismantleInterface::Execute_Dismantle(this);
 			return true;
 		}

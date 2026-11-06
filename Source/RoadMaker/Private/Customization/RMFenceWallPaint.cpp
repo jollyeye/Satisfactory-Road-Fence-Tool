@@ -58,13 +58,23 @@ namespace
 		FRotator View;
 		PC->GetPlayerViewPoint(Eye, View);
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMFenceWallTrace), true, PC->GetPawn());
-		FHitResult Hit;
-		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
+		// Walls just swapped for another material are on their way out: look through them.
+		for (int32 Try = 0; Try < 4; ++Try)
 		{
-			return nullptr;
+			FHitResult Hit;
+			if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
+			{
+				return nullptr;
+			}
+			ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
+			if (Wall && (Wall->IsHidden() || Wall->GetIsDismantled() || Wall->IsActorBeingDestroyed()))
+			{
+				Params.AddIgnoredActor(Wall);
+				continue;
+			}
+			return Wall && Wall->HasLooks() ? Wall : nullptr;
 		}
-		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
-		return Wall && Wall->HasLooks() ? Wall : nullptr;
+		return nullptr;
 	}
 
 	void FenceWallClearPreview()

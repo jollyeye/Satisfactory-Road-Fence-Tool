@@ -344,6 +344,8 @@ namespace
 		// original icon material while our picture is shown, and restoring it crashes.
 		TStrongObjectPtr<UObject> OriginalResource;
 		TArray<TPair<TWeakObjectPtr<UTextBlock>, ESlateVisibility>> HiddenTexts;
+		/** The Road Lines picture we put in. */
+		TWeakObjectPtr<UTexture2D> OurIcon;
 	};
 	TArray<FPatchedTile> GPatched;
 
@@ -364,7 +366,11 @@ namespace
 			}
 			if (UImage* Image = T.Icon.Get())
 			{
-				if (T.OriginalResource.IsValid())
+				// Only undo our picture if it is still there: when the menu reuses the tile for
+				// another tab it sets that option's icon itself, and putting back the brush the tile
+				// had before would show a wrong icon (e.g. on the wall materials).
+				const bool bStillOurs = T.OurIcon.IsValid() && Image->GetBrush().GetResourceObject() == T.OurIcon.Get();
+				if (bStillOurs && T.OriginalResource.IsValid())
 				{
 					Image->SetBrush(T.OriginalBrush);
 				}
@@ -445,6 +451,7 @@ namespace
 			if (Image->GetBrush().GetResourceObject() != Icon)
 			{
 				FSlateBrush Brush = Patched->OriginalBrush;
+				Patched->OurIcon = Icon;
 				Brush.SetResourceObject(Icon);
 				Brush.DrawAs = ESlateBrushDrawType::Image;
 				Brush.TintColor = FSlateColor(FLinearColor::White);
