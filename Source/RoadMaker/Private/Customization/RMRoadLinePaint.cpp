@@ -374,6 +374,9 @@ namespace
 				// draw settings we changed: always put back the tile's own draw settings and colour,
 				// with the game's new picture if it set one.
 				const bool bStillOurs = T.OurIcon.IsValid() && Image->GetBrush().GetResourceObject() == T.OurIcon.Get();
+				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] restore tile %p label '%s' stillOurs=%d current=%s original=%s"), Image,
+					T.Label.IsValid() ? *T.Label->GetText().ToString() : TEXT("gone"), bStillOurs ? 1 : 0,
+					*GetNameSafe(Image->GetBrush().GetResourceObject()), *GetNameSafe(T.OriginalBrush.GetResourceObject()));
 				FSlateBrush Brush = T.OriginalBrush;
 				if (!bStillOurs)
 				{

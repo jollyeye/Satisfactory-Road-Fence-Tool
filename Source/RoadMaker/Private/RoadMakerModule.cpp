@@ -3,6 +3,7 @@
 #include "Snapping/RMVanillaSnapping.h"
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMFenceWallPaint.h"
+namespace RMDiag { void InstallHooks(); }
 #include "Buildables/RMBuildableProcedural.h"
 #include "Buildables/FGBuildableFoundation.h"
 #include "Equipment/FGBuildGun.h"
@@ -79,6 +80,9 @@ void FRoadMakerModule::StartupModule()
 
 	// Customizer Material tab on fence walls (concrete / FICSIT / steel), switched in place.
 	RMFenceWallPaint::InstallHooks();
+
+	// Development logger (temporary, remove before release).
+	RMDiag::InstallHooks();
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
