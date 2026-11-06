@@ -24,16 +24,17 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	{
 		return SnapToFoundationGrid(hitResult);
 	}
-	// Fence walls stack: aiming at the upper half of a fence wall puts the new one right on top of
-	// it, the lower half right below it, same course. With the snap key held the new wall takes the
-	// aimed wall's place instead and replaces it on click, like the game's walls.
-	if (GetFenceDefaults()->IsWall())
+	// With the snap key held, aiming at another fence of the same family (fence wall for fence
+	// walls, road fence for road fences) puts the new one in its place, replaced on click, like the
+	// game's walls. Fence walls also stack: aiming at the upper half of a fence wall puts the new one
+	// right on top of it, the lower half right below it, same course.
 	{
 		ARMBuildableFence* Other = Cast<ARMBuildableFence>(hitResult.GetActor());
-		// Replacing needs a different wall: another type, or the same type showing another look.
+		const bool bOwnWall = GetFenceDefaults()->IsWall();
+		// Replacing needs a different fence: another type, or the same type showing another look.
 		const ERMFenceType OwnType = GetFenceDefaults()->mFenceType;
-		const bool bSameWall = Other && Other->GetEffectiveType() == OwnType;
-		if (Other && Other->IsWall() && mSnapToGuideLines && !bSameWall)
+		const bool bSameFence = Other && Other->GetEffectiveType() == OwnType;
+		if (Other && Other->IsWall() == bOwnWall && mSnapToGuideLines && !bSameFence)
 		{
 			TArray<FRMSplinePoint> Points;
 			Other->GetWorldSplinePoints(Points);
@@ -47,7 +48,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 				return true;
 			}
 		}
-		if (Other && Other->IsWall())
+		if (bOwnWall && Other && Other->IsWall())
 		{
 			TArray<FRMSplinePoint> Points;
 			Other->GetWorldSplinePoints(Points);
@@ -213,7 +214,7 @@ AActor* ARMFenceHologram::Construct(TArray<AActor*>& out_children, FNetConstruct
 {
 	AActor* Target = mReplaceTarget;
 	AActor* Built = Super::Construct(out_children, constructionID);
-	// Replacing a fence wall: if the game's upgrade flow did not remove the old wall, remove it here
+	// Replacing a fence: if the game's upgrade flow did not remove the old wall, remove it here
 	// and give its cost back to the player (as dismantling would).
 	ARMBuildableFence* Old = Cast<ARMBuildableFence>(Target);
 	if (Built && Old && Old != Built && IsValid(Old) && !Old->IsActorBeingDestroyed() && !Old->GetIsDismantled()

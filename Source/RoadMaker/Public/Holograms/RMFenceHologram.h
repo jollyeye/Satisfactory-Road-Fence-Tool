@@ -31,7 +31,7 @@ public:
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	/** Fence wall + snap key aimed at a fence wall: this one replaces it (the game's upgrade flow). */
+	/** Snap key aimed at another fence of the same family (wall / road fence): this one replaces it (the game's upgrade flow). */
 	virtual AActor* GetUpgradedActor() const override { return mReplaceTarget; }
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
@@ -56,7 +56,7 @@ protected:
 
 	bool mOnRoadEdge = false;
 
-	/** The fence wall this hologram replaces (snap key held, aiming at it), else null. */
+	/** The fence this hologram replaces (snap key held, aiming at it), else null. */
 	UPROPERTY(Replicated, CustomSerialization)
 	AActor* mReplaceTarget = nullptr;
 

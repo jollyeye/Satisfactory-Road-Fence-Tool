@@ -501,9 +501,71 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 	{
 		Out.AddVertex(Frame.ProfileToWorld(P), N, P * S, Frame.Right);
 	}
-	for (int32 I = 1; I + 1 < Profile.Num(); ++I)
+	// Ear clipping: profiles are not always convex (the cement block's step), and a plain fan from
+	// the first corner then covers area outside the profile.
+	float Area2 = 0.f;
+	for (int32 I = 0; I < Profile.Num(); ++I)
 	{
-		Out.AddTriangle(Base, Base + I, Base + I + 1, N);
+		const FVector2D& A = Profile[I];
+		const FVector2D& B = Profile[(I + 1) % Profile.Num()];
+		Area2 += A.X * B.Y - B.X * A.Y;
+	}
+	const float Orient = Area2 >= 0.f ? 1.f : -1.f;
+	auto Cross = [](const FVector2D& A, const FVector2D& B, const FVector2D& C)
+	{
+		return (B.X - A.X) * (C.Y - A.Y) - (B.Y - A.Y) * (C.X - A.X);
+	};
+	TArray<int32> Left;
+	for (int32 I = 0; I < Profile.Num(); ++I)
+	{
+		Left.Add(I);
+	}
+	while (Left.Num() > 3)
+	{
+		bool bClipped = false;
+		for (int32 K = 0; K < Left.Num(); ++K)
+		{
+			const int32 IA = Left[(K + Left.Num() - 1) % Left.Num()];
+			const int32 IB = Left[K];
+			const int32 IC = Left[(K + 1) % Left.Num()];
+			const FVector2D& A = Profile[IA];
+			const FVector2D& B = Profile[IB];
+			const FVector2D& C = Profile[IC];
+			if (Cross(A, B, C) * Orient <= KINDA_SMALL_NUMBER)
+			{
+				continue; // reflex or flat corner: not an ear
+			}
+			bool bInside = false;
+			for (const int32 IP : Left)
+			{
+				if (IP == IA || IP == IB || IP == IC)
+				{
+					continue;
+				}
+				const FVector2D& P = Profile[IP];
+				if (Cross(A, B, P) * Orient >= 0.f && Cross(B, C, P) * Orient >= 0.f && Cross(C, A, P) * Orient >= 0.f)
+				{
+					bInside = true;
+					break;
+				}
+			}
+			if (bInside)
+			{
+				continue;
+			}
+			Out.AddTriangle(Base + IA, Base + IB, Base + IC, N);
+			Left.RemoveAt(K);
+			bClipped = true;
+			break;
+		}
+		if (!bClipped)
+		{
+			break; // degenerate profile: fan the rest below
+		}
+	}
+	for (int32 I = 1; I + 1 < Left.Num(); ++I)
+	{
+		Out.AddTriangle(Base + Left[0], Base + Left[I], Base + Left[I + 1], N);
 	}
 }
 
