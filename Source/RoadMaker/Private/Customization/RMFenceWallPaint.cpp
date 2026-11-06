@@ -121,31 +121,6 @@ namespace
 		}
 	};
 
-	/**
-	 * The paint gun outlines the aimed building through custom depth with a stencil value; it uses
-	 * the "cannot apply" value on fence walls (the game does not know they take wall materials).
-	 * Put the "can apply" value on them instead.
-	 */
-	void FenceWallOutlineValid(ARMBuildableFence* Wall)
-	{
-		static const uint8 Ok = FRMStencilAccess::Get(EHologramMaterialState::HMS_OK);
-		static bool bLogged = false;
-		if (!bLogged)
-		{
-			bLogged = true;
-			UE_LOG(LogRoadMaker, Display, TEXT("[Diag] stencil OK=%d WARNING=%d ERROR=%d"), Ok,
-				FRMStencilAccess::Get(EHologramMaterialState::HMS_WARNING), FRMStencilAccess::Get(EHologramMaterialState::HMS_ERROR));
-		}
-		TInlineComponentArray<UPrimitiveComponent*> Comps(Wall);
-		for (UPrimitiveComponent* C : Comps)
-		{
-			if (C->bRenderCustomDepth && C->CustomDepthStencilValue != Ok)
-			{
-				C->SetCustomDepthStencilValue(Ok);
-			}
-		}
-	}
-
 	void FenceWallClearPreview()
 	{
 		if (ARMBuildableFence* Old = GFenceWallPreview.Get())
@@ -196,8 +171,8 @@ namespace
 			Wall->SetPreviewWallLook(Look);
 			GFenceWallPreview = Wall;
 			FenceWallClearPaintDisqualifiers(State);
-			FenceWallReportHit(State, Wall, true);
-			FenceWallOutlineValid(Wall); // white outline, like a game wall
+			// Valid (for the menu) only if the player can pay for the switch.
+			FenceWallReportHit(State, Wall, Wall->CanAffordLook(Look, Cast<AFGCharacterPlayer>(PC ? PC->GetPawn() : nullptr)));
 			GFenceWallReportedState = State;
 		}
 		else if (UFGBuildGunStatePaint* Reported = GFenceWallReportedState.Get())
@@ -235,7 +210,14 @@ void RMFenceWallPaint::InstallHooks()
 		FenceWallClearPreview();
 		if (Wall->HasAuthority())
 		{
-			Wall->SetWallLook(Look, Cast<AFGCharacterPlayer>(Pawn));
+			if (!Wall->SetWallLook(Look, Cast<AFGCharacterPlayer>(Pawn)))
+			{
+				// The game's "could not apply" effect (e.g. not enough materials for the switch).
+				if (UFunction* Failed = State->FindFunction(TEXT("OnApplyCustomizationFailed")))
+				{
+					State->ProcessEvent(Failed, nullptr);
+				}
+			}
 		}
 		else if (URMRemoteCallObject* RCO = URMRemoteCallObject::Get(PC))
 		{

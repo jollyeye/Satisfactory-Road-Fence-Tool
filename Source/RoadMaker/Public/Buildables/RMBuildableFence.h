@@ -72,6 +72,9 @@ public:
 	 */
 	bool SetWallLook(uint8 Look, class AFGCharacterPlayer* Payer = nullptr);
 	uint8 GetShownLook() const { return mWallLook ? mWallLook : LookOfType(mFenceType); }
+
+	/** True if the player can pay for switching to this look (or nothing has to be paid). */
+	bool CanAffordLook(uint8 Look, class AFGCharacterPlayer* Payer) const;
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
 	void SetPreviewWallLook(uint8 Look);
 	uint8 GetWallLook() const { return mWallLook; }

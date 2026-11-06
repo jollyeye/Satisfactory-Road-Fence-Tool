@@ -171,6 +171,28 @@ namespace
 		FCollisionQueryParams Q(SCENE_QUERY_STAT(RMDiag), true, PC->GetPawn());
 		AActor* Aimed = PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Q) ? Hit.GetActor() : nullptr;
 		DiagSet(TEXT("paint aimed"), ObjName(Aimed));
+		// Every part drawn with an outline (custom depth) right now, with its stencil value: shows
+		// which value the game uses for "can apply" (white) and "cannot apply" (red) outlines.
+		{
+			TSet<FString> Seen;
+			for (TObjectIterator<UPrimitiveComponent> It; It; ++It)
+			{
+				UPrimitiveComponent* C = *It;
+				if (!C || C->IsTemplate() || !C->bRenderCustomDepth || C->CustomDepthStencilValue <= 1 || C->GetWorld() != PC->GetWorld())
+				{
+					continue;
+				}
+				AActor* Owner = C->GetOwner();
+				if (Owner == PC->GetPawn() || (Owner && Owner->IsA<AFGBuildGun>()))
+				{
+					continue;
+				}
+				Seen.Add(FString::Printf(TEXT("%s/%s stencil=%d"), Owner ? *Owner->GetClass()->GetName() : TEXT("none"), *C->GetClass()->GetName(), C->CustomDepthStencilValue));
+			}
+			TArray<FString> List = Seen.Array();
+			List.Sort();
+			DiagSet(TEXT("outlined now"), FString::Printf(TEXT("valid material %d: %s"), State->IsMaterialHitValid() ? 1 : 0, *FString::Join(List, TEXT(", "))));
+		}
 		if (Aimed)
 		{
 			TInlineComponentArray<UPrimitiveComponent*> Comps(Aimed);

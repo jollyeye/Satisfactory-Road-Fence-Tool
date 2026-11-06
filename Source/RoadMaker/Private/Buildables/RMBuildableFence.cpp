@@ -210,6 +210,33 @@ void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack
 	}
 }
 
+bool ARMBuildableFence::CanAffordLook(uint8 Look, AFGCharacterPlayer* Payer) const
+{
+	const AFGGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AFGGameState>() : nullptr;
+	UFGInventoryComponent* Inventory = Payer ? Payer->GetInventory() : nullptr;
+	if (!Inventory || (GameState && GameState->GetCheatNoCost()) || Look < 1 || Look > 3
+		|| !mWallLookRecipes.IsValidIndex(Look - 1) || !mWallLookRecipes.IsValidIndex(GetShownLook() - 1))
+	{
+		return true;
+	}
+	TMap<TSubclassOf<UFGItemDescriptor>, int32> Net;
+	AddRecipeCost(this, mWallLookRecipes[Look - 1], mCostMultiplier, Net);
+	TMap<TSubclassOf<UFGItemDescriptor>, int32> Refund;
+	AddRecipeCost(this, mWallLookRecipes[GetShownLook() - 1], mCostMultiplier, Refund);
+	for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& R : Refund)
+	{
+		Net.FindOrAdd(R.Key) -= R.Value;
+	}
+	for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& N : Net)
+	{
+		if (N.Value > 0 && !Inventory->HasItems(N.Key, N.Value))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 {
 	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook() || GetIsDismantled() || IsActorBeingDestroyed())

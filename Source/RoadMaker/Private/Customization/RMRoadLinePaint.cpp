@@ -376,6 +376,9 @@ namespace
 			{
 				UTexture* Current = nullptr;
 				Mid->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Texture")), Current);
+				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] restore tile '%s' current=%s ours=%d original=%s"),
+					T.Label.IsValid() ? *T.Label->GetText().ToString() : TEXT("gone"), *GetNameSafe(Current),
+					(T.OurIcon.IsValid() && Current == T.OurIcon.Get()) ? 1 : 0, *GetNameSafe(T.OriginalTexture.Get()));
 				if (T.OurIcon.IsValid() && Current == T.OurIcon.Get())
 				{
 					Mid->SetTextureParameterValue(TEXT("Texture"), T.OriginalTexture.Get());
