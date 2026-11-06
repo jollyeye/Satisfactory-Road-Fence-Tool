@@ -111,16 +111,6 @@ namespace
 
 	TWeakObjectPtr<UFGBuildGunStatePaint> GFenceWallReportedState;
 
-	/** Stencil values the game uses to colour holograms / outlines (OK = white, ERROR = red). */
-	struct FRMStencilAccess : public AFGHologram
-	{
-		static uint8 Get(EHologramMaterialState State)
-		{
-			const AFGHologram* Cdo = GetDefault<ARMFenceHologram>();
-			return static_cast<const FRMStencilAccess*>(Cdo)->GetStencilForHologramMaterialState(State);
-		}
-	};
-
 	void FenceWallClearPreview()
 	{
 		if (ARMBuildableFence* Old = GFenceWallPreview.Get())
@@ -216,7 +206,6 @@ void RMFenceWallPaint::InstallHooks()
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 		ARMBuildableFence* Wall = FenceWallTrace(PC);
-		UE_LOG(LogRoadMaker, Display, TEXT("[Diag] fire with wall material %d, aimed fence wall %s"), Look, *GetNameSafe(Wall));
 		if (!Wall)
 		{
 			return; // not a fence wall: the game handles it

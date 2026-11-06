@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.1.0",
-	"SemVersion": "1.1.0",
+	"VersionName": "1.1.1",
+	"SemVersion": "1.1.1",
 	"GameVersion": ">=513885",
 	"FriendlyName": "Road Maker",
 	"Description": "Spline roads 1, 2 and 3 foundations wide with lane lines, four kinds of road-edge fences, and road intersections joining up to 6 roads.",

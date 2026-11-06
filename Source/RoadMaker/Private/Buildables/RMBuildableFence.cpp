@@ -270,8 +270,6 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 {
 	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook() || GetIsDismantled() || IsActorBeingDestroyed())
 	{
-		UE_LOG(LogRoadMaker, Display, TEXT("[Diag] wall %s: look %d not applied (shown %d, dismantled %d)"), *GetName(), Look,
-			GetShownLook(), GetIsDismantled() ? 1 : 0);
 		return false;
 	}
 	// Pay the difference: the new look's cost, minus what the old look gives back (nothing to pay
@@ -293,8 +291,6 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 		{
 			if (N.Value > 0 && AvailableItems(this, Inventory, N.Key) < N.Value)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] wall %s: look %d not applied, missing %d x %s"), *GetName(), Look,
-					N.Value, *GetNameSafe(N.Key.Get()));
 				return false; // cannot pay
 			}
 		}
@@ -334,7 +330,6 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 			SetActorEnableCollision(false);
 			SetActorHiddenInGame(true);
 			IFGDismantleInterface::Execute_Dismantle(this);
-			UE_LOG(LogRoadMaker, Display, TEXT("[Diag] wall %s swapped to %s"), *GetName(), *New->GetName());
 			return true;
 		}
 	}

@@ -19,7 +19,8 @@ at run time (section 1), then change it from C++.
 The breakthrough for every hard UI bug was a temporary logger that prints only what *changes*.
 
 - File: `Source/RoadMaker/Private/Diag/RMDiag.cpp`, installed from `RoadMakerModule.cpp`
-  (`RMDiag::InstallHooks()`). **Remove before a release.**
+  (`RMDiag::InstallHooks()`). Removed for the 1.1.1 release; get it back from git history (it is
+  in commit `1913f2e` and earlier). **Always remove it before a release.**
 - An `FTSTicker` runs every 0.1 s, builds one line of text per thing it watches, and logs a
   `[Diag]` line only when that text differs from last time. Logs stay short even at 10 Hz.
 - What it watched:
