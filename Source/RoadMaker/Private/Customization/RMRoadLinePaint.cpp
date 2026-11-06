@@ -676,6 +676,22 @@ void RMRoadLinePaint::InstallHooks()
 
 	// Road Lines shortcuts on the hotbar: their picture (the game leaves it as a blank swatch).
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixRoadLinesHotbarIcons), 0.2f);
+	// Right after a shortcut is bound, check every frame for a moment, so the blank swatch is not seen.
+	static int32 GHotbarFastFrames = 0;
+	SUBSCRIBE_METHOD_AFTER(UFGFactoryCustomizationShortcut::SetCustomizationRecipe,
+		[](UFGFactoryCustomizationShortcut*, TSubclassOf<UFGCustomizationRecipe>, bool)
+		{
+			GHotbarFastFrames = 30;
+		});
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float DeltaTime)
+		{
+			if (GHotbarFastFrames > 0)
+			{
+				--GHotbarFastFrames;
+				FixRoadLinesHotbarIcons(DeltaTime);
+			}
+			return true;
+		}));
 
 	SUBSCRIBE_METHOD_AFTER(UFGBuildGunStatePaint::SetActiveCustomization,
 		[](UFGBuildGunStatePaint* State, TSubclassOf<UFGFactoryCustomizationDescriptor> Desc)
