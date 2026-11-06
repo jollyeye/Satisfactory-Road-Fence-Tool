@@ -9,6 +9,7 @@
 #include "FGCharacterPlayer.h"
 #include "FGInventoryComponent.h"
 #include "FGGameState.h"
+#include "FGCentralStorageSubsystem.h"
 #include "FGDismantleInterface.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -175,6 +176,34 @@ UMaterialInterface* ARMBuildableFence::GetEffectiveMainMaterial() const
 
 namespace
 {
+	/** Items the player can spend: their inventory plus the Dimensional Depot (central storage). */
+	int32 AvailableItems(const UObject* Context, UFGInventoryComponent* Inventory, TSubclassOf<UFGItemDescriptor> Item)
+	{
+		int32 Count = Inventory ? Inventory->GetNumItems(Item) : 0;
+		if (AFGCentralStorageSubsystem* Central = AFGCentralStorageSubsystem::Get(const_cast<UObject*>(Context)))
+		{
+			Count += Central->GetNumItemsFromCentralStorage(Item);
+		}
+		return Count;
+	}
+
+	/** Takes items from the inventory first, the rest from the Dimensional Depot. */
+	void SpendItems(const UObject* Context, UFGInventoryComponent* Inventory, TSubclassOf<UFGItemDescriptor> Item, int32 Num)
+	{
+		const int32 FromInventory = Inventory ? FMath::Min(Num, Inventory->GetNumItems(Item)) : 0;
+		if (FromInventory > 0)
+		{
+			Inventory->Remove(Item, FromInventory);
+		}
+		if (Num - FromInventory > 0)
+		{
+			if (AFGCentralStorageSubsystem* Central = AFGCentralStorageSubsystem::Get(const_cast<UObject*>(Context)))
+			{
+				Central->TryRemoveItemsFromCentralStorage(Item, Num - FromInventory);
+			}
+		}
+	}
+
 	/** Ingredients of a recipe, times a count, merged per item. */
 	void AddRecipeCost(const UObject* Context, TSubclassOf<UFGRecipe> Recipe, int32 Times, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out)
 	{
@@ -229,7 +258,7 @@ bool ARMBuildableFence::CanAffordLook(uint8 Look, AFGCharacterPlayer* Payer) con
 	}
 	for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& N : Net)
 	{
-		if (N.Value > 0 && !Inventory->HasItems(N.Key, N.Value))
+		if (N.Value > 0 && AvailableItems(this, Inventory, N.Key) < N.Value)
 		{
 			return false;
 		}
@@ -262,7 +291,7 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 		}
 		for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& N : Net)
 		{
-			if (N.Value > 0 && !Inventory->HasItems(N.Key, N.Value))
+			if (N.Value > 0 && AvailableItems(this, Inventory, N.Key) < N.Value)
 			{
 				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] wall %s: look %d not applied, missing %d x %s"), *GetName(), Look,
 					N.Value, *GetNameSafe(N.Key.Get()));
@@ -273,7 +302,7 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 		{
 			if (N.Value > 0)
 			{
-				Inventory->Remove(N.Key, N.Value);
+				SpendItems(this, Inventory, N.Key, N.Value);
 			}
 			else if (N.Value < 0)
 			{

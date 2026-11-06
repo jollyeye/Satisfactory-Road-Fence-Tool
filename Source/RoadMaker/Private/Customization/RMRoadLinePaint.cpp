@@ -381,8 +381,9 @@ namespace
 					(T.OurIcon.IsValid() && Current == T.OurIcon.Get()) ? 1 : 0, *GetNameSafe(T.OriginalTexture.Get()));
 				if (T.OurIcon.IsValid() && Current == T.OurIcon.Get())
 				{
+					// Only the picture: the colour flag is the game's (it sets it for colour swatches,
+					// and putting back the old one turned swatches into stale pictures).
 					Mid->SetTextureParameterValue(TEXT("Texture"), T.OriginalTexture.Get());
-					Mid->SetScalarParameterValue(TEXT("IsColor"), T.OriginalIsColor);
 				}
 			}
 			for (const auto& Hidden : T.HiddenTexts)

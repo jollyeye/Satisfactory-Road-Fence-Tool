@@ -171,8 +171,21 @@ namespace
 			Wall->SetPreviewWallLook(Look);
 			GFenceWallPreview = Wall;
 			FenceWallClearPaintDisqualifiers(State);
-			// Valid (for the menu) only if the player can pay for the switch.
-			FenceWallReportHit(State, Wall, Wall->CanAffordLook(Look, Cast<AFGCharacterPlayer>(PC ? PC->GetPawn() : nullptr)));
+			// Valid only if the player can pay for the switch (inventory + Dimensional Depot).
+			const bool bCanApply = Wall->CanAffordLook(Look, Cast<AFGCharacterPlayer>(PC ? PC->GetPawn() : nullptr));
+			FenceWallReportHit(State, Wall, bCanApply);
+			// The game outlines the aimed building with custom depth: stencil 2 draws the white
+			// "can apply" outline, 7 the red one (values read from the game in the log). It uses 7 on
+			// fence walls because it does not know they take wall materials.
+			const uint8 Stencil = bCanApply ? 2 : 7;
+			TInlineComponentArray<UPrimitiveComponent*> Comps(Wall);
+			for (UPrimitiveComponent* C : Comps)
+			{
+				if (C->bRenderCustomDepth && C->CustomDepthStencilValue != Stencil)
+				{
+					C->SetCustomDepthStencilValue(Stencil);
+				}
+			}
 			GFenceWallReportedState = State;
 		}
 		else if (UFGBuildGunStatePaint* Reported = GFenceWallReportedState.Get())
