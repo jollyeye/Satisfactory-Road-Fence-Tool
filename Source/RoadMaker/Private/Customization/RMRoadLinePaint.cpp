@@ -347,6 +347,10 @@ namespace
 		/** The Road Lines picture we put in. */
 		TWeakObjectPtr<UTexture2D> OurIcon;
 		FLinearColor OriginalColor = FLinearColor::White;
+		/** The tile's own icon material (the game sets each option's picture on it). */
+		TWeakObjectPtr<UMaterialInstanceDynamic> Mid;
+		TStrongObjectPtr<UTexture> OriginalTexture;
+		float OriginalIsColor = 0.f;
 	};
 	TArray<FPatchedTile> GPatched;
 
@@ -365,28 +369,18 @@ namespace
 			{
 				continue;
 			}
-			if (UImage* Image = T.Icon.Get())
+			// The picture is a parameter of the tile's icon material, which the game sets again for
+			// whatever option it puts in the tile. Only if it is still our picture (the game has not
+			// refilled the tile yet) do we put the old values back.
+			if (UMaterialInstanceDynamic* Mid = T.Mid.Get())
 			{
-				// Only undo our picture if it is still there: when the menu reuses the tile for
-				// another tab it sets that option's icon itself, and putting back the brush the tile
-				// had before would show a wrong icon (e.g. on the wall materials).
-				// The game may only swap the picture (resource) when it reuses the tile, keeping the
-				// draw settings we changed: always put back the tile's own draw settings and colour,
-				// with the game's new picture if it set one.
-				const bool bStillOurs = T.OurIcon.IsValid() && Image->GetBrush().GetResourceObject() == T.OurIcon.Get();
-				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] restore tile %p label '%s' stillOurs=%d current=%s original=%s"), Image,
-					T.Label.IsValid() ? *T.Label->GetText().ToString() : TEXT("gone"), bStillOurs ? 1 : 0,
-					*GetNameSafe(Image->GetBrush().GetResourceObject()), *GetNameSafe(T.OriginalBrush.GetResourceObject()));
-				FSlateBrush Brush = T.OriginalBrush;
-				if (!bStillOurs)
+				UTexture* Current = nullptr;
+				Mid->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Texture")), Current);
+				if (T.OurIcon.IsValid() && Current == T.OurIcon.Get())
 				{
-					Brush.SetResourceObject(Image->GetBrush().GetResourceObject());
+					Mid->SetTextureParameterValue(TEXT("Texture"), T.OriginalTexture.Get());
+					Mid->SetScalarParameterValue(TEXT("IsColor"), T.OriginalIsColor);
 				}
-				if (!bStillOurs || T.OriginalResource.IsValid())
-				{
-					Image->SetBrush(Brush);
-				}
-				Image->SetColorAndOpacity(T.OriginalColor);
 			}
 			for (const auto& Hidden : T.HiddenTexts)
 			{
@@ -462,15 +456,27 @@ namespace
 					}
 				}
 			}
-			if (Image->GetBrush().GetResourceObject() != Icon)
+			// Draw our picture through the tile's own icon material (its "Texture" parameter), the
+			// way the game draws pattern and material icons. The brush itself is left alone, so the
+			// game can refill the tile for other tabs.
+			UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Image->GetBrush().GetResourceObject());
+			if (!Mid)
 			{
-				FSlateBrush Brush = Patched->OriginalBrush;
+				return;
+			}
+			UTexture* Current = nullptr;
+			Mid->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Texture")), Current);
+			if (Current != Icon)
+			{
+				if (Patched->Mid.Get() != Mid || !Patched->OurIcon.IsValid())
+				{
+					Patched->Mid = Mid;
+					Patched->OriginalTexture.Reset(Current);
+					Mid->GetScalarParameterValue(FHashedMaterialParameterInfo(TEXT("IsColor")), Patched->OriginalIsColor);
+				}
 				Patched->OurIcon = Icon;
-				Brush.SetResourceObject(Icon);
-				Brush.DrawAs = ESlateBrushDrawType::Image;
-				Brush.TintColor = FSlateColor(FLinearColor::White);
-				Image->SetBrush(Brush);
-				Image->SetColorAndOpacity(FLinearColor::White);
+				Mid->SetTextureParameterValue(TEXT("Texture"), Icon);
+				Mid->SetScalarParameterValue(TEXT("IsColor"), 0.f);
 			}
 			return;
 		}

@@ -13,6 +13,8 @@
 #include "Containers/Ticker.h"
 #include "UObject/UnrealType.h"
 #include "Resources/FGBuildingDescriptor.h"
+#include "Holograms/RMFenceHologram.h"
+#include "Components/PrimitiveComponent.h"
 
 #if !WITH_EDITOR
 namespace
@@ -109,6 +111,41 @@ namespace
 
 	TWeakObjectPtr<UFGBuildGunStatePaint> GFenceWallReportedState;
 
+	/** Stencil values the game uses to colour holograms / outlines (OK = white, ERROR = red). */
+	struct FRMStencilAccess : public AFGHologram
+	{
+		static uint8 Get(EHologramMaterialState State)
+		{
+			const AFGHologram* Cdo = GetDefault<ARMFenceHologram>();
+			return static_cast<const FRMStencilAccess*>(Cdo)->GetStencilForHologramMaterialState(State);
+		}
+	};
+
+	/**
+	 * The paint gun outlines the aimed building through custom depth with a stencil value; it uses
+	 * the "cannot apply" value on fence walls (the game does not know they take wall materials).
+	 * Put the "can apply" value on them instead.
+	 */
+	void FenceWallOutlineValid(ARMBuildableFence* Wall)
+	{
+		static const uint8 Ok = FRMStencilAccess::Get(EHologramMaterialState::HMS_OK);
+		static bool bLogged = false;
+		if (!bLogged)
+		{
+			bLogged = true;
+			UE_LOG(LogRoadMaker, Display, TEXT("[Diag] stencil OK=%d WARNING=%d ERROR=%d"), Ok,
+				FRMStencilAccess::Get(EHologramMaterialState::HMS_WARNING), FRMStencilAccess::Get(EHologramMaterialState::HMS_ERROR));
+		}
+		TInlineComponentArray<UPrimitiveComponent*> Comps(Wall);
+		for (UPrimitiveComponent* C : Comps)
+		{
+			if (C->bRenderCustomDepth && C->CustomDepthStencilValue != Ok)
+			{
+				C->SetCustomDepthStencilValue(Ok);
+			}
+		}
+	}
+
 	void FenceWallClearPreview()
 	{
 		if (ARMBuildableFence* Old = GFenceWallPreview.Get())
@@ -159,7 +196,8 @@ namespace
 			Wall->SetPreviewWallLook(Look);
 			GFenceWallPreview = Wall;
 			FenceWallClearPaintDisqualifiers(State);
-			FenceWallReportHit(State, Wall, true); // white outline, like a game wall
+			FenceWallReportHit(State, Wall, true);
+			FenceWallOutlineValid(Wall); // white outline, like a game wall
 			GFenceWallReportedState = State;
 		}
 		else if (UFGBuildGunStatePaint* Reported = GFenceWallReportedState.Get())
@@ -188,6 +226,7 @@ void RMFenceWallPaint::InstallHooks()
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 		ARMBuildableFence* Wall = FenceWallTrace(PC);
+		UE_LOG(LogRoadMaker, Display, TEXT("[Diag] fire with wall material %d, aimed fence wall %s"), Look, *GetNameSafe(Wall));
 		if (!Wall)
 		{
 			return; // not a fence wall: the game handles it
