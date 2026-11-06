@@ -17,6 +17,8 @@
 #include "Engine/World.h"
 #include "Containers/Ticker.h"
 #include "UObject/UObjectIterator.h"
+#include "FGFactoryCustomizationShortcut.h"
+#include "FGCustomizationRecipe.h"
 
 namespace RMDiag
 {
@@ -223,6 +225,66 @@ namespace
 		}
 	}
 
+	/** Hotbar: the customization shortcuts and the pictures of the hotbar slot widgets. */
+	void DiagHotbar()
+	{
+		for (TObjectIterator<UFGFactoryCustomizationShortcut> It; It; ++It)
+		{
+			UFGFactoryCustomizationShortcut* Shortcut = *It;
+			if (!Shortcut || Shortcut->IsTemplate())
+			{
+				continue;
+			}
+			TSubclassOf<UFGCustomizationRecipe> Recipe = Shortcut->GetCustomizationRecipe();
+			TSubclassOf<UFGFactoryCustomizationDescriptor> Desc = Recipe ? UFGCustomizationRecipe::GetCustomizationDescriptor(Recipe) : nullptr;
+			DiagSet(TEXT("shortcut ") + Shortcut->GetName(), FString::Printf(TEXT("recipe=%s desc=%s descParent=%s image=%s"),
+				*GetNameSafe(Recipe.Get()), *GetNameSafe(Desc.Get()), Desc ? *GetNameSafe(Desc->GetSuperClass()) : TEXT("none"),
+				*GetNameSafe(Shortcut->GetDisplayImage())));
+		}
+		for (TObjectIterator<UImage> It; It; ++It)
+		{
+			UImage* Image = *It;
+			if (!Image || Image->IsTemplate() || !Image->IsVisible())
+			{
+				continue;
+			}
+			// Path of the widgets it sits in, innermost first; keep only hotbar / shortcut ones.
+			FString Path;
+			bool bHotbar = false;
+			int32 Depth = 0;
+			for (UUserWidget* W = Image->GetTypedOuter<UUserWidget>(); W && Depth < 5; W = W->GetTypedOuter<UUserWidget>(), ++Depth)
+			{
+				const FString Name = W->GetClass()->GetName();
+				bHotbar |= Name.Contains(TEXT("Hotbar")) || Name.Contains(TEXT("Shortcut"));
+				Path += Name + TEXT("/") + W->GetName() + TEXT(" < ");
+				if (!W->GetOuter() || W->GetOuter() == W)
+				{
+					break;
+				}
+			}
+			const FSlateBrush& Brush = Image->GetBrush();
+			UObject* Res = Brush.GetResourceObject();
+			// Also any other picture drawn with the customizer icon material outside the customizer tiles.
+			const UMaterialInstance* ResMI = Cast<UMaterialInstance>(Res);
+			const bool bCustomiserMaterial = ResMI && GetNameSafe(ResMI->Parent).Contains(TEXT("Customi")) && !Path.Contains(TEXT("CustomiserIcon"));
+			if (!bHotbar && !bCustomiserMaterial)
+			{
+				continue;
+			}
+			FString ResInfo = ObjName(Res);
+			if (UMaterialInterface* M = Cast<UMaterialInterface>(Res))
+			{
+				ResInfo = MaterialInfo(M);
+				if (UMaterialInstance* MI = Cast<UMaterialInstance>(M))
+				{
+					ResInfo += TEXT(" parent=") + GetNameSafe(MI->Parent);
+				}
+			}
+			DiagSet(TEXT("hotbar img ") + Path + Image->GetName(), FString::Printf(TEXT("res=%s tint=%s drawAs=%d"),
+				*ResInfo, *Image->GetColorAndOpacity().ToString(), (int32)Brush.DrawAs));
+		}
+	}
+
 	bool DiagTick(float)
 	{
 		if (!GEngine || IsRunningDedicatedServer())
@@ -237,6 +299,10 @@ namespace
 				PC = Context.World()->GetFirstPlayerController();
 				break;
 			}
+		}
+		if (PC)
+		{
+			DiagHotbar();
 		}
 		AFGCharacterPlayer* Character = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Character ? Character->GetBuildGun() : nullptr;
