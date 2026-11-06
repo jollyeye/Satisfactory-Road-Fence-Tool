@@ -76,6 +76,13 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
+## Changelog for version 1.1.1 (not released yet: add to it as fixes come in)
+- Road Lines options are no longer listed as items (e.g. under Parts in the creative mode item list).
+- Switching a fence wall's material in the customizer now turns it into the real building of that material (its name, recipe and dismantle refund change), keeping its course and paint. Switching again right away works.
+- The material switch pays the cost difference from your inventory and the Dimensional Depot, and is free with No Build Cost. When it cannot be applied, the game's failure sound plays.
+- Fence walls get the game's outline while aiming with a material: white when the material can be applied, red when the wall already has that material or you cannot pay for it.
+- Customizer icons stay correct after visiting the Road Lines tab (no more wrong pictures or colours in other tabs).
+
 ## Changelog for version 1.1.0
 - **New: Fence Walls** (Walls › Fence Walls; the 4 m metal grid fence is now the Steel Mesh Fence Wall, unlocked with Basic Steel Production; FICSIT with Tier 1 Base Building, concrete and steel with their wall materials): a 4 m wall along the road edge or an intersection curb, stackable, paintable, in concrete, FICSIT or steel (switchable in the customizer).
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane of a road: the path or track is laid along the whole lane, end to end — click to build. Scroll flips the direction; next to an existing path it continues that path's direction and joins it, and tracks connect to free track ends.
