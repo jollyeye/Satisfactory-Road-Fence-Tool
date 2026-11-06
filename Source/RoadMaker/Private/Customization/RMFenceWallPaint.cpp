@@ -12,6 +12,7 @@
 #include "Engine/World.h"
 #include "Containers/Ticker.h"
 #include "UObject/UnrealType.h"
+#include "Resources/FGBuildingDescriptor.h"
 
 #if !WITH_EDITOR
 namespace
@@ -77,6 +78,37 @@ namespace
 		return nullptr;
 	}
 
+	/**
+	 * The paint gun outlines the aimed building white if the selected customization can be applied,
+	 * red if not; its Blueprint does that in OnHitStatusChanged. The game does not know fence walls
+	 * take wall materials (we switch them ourselves), so we report a valid hit for them.
+	 */
+	void FenceWallReportHit(UFGBuildGunStatePaint* State, const ARMBuildableFence* Wall, bool bValidMaterial)
+	{
+		static UFunction* Fn = UFGBuildGunStatePaint::StaticClass()->FindFunctionByName(TEXT("OnHitStatusChanged"));
+		if (!State || !Fn)
+		{
+			return;
+		}
+		struct FParams
+		{
+			TSubclassOf<UFGBuildingDescriptor> HitBuildingDesc;
+			bool bValidSwatch;
+			bool bValidPattern;
+			bool bValidMaterial;
+		} Params;
+		Params.HitBuildingDesc = Wall ? TSubclassOf<UFGBuildingDescriptor>(Wall->GetBuiltWithDescriptor<UFGBuildingDescriptor>()) : nullptr;
+		Params.bValidSwatch = State->IsSwatchHitValid();
+		Params.bValidPattern = State->IsPatternHitValid();
+		Params.bValidMaterial = bValidMaterial;
+		if (Fn->ParmsSize == sizeof(FParams) || Fn->ParmsSize >= 11)
+		{
+			State->ProcessEvent(Fn, &Params);
+		}
+	}
+
+	TWeakObjectPtr<UFGBuildGunStatePaint> GFenceWallReportedState;
+
 	void FenceWallClearPreview()
 	{
 		if (ARMBuildableFence* Old = GFenceWallPreview.Get())
@@ -127,6 +159,14 @@ namespace
 			Wall->SetPreviewWallLook(Look);
 			GFenceWallPreview = Wall;
 			FenceWallClearPaintDisqualifiers(State);
+			FenceWallReportHit(State, Wall, true); // white outline, like a game wall
+			GFenceWallReportedState = State;
+		}
+		else if (UFGBuildGunStatePaint* Reported = GFenceWallReportedState.Get())
+		{
+			// Back to what the game itself found for what is aimed at now.
+			FenceWallReportHit(Reported, nullptr, Reported->IsMaterialHitValid());
+			GFenceWallReportedState.Reset();
 		}
 		return true;
 	}

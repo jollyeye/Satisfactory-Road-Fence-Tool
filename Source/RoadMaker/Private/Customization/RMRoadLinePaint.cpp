@@ -346,6 +346,7 @@ namespace
 		TArray<TPair<TWeakObjectPtr<UTextBlock>, ESlateVisibility>> HiddenTexts;
 		/** The Road Lines picture we put in. */
 		TWeakObjectPtr<UTexture2D> OurIcon;
+		FLinearColor OriginalColor = FLinearColor::White;
 	};
 	TArray<FPatchedTile> GPatched;
 
@@ -369,11 +370,20 @@ namespace
 				// Only undo our picture if it is still there: when the menu reuses the tile for
 				// another tab it sets that option's icon itself, and putting back the brush the tile
 				// had before would show a wrong icon (e.g. on the wall materials).
+				// The game may only swap the picture (resource) when it reuses the tile, keeping the
+				// draw settings we changed: always put back the tile's own draw settings and colour,
+				// with the game's new picture if it set one.
 				const bool bStillOurs = T.OurIcon.IsValid() && Image->GetBrush().GetResourceObject() == T.OurIcon.Get();
-				if (bStillOurs && T.OriginalResource.IsValid())
+				FSlateBrush Brush = T.OriginalBrush;
+				if (!bStillOurs)
 				{
-					Image->SetBrush(T.OriginalBrush);
+					Brush.SetResourceObject(Image->GetBrush().GetResourceObject());
 				}
+				if (!bStillOurs || T.OriginalResource.IsValid())
+				{
+					Image->SetBrush(Brush);
+				}
+				Image->SetColorAndOpacity(T.OriginalColor);
 			}
 			for (const auto& Hidden : T.HiddenTexts)
 			{
@@ -413,6 +423,7 @@ namespace
 				New.Label = Label;
 				New.Icon = Image;
 				New.OriginalBrush = Image->GetBrush();
+				New.OriginalColor = Image->GetColorAndOpacity();
 				New.OriginalResource.Reset(New.OriginalBrush.GetResourceObject());
 				// The "Edit" label left over from the colour tab: Road Lines options are not editable.
 				for (UWidget* Other : Widgets)
