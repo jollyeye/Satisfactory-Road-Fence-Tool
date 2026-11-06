@@ -617,8 +617,11 @@ if light_swatch:
 look_recipes = [fence_wall_recipes.get(n) for n in ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")]
 for wname, wcls in fence_wall_classes.items():
     wbp = unreal.load_asset("%s/Buildables/Build_%s.Build_%s" % (ROOT, wname, wname))
+    look_classes = [fence_wall_classes.get(n) for n in ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")]
     if wbp and all(look_recipes):
         setp(cdo(wbp), look_recipes, "m_wall_look_recipes", "mWallLookRecipes")
+        if all(look_classes):
+            setp(cdo(wbp), look_classes, "m_wall_look_classes", "mWallLookClasses")
         finish(wbp)
 
 # Concrete and steel fence walls unlock with the game's concrete / steel wall materials.

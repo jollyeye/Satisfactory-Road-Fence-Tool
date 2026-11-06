@@ -7,6 +7,9 @@
 #include "FGRecipe.h"
 #include "FGCharacterPlayer.h"
 #include "FGInventoryComponent.h"
+#include "FGGameState.h"
+#include "FGDismantleInterface.h"
+#include "Kismet/GameplayStatics.h"
 
 ARMBuildableFence::ARMBuildableFence(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -212,8 +215,11 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 	{
 		return false;
 	}
-	// Pay the difference: the new look's cost, minus what the old look gives back.
-	UFGInventoryComponent* Inventory = Payer ? Payer->GetInventory() : nullptr;
+	// Pay the difference: the new look's cost, minus what the old look gives back (nothing to pay
+	// with the game's "no build cost" cheat / creative option).
+	const AFGGameState* GameState = GetWorld() ? GetWorld()->GetGameState<AFGGameState>() : nullptr;
+	const bool bFree = GameState && GameState->GetCheatNoCost();
+	UFGInventoryComponent* Inventory = Payer && !bFree ? Payer->GetInventory() : nullptr;
 	if (Inventory && mWallLookRecipes.IsValidIndex(Look - 1) && mWallLookRecipes.IsValidIndex(GetShownLook() - 1))
 	{
 		TMap<TSubclassOf<UFGItemDescriptor>, int32> Net;
@@ -243,7 +249,31 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 			}
 		}
 	}
-	// Back to the look it was built with: store 0, so the saved value stays "as built".
+	// Swap to the fence wall of that material, like the game's material swap: a new building of the
+	// right type (name, recipe, refund) with this wall's course, side and paint; this one goes away.
+	UClass* NewClass = mWallLookClasses.IsValidIndex(Look - 1) ? mWallLookClasses[Look - 1].Get() : nullptr;
+	UWorld* World = GetWorld();
+	if (NewClass && NewClass != GetClass() && World)
+	{
+		const FTransform T = GetActorTransform();
+		ARMBuildableFence* New = World->SpawnActorDeferred<ARMBuildableFence>(NewClass, T, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (New)
+		{
+			if (mWallLookRecipes.IsValidIndex(Look - 1))
+			{
+				New->SetBuiltWithRecipe(mWallLookRecipes[Look - 1]);
+			}
+			New->SetInwardSign(mInwardSign);
+			New->SetCostMultiplier(mCostMultiplier);
+			New->SetSplinePoints(mSplinePoints);
+			New->SetCustomizationData_Native(mCustomizationData);
+			UGameplayStatics::FinishSpawningActor(New, T);
+			IFGDismantleInterface::Execute_Dismantle(this);
+			return true;
+		}
+	}
+	// No class for that look (older setup): switch the look on this wall.
 	mWallLook = Look == LookOfType(mFenceType) ? 0 : Look;
 	RebuildMesh();
 	ForceNetUpdate();

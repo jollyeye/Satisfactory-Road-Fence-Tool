@@ -130,6 +130,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	bool mWallMirror = true;
 
+	/** Fence walls: the fence wall class of each look (concrete, FICSIT, steel); switching swaps to it. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	TArray<TSubclassOf<class ARMBuildableFence>> mWallLookClasses;
+
 	/** Fence walls: the recipe of each look (concrete, FICSIT, steel), for its cost. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	TArray<TSubclassOf<class UFGRecipe>> mWallLookRecipes;
