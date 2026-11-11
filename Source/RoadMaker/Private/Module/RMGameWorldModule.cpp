@@ -13,6 +13,7 @@
 #include "UObject/UnrealType.h"
 #include "FGFactoryColoringTypes.h"
 #include "Buildables/FGBuildable.h"
+#include "Buildables/RMBuildableProcedural.h"
 
 void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 {
@@ -23,6 +24,7 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 		// The game's wall materials list the fence walls (so the build menu can treat them like the
 		// game's walls), but the customizer switches them in place (RMFenceWallPaint).
 		RegisterFenceWallMaterials();
+		RegisterRoadMaterials();
 	}
 	if (Phase == ELifecyclePhase::POST_INITIALIZATION)
 	{
@@ -115,6 +117,26 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		{
 			UE_LOG(LogRoadMaker, Display, TEXT("Fence walls: %s -> %s for %d variant(s)"), *Entry.Key->GetName(), *Entry.Value->GetName(), Added);
 		}
+	}
+}
+
+void URMGameWorldModule::RegisterRoadMaterials()
+{
+	for (const TSubclassOf<UFGFactoryCustomizationDescriptor_Material>& DescClass : mRoadMaterialDescs)
+	{
+		UFGFactoryCustomizationDescriptor_Material* Desc = DescClass ? DescClass.GetDefaultObject() : nullptr;
+		if (!Desc)
+		{
+			continue;
+		}
+		for (const TPair<TSubclassOf<AFGBuildable>, TSubclassOf<UFGRecipe>>& Entry : mRoadBuildableRecipes)
+		{
+			if (Entry.Key && Entry.Value && !Desc->GetBuildableMap().Contains(Entry.Key))
+			{
+				Desc->AddType(Entry.Key, Entry.Value);
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Road material %s lists %d road pieces"), *DescClass->GetName(), Desc->GetBuildableMap().Num());
 	}
 }
 
@@ -224,6 +246,7 @@ void URMGameWorldModule::GrantRecipesOfPurchasedSchematics()
 
 void URMGameWorldModule::EnsureRoadSwatchGroup()
 {
+	ARMBuildableProcedural::sDefaultRoadSwatch = mDefaultRoadSwatch;
 	UWorld* World = GetWorld();
 	AFGGameState* GameState = World ? World->GetGameState<AFGGameState>() : nullptr;
 	if (!GameState || World->GetNetMode() == NM_Client)

@@ -10,6 +10,7 @@
 
 class UProceduralMeshComponent;
 class UMaterialInterface;
+class UFGFactoryCustomizationDescriptor_Swatch;
 
 UCLASS(Abstract)
 class ROADMAKER_API ARMBuildableProcedural : public AFGBuildable
@@ -39,7 +40,38 @@ public:
 	int32 GetCostMultiplier() const { return mCostMultiplier; }
 	UProceduralMeshComponent* GetProceduralMesh() const { return mMesh; }
 
+	/** Road surface looks (roads and intersections): 0 asphalt, 1 concrete blocks, 2 cyberpunk. */
+	static constexpr uint8 NoPreviewLook = 255;
+	uint8 GetLook() const { return mLook; }
+	uint8 GetShownLook() const { return mPreviewLook != NoPreviewLook ? mPreviewLook : mLook; }
+	/** Switches the look (server, or locally for a preview of a replicated change). Free. */
+	void SetLook(uint8 Look);
+	/** Customizer hover: shows a look without changing it; NoPreviewLook ends it. */
+	void SetPreviewLook(uint8 Look);
+
+	/** The road swatch the game gives unpainted roads (set by the module); cyberpunk roads that still have it get their own colours. */
+	static TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> sDefaultRoadSwatch;
+
 protected:
+	/** Top / body material for the shown look (index look - 1 of the arrays, else the default). */
+	UMaterialInterface* LookMaterial(const TArray<UMaterialInterface*>& Looks, UMaterialInterface* Default) const;
+
+	/** Cyberpunk, unpainted: its own purple and cyan instead of the road swatch. */
+	void AdjustColorsForLook(const struct FFactoryCustomizationData& Data, FLinearColor& Primary, FLinearColor& Secondary) const;
+
+	UFUNCTION()
+	void OnRep_Look() { RebuildMesh(); }
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Look)
+	uint8 mLook = 0;
+	uint8 mPreviewLook = NoPreviewLook;
+
+	/** Materials of looks 1, 2... (index look - 1) for the top and the body of the slab. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TArray<UMaterialInterface*> mLookTopMaterials;
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TArray<UMaterialInterface*> mLookBodyMaterials;
+
 	/** Applies a material to a section, falling back to the first slot material. */
 	void ApplyMaterial(int32 Section, UMaterialInterface* Material);
 

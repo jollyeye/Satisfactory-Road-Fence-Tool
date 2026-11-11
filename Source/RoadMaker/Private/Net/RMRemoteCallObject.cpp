@@ -1,5 +1,7 @@
 #include "Net/RMRemoteCallObject.h"
 #include "Buildables/RMBuildableFence.h"
+#include "Buildables/RMBuildableRoad.h"
+#include "Buildables/RMBuildableIntersection.h"
 #include "FGCharacterPlayer.h"
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMRoadLineDescriptor.h"
@@ -22,6 +24,14 @@ void URMRemoteCallObject::ServerSetFenceWallLook_Implementation(ARMBuildableFenc
 	if (Wall)
 	{
 		Wall->SetWallLook(Look, GetOwnerPlayerCharacter());
+	}
+}
+
+void URMRemoteCallObject::ServerSetRoadLook_Implementation(ARMBuildableProcedural* Piece, uint8 Look)
+{
+	if (Piece && Look <= 2 && (Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableIntersection>()))
+	{
+		Piece->SetLook(Look);
 	}
 }
 

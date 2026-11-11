@@ -44,6 +44,19 @@ protected:
 	TMap<TSubclassOf<class UFGFactoryCustomizationDescriptor_Material>, TSubclassOf<class UFGRecipe>> mFenceWallMaterialRecipes;
 
 	/**
+	 * Road materials (Material tab > Roads): every one of our material descriptors lists the roads and
+	 * intersections (with their own recipes) so the customizer accepts them; the switch itself is done in
+	 * place by RMRoadLookPaint.
+	 */
+	void RegisterRoadMaterials();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TArray<TSubclassOf<class UFGFactoryCustomizationDescriptor_Material>> mRoadMaterialDescs;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TMap<TSubclassOf<class AFGBuildable>, TSubclassOf<class UFGRecipe>> mRoadBuildableRecipes;
+
+	/**
 	 * Recipes unlocked together with a game recipe (key): our recipe is added to every schematic that
 	 * unlocks the game's one, e.g. the concrete fence wall with the customizer's concrete wall material.
 	 */

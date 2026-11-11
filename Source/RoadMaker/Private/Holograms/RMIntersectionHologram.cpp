@@ -343,6 +343,20 @@ void ARMIntersectionHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(inBuildable))
 	{
 		X->SetSideLines(mSideLines);
+		// The look of the first road (or intersection) joined.
+		for (const FRMRoadEndRef& End : mPicked)
+		{
+			if (End.Road)
+			{
+				X->SetLook(End.Road->GetLook());
+				break;
+			}
+			if (End.Intersection)
+			{
+				X->SetLook(End.Intersection->GetLook());
+				break;
+			}
+		}
 		X->SetEnds(mLocalEnds, mHeight);
 		X->SetCostMultiplier(GetBaseCostMultiplier());
 	}

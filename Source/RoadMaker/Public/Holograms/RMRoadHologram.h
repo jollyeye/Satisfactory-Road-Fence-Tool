@@ -54,6 +54,10 @@ protected:
 	FRMMarkings mMarkings;
 	bool mHasCopiedMarkings = false;
 
+	/** Surface look of the new road: copied from the road (or intersection) it snaps to. */
+	UPROPERTY(CustomSerialization)
+	uint8 mLook = 0;
+
 	/** Along-edge snap step on foundations, in cm. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	float mFoundationEdgeStep = 400.f;

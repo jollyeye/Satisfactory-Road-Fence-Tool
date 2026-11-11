@@ -43,6 +43,7 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	}
 	if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
 	{
+		mLook = Intersection->GetLook();
 		return SnapBesideCurb(Intersection, hitResult.Location);
 	}
 	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
@@ -50,6 +51,7 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	{
 		return false;
 	}
+	mLook = Road->GetLook();
 	TArray<FRMFrame> Frames;
 	Road->GetWorldFrames(Frames, 50.f);
 	if (Frames.Num() < 2)
@@ -168,6 +170,7 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	if (End.Road && (mStep == 0 || !mHasCopiedMarkings))
 	{
 		mMarkings = End.Road->GetMarkings();
+		mLook = End.Road->GetLook();
 		mHasCopiedMarkings = true;
 	}
 
@@ -357,5 +360,6 @@ void ARMRoadHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(inBuildable))
 	{
 		Road->SetMarkings(mMarkings);
+		Road->SetLook(mLook);
 	}
 }

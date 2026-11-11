@@ -446,6 +446,8 @@ def tool_icon(name):
 
 
 recipes = []
+tool_recipe_classes = {}
+tool_classes = {}
 
 for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     log("== " + name + " ==")
@@ -525,6 +527,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         if not ok:
             setp(rc, [unreal.SoftClassPath(BuildGun.get_path_name())], "m_produced_in", "mProducedIn")
     finish(r)
+    tool_recipe_classes[name] = r.generated_class()
+    tool_classes[name] = b.generated_class()
     if name in FENCE_WALLS:
         fence_wall_recipes[name] = r.generated_class()
     if name in WALLS_MENU:
@@ -660,6 +664,58 @@ for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIO
     recipes.append(r.generated_class())
 
 
+# ---------------------------------------------------------------------------------------------
+# Customizer Material tab: "Roads" section with Asphalt / Concrete / Cyberpunk
+# ---------------------------------------------------------------------------------------------
+log("== Road materials (customizer) ==")
+MaterialDescBase = native_class("FGFactoryCustomizationDescriptor_Material", "FGFactoryCustomizationDescriptorMaterial")
+roads_sub = make_bp("Customization", "CustSub_Material_Roads", CustSubCategory)
+setp(cdo(roads_sub), text("Roads"), "m_display_name", "mDisplayName")
+setp(cdo(roads_sub), 50.0, "m_menu_priority", "mMenuPriority")
+finish(roads_sub)
+road_material_descs = []
+ROAD_MATERIALS = [
+    ("Asphalt", "Asphalt", "Dark asphalt with lane markings. The default look of roads and intersections.", 9200),
+    ("Concrete", "Concrete Blocks", "Light concrete blocks. Lane markings stay in the road's line colours.", 9201),
+    ("Cyber", "Cyberpunk", "Matte plastic with circuit-board grooves in the primary colour. The lane lines glow in the secondary colour.", 9202),
+]
+if MaterialDescBase and MaterialTab:
+    for i, (key, display, desc, ident) in enumerate(ROAD_MATERIALS):
+        md = make_bp("Customization", "MaterialDesc_Road_" + key, MaterialDescBase)
+        mc = cdo(md)
+        setp(mc, text(display), "m_display_name", "mDisplayName")
+        setp(mc, text(desc), "m_description", "mDescription")
+        setp(mc, MaterialTab, "m_category", "mCategory")
+        setp(mc, [roads_sub.generated_class()], "m_sub_categories", "mSubCategories")
+        setp(mc, float(i), "m_menu_priority", "mMenuPriority")
+        setp(mc, [RMBuildableRoad, RMBuildableIntersection], "m_valid_buildables", "mValidBuildables")
+        setp(mc, ident, "id", "ID")
+        try:
+            tex = unreal.load_asset("%s/Icons/T_Icon_RoadMat_%s.T_Icon_RoadMat_%s" % (ROOT, key, key))
+        except Exception:
+            tex = None
+        if tex:
+            for prop in (("m_icon", "mIcon"), ("m_small_icon", "mSmallIcon"), ("m_persistent_big_icon", "mPersistentBigIcon")):
+                setp(mc, tex, *prop)
+        rf = getattr(unreal, "ResourceForm", None)
+        if rf is not None and hasattr(rf, "RF_INVALID"):
+            setp(mc, rf.RF_INVALID, "m_form", "mForm")
+        finish(md)
+
+        r = make_bp("Customization", "Recipe_MaterialDesc_Road_" + key, CustRecipe)
+        rc = cdo(r)
+        setp(rc, text(display), "m_display_name", "mDisplayName")
+        setp(rc, md.generated_class(), "m_customization_desc", "mCustomizationDesc")
+        setp(rc, [item_amount(md.generated_class(), 1)], "m_product", "mProduct")
+        if cust_produced_in:
+            setp(rc, cust_produced_in, "m_produced_in", "mProducedIn")
+        finish(r)
+        recipes.append(r.generated_class())
+        road_material_descs.append(md.generated_class())
+else:
+    log("  ! material descriptor class or CC_Material not found: road looks not in the Material tab")
+
+
 def make_schematic(name, display, recipe_list):
     log("== " + name + " ==")
     bp = make_bp("Unlocks", name, Schematic)
@@ -711,6 +767,19 @@ for wname, wcls in fence_wall_classes.items():
         if all(look_classes):
             setp(cdo(wbp), look_classes, "m_wall_look_classes", "mWallLookClasses")
         finish(wbp)
+
+# Road looks of the Material tab: descriptors, and the recipe of each road piece (cost of switching).
+if road_material_descs:
+    setp(g, road_material_descs, "m_road_material_descs", "mRoadMaterialDescs")
+    rmap = {}
+    for n in ("Road_1x", "Road_2x", "Road_3x", "Road_4x", "RoadIntersection"):
+        if n in tool_classes and n in tool_recipe_classes:
+            rmap[tool_classes[n]] = tool_recipe_classes[n]
+    try:
+        g.set_editor_property("m_road_buildable_recipes", rmap)
+        log("  road materials: %d descriptors, %d road pieces" % (len(road_material_descs), len(rmap)))
+    except Exception as e:
+        log("  ! road buildable recipes: %s" % e)
 
 # Concrete and steel fence walls unlock with the game's concrete / steel wall materials.
 alongside = {}

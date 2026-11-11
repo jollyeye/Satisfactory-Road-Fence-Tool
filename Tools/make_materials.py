@@ -559,13 +559,217 @@ for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWa
 wall_looks = [game_wall_mat or fwall, game_wall_mats.get("ficsit") or game_wall_mat or fwall,
               game_wall_mats.get("steel") or game_wall_mat or fwall]
 
+# --- Road looks for the Material tab: concrete blocks (pavers) and cyberpunk -------------------
+def cpd_param(mat, name, index, default, x, y):
+    p = node(mat, unreal.MaterialExpressionVectorParameter, x, y,
+             parameter_name=name, default_value=default)
+    p.set_editor_property("use_custom_primitive_data", True)
+    p.set_editor_property("primitive_data_index", index)
+    return p
+
+
+def lane_masks(mat, x, y):
+    """(mid, side) lane-marking masks from the mesh UVs, same as the asphalt."""
+    u1 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y, coordinate_index=1)
+    u2 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 100, coordinate_index=2)
+    u3 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 200, coordinate_index=3)
+    m = custom(mat, MARKINGS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "UV3"], x + 300, y, "LaneMarkings")
+    link(u1, "", m, "UV1")
+    link(u2, "", m, "UV2")
+    link(u3, "", m, "UV3")
+    mid = node(mat, unreal.MaterialExpressionComponentMask, x + 550, y, r=True, g=False, b=False, a=False)
+    side = node(mat, unreal.MaterialExpressionComponentMask, x + 550, y + 100, r=False, g=True, b=False, a=False)
+    link(m, "", mid, "")
+    link(m, "", side, "")
+    return mid, side, u1, u2
+
+
+# Concrete blocks: running bond, 2 m along x 1 m across, 1.2 cm joints. Returns (joint, block hash).
+PAVERS_HLSL = r"""
+float2 p = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
+float bl = 2.0; float bw = 1.0;
+float row = floor(p.y / bw);
+float2 c = float2(p.x + fmod(abs(row), 2.0) * 0.5 * bl, p.y);
+float2 cell = float2(c.x / bl, c.y / bw);
+float2 f = frac(cell);
+float2 d = min(f, 1.0 - f) * float2(bl, bw);
+float e = min(d.x, d.y);
+float aa = max(max(fwidth(p.x), fwidth(p.y)), 0.002);
+float joint = (1.0 - smoothstep(0.006, 0.006 + aa, e)) * saturate(0.03 / aa);
+float h = frac(sin(dot(floor(cell), float2(12.9898, 78.233))) * 43758.5453);
+return float2(joint, h);
+"""
+
+# Cyberpunk circuit traces: 0.5 m tracks along the road in 4 m sections; each track runs straight,
+# jogs to the next track, or ends in a ring pad. Returns the groove mask.
+CIRCUIT_HLSL = r"""
+float2 q = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
+float S = 4.0; float R = 0.5;
+float s = floor(q.x / S);
+float j0 = floor(q.y / R);
+float x = q.x - s * S;
+float aa = max(max(fwidth(q.x), fwidth(q.y)), 0.001);
+float hw = 0.01;
+float ln = 0.0;
+float ring = 0.0;
+for (int dj = -1; dj <= 1; dj++)
+{
+    float j = j0 + dj;
+    float hj = frac(sin(dot(float2(j, s), float2(127.1, 311.7))) * 43758.5453);
+    float2 P = float2(x, q.y - (j + 0.5) * R);
+    float2 A[3]; float2 B[3];
+    for (int k = 0; k < 3; k++) { A[k] = float2(100, 100); B[k] = float2(100, 100); }
+    if (hj < 0.55)
+    {
+        A[0] = float2(0, 0); B[0] = float2(4, 0);
+        ring = max(ring, 1.0 - smoothstep(0.012, 0.012 + aa, length(P - float2(2, 0))));
+    }
+    else if (hj < 0.8)
+    {
+        A[0] = float2(0, 0);   B[0] = float2(1.8, 0);
+        A[1] = float2(1.8, 0); B[1] = float2(2.2, R);
+        A[2] = float2(2.2, R); B[2] = float2(4, R);
+    }
+    else
+    {
+        float rr = abs(length(P - float2(2, 0)) - 0.06);
+        ring = max(ring, 1.0 - smoothstep(hw, hw + aa, rr));
+        A[0] = float2(2.06, 0); B[0] = float2(3.2, 0);
+        A[1] = float2(0.8, 0);  B[1] = float2(1.94, 0);
+    }
+    for (int m = 0; m < 3; m++)
+    {
+        float2 pa = P - A[m]; float2 ba = B[m] - A[m];
+        float t = saturate(dot(pa, ba) / max(dot(ba, ba), 1e-5));
+        float dd = length(pa - ba * t);
+        ln = max(ln, 1.0 - smoothstep(hw, hw + aa, dd));
+    }
+}
+return saturate(max(ln, ring)) * saturate(0.03 / aa);
+"""
+
+
+def lines_on(mat, base, mid, side, primary, secondary, x, y):
+    with_sides = node(mat, unreal.MaterialExpressionLinearInterpolate, x, y)
+    link(base, "", with_sides, "A")
+    link(secondary, "", with_sides, "B")
+    link(side, "", with_sides, "Alpha")
+    col = node(mat, unreal.MaterialExpressionLinearInterpolate, x + 150, y)
+    link(with_sides, "", col, "A")
+    link(primary, "", col, "B")
+    link(mid, "", col, "Alpha")
+    return col
+
+
+# Concrete blocks.
+pavers = new_material("M_RoadPavers")
+p_uv1 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+p_uv2 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
+p_wp = node(pavers, unreal.MaterialExpressionWorldPosition, -1100, 800)
+pv = custom(pavers, PAVERS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "WP"], -800, 650, "Pavers")
+link(p_uv1, "", pv, "UV1")
+link(p_uv2, "", pv, "UV2")
+link(p_wp, "", pv, "WP")
+joint_m = node(pavers, unreal.MaterialExpressionComponentMask, -550, 650, r=True, g=False, b=False, a=False)
+hash_m = node(pavers, unreal.MaterialExpressionComponentMask, -550, 750, r=False, g=True, b=False, a=False)
+link(pv, "", joint_m, "")
+link(pv, "", hash_m, "")
+if tex_c:
+    p_base = atlas_sample(pavers, tex_c, RECT_BOTTOM_LEFT, False, -700, -300, (p_uv1, p_uv2))
+else:
+    p_base = noise_blend(pavers, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
+# Per-block tint 0.8 .. 1.1, joints darker.
+tint = node(pavers, unreal.MaterialExpressionLinearInterpolate, -350, 200)
+link(const(pavers, 0.8, -550, 150), "", tint, "A")
+link(const(pavers, 1.1, -550, 220), "", tint, "B")
+link(hash_m, "", tint, "Alpha")
+tinted = node(pavers, unreal.MaterialExpressionMultiply, -200, 150)
+link(p_base, "", tinted, "A")
+link(tint, "", tinted, "B")
+jd = node(pavers, unreal.MaterialExpressionLinearInterpolate, -50, 150)
+link(tinted, "", jd, "A")
+link(color(pavers, 0.03, 0.03, 0.03, -300, 300), "", jd, "B")
+link(joint_m, "", jd, "Alpha")
+pm, ps, _, _ = lane_masks(pavers, -1100, 1000)
+p_primary = cpd_param(pavers, "MiddleLineColor", 24, unreal.LinearColor(0.8, 0.8, 0.76, 1.0), -600, 1300)
+p_secondary = cpd_param(pavers, "SideLineColor", 28, unreal.LinearColor(0.8, 0.8, 0.76, 1.0), -600, 1400)
+p_col = lines_on(pavers, jd, pm, ps, p_primary, p_secondary, 100, 150)
+MEL.connect_material_property(p_col, "", MP.MP_BASE_COLOR)
+p_any = node(pavers, unreal.MaterialExpressionMax, -350, 450)
+link(pm, "", p_any, "A")
+link(ps, "", p_any, "B")
+p_rough = node(pavers, unreal.MaterialExpressionLinearInterpolate, 100, 400)
+link(const(pavers, 0.9, -200, 350), "", p_rough, "A")
+link(const(pavers, 0.6, -200, 420), "", p_rough, "B")
+link(p_any, "", p_rough, "Alpha")
+MEL.connect_material_property(p_rough, "", MP.MP_ROUGHNESS)
+finish(pavers)
+log("Concrete pavers")
+
+# Cyberpunk top: matte plastic in the primary colour, circuit grooves, glowing secondary lane lines.
+cyber = new_material("M_RoadCyber")
+c_uv1 = node(cyber, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+c_uv2 = node(cyber, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
+c_wp = node(cyber, unreal.MaterialExpressionWorldPosition, -1100, 800)
+cc = custom(cyber, CIRCUIT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "UV2", "WP"], -800, 650, "Circuit")
+link(c_uv1, "", cc, "UV1")
+link(c_uv2, "", cc, "UV2")
+link(c_wp, "", cc, "WP")
+c_primary = cpd_param(cyber, "MiddleLineColor", 24, unreal.LinearColor(0.32, 0.02, 0.40, 1.0), -600, 1300)
+c_secondary = cpd_param(cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -600, 1400)
+plastic = node(cyber, unreal.MaterialExpressionMultiply, -350, 100)
+link(c_primary, "", plastic, "A")
+link(const(cyber, 0.55, -500, 150), "", plastic, "B")
+groove = node(cyber, unreal.MaterialExpressionMultiply, -350, 250)
+link(c_primary, "", groove, "A")
+link(const(cyber, 0.12, -500, 300), "", groove, "B")
+c_surface = node(cyber, unreal.MaterialExpressionLinearInterpolate, -150, 150)
+link(plastic, "", c_surface, "A")
+link(groove, "", c_surface, "B")
+link(cc, "", c_surface, "Alpha")
+cm, cs, _, _ = lane_masks(cyber, -1100, 1000)
+c_col = lines_on(cyber, c_surface, cm, cs, c_secondary, c_secondary, 50, 150)
+MEL.connect_material_property(c_col, "", MP.MP_BASE_COLOR)
+c_any = node(cyber, unreal.MaterialExpressionMax, -350, 450)
+link(cm, "", c_any, "A")
+link(cs, "", c_any, "B")
+glow = node(cyber, unreal.MaterialExpressionMultiply, 100, 450)
+glow_col = node(cyber, unreal.MaterialExpressionMultiply, 100, 550)
+link(c_secondary, "", glow_col, "A")
+link(c_any, "", glow_col, "B")
+link(glow_col, "", glow, "A")
+link(const(cyber, 4.0, -100, 600), "", glow, "B")
+MEL.connect_material_property(glow, "", MP.MP_EMISSIVE_COLOR)
+c_rough = node(cyber, unreal.MaterialExpressionLinearInterpolate, 100, 700)
+link(const(cyber, 0.65, -200, 650), "", c_rough, "A")
+link(const(cyber, 0.25, -200, 720), "", c_rough, "B")
+link(c_any, "", c_rough, "Alpha")
+MEL.connect_material_property(c_rough, "", MP.MP_ROUGHNESS)
+finish(cyber)
+log("Cyberpunk road")
+
+# Cyberpunk slab sides: dark plastic in the primary colour.
+cyber_body = new_material("M_RoadCyberBody")
+cb_primary = cpd_param(cyber_body, "MiddleLineColor", 24, unreal.LinearColor(0.32, 0.02, 0.40, 1.0), -600, 0)
+cb_col = node(cyber_body, unreal.MaterialExpressionMultiply, -300, 0)
+link(cb_primary, "", cb_col, "A")
+link(const(cyber_body, 0.3, -500, 80), "", cb_col, "B")
+MEL.connect_material_property(cb_col, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(cyber_body, 0.7, -300, 200), "", MP.MP_ROUGHNESS)
+finish(cyber_body)
+log("Cyberpunk road body")
+
 # --- Assign ----------------------------------------------------------------------------------
+# Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
+ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
+              "m_look_top_materials": [pavers, cyber],
+              "m_look_body_materials": [concrete, cyber_body]}
 ASSIGN = {
-    "Build_Road_1x": {"m_top_material": asphalt, "m_body_material": concrete},
-    "Build_Road_2x": {"m_top_material": asphalt, "m_body_material": concrete},
-    "Build_Road_3x": {"m_top_material": asphalt, "m_body_material": concrete},
-    "Build_Road_4x": {"m_top_material": asphalt, "m_body_material": concrete},
-    "Build_RoadIntersection": {"m_top_material": asphalt, "m_body_material": concrete},
+    "Build_Road_1x": ROAD_LOOKS,
+    "Build_Road_2x": ROAD_LOOKS,
+    "Build_Road_3x": ROAD_LOOKS,
+    "Build_Road_4x": ROAD_LOOKS,
+    "Build_RoadIntersection": ROAD_LOOKS,
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},

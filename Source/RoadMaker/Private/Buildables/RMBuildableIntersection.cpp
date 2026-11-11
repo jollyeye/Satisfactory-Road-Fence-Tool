@@ -51,8 +51,10 @@ void ARMBuildableIntersection::RebuildMesh()
 	}
 	Top.ApplyToSection(mMesh, 0, true);
 	Body.ApplyToSection(mMesh, 1, true);
-	ApplyMaterial(0, mTopMaterial);
-	ApplyMaterial(1, mBodyMaterial);
+	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
+	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
+	ApplyMaterial(0, TopMat);
+	ApplyMaterial(1, BodyMat);
 
 	if (mPreviewSideLines.Get(mSideLines))
 	{
@@ -61,7 +63,7 @@ void ARMBuildableIntersection::RebuildMesh()
 		FRMMesh Lines;
 		RMGeometry::BuildCurbLines(Curbs, mEdgeLineInset, Top, Lines);
 		Lines.ApplyToSection(mMesh, 2, false);
-		ApplyMaterial(2, mTopMaterial);
+		ApplyMaterial(2, TopMat);
 	}
 
 	// Far version: 3 points per curb fillet instead of mFilletSegments.
@@ -70,15 +72,15 @@ void ARMBuildableIntersection::RebuildMesh()
 	TArray<bool> FarIsMouth;
 	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth))
 	{
-		ApplyFarSection(FarTop, 0, mTopMaterial);
-		ApplyFarSection(FarBody, 1, mBodyMaterial);
+		ApplyFarSection(FarTop, 0, TopMat);
+		ApplyFarSection(FarBody, 1, BodyMat);
 		if (mPreviewSideLines.Get(mSideLines))
 		{
 			TArray<TArray<FVector>> FarCurbs;
 			RMGeometry::GetIntersectionCurbs(FarOutline, FarIsMouth, FarCurbs);
 			FRMMesh FarLines;
 			RMGeometry::BuildCurbLines(FarCurbs, mEdgeLineInset, FarTop, FarLines);
-			ApplyFarSection(FarLines, 2, mTopMaterial);
+			ApplyFarSection(FarLines, 2, TopMat);
 		}
 	}
 	ApplyMarkingColors(mCustomizationData);
@@ -117,8 +119,9 @@ void ARMBuildableIntersection::ApplyMarkingColors(const FFactoryCustomizationDat
 		return;
 	}
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
-	const FLinearColor P = Resolved.PrimaryColor;
-	const FLinearColor S = Resolved.SecondaryColor;
+	FLinearColor P = Resolved.PrimaryColor;
+	FLinearColor S = Resolved.SecondaryColor;
+	AdjustColorsForLook(Data, P, S);
 	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
 	{
 		if (M)

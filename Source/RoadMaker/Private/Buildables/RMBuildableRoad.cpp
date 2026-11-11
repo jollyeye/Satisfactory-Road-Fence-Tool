@@ -43,8 +43,10 @@ void ARMBuildableRoad::RebuildMesh()
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, Top, Body);
 	Top.ApplyToSection(mMesh, 0, true);
 	Body.ApplyToSection(mMesh, 1, true);
-	ApplyMaterial(0, mTopMaterial);
-	ApplyMaterial(1, mBodyMaterial);
+	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
+	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
+	ApplyMaterial(0, TopMat);
+	ApplyMaterial(1, BodyMat);
 
 	// Far version: the same road sampled every 4 m instead of every 1 m.
 	ClearFarMesh();
@@ -54,8 +56,8 @@ void ARMBuildableRoad::RebuildMesh()
 	{
 		FRMMesh FarTop, FarBody;
 		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, FarTop, FarBody);
-		ApplyFarSection(FarTop, 0, mTopMaterial);
-		ApplyFarSection(FarBody, 1, mBodyMaterial);
+		ApplyFarSection(FarTop, 0, TopMat);
+		ApplyFarSection(FarBody, 1, BodyMat);
 	}
 	ApplyMarkingColors(mCustomizationData);
 
@@ -131,8 +133,9 @@ void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 	}
 	// Resolves swatch / colour slot / custom colours into the actual primary and secondary colour.
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
-	const FLinearColor P = Resolved.PrimaryColor;
-	const FLinearColor S = Resolved.SecondaryColor;
+	FLinearColor P = Resolved.PrimaryColor;
+	FLinearColor S = Resolved.SecondaryColor;
+	AdjustColorsForLook(Data, P, S);
 	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
 	{
 		if (M)
@@ -351,6 +354,7 @@ void ARMBuildableRoad::CopyCutSettingsTo(ARMBuildableSpline* New) const
 	if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(New))
 	{
 		Road->SetMarkings(mMarkings);
+		Road->SetLook(mLook);
 	}
 }
 

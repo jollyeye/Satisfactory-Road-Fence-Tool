@@ -23,6 +23,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerSetFenceWallLook(class ARMBuildableFence* Wall, uint8 Look);
 
+	/** Switches a road's or intersection's look (customizer Material tab > Roads), on the server. */
+	UFUNCTION(Server, Reliable)
+	void ServerSetRoadLook(class ARMBuildableProcedural* Piece, uint8 Look);
+
 	/** Registers this RCO for a player controller (call on the server). */
 	static void RegisterFor(class AFGPlayerController* PC);
 

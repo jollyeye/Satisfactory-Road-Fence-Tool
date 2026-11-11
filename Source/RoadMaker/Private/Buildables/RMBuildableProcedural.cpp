@@ -1,4 +1,5 @@
 #include "Buildables/RMBuildableProcedural.h"
+#include "FGFactoryColoringTypes.h"
 #include "ProceduralMeshComponent.h"
 #include "FGInventoryComponent.h"
 #include "Materials/Material.h"
@@ -141,6 +142,7 @@ void ARMBuildableProcedural::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableProcedural, mCostMultiplier);
+	DOREPLIFETIME(ARMBuildableProcedural, mLook);
 }
 
 void ARMBuildableProcedural::PostLoadGame_Implementation(int32 saveVersion, int32 gameVersion)
@@ -242,5 +244,54 @@ void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActo
 				out_ChildDismantleActors.AddUnique(S);
 			}
 		}
+	}
+}
+
+TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> ARMBuildableProcedural::sDefaultRoadSwatch;
+
+void ARMBuildableProcedural::SetLook(uint8 Look)
+{
+	if (Look == mLook)
+	{
+		return;
+	}
+	mLook = Look;
+	if (HasActorBegunPlay())
+	{
+		RebuildMesh();
+	}
+}
+
+void ARMBuildableProcedural::SetPreviewLook(uint8 Look)
+{
+	if (Look == mPreviewLook)
+	{
+		return;
+	}
+	mPreviewLook = Look;
+	if (HasActorBegunPlay())
+	{
+		RebuildMesh();
+	}
+}
+
+UMaterialInterface* ARMBuildableProcedural::LookMaterial(const TArray<UMaterialInterface*>& Looks, UMaterialInterface* Default) const
+{
+	const uint8 Look = GetShownLook();
+	return Look > 0 && Looks.IsValidIndex(Look - 1) && Looks[Look - 1] ? Looks[Look - 1] : Default;
+}
+
+void ARMBuildableProcedural::AdjustColorsForLook(const FFactoryCustomizationData& Data, FLinearColor& Primary, FLinearColor& Secondary) const
+{
+	if (GetShownLook() != 2)
+	{
+		return;
+	}
+	// Unpainted (no swatch, or the road swatch the game hands out): the cyberpunk colours.
+	const bool bUnpainted = !Data.SwatchDesc || (sDefaultRoadSwatch && Data.SwatchDesc == sDefaultRoadSwatch);
+	if (bUnpainted)
+	{
+		Primary = FLinearColor(0.32f, 0.02f, 0.40f, 1.f);
+		Secondary = FLinearColor(0.f, 0.85f, 1.f, 1.f);
 	}
 }
