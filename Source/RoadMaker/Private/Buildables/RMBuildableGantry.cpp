@@ -80,11 +80,13 @@ void ARMBuildableGantry::RebuildMesh()
 	}
 	if (mParts.Num() == 3)
 	{
-		// Columns (length along the gantry's Z: pitch 90) and the cross beam (along Y: yaw 90), resting
-		// on top of the columns so the flanges do not intersect.
-		PlacePart(mParts[0], FVector(0.f, -mHalfSpan, mBeamBottom * 0.5f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
-		PlacePart(mParts[1], FVector(0.f, mHalfSpan, mBeamBottom * 0.5f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
-		PlacePart(mParts[2], FVector(0.f, 0.f, mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f), 2.f * (mHalfSpan + BeamOverhang));
+		// The game's beam mesh starts at its origin and runs along its length (not centred), so each part is
+		// placed by its start point. Columns (length along the gantry's Z: pitch 90) from the road up; the
+		// cross beam (along Y: yaw 90) from the left column's outer face, resting on top of the columns so
+		// the flanges do not intersect.
+		PlacePart(mParts[0], FVector(0.f, -mHalfSpan, 0.f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
+		PlacePart(mParts[1], FVector(0.f, mHalfSpan, 0.f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
+		PlacePart(mParts[2], FVector(0.f, -(mHalfSpan + BeamOverhang), mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f), 2.f * (mHalfSpan + BeamOverhang));
 	}
 }
 
