@@ -76,11 +76,12 @@ void ARMBuildableMarking::ApplyMarkingColors(const FFactoryCustomizationData& Da
 	{
 		return;
 	}
-	// The colour of the road's side lines: the secondary colour of the paint data (a marking starts with a
-	// copy of its road's paint). Both slots, so the plain paint and the glowing cyberpunk one read the same.
+	// Like the road's lines: asphalt and concrete paint in the primary colour (the middle lines' colour),
+	// cyberpunk glows in the secondary colour (its lines' glow). A marking starts with a copy of its road's paint.
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
+	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
 	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }
 
