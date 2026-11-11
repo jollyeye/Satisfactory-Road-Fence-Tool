@@ -99,27 +99,46 @@ namespace
 		float Distance = TNumericLimits<float>::Max();
 	};
 
-	/** Closest point on the edge of any nearby road (both sides), like the game's own edge snapping. */
-	bool FindFenceLinePoint(UWorld* World, const FVector& Aim, float MaxDistance, FFenceLinePoint& Out)
+	/**
+	 * Closest point on the edge of any nearby road (both sides), like the game's own edge snapping. Two roads
+	 * side by side share an edge: both give the same point, facing opposite ways. Then the road you aim at
+	 * wins (its edges count 1 m closer), and between near-equal points the one facing like last time stays,
+	 * so a street light on a shared edge does not flicker between the two roads.
+	 */
+	bool FindFenceLinePoint(UWorld* World, const FVector& Aim, float MaxDistance, FFenceLinePoint& Out,
+		const AActor* AimedRoad = nullptr, const FVector* PrevInward = nullptr)
 	{
 		TArray<ARMBuildableRoad*> Roads;
 		RMRoadUtils::GatherNearby(World, Aim, MaxDistance + RM::FoundationSize * 2.f, Roads);
 		bool bFound = false;
+		float BestScore = TNumericLimits<float>::Max();
 		for (ARMBuildableRoad* Road : Roads)
 		{
 			TArray<FRMFrame> Frames;
 			Road->GetWorldFrames(Frames, 25.f);
 			const float Offset = Road->GetRoadWidth() * 0.5f; // exactly on the road edge
+			const float Bias = Road == AimedRoad ? -100.f : 0.f;
 			for (const FRMFrame& F : Frames)
 			{
 				for (float Side : { 1.f, -1.f })
 				{
 					const FVector P = F.Pos + F.Right * (Offset * Side);
 					const float D = FVector::Dist(P, Aim);
-					if (D < Out.Distance && D <= MaxDistance)
+					if (D > MaxDistance)
 					{
+						continue;
+					}
+					const FVector Inward = -F.Right * Side;
+					float Score = D + Bias;
+					if (PrevInward && !PrevInward->IsNearlyZero() && FVector::DotProduct(Inward, *PrevInward) > 0.f)
+					{
+						Score -= 10.f; // keep facing the same road unless another is clearly closer
+					}
+					if (Score < BestScore)
+					{
+						BestScore = Score;
 						Out.Location = P;
-						Out.Inward = -F.Right * Side;
+						Out.Inward = Inward;
 						Out.Distance = D;
 						bFound = true;
 					}
@@ -134,6 +153,7 @@ namespace
 	{
 		int32 LastScroll = 0;
 		bool bFacingAway = false;
+		FVector LastInward = FVector::ZeroVector; // the road edge it faced last time (no flicker on shared edges)
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FLightState> GLightStates;
 
@@ -2140,7 +2160,9 @@ namespace
 			return false;
 		}
 		FFenceLinePoint Line;
-		if (!FindFenceLinePoint(Hologram->GetWorld(), Hit.Location, 800.f, Line))
+		const FLightState* Prev = Kind == ESnapKind::StreetLight ? GLightStates.Find(Hologram) : nullptr;
+		if (!FindFenceLinePoint(Hologram->GetWorld(), Hit.Location, 800.f, Line, Cast<ARMBuildableRoad>(Hit.GetActor()),
+			Prev ? &Prev->LastInward : nullptr))
 		{
 			return false;
 		}
@@ -2149,6 +2171,7 @@ namespace
 		if (Kind == ESnapKind::StreetLight)
 		{
 			FLightState& State = GLightStates.FindOrAdd(Hologram);
+			State.LastInward = Line.Inward;
 			const int32 Scroll = Hologram->GetScrollRotateValue();
 			if (Scroll != State.LastScroll)
 			{
