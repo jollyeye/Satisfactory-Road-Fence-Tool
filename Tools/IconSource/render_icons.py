@@ -335,6 +335,38 @@ def split_glyph(path):
     img.save(path)
 
 
+def adjust_glyph(path):
+    """Adjust Curvature icon: white flat glyph, a curved road ending in a grab circle."""
+    from PIL import Image as _I, ImageDraw as _D
+    import math
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    C = (0, 0, 0, 0)
+    # Quadratic curve from bottom-left, bending to the right.
+    P0, P1, P2 = (190.0, 880.0), (190.0, 330.0), (680.0, 330.0)
+    def pt(t):
+        a = (1 - t) ** 2; b = 2 * t * (1 - t); c = t * t
+        return (a * P0[0] + b * P1[0] + c * P2[0], a * P0[1] + b * P1[1] + c * P2[1])
+    steps = 80
+    for i in range(steps + 1):
+        x, y = pt(i / steps)
+        d.ellipse([x - 78, y - 78, x + 78, y + 78], fill=W)
+    # Dashed middle line cut out.
+    for i in range(4, steps - 6, 9):
+        for k in range(5):
+            x, y = pt((i + k) / steps)
+            d.ellipse([x - 11, y - 11, x + 11, y + 11], fill=C)
+    # Grab circle at the end: ring with a dot.
+    cx, cy = 790, 330
+    d.ellipse([cx - 120, cy - 120, cx + 120, cy + 120], fill=W)
+    d.ellipse([cx - 82, cy - 82, cx + 82, cy + 82], fill=C)
+    d.ellipse([cx - 40, cy - 40, cx + 40, cy + 40], fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def fence_cut_glyph(path):
     """Cut Fence icon: white flat glyph, a brick wall split by a vertical cut line."""
     from PIL import Image as _I, ImageDraw as _D
@@ -386,6 +418,8 @@ if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
 if what == "splitglyph":
     split_glyph(out); sys.exit(0)
+if what == "adjustglyph":
+    adjust_glyph(out); sys.exit(0)
 if what == "fencecutglyph":
     fence_cut_glyph(out); sys.exit(0)
 if what == "tabglyph":

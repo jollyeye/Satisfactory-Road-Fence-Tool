@@ -56,6 +56,12 @@ public:
 	 * wide and the right one the rest, following its curve, with its lines and paint. Returns the left
 	 * road (OutRight the other); null if not possible.
 	 */
+	/**
+	 * A tool replaced this road with a new one (Split Road, Adjust Curvature): out of the way at once
+	 * and dismantled, leaving the tracks and paths on it as they are.
+	 */
+	void DismantleReplaced();
+
 	ARMBuildableRoad* SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight = nullptr);
 
 	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;

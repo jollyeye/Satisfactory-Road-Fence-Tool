@@ -102,3 +102,11 @@ class ROADMAKER_API URMCD_RidersOnRoad : public UFGConstructDisqualifier
 public:
 	URMCD_RidersOnRoad() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RidersOnRoad", "Remove the train tracks and vehicle paths on the road first"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_AimAtRoadEnd : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_AimAtRoadEnd() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtRoadEnd", "Aim at an orange circle on a road end"); }
+};

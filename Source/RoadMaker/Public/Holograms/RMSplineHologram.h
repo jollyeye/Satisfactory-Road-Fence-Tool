@@ -70,7 +70,7 @@ protected:
 	virtual void RebuildPreview() PURE_VIRTUAL(ARMSplineHologram::RebuildPreview, );
 
 	/** Recomputes the spline from the start/end state, moves the actor to the start, rebuilds preview. */
-	void UpdateCurve();
+	virtual void UpdateCurve();
 
 	/** Directly set world-space points (used by fence edge mode). Actor goes to the first point. */
 	void SetWorldPoints(const TArray<FRMSplinePoint>& WorldPoints);
@@ -126,7 +126,7 @@ protected:
 	void ResetNudge();
 
 	/** Level direction of the point being placed: the start direction, or the end's travel direction. */
-	FVector GetPlacedPointAxis() const;
+	virtual FVector GetPlacedPointAxis() const;
 
 	/** Scroll value when the current step started, so each step rotates from zero. */
 	int32 mScrollAtStepStart = 0;

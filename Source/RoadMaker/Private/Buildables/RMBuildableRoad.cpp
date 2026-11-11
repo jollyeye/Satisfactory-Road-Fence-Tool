@@ -265,6 +265,14 @@ bool ARMBuildableRoad::CanSplitLengthwise() const
 	return true;
 }
 
+void ARMBuildableRoad::DismantleReplaced()
+{
+	mBeingCut = true;
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+	IFGDismantleInterface::Execute_Dismantle(this);
+}
+
 ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)
 {
 	if (OutRight)
