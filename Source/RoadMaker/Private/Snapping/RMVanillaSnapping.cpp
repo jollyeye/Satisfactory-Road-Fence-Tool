@@ -1587,7 +1587,7 @@ namespace
 	TSet<TWeakObjectPtr<const AFGHologram>> GSignsOnWall;
 
 	/** Correction between "facing" and the sign model's own front axis. */
-	constexpr float SignYawOffset = 0.f;
+	constexpr float SignYawOffset = -90.f;
 
 	void SetSignPoleDisabled(AFGHologram* Sign, bool bDisabled)
 	{
@@ -1608,8 +1608,8 @@ namespace
 	/**
 	 * Signs on fence walls: the game's sign hologram does not know our curved walls (it kept its leg,
 	 * needed a second click and did not turn with the curve). Aimed at a wall, the sign is placed here:
-	 * flat on the face you aim at, turned with the curve, free along the wall and snapped every 2 m in
-	 * height (two rows of a 4 m wall), without its leg, built with one click.
+	 * flat on the face you aim at, turned with the curve, free along the wall and snapped every 1 m in
+	 * height (5 levels on a 4 m wall), without its leg, built with one click.
 	 */
 	template <typename TScope, typename THologram>
 	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
@@ -1653,10 +1653,11 @@ namespace
 
 		// Along the wall: where you aim. Height: two rows of 2 m, the sign centred in its row.
 		const float Along = FVector::DotProduct(Hit.Location - Near.Pos, Fwd);
-		const float Row = FMath::Clamp(FMath::FloorToFloat((Hit.Location.Z - Near.Pos.Z) / 200.f), 0.f, 1.f);
+		// Five heights, 1 m apart: the bottom and top edge of the wall and three on its face.
+		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - Near.Pos.Z) / 100.f), 0.f, 4.f);
 		const float HalfThickness = 25.f; // walls are 0.5 m thick
 		FVector Location = Near.Pos + Fwd * Along + Normal * (HalfThickness + 1.f);
-		Location.Z = Near.Pos.Z + 100.f + 200.f * Row;
+		Location.Z = Near.Pos.Z + 100.f * Level;
 
 		if (GSignsOnWall.Contains(Hologram) == false)
 		{
