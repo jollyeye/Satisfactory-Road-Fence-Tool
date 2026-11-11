@@ -957,9 +957,10 @@ void RMRoadLinePaint::InstallHooks()
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 		if (GActiveMarking)
 		{
-			ARMBuildableRoad* Road;
-			AActor* Actor;
-			FVector Aim, Look;
+			ARMBuildableRoad* Road = nullptr;
+			AActor* Actor = nullptr;
+			FVector Aim;
+			FVector Look;
 			if (!TraceAim(PC, Road, Actor, Aim, Look) || !Road)
 			{
 				return; // the hint says "Aim at a road"

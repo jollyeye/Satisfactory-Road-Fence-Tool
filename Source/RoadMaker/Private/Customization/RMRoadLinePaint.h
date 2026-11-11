@@ -5,6 +5,7 @@
 #include "RMRoadLinePaint.generated.h"
 
 class APlayerController;
+class URMRoadLineDescriptor;
 class ARMBuildableRoad;
 class ARMBuildableIntersection;
 class UBorder;
