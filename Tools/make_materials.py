@@ -584,10 +584,11 @@ def lane_masks(mat, x, y):
     return mid, side, u1, u2
 
 
-# Concrete blocks: running bond, 2 m along x 1 m across, 1.2 cm joints. Returns (joint, block hash).
+# Concrete blocks: running bond, 4 m along x 2 m across, 1.6 cm joints with 4 cm bevels.
+# Returns (joint, block hash, height in cm); the height feeds the bump normal.
 PAVERS_HLSL = r"""
 float2 p = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
-float bl = 2.0; float bw = 1.0;
+float bl = 4.0; float bw = 2.0;
 float row = floor(p.y / bw);
 float2 c = float2(p.x + fmod(abs(row), 2.0) * 0.5 * bl, p.y);
 float2 cell = float2(c.x / bl, c.y / bw);
@@ -595,57 +596,119 @@ float2 f = frac(cell);
 float2 d = min(f, 1.0 - f) * float2(bl, bw);
 float e = min(d.x, d.y);
 float aa = max(max(fwidth(p.x), fwidth(p.y)), 0.002);
-float joint = (1.0 - smoothstep(0.006, 0.006 + aa, e)) * saturate(0.03 / aa);
+float fade = saturate(0.03 / aa);
+float joint = (1.0 - smoothstep(0.008, 0.008 + aa, e)) * fade;
 float h = frac(sin(dot(floor(cell), float2(12.9898, 78.233))) * 43758.5453);
-return float2(joint, h);
+float height = 1.5 * smoothstep(0.008, 0.05, e) * fade;
+return float3(joint, h, height);
 """
 
-# Cyberpunk circuit traces: 0.5 m tracks along the road in 4 m sections; each track runs straight,
-# jogs to the next track, or ends in a ring pad. Returns the groove mask.
+# Bump normal from a height field (cm) with screen-space derivatives (world space result).
+BUMP_HLSL = r"""
+float3 dpx = ddx(WP);
+float3 dpy = ddy(WP);
+float dbs = ddx(Hgt) * Str;
+float dbt = ddy(Hgt) * Str;
+float3 R1 = cross(dpy, N);
+float3 R2 = cross(N, dpx);
+float det = dot(dpx, R1);
+float3 grad = sign(det) * (dbs * R1 + dbt * R2);
+float3 n = normalize(abs(det) * N - grad);
+return normalize(lerp(n, N, saturate(Flat)));
+"""
+
+# Cyberpunk circuit board: two layers of 0.5 m / 0.25 m tracks whose sections are staggered per
+# track and differ in length (straight, jog up / down, short with a pad, bus, rings), empty patches
+# (macro cells), and now and then a chip with legs (16 x 8 m cells). Returns the emboss mask.
 CIRCUIT_HLSL = r"""
 float2 q = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
-float S = 4.0; float R = 0.5;
-float s = floor(q.x / S);
-float j0 = floor(q.y / R);
-float x = q.x - s * S;
 float aa = max(max(fwidth(q.x), fwidth(q.y)), 0.001);
-float hw = 0.01;
+float hw = 0.011;
+float soft = 0.004 + aa;
 float ln = 0.0;
-float ring = 0.0;
-for (int dj = -1; dj <= 1; dj++)
+float rg = 0.0;
+for (int layer = 0; layer < 2; layer++)
 {
-    float j = j0 + dj;
-    float hj = frac(sin(dot(float2(j, s), float2(127.1, 311.7))) * 43758.5453);
-    float2 P = float2(x, q.y - (j + 0.5) * R);
-    float2 A[3]; float2 B[3];
-    for (int k = 0; k < 3; k++) { A[k] = float2(100, 100); B[k] = float2(100, 100); }
-    if (hj < 0.55)
+    float S = layer == 0 ? 4.0 : 2.5;
+    float R = layer == 0 ? 0.5 : 0.25;
+    float2 qq = q + (layer == 0 ? float2(0, 0) : float2(1.3, 0.37));
+    float j0 = floor(qq.y / R);
+    for (int dj = -1; dj <= 1; dj++)
     {
-        A[0] = float2(0, 0); B[0] = float2(4, 0);
-        ring = max(ring, 1.0 - smoothstep(0.012, 0.012 + aa, length(P - float2(2, 0))));
-    }
-    else if (hj < 0.8)
-    {
-        A[0] = float2(0, 0);   B[0] = float2(1.8, 0);
-        A[1] = float2(1.8, 0); B[1] = float2(2.2, R);
-        A[2] = float2(2.2, R); B[2] = float2(4, R);
-    }
-    else
-    {
-        float rr = abs(length(P - float2(2, 0)) - 0.06);
-        ring = max(ring, 1.0 - smoothstep(hw, hw + aa, rr));
-        A[0] = float2(2.06, 0); B[0] = float2(3.2, 0);
-        A[1] = float2(0.8, 0);  B[1] = float2(1.94, 0);
-    }
-    for (int m = 0; m < 3; m++)
-    {
-        float2 pa = P - A[m]; float2 ba = B[m] - A[m];
-        float t = saturate(dot(pa, ba) / max(dot(ba, ba), 1e-5));
-        float dd = length(pa - ba * t);
-        ln = max(ln, 1.0 - smoothstep(hw, hw + aa, dd));
+        float j = j0 + dj;
+        float sh = frac(sin(j * 12.9898 + layer * 4.1) * 43758.5453) * S;
+        float s = floor((qq.x + sh) / S);
+        float x = qq.x + sh - s * S;
+        float2 hh = frac(sin(float2(dot(float2(j, s), float2(127.1, 311.7)) + layer * 7.7,
+                                    dot(float2(j, s), float2(269.5, 183.3)) + layer * 3.3)) * 43758.5453);
+        float hj = hh.x; float h2 = hh.y;
+        float dens = frac(sin(dot(floor(float2(qq.x / (S * 3.0), qq.y / (R * 8.0))), float2(41.3, 17.9)) + layer) * 43758.5453);
+        if (dens < 0.2) continue;
+        float2 P = float2(x, qq.y - (j + 0.5) * R);
+        float2 A[3]; float2 B[3];
+        for (int k = 0; k < 3; k++) { A[k] = float2(100, 100); B[k] = float2(100, 100); }
+        if (hj < 0.3)
+        {
+            A[0] = float2(0, 0); B[0] = float2(S, 0);
+            rg = max(rg, 1.0 - smoothstep(hw, hw + soft, abs(length(P - float2(S * (0.25 + 0.5 * h2), 0)) - 0.05)));
+        }
+        else if (hj < 0.65)
+        {
+            float jx = S * (0.3 + 0.4 * h2);
+            float up = hj < 0.5 ? R : -R;
+            A[0] = float2(0, 0);          B[0] = float2(jx - 0.2, 0);
+            A[1] = float2(jx - 0.2, 0);   B[1] = float2(jx + 0.2, up);
+            A[2] = float2(jx + 0.2, up);  B[2] = float2(S, up);
+        }
+        else if (hj < 0.8)
+        {
+            float len = S * (0.3 + 0.5 * h2);
+            A[0] = float2(0, 0); B[0] = float2(len, 0);
+            rg = max(rg, 1.0 - smoothstep(hw, hw + soft, abs(length(P - float2(len + 0.06, 0)) - 0.05)));
+        }
+        else if (hj < 0.92)
+        {
+            A[0] = float2(0, -0.12); B[0] = float2(S, -0.12);
+            A[1] = float2(0, 0);     B[1] = float2(S * (0.6 + 0.4 * h2), 0);
+            A[2] = float2(0, 0.12);  B[2] = float2(S, 0.12);
+        }
+        else
+        {
+            float lr = length(P - float2(S * 0.5, 0));
+            rg = max(rg, 1.0 - smoothstep(hw, hw + soft, abs(lr - 0.07)));
+            rg = max(rg, 1.0 - smoothstep(hw, hw + soft, abs(lr - 0.03)));
+        }
+        for (int m = 0; m < 3; m++)
+        {
+            float2 pa = P - A[m]; float2 ba = B[m] - A[m];
+            float t = saturate(dot(pa, ba) / max(dot(ba, ba), 1e-5));
+            ln = max(ln, 1.0 - smoothstep(hw, hw + soft, length(pa - ba * t)));
+        }
     }
 }
-return saturate(max(ln, ring)) * saturate(0.03 / aa);
+float2 C = float2(16.0, 8.0);
+float2 cc = floor(q / C);
+float hc = frac(sin(dot(cc, float2(91.7, 33.1))) * 43758.5453);
+float hc2 = frac(sin(dot(cc, float2(17.3, 71.9))) * 43758.5453);
+float chip = 0.0;
+float clear = 1.0;
+if (hc < 0.4)
+{
+    float2 c = (cc + float2(0.25 + 0.5 * hc2, 0.25 + 0.5 * frac(hc * 7.3))) * C;
+    float2 hs = float2(0.9 + 0.8 * hc2, 0.6 + 0.3 * hc);
+    float2 b = abs(q - c) - hs;
+    float sd = length(max(b, 0.0)) + min(max(b.x, b.y), 0.0);
+    float outline = 1.0 - smoothstep(hw, hw + soft, abs(sd));
+    float lx = abs(frac((q.x - c.x) / 0.3 + 0.5) - 0.5) * 0.3;
+    float ly = abs(frac((q.y - c.y) / 0.3 + 0.5) - 0.5) * 0.3;
+    float legY = (b.y > 0 && b.y < 0.3 && b.x < -0.1) ? 1.0 - smoothstep(0.02, 0.02 + soft, lx) : 0.0;
+    float legX = (b.x > 0 && b.x < 0.3 && b.y < -0.1) ? 1.0 - smoothstep(0.02, 0.02 + soft, ly) : 0.0;
+    float dotm = 1.0 - smoothstep(0.04, 0.04 + soft, length(q - (c - hs + 0.18)));
+    chip = max(max(outline, dotm), max(legY, legX));
+    clear = smoothstep(0.30, 0.45, sd);
+}
+float m = max(max(ln, rg) * clear, chip);
+return saturate(m) * saturate(0.03 / aa);
 """
 
 
@@ -666,7 +729,7 @@ pavers = new_material("M_RoadPavers")
 p_uv1 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
 p_uv2 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 p_wp = node(pavers, unreal.MaterialExpressionWorldPosition, -1100, 800)
-pv = custom(pavers, PAVERS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "WP"], -800, 650, "Pavers")
+pv = custom(pavers, PAVERS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["UV1", "UV2", "WP"], -800, 650, "Pavers")
 link(p_uv1, "", pv, "UV1")
 link(p_uv2, "", pv, "UV2")
 link(p_wp, "", pv, "WP")
@@ -703,6 +766,27 @@ link(const(pavers, 0.9, -200, 350), "", p_rough, "A")
 link(const(pavers, 0.6, -200, 420), "", p_rough, "B")
 link(p_any, "", p_rough, "Alpha")
 MEL.connect_material_property(p_rough, "", MP.MP_ROUGHNESS)
+
+
+def bump_normal(mat, height, strength, flat, x, y):
+    """World-space bump normal from a height field in cm."""
+    bn = custom(mat, BUMP_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["Hgt", "WP", "N", "Str", "Flat"], x, y, "Bump")
+    link(height, "", bn, "Hgt")
+    link(node(mat, unreal.MaterialExpressionWorldPosition, x - 300, y + 100), "", bn, "WP")
+    link(node(mat, unreal.MaterialExpressionVertexNormalWS, x - 300, y + 200), "", bn, "N")
+    link(const(mat, strength, x - 300, y + 300), "", bn, "Str")
+    if flat is None:
+        link(const(mat, 0.0, x - 300, y + 380), "", bn, "Flat")
+    else:
+        link(flat, "", bn, "Flat")
+    mat.set_editor_property("tangent_space_normal", False)
+    MEL.connect_material_property(bn, "", MP.MP_NORMAL)
+    return bn
+
+
+p_height = node(pavers, unreal.MaterialExpressionComponentMask, -550, 850, r=False, g=False, b=True, a=False)
+link(pv, "", p_height, "")
+bump_normal(pavers, p_height, 1.0, p_any, 300, 900)
 finish(pavers)
 log("Concrete pavers")
 
@@ -719,14 +803,17 @@ c_primary = cpd_param(cyber, "MiddleLineColor", 24, unreal.LinearColor(0.32, 0.0
 c_secondary = cpd_param(cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -600, 1400)
 plastic = node(cyber, unreal.MaterialExpressionMultiply, -350, 100)
 link(c_primary, "", plastic, "A")
-link(const(cyber, 0.55, -500, 150), "", plastic, "B")
+link(const(cyber, 0.8, -500, 150), "", plastic, "B")
 groove = node(cyber, unreal.MaterialExpressionMultiply, -350, 250)
 link(c_primary, "", groove, "A")
-link(const(cyber, 0.12, -500, 300), "", groove, "B")
+link(const(cyber, 0.7, -500, 300), "", groove, "B")
 c_surface = node(cyber, unreal.MaterialExpressionLinearInterpolate, -150, 150)
 link(plastic, "", c_surface, "A")
 link(groove, "", c_surface, "B")
-link(cc, "", c_surface, "Alpha")
+faint = node(cyber, unreal.MaterialExpressionMultiply, -300, 330)
+link(cc, "", faint, "A")
+link(const(cyber, 0.5, -450, 380), "", faint, "B")
+link(faint, "", c_surface, "Alpha")
 cm, cs, _, _ = lane_masks(cyber, -1100, 1000)
 c_col = lines_on(cyber, c_surface, cm, cs, c_secondary, c_secondary, 50, 150)
 MEL.connect_material_property(c_col, "", MP.MP_BASE_COLOR)
@@ -741,10 +828,12 @@ link(glow_col, "", glow, "A")
 link(const(cyber, 4.0, -100, 600), "", glow, "B")
 MEL.connect_material_property(glow, "", MP.MP_EMISSIVE_COLOR)
 c_rough = node(cyber, unreal.MaterialExpressionLinearInterpolate, 100, 700)
-link(const(cyber, 0.65, -200, 650), "", c_rough, "A")
-link(const(cyber, 0.25, -200, 720), "", c_rough, "B")
+link(const(cyber, 0.14, -200, 650), "", c_rough, "A")
+link(const(cyber, 0.1, -200, 720), "", c_rough, "B")
 link(c_any, "", c_rough, "Alpha")
 MEL.connect_material_property(c_rough, "", MP.MP_ROUGHNESS)
+# The circuit is an emboss in the normal map (0.6 cm); flat under the lane lines.
+bump_normal(cyber, cc, 0.6, c_any, 300, 1100)
 finish(cyber)
 log("Cyberpunk road")
 
@@ -755,7 +844,7 @@ cb_col = node(cyber_body, unreal.MaterialExpressionMultiply, -300, 0)
 link(cb_primary, "", cb_col, "A")
 link(const(cyber_body, 0.3, -500, 80), "", cb_col, "B")
 MEL.connect_material_property(cb_col, "", MP.MP_BASE_COLOR)
-MEL.connect_material_property(const(cyber_body, 0.7, -300, 200), "", MP.MP_ROUGHNESS)
+MEL.connect_material_property(const(cyber_body, 0.2, -300, 200), "", MP.MP_ROUGHNESS)
 finish(cyber_body)
 log("Cyberpunk road body")
 
