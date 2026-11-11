@@ -1,4 +1,5 @@
 #include "Holograms/RMRoadCutHologram.h"
+#include "RMRoadUtils.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
@@ -84,13 +85,15 @@ bool ARMRoadCutHologram::IsWithFences() const
 	return !mFenceTool && mBuildModeWithFences && IsCurrentBuildMode(mBuildModeWithFences);
 }
 
-bool ARMRoadCutHologram::IsValidHitResult(const FHitResult& hitResult) const
+bool ARMRoadCutHologram::IsValidHitResult(const FHitResult& InHit) const
 {
+	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit);
 	return Cast<ARMBuildableSpline>(hitResult.GetActor()) != nullptr || Super::IsValidHitResult(hitResult);
 }
 
-void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
+void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
+	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	ARMBuildableSpline* Hit = Cast<ARMBuildableSpline>(hitResult.GetActor());
 	const bool bRightKind = Hit && (mFenceTool ? Hit->IsA<ARMBuildableFence>() : Hit->IsA<ARMBuildableRoad>());
 	mTarget = bRightKind && !Hit->GetIsDismantled() && !Hit->IsActorBeingDestroyed() && !Hit->IsHidden() ? Hit : nullptr;

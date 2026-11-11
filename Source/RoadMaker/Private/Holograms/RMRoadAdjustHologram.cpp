@@ -209,8 +209,9 @@ int32 ARMRoadAdjustHologram::FindAimedEnd(const FVector& Aim) const
 	return Best;
 }
 
-void ARMRoadAdjustHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
+void ARMRoadAdjustHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
+	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	if (mStep == 0)
 	{
 		RefreshEnds();

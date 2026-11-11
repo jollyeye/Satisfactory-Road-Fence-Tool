@@ -1,4 +1,5 @@
 #include "Holograms/RMGantryHologram.h"
+#include "RMRoadUtils.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Holograms/RMHologramLook.h"
 #include "Buildables/RMBuildableGantry.h"
@@ -45,8 +46,9 @@ bool ARMGantryHologram::IsValidHitResult(const FHitResult& hitResult) const
 	return mStep == 1 || Super::IsValidHitResult(hitResult);
 }
 
-void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
+void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
+	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	if (mStep == 0)
 	{
 		ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());

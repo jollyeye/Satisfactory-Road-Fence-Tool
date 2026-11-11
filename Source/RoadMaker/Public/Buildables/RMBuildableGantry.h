@@ -1,6 +1,6 @@
 // Sign gantry: two H-beam columns standing on upright connection cubes on the road's fence lines, and a
 // beam across the road at least 8 m above it (H-beam with a shelf-beam end piece each side), resting
-// on top of the columns (the game's own meshes, beams stretched to length). Signs snap to the beam's faces with the snap key. Only two numbers are saved (half span,
+// on top of the columns (the game's own meshes, beams stretched to length). Signs snap to its faces (no snap key). Only two numbers are saved (half span,
 // beam height); the parts are rebuilt from them. An invisible box shape gives the collision.
 // Local space: X along the road, Y across it, Z up from the road surface at the gantry's centre.
 #pragma once

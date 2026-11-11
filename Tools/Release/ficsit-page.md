@@ -42,7 +42,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **Cut Road** (optionally cutting its fences too), **Split Road** (lengthwise, in 8 m steps), **Adjust Curvature** (grab a road end and reshape it; lane markings move along) and **Cut Fence**. Lines, paint, fences and paths are kept.
 
 ### Sign Gantry
-- Two of the game's H-beams on the fence lines of a road with a beam across, 8 to 24 m above it. Signs snap to the beam and columns every 2 m (snap key); wall attachments snap to it too.
+- Two of the game's H-beams on the fence lines of a road with a beam across, 8 to 24 m above it. Signs snap to the beam and columns every 2 m; wall attachments snap to it too.
 
 ### Road Intersection
 ![A four-way intersection with side lines and fences on the curbs](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection.jpg)
@@ -64,7 +64,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 4 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
 - **FICSIT**, **Concrete** and **Steel Fence Wall** use the game's own wall materials and paint exactly like the game's walls. The customizer's **Material** tab switches a fence wall between concrete, FICSIT and steel in place, with a preview while aiming; switching costs the difference, like the game's walls.
 - **Steel Mesh Fence Wall**: a steel frame with a diamond wire mesh (the former 4 m metal grid fence).
-- Signs (snap key) and wall attachments (conveyor, power and pipe wall mounts, wall holes, ladders...) snap to fence walls.
+- Signs and wall attachments (conveyor, power and pipe wall mounts, wall holes, ladders...) snap to fence walls.
 - Aim at the upper or lower half of a fence wall to stack another one above or below it. Hold the snap key (Ctrl) to replace the aimed fence wall with a different one, like the game's walls.
 - Unlocks: FICSIT with Tier 1 **Base Building**, Steel Mesh with Tier 3 **Basic Steel Production**, Concrete and Steel together with the game's concrete and steel wall materials (AWESOME Shop).
 
@@ -89,6 +89,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.2.1
+- Signs snap to fence walls and the sign gantry automatically again, no snap key needed (like wall attachments).
+- Lane markings no longer get in the way: aiming at an arrow or number counts as aiming at the road under it (one-click lane paths and tracks, roads beside roads, fences, the gantry, Cut / Split / Adjust).
 - Fixed: fence walls stack on other fence walls again without the snap key (aim at the upper half to build on top, the lower half to build below). The snap key still replaces the aimed fence wall with a different one, and still snaps fences to road edges and curbs.
 
 ## Changelog for version 1.2.0

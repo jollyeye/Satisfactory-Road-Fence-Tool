@@ -1,4 +1,5 @@
 #include "RMRoadUtils.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "Engine/World.h"
@@ -269,4 +270,22 @@ bool RMRoadUtils::GetFoundationPiece(const FHitResult& Hit, FTransform& OutTrans
 	OutLocalBox = Mesh->GetStaticMesh()->GetBoundingBox();
 	const FVector Size = OutLocalBox.GetSize() * OutTransform.GetScale3D().GetAbs();
 	return Size.X >= 390.f && Size.Y >= 390.f && Size.Z >= 50.f && Size.Z <= 450.f;
+}
+
+FHitResult RMRoadUtils::ThroughMarking(const FHitResult& Hit)
+{
+	AActor* Actor = Hit.GetActor();
+	if (!Actor || !Actor->IsA<ARMBuildableMarking>())
+	{
+		return Hit;
+	}
+	ARMBuildableRoad* Road = ARMBuildableMarking::FindRoadAt(Actor->GetWorld(), Hit.Location);
+	if (!Road)
+	{
+		return Hit;
+	}
+	FHitResult Out = Hit;
+	Out.HitObjectHandle = FActorInstanceHandle(Road);
+	Out.Component = Road->GetProceduralMesh();
+	return Out;
 }

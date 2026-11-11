@@ -1,4 +1,5 @@
 #include "Holograms/RMSplineHologram.h"
+#include "RMRoadUtils.h"
 #include "Buildables/RMBuildableSpline.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "ProceduralMeshComponent.h"
@@ -90,8 +91,9 @@ float ARMSplineHologram::GetStepScrollYaw() const
 	return static_cast<float>(GetScrollRotateValue() - mScrollAtStepStart);
 }
 
-void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
+void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
+	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	if (TrySnapToRoadEnd(hitResult))
 	{
 		return;

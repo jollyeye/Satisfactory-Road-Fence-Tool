@@ -1806,9 +1806,9 @@ namespace
 	template <typename TScope, typename THologram>
 	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
-		// Only with the snap key held: otherwise the sign places normally (with its leg).
+		// Automatic on fence walls and the gantry; anywhere else the sign places normally (with its leg).
 		FWallFace Face;
-		if (FRMSnapAccess::IsSnapHeld(Hologram) && FindWallFace(Hit, Face))
+		if (FindWallFace(Hit, Face))
 		{
 			FinishSignPlacement(Scope, Hologram, Face.Location, Face.Normal, Face.Fwd, Face.Slope);
 			return true;
@@ -1915,8 +1915,9 @@ namespace
 	}
 
 	template <typename TScope, typename THologram>
-	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& InHit)
 	{
+		const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 		const ESnapKind Kind = KindOf(Hologram);
 		if (Kind == ESnapKind::None || !Hologram->GetWorld() || GInPathReplace)
 		{

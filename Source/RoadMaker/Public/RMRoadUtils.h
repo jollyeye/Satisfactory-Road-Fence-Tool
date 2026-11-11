@@ -57,5 +57,11 @@ namespace RMRoadUtils
 	 * If the hit is on a foundation-shaped building piece (classic or instanced), its transform and
 	 * local bounding box. Road Maker pieces are not foundations.
 	 */
+	/**
+	 * Lane markings lie on roads but are pieces of their own, so the aim hits them first. This turns a hit on
+	 * a marking into a hit on the road under it (same point); any other hit is returned as it is.
+	 */
+	ROADMAKER_API FHitResult ThroughMarking(const FHitResult& Hit);
+
 	ROADMAKER_API bool GetFoundationPiece(const FHitResult& Hit, FTransform& OutTransform, FBox& OutLocalBox);
 }
