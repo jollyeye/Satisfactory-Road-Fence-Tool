@@ -385,6 +385,94 @@ void RMGeometry::MakeFixedEnds(const FVector& Start, const FVector& StartDir, co
 	OutPoints.Add(FRMSplinePoint(End, E * Magnitude + FVector(0.f, 0.f, Chord.Z)));
 }
 
+void RMGeometry::MakeQuadratic(const FVector& Start, const FVector& StartDir, const FVector& End, const FVector& EndDir, TArray<FRMSplinePoint>& OutPoints)
+{
+	OutPoints.Reset();
+	const FVector2D P0(Start.X, Start.Y);
+	const FVector2D P1(End.X, End.Y);
+	const FVector2D D = P1 - P0;
+	const float Dist = D.Size();
+	const float DZ = End.Z - Start.Z;
+
+	// One quadratic P0 -> C -> P2 as a cubic Hermite piece; height linear along t.
+	auto AddQuadratic = [&OutPoints](const FVector& A, const FVector& C, const FVector& B, bool bFirst)
+	{
+		if (bFirst)
+		{
+			OutPoints.Add(FRMSplinePoint(A, 2.f * (C - A)));
+		}
+		OutPoints.Add(FRMSplinePoint(B, 2.f * (B - C)));
+	};
+
+	if (Dist < 1.f)
+	{
+		AddQuadratic(Start, (Start + End) * 0.5f, End, true);
+		return;
+	}
+
+	FVector2D U0 = FVector2D(StartDir.X, StartDir.Y).GetSafeNormal();
+	FVector2D U1 = FVector2D(EndDir.X, EndDir.Y).GetSafeNormal();
+	if (U0.IsNearlyZero())
+	{
+		U0 = D / Dist;
+	}
+	if (U1.IsNearlyZero())
+	{
+		U1 = D / Dist;
+	}
+
+	auto DiffAngle = [](float A, float B)
+	{
+		return FMath::UnwindRadians(A - B);
+	};
+	const float ChordAngle = FMath::Atan2(D.Y, D.X);
+	const float Angle0 = FMath::Atan2(U0.Y, U0.X);
+	const float Angle1 = FMath::Atan2(U1.Y, U1.X);
+	const float Diff0 = DiffAngle(Angle0, ChordAngle);
+	const float Diff1 = DiffAngle(Angle1, ChordAngle);
+
+	// S-curve: both directions on the same side of the chord need an inflection, which a single
+	// quadratic cannot make.
+	const bool bInflection = FMath::Sin(Diff0) * FMath::Sin(Diff1) > 0.04f;
+	// Wide turns / U-turns: the direction lines meet far away (or behind).
+	const float Limit = FMath::DegreesToRadians(68.f);
+	const bool bWide = FMath::Abs(Diff0) > Limit || FMath::Abs(Diff1) > Limit
+		|| FMath::Abs(DiffAngle(Angle1, Angle0)) > FMath::DegreesToRadians(110.f)
+		|| FMath::Cos(Diff0) <= 0.2f || FMath::Cos(Diff1) <= 0.2f;
+	const float Det = U0.X * U1.Y - U0.Y * U1.X;
+
+	if (!bInflection && !bWide && FMath::Abs(Det) > 0.08f)
+	{
+		// Where the start and end direction lines meet: Start + S * U0 = End - T * U1.
+		const float S = (D.X * U1.Y - D.Y * U1.X) / Det;
+		const float T = (U0.X * D.Y - U0.Y * D.X) / Det;
+		if (S > Dist * 0.04f && T > Dist * 0.04f && S < Dist * 1.35f && T < Dist * 1.35f
+			&& FMath::Max(S / T, T / S) <= 3.f)
+		{
+			const FVector2D C = P0 + U0 * S;
+			AddQuadratic(Start, FVector(C.X, C.Y, Start.Z + DZ * 0.5f), End, true);
+			return;
+		}
+	}
+
+	// Two quadratics joined smoothly at M, the middle of their control points C0 and C1.
+	auto Arm = [Dist, bInflection](float Diff)
+	{
+		if (bInflection)
+		{
+			return Dist * 0.38f;
+		}
+		const float Deviation = FMath::Min(1.f, FMath::Abs(FMath::Sin(Diff)));
+		return Dist * (0.35f + 0.18f * Deviation);
+	};
+	const FVector2D C0 = P0 + U0 * Arm(Diff0);
+	const FVector2D C1 = P1 - U1 * Arm(Diff1);
+	const FVector2D M = (C0 + C1) * 0.5f;
+	const FVector M3(M.X, M.Y, Start.Z + DZ * 0.5f);
+	AddQuadratic(Start, FVector(C0.X, C0.Y, Start.Z + DZ * 0.25f), M3, true);
+	AddQuadratic(M3, FVector(C1.X, C1.Y, End.Z - DZ * 0.25f), End, false);
+}
+
 void RMGeometry::OffsetCurve(const TArray<FRMFrame>& Frames, float LateralOffset, float KeyEvery, TArray<FRMSplinePoint>& OutPoints)
 {
 	OutPoints.Reset();

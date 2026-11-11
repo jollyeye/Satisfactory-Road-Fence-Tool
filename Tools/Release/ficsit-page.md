@@ -76,6 +76,9 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
+## Changelog for version 1.2.0 (not released yet: add to it as features come in)
+- **New curves:** roads and fences are drawn as quadratic Bezier curves. Gentle bends are one curve through the point where the start and end directions meet; S-curves, wide turns and U-turns become two smoothly joined curves. Same two clicks as before: the mouse wheel turns the start direction before the first click and the end direction before the second.
+
 ## Changelog for version 1.1.1
 - Road Lines options are no longer listed as items (e.g. under Parts in the creative mode item list).
 - Switching a fence wall's material in the customizer now turns it into the real building of that material (its name, recipe and dismantle refund change), keeping its course and paint. Switching again right away works.

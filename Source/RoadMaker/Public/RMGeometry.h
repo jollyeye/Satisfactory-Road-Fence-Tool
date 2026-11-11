@@ -160,6 +160,15 @@ namespace RMGeometry
 	ROADMAKER_API void MakeFixedEnds(const FVector& Start, const FVector& StartDir, const FVector& End, const FVector& EndDir, TArray<FRMSplinePoint>& OutPoints);
 
 	/**
+	 * Quadratic Bezier road between two points with given travel directions (ported from the
+	 * developer's 2D "CurveRoads" test, solveControlPoint). Gentle C-curves are one quadratic whose
+	 * control point is where the start and end direction lines meet. S-curves, wide turns and U-turns
+	 * become two quadratics joined smoothly at the middle (bi-quadratic). Each quadratic is stored as
+	 * an exact cubic (tangents 2(C - P0) and 2(P2 - C)). Height changes linearly from start to end.
+	 */
+	ROADMAKER_API void MakeQuadratic(const FVector& Start, const FVector& StartDir, const FVector& End, const FVector& EndDir, TArray<FRMSplinePoint>& OutPoints);
+
+	/**
 	 * Offset curve of a road edge: Q(s) = P(s) + Offset * Right(s), with Right the level normal of the
 	 * centreline. The exact offset of a cubic is not a cubic, so it is resampled every KeyEvery cm and
 	 * refitted with Catmull-Rom tangents.

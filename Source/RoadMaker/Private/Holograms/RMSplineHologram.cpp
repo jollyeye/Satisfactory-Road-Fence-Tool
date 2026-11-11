@@ -132,7 +132,7 @@ void ARMSplineHologram::UpdateCurve()
 	}
 	else if (mEndSnapped)
 	{
-		RMGeometry::MakeFixedEnds(mStart, mStartDir, mEnd, mEndDir, World);
+		RMGeometry::MakeQuadratic(mStart, mStartDir, mEnd, mEndDir, World);
 	}
 	else if (IsStraightMode())
 	{
@@ -153,15 +153,14 @@ void ARMSplineHologram::UpdateCurve()
 	}
 	else
 	{
-		RMGeometry::MakeArc(mStart, mStartDir, mEnd, World);
-
-		// Mouse wheel turns the end direction away from the natural arc.
-		const float Yaw = GetStepScrollYaw();
-		if (mStep == 1 && !FMath::IsNearlyZero(Yaw) && World.Num() == 2)
+		// Quadratic Bezier: the end heads along the chord (start to end), turned by the mouse wheel.
+		FVector EndDir = FVector(mEnd.X - mStart.X, mEnd.Y - mStart.Y, 0.f).GetSafeNormal();
+		if (EndDir.IsNearlyZero())
 		{
-			const FVector ArcEnd = FVector(World[1].Tangent.X, World[1].Tangent.Y, 0.f).GetSafeNormal();
-			RMGeometry::MakeFixedEnds(mStart, mStartDir, mEnd, ArcEnd.RotateAngleAxis(Yaw, FVector::UpVector), World);
+			EndDir = mStartDir;
 		}
+		const float Yaw = mStep == 1 ? GetStepScrollYaw() : 0.f;
+		RMGeometry::MakeQuadratic(mStart, mStartDir, mEnd, EndDir.RotateAngleAxis(Yaw, FVector::UpVector), World);
 	}
 
 	if (IsSmoothMode() && World.Num() >= 2)

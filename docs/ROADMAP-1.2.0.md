@@ -6,7 +6,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 
 | # | Item | Size | Notes |
 |---|---|---|---|
-| 1 | Better road curves | M | Roads are already cubic curves (Hermite, the same family as Bezier) with arc-shaped tangents, one curve per piece, start direction fixed. Real gains: S-curves and a curve control step (start, bend point, end), like the game's conveyor / rail build modes, and more even mesh spacing on tight bends. Decide with the developer what feels wrong today. |
+| 1 | Better road curves | M | **Done (to test):** quadratic Bezier ported from the developer's 2D test (`CurveRoads`, `solveControlPoint`) into `RMGeometry::MakeQuadratic`: one quadratic for C-curves (control point = where the direction lines meet), two joined quadratics for S-curves, wide turns, U-turns. Free end heads along the chord, turned by the wheel. Old saves unaffected (stored as cubic points). |
 | 2 | Tool: road / fence slicer | M | Cut a built road or fence at the aimed point into two pieces. Spline split is easy (De Casteljau / Hermite split at t); keep paint, lane lines, wall look; refund nothing. Needs a tool entry (build gun mode or a build-menu "tool" building like the game's). |
 | 3 | Tool: road splitter | M | Clarify vs 2: likely "drop an intersection into an existing road" (cut it and connect both halves to a new intersection). Builds on 2. |
 | 4 | Tool: move end points | M-L | Grab a road / fence end and drag it; connected intersections and neighbours follow or detach. Rebuild the spline from the new end, keep the other end's direction. |
