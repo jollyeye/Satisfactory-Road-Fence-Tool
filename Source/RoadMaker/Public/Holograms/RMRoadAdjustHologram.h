@@ -26,6 +26,7 @@ public:
 	virtual int32 GetBaseCostMultiplier() const override { return 1; }
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
 	virtual void SetMaterialState(EHologramMaterialState state) override;
+	virtual void Destroyed() override;
 
 protected:
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
@@ -43,6 +44,17 @@ protected:
 		int32 PartnerEnd = 0;
 		FVector Location = FVector::ZeroVector;
 	};
+
+	/**
+	 * Aiming at a foundation. One road: its end snaps to the middle of the nearest edge (or +-4 m along
+	 * it), road top level with the foundation, pointing into it, like a new road. Two roads: the joint
+	 * snaps to the 4 m grid on top of the foundation (road resting on it), direction free.
+	 */
+	bool TrySnapToFoundation(const FHitResult& hitResult);
+
+	/** The grabbed roads are hidden while their replacement is previewed. */
+	void SetGrabbedRoadsHidden(bool bHidden);
+	bool mRoadsHidden = false;
 
 	/** The road ends near the player (refreshed twice a second). */
 	void RefreshEnds();

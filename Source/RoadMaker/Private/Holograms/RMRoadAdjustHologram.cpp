@@ -11,6 +11,21 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
+namespace
+{
+	/** Rise per horizontal distance of a direction. */
+	float AdjustSlopeOf(const FVector& Dir)
+	{
+		const float Flat = FVector(Dir.X, Dir.Y, 0.f).Size();
+		return Flat > KINDA_SMALL_NUMBER ? Dir.Z / Flat : 0.f;
+	}
+
+	void SetAdjustTangentSlope(FVector& Tangent, float Slope)
+	{
+		Tangent.Z = FVector(Tangent.X, Tangent.Y, 0.f).Size() * Slope;
+	}
+}
+
 ARMRoadAdjustHologram::ARMRoadAdjustHologram()
 {
 	mPreviewMeshB = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("PreviewMeshB"));
@@ -52,6 +67,28 @@ FVector ARMRoadAdjustHologram::GetPlacedPointAxis() const
 // ---------------------------------------------------------------------------------------------
 // Step 0: the circles
 // ---------------------------------------------------------------------------------------------
+
+void ARMRoadAdjustHologram::SetGrabbedRoadsHidden(bool bHidden)
+{
+	mRoadsHidden = bHidden;
+	for (ARMBuildableRoad* Road : { mRoadA, mRoadB })
+	{
+		if (IsValid(Road) && !Road->GetIsDismantled())
+		{
+			Road->SetActorHiddenInGame(bHidden);
+		}
+	}
+}
+
+void ARMRoadAdjustHologram::Destroyed()
+{
+	// Cancelled (or switched tool): the roads come back.
+	if (mRoadsHidden)
+	{
+		SetGrabbedRoadsHidden(false);
+	}
+	Super::Destroyed();
+}
 
 void ARMRoadAdjustHologram::RefreshEnds()
 {
@@ -172,26 +209,94 @@ void ARMRoadAdjustHologram::SetHologramLocationAndRotation(const FHitResult& hit
 
 bool ARMRoadAdjustHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 {
-	// Two roads moved together do not snap (a third road would meet them at one point).
-	if (mStep == 0 || !mRoadA || mRoadB)
+	if (mStep == 0 || !mRoadA)
 	{
 		return false;
 	}
-	TArray<FRMRoadEndRef> Ends;
-	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSnapRadius, 4, nullptr, Ends);
-	for (const FRMRoadEndRef& End : Ends)
+	// One road: a free road end (or intersection mouth) near the aim. Two roads moved together do not
+	// snap to road ends (a third road would meet them at one point).
+	if (!mRoadB)
 	{
-		if (End.Road == mRoadA)
+		TArray<FRMRoadEndRef> Ends;
+		RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSnapRadius, 4, nullptr, Ends);
+		for (const FRMRoadEndRef& End : Ends)
 		{
-			continue;
+			if (End.Road == mRoadA)
+			{
+				continue;
+			}
+			mEnd = End.Location;
+			mJointDir = End.Outward * -1.f; // road A arrives travelling into that end
+			mEndSnapped = true;
+			UpdateCurve();
+			return true;
 		}
-		mEnd = End.Location;
-		mJointDir = End.Outward * -1.f; // road A arrives travelling into that end
-		mEndSnapped = true;
+	}
+	return TrySnapToFoundation(hitResult);
+}
+
+bool ARMRoadAdjustHologram::TrySnapToFoundation(const FHitResult& hitResult)
+{
+	FTransform Piece;
+	FBox Box;
+	if (!RMRoadUtils::GetFoundationPiece(hitResult, Piece, Box))
+	{
+		return false;
+	}
+	const FVector Local = Piece.InverseTransformPosition(hitResult.Location);
+	const FVector Scale = Piece.GetScale3D().GetAbs();
+	constexpr float Grid = 400.f;
+
+	if (mRoadB)
+	{
+		// Two roads: the joint on the 4 m grid of the top face, resting on it.
+		const float StepX = Grid / FMath::Max(Scale.X, KINDA_SMALL_NUMBER);
+		const float StepY = Grid / FMath::Max(Scale.Y, KINDA_SMALL_NUMBER);
+		const float X = FMath::Clamp(Box.Min.X + FMath::RoundToFloat((Local.X - Box.Min.X) / StepX) * StepX, Box.Min.X, Box.Max.X);
+		const float Y = FMath::Clamp(Box.Min.Y + FMath::RoundToFloat((Local.Y - Box.Min.Y) / StepY) * StepY, Box.Min.Y, Box.Max.Y);
+		mEnd = Piece.TransformPosition(FVector(X, Y, Box.Max.Z)) + FVector(0.f, 0.f, GetSurfaceOffset());
+		mEndSnapped = false;
 		UpdateCurve();
 		return true;
 	}
-	return false;
+
+	// One road: nearest edge of the top face.
+	const FVector Center = Box.GetCenter();
+	const float Dist[4] = { Box.Max.X - Local.X, Local.X - Box.Min.X, Box.Max.Y - Local.Y, Local.Y - Box.Min.Y };
+	int32 Edge = 0;
+	for (int32 I = 1; I < 4; ++I)
+	{
+		if (Dist[I] < Dist[Edge])
+		{
+			Edge = I;
+		}
+	}
+	const bool bAlongY = Edge < 2; // X edges run along Y
+	const float Half = bAlongY ? (Box.Max.Y - Box.Min.Y) * 0.5f : (Box.Max.X - Box.Min.X) * 0.5f;
+	const float Along = bAlongY ? Local.Y - Center.Y : Local.X - Center.X;
+	const float AlongScale = bAlongY ? Scale.Y : Scale.X;
+	const float Step = Grid / FMath::Max(AlongScale, KINDA_SMALL_NUMBER);
+	const float Snapped = FMath::Clamp(FMath::RoundToFloat(Along / Step) * Step, -Half, Half);
+
+	FVector LocalPoint, LocalNormal;
+	switch (Edge)
+	{
+	case 0:  LocalPoint = FVector(Box.Max.X, Center.Y + Snapped, Box.Max.Z); LocalNormal = FVector(1, 0, 0); break;
+	case 1:  LocalPoint = FVector(Box.Min.X, Center.Y + Snapped, Box.Max.Z); LocalNormal = FVector(-1, 0, 0); break;
+	case 2:  LocalPoint = FVector(Center.X + Snapped, Box.Max.Y, Box.Max.Z); LocalNormal = FVector(0, 1, 0); break;
+	default: LocalPoint = FVector(Center.X + Snapped, Box.Min.Y, Box.Max.Z); LocalNormal = FVector(0, -1, 0); break;
+	}
+	FVector Outward = Piece.TransformVectorNoScale(LocalNormal);
+	Outward.Z = 0.f;
+	if (!Outward.Normalize())
+	{
+		return false;
+	}
+	mEnd = Piece.TransformPosition(LocalPoint);
+	mJointDir = -Outward; // the road arrives travelling into the foundation
+	mEndSnapped = true;
+	UpdateCurve();
+	return true;
 }
 
 bool ARMRoadAdjustHologram::DoMultiStepPlacement(bool isInputFromARelease)
@@ -211,6 +316,7 @@ bool ARMRoadAdjustHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		mScrollAtStepStart = GetScrollRotateValue();
 		mEnd = End.Location;
 		mEndSnapped = false;
+		SetGrabbedRoadsHidden(true);
 		UpdateCurve();
 		ResetNudge();
 		return false;
@@ -270,13 +376,25 @@ bool ARMRoadAdjustHologram::ComputeCurves(TArray<FRMSplinePoint>& OutA, TArray<F
 		// its own direction of travel (start to end).
 		FVector FarLoc, FarOutward;
 		Road->GetEndWorld(1 - GrabbedEnd, FarLoc, FarOutward);
+		// Smooth: the height eases out of the far end with the slope it had and into the joint with the
+		// slope of what it snaps to (level when free), like the Smooth build mode.
+		FVector StartDir, EndDir;
 		if (GrabbedEnd == 1)
 		{
-			RMGeometry::MakeQuadratic(FarLoc, -FarOutward, mJoint, OutwardAtJoint, Out);
+			StartDir = -FarOutward;
+			EndDir = OutwardAtJoint;
+			RMGeometry::MakeQuadratic(FarLoc, StartDir, mJoint, EndDir, Out);
 		}
 		else
 		{
-			RMGeometry::MakeQuadratic(mJoint, -OutwardAtJoint, FarLoc, FarOutward, Out);
+			StartDir = -OutwardAtJoint;
+			EndDir = FarOutward;
+			RMGeometry::MakeQuadratic(mJoint, StartDir, FarLoc, EndDir, Out);
+		}
+		if (Out.Num() >= 2)
+		{
+			SetAdjustTangentSlope(Out[0].Tangent, AdjustSlopeOf(StartDir));
+			SetAdjustTangentSlope(Out.Last().Tangent, AdjustSlopeOf(EndDir));
 		}
 	};
 	Curve(mRoadA, mEndA, mJointDir, OutA);
@@ -424,8 +542,10 @@ AActor* ARMRoadAdjustHologram::Construct(TArray<AActor*>& out_children, FNetCons
 			{
 				NewB->Destroy();
 			}
+			SetGrabbedRoadsHidden(false);
 		}
 	}
+	mRoadsHidden = false;
 	mRoadA = nullptr;
 	mRoadB = nullptr;
 	mPreviewMesh->ClearAllMeshSections();
