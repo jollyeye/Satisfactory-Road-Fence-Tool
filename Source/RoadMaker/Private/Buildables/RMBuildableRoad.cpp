@@ -104,6 +104,30 @@ void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
 	}
 }
 
+void ARMBuildableRoad::GetLaneCentres(TArray<float>& OutOffsets, float& OutLaneWidth) const
+{
+	OutOffsets.Reset();
+	const float Width = GetRoadWidth();
+	const int32 Lanes = FMath::Clamp<int32>(mMarkings.Lanes, 1, 4);
+	if (Lanes <= 1)
+	{
+		const int32 Count = FMath::FloorToInt(Width * 0.5f / 200.f);
+		for (int32 K = -Count; K <= Count; ++K)
+		{
+			OutOffsets.Add(K * 200.f);
+		}
+		OutLaneWidth = 200.f;
+		return;
+	}
+	const float Inset = mMarkings.bEdgeLines ? mEdgeLineInset : 0.f; // no side lines: full width
+	const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
+	for (int32 I = 0; I < Lanes; ++I)
+	{
+		OutOffsets.Add(-Width * 0.5f + Inset + Inner * (I + 0.5f) / Lanes);
+	}
+	OutLaneWidth = Inner / Lanes;
+}
+
 void ARMBuildableRoad::SetPreviewMarkings(const TOptional<FRMMarkings>& Preview)
 {
 	const bool bSame = Preview.IsSet() == mPreviewMarkings.IsSet()

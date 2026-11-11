@@ -35,6 +35,12 @@ public:
 	void SetMarkings(const FRMMarkings& InMarkings);
 	const FRMMarkings& GetMarkings() const { return mMarkings; }
 
+	/**
+	 * Lane centres across the road (cm from the middle, left to right) and the width of one lane.
+	 * Follows the markings: with side lines the lanes sit inside them, with 1 lane every 2 m.
+	 */
+	void GetLaneCentres(TArray<float>& OutOffsets, float& OutLaneWidth) const;
+
 	/** Local-only look while the customizer hovers this road; unset = show the real markings. */
 	void SetPreviewMarkings(const TOptional<FRMMarkings>& Preview);
 	float GetRoadHeight() const { return mRoadHeight; }

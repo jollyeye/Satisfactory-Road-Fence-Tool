@@ -433,6 +433,24 @@ def sign_gantry(sc):
     deco(2.0, 3.2, 6.35, 8.5)                                       # arrow shaft
     sc.quad((xf, 1.5, 6.9), (xf, 3.7, 6.9), (xf, 2.6, 6.2), (xf, 2.6, 6.2), W, layer=2, two=True, shade=False)
 
+
+def marking_icon(sc, kind):
+    """A straight road with a big white arrow (or the digit 5) painted on it."""
+    road(sc, 8, 1, length=18.0, bend=0.0)
+    Z = 0.06; k = 2.9; cx = 9.0
+    def rect(x0, x1, y0, y1):
+        sc.quad((cx + x0 * k, y0 * k, Z), (cx + x1 * k, y0 * k, Z), (cx + x1 * k, y1 * k, Z), (cx + x0 * k, y1 * k, Z), WHITE, layer=2, two=True, shade=False)
+    def tri(a, b, c):
+        sc.face([(cx + a[0] * k, a[1] * k, Z), (cx + b[0] * k, b[1] * k, Z), (cx + c[0] * k, c[1] * k, Z)], WHITE, layer=2, two=True, shade=False)
+    if kind == "arrow":
+        rect(-1.1, 0.55, -0.14, 0.14)
+        tri((0.55, -0.5), (1.1, 0.0), (0.55, 0.5))
+    else:
+        T = 0.24; L, H, Lo, Hi, M = -0.9, 0.9, -0.5, 0.5, 0.0
+        rect(H - T, H, Lo, Hi); rect(M - T / 2, M + T / 2, Lo, Hi); rect(L, L + T, Lo, Hi)   # top, middle, bottom
+        rect(M + T / 2, H - T, Lo, Lo + T)                                                    # upper left
+        rect(L + T, M - T / 2, Hi - T, Hi)                                                    # lower right
+
 what = sys.argv[1]; out = sys.argv[2]
 if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
@@ -456,6 +474,8 @@ elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
 elif what == "gantry": sign_gantry(sc)
+elif what == "lanearrow": marking_icon(sc, "arrow")
+elif what == "lanenumber": marking_icon(sc, "digit")
 elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")

@@ -1,6 +1,7 @@
 #include "Customization/RMRoadLookPaint.h"
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "Net/RMRemoteCallObject.h"
 #include "Equipment/FGBuildGun.h"
@@ -68,7 +69,7 @@ namespace
 			return nullptr;
 		}
 		ARMBuildableProcedural* Piece = Cast<ARMBuildableProcedural>(Hit.GetActor());
-		if (!Piece || !(Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableIntersection>()))
+		if (!Piece || !(Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableIntersection>() || Piece->IsA<ARMBuildableMarking>()))
 		{
 			return nullptr;
 		}

@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 #include "Components/SplineComponent.h"
 #include "Buildables/FGBuildableRailroadTrack.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "FGDismantleInterface.h"
 #include "HAL/PlatformTime.h"
@@ -262,6 +263,15 @@ void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActo
 		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
 		{
 			Consider(*It, It->GetSplineComponent());
+		}
+		// Lane markings painted on this piece go with it.
+		for (TActorIterator<ARMBuildableMarking> It(World); It; ++It)
+		{
+			ARMBuildableMarking* Marking = *It;
+			if (Marking && IsValid(Marking) && Marking != this && Box.IsInside(Marking->GetActorLocation()) && IsOnThis(Marking->GetActorLocation()))
+			{
+				mRiderCache.Add(Marking);
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "FGCharacterPlayer.h"
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMRoadLineDescriptor.h"
@@ -29,7 +30,7 @@ void URMRemoteCallObject::ServerSetFenceWallLook_Implementation(ARMBuildableFenc
 
 void URMRemoteCallObject::ServerSetRoadLook_Implementation(ARMBuildableProcedural* Piece, uint8 Look)
 {
-	if (Piece && Look <= 2 && (Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableIntersection>()))
+	if (Piece && Look <= 2 && (Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableIntersection>() || Piece->IsA<ARMBuildableMarking>()))
 	{
 		Piece->SetLook(Look);
 	}

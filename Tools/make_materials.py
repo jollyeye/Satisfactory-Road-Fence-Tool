@@ -857,11 +857,33 @@ MEL.connect_material_property(const(cyber_body, 0.2, -300, 200), "", MP.MP_ROUGH
 finish(cyber_body)
 log("Cyberpunk road body")
 
+# --- Lane markings (arrows, numbers): flat paint in the road's line colour -----------------------
+# Plain: matte paint in the primary colour (the dashed middle lines' colour), like the asphalt's lines.
+marking = new_material("M_RoadMarking")
+mk_primary = cpd_param(marking, "MiddleLineColor", 24, unreal.LinearColor(0.8, 0.8, 0.76, 1.0), -600, 0)
+MEL.connect_material_property(mk_primary, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(marking, 0.75, -300, 120), "", MP.MP_ROUGHNESS)
+finish(marking)
+log("Lane marking paint")
+
+# Cyberpunk: glows in the secondary colour like the cyberpunk road's lines (emissive x4).
+marking_cyber = new_material("M_RoadMarkingCyber")
+mc_secondary = cpd_param(marking_cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -600, 0)
+MEL.connect_material_property(mc_secondary, "", MP.MP_BASE_COLOR)
+mc_glow = node(marking_cyber, unreal.MaterialExpressionMultiply, -300, 100)
+link(mc_secondary, "", mc_glow, "A")
+link(const(marking_cyber, 4.0, -450, 160), "", mc_glow, "B")
+MEL.connect_material_property(mc_glow, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(const(marking_cyber, 0.1, -300, 260), "", MP.MP_ROUGHNESS)
+finish(marking_cyber)
+log("Cyberpunk lane marking")
+
 # --- Assign ----------------------------------------------------------------------------------
 # Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
               "m_look_top_materials": [pavers, cyber],
               "m_look_body_materials": [concrete, cyber_body]}
+MARKING_LOOKS = {"m_marking_material": marking, "m_look_top_materials": [marking, marking_cyber]}
 ASSIGN = {
     "Build_Road_1x": ROAD_LOOKS,
     "Build_Road_2x": ROAD_LOOKS,
@@ -869,6 +891,8 @@ ASSIGN = {
     "Build_Road_4x": ROAD_LOOKS,
     "Build_RoadIntersection": ROAD_LOOKS,
     "Build_SignGantry": {"m_main_material": steel},
+    "Build_LaneArrow": MARKING_LOOKS,
+    "Build_LaneNumber": MARKING_LOOKS,
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},

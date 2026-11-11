@@ -207,6 +207,8 @@ RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
 RMGantryHologram = native_class("RMGantryHologram")
 RMBuildableGantry = native_class("RMBuildableGantry")
+RMBuildableMarking = native_class("RMBuildableMarking")
+RMMarkingHologram = native_class("RMMarkingHologram")
 RMBuildableRoadTool = native_class("RMBuildableRoadTool")
 BuildModeDescriptor = native_class("FGHologramBuildModeDescriptor")
 BuildingDescriptor = native_class("FGBuildingDescriptor")
@@ -257,6 +259,9 @@ finish(holo_adjust)
 
 holo_gantry = make_bp("Holograms", "Holo_SignGantry", RMGantryHologram)
 finish(holo_gantry)
+
+holo_marking = make_bp("Holograms", "Holo_Marking", RMMarkingHologram)
+finish(holo_marking)
 
 holo_fence_cut = make_bp("Holograms", "Holo_FenceCut", RMRoadCutHologram)
 setp(cdo(holo_fence_cut), True, "m_fence_tool", "mFenceTool")
@@ -325,6 +330,7 @@ else:
 road_tools_cat = None
 edit_road_subcat = None
 edit_fence_subcat = None
+lane_marking_subcat = None
 if VehicleCat:
     rtc = make_bp("Buildables", "BC_RoadTools", VehicleCat)
     rc_cdo = cdo(rtc)
@@ -344,8 +350,13 @@ if VehiclePathSubCat:
     setp(cdo(efc), 2.0, "m_menu_priority", "mMenuPriority")
     finish(efc)
     edit_fence_subcat = efc.generated_class()
+    lmc = make_bp("Buildables", "SC_LaneMarkings", VehiclePathSubCat)
+    setp(cdo(lmc), text("Lane markings"), "m_display_name", "mDisplayName")
+    setp(cdo(lmc), 3.0, "m_menu_priority", "mMenuPriority")
+    finish(lmc)
+    lane_marking_subcat = lmc.generated_class()
 # Road Tools entries and their section.
-ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadAdjust": "road", "FenceCut": "fence"}
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadAdjust": "road", "FenceCut": "fence", "LaneArrow": "marking", "LaneNumber": "marking"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -396,15 +407,20 @@ TOOLS = [
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Hold the snap key and aim a sign at the beam to put it flat on the beam's front or back face (scroll turns it 45 degrees). Cost is per 8 m of steel.",
      {}, [(Desc_SteelBeam, 1), (Desc_SteelPipe, 1)], road_icons, {"m_main_material": mat_metal}),
+    ("LaneArrow", RMBuildableMarking, holo_marking, "Lane Arrow", "Paints an arrow on a lane of a road. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the arrow (straight, left, right, straight or left, straight or right, left or right). It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
+     {"m_kind": "ARROW"}, [], road_icons, {}),
+    ("LaneNumber", RMBuildableMarking, holo_marking, "Lane Number", "Paints a single digit (0 to 9) on a lane of a road, for speed limits and lane numbers. Aim at a road: it snaps to the middle of the lane you aim at and reads upright for traffic driving the way you are looking along the road. The mouse wheel picks the digit. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
+     {"m_kind": "DIGIT"}, [], road_icons, {}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
 MENU_ORDER = {"RoadCut": 1, "RoadSplit": 2, "RoadAdjust": 3, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
-              "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
+              "LaneArrow": 1, "LaneNumber": 2, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
+MarkingKindEnum = getattr(unreal, "RMMarkingKind", None)
 
 # Light default swatch for roads (lines would otherwise start FICSIT orange / grey).
 light_swatch = None
@@ -469,11 +485,13 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     for k, v in props.items():
         if k == "m_fence_type" and FenceEnum is not None:
             v = getattr(FenceEnum, v, v)
+        if k == "m_kind" and MarkingKindEnum is not None:
+            v = getattr(MarkingKindEnum, v, v)
         setp(c, v, k)
     for k, m in mats.items():
         if m:
             setp(c, m, k)
-    if parent in (RMBuildableRoad, RMBuildableIntersection):
+    if parent in (RMBuildableRoad, RMBuildableIntersection, RMBuildableMarking):
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
         setp(c, None, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
     if name in FENCE_WALLS:
@@ -506,7 +524,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, text(desc), "m_description", "mDescription")
     # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
-    tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat}.get(ROAD_TOOLS_MENU.get(name))
+    tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat, "marking": lane_marking_subcat}.get(ROAD_TOOLS_MENU.get(name))
     if tool_subcat and road_tools_cat:
         setp(dc, road_tools_cat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [tool_subcat], "m_sub_categories", "mSubCategories")
@@ -698,7 +716,7 @@ if MaterialDescBase and MaterialTab:
         setp(mc, MaterialTab, "m_category", "mCategory")
         setp(mc, [roads_sub.generated_class()], "m_sub_categories", "mSubCategories")
         setp(mc, float(i), "m_menu_priority", "mMenuPriority")
-        setp(mc, [RMBuildableRoad, RMBuildableIntersection], "m_valid_buildables", "mValidBuildables")
+        setp(mc, [RMBuildableRoad, RMBuildableIntersection, RMBuildableMarking], "m_valid_buildables", "mValidBuildables")
         setp(mc, ident, "id", "ID")
         try:
             tex = unreal.load_asset("%s/Icons/T_Icon_RoadMat_%s.T_Icon_RoadMat_%s" % (ROOT, key, key))
