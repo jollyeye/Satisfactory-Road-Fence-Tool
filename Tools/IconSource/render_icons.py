@@ -313,6 +313,32 @@ def cut_glyph(path):
     img = img.resize((512, 512), _I.LANCZOS)
     img.save(path)
 
+def fence_cut_glyph(path):
+    """Cut Fence icon: white flat glyph, a brick wall split by a vertical cut line."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    gap, mortar = 70, 22
+    rows = [(250, 390), (390, 530), (530, 670), (670, 810)]
+    for r, (y0, y1) in enumerate(rows):
+        # Bricks offset every other row; each half of the wall stops short of the cut.
+        off = 0 if r % 2 == 0 else 95
+        x = 120 - off
+        while x < 904:
+            x0, x1 = max(x, 120), min(x + 190, 904)
+            for lo, hi in ((120, 512 - gap), (512 + gap, 904)):
+                a, b = max(x0, lo), min(x1, hi)
+                if b - a > 70:
+                    d.rounded_rectangle([a + mortar / 2, y0 + mortar / 2, b - mortar / 2, y1 - mortar / 2], radius=12, fill=W)
+            x += 190
+    # Vertical cut line, taller than the wall.
+    d.rounded_rectangle([492, 150, 532, 910], radius=20, fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def tab_glyph(path):
     """Road Tools tab icon: white glyph of a road in perspective, like /┆\\ ."""
     from PIL import Image as _I, ImageDraw as _D
@@ -336,6 +362,8 @@ def tab_glyph(path):
 what = sys.argv[1]; out = sys.argv[2]
 if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
+if what == "fencecutglyph":
+    fence_cut_glyph(out); sys.exit(0)
 if what == "tabglyph":
     tab_glyph(out); sys.exit(0)
 sc = Scene()

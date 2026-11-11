@@ -27,7 +27,37 @@ public:
 
 	float GetLength() const;
 
+	/** Frame (position and directions) at Dist cm along the spline, in world space. */
+	bool GetFrameAt(float Dist, FRMFrame& OutFrame) const;
+
+	/**
+	 * Cut tools (server): replaces this piece with two of the same kind split at Dist cm along it,
+	 * following its curve, with its recipe, paint and settings; this one goes away. Returns the first
+	 * piece (start side), the second in OutSecond; null if the cut is not possible.
+	 */
+	ARMBuildableSpline* CutAt(float Dist, ARMBuildableSpline** OutSecond = nullptr);
+
+	/** Used while spawning cut pieces (CopyCutSettingsTo is protected). */
+	void CopyCutSettingsForSpawn(ARMBuildableSpline* New) const { CopyCutSettingsTo(New); }
+
+	/** Extra conditions for a cut at Dist (e.g. what is built on it). */
+	virtual bool CanCutAt(float Dist) const { return true; }
+
+	/** Cross-section shown by the cut tools: half width, and bottom / top along the spline's up. */
+	virtual void GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const
+	{
+		OutHalfWidth = 50.f;
+		OutBottom = 0.f;
+		OutTop = 100.f;
+	}
+
 protected:
+	/** Cut: settings of this piece that the two new pieces take over (lines, side, look...). */
+	virtual void CopyCutSettingsTo(ARMBuildableSpline* New) const {}
+
+	/** Cut: the new pieces exist, this one is about to be dismantled. */
+	virtual void BeforeCutDismantle(float Dist) {}
+
 	UFUNCTION()
 	void OnRep_SplinePoints();
 

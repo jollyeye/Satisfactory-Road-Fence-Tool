@@ -78,3 +78,11 @@ class ROADMAKER_API URMCD_RiderTooShort : public UFGConstructDisqualifier
 public:
 	URMCD_RiderTooShort() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RiderTooShort", "A train track or vehicle path on the road would be cut too close to its end"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_AimAtFence : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_AimAtFence() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtFence", "Aim at a road fence or fence wall"); }
+};

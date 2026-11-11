@@ -38,12 +38,9 @@ public:
 	void SetPreviewMarkings(const TOptional<FRMMarkings>& Preview);
 	float GetRoadHeight() const { return mRoadHeight; }
 
-	/**
-	 * Cut Road (server): replaces this road with two roads split at Dist cm along it, keeping its
-	 * curve, lines, paint and recipe; this one goes away. Returns the first piece (start side), the
-	 * second in OutSecond. Null if the cut is not possible.
-	 */
-	ARMBuildableRoad* CutAt(float Dist, ARMBuildableRoad** OutSecond = nullptr);
+	// Cut Road: lines go to both pieces; tracks / paths on it are split too (refused if too short).
+	virtual bool CanCutAt(float Dist) const override;
+	virtual void GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const override;
 
 	/**
 	 * Game rail tracks / vehicle paths on this road that a cut at Dist crosses, with where along them
@@ -52,8 +49,10 @@ public:
 	 */
 	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;
 
-	/** The cut frame (position and directions) at Dist along this road. */
-	bool GetFrameAt(float Dist, FRMFrame& OutFrame) const;
+
+protected:
+	virtual void CopyCutSettingsTo(ARMBuildableSpline* New) const override;
+	virtual void BeforeCutDismantle(float Dist) override;
 
 private:
 	/** Set while this road is replaced by a cut, so dismantling it leaves its riders alone. */

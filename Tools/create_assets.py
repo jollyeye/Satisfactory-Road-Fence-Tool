@@ -233,8 +233,18 @@ finish(holo_fence)
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
 
+bm_cut_fences = make_bp("Holograms", "BM_CutWithFences", BuildModeDescriptor)
+setp(cdo(bm_cut_fences), text("Cut also fences"), "m_display_name", "mDisplayName")
+setp(cdo(bm_cut_fences), text("Also cuts, at the same place, the fences along the road's sides (fence walls stacked on them too) and the roads built beside it. Train tracks and vehicle paths on the road are always cut."), "m_description", "mDescription")
+finish(bm_cut_fences)
+
 holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)
+setp(cdo(holo_cut), bm_cut_fences.generated_class(), "m_build_mode_with_fences", "mBuildModeWithFences")
 finish(holo_cut)
+
+holo_fence_cut = make_bp("Holograms", "Holo_FenceCut", RMRoadCutHologram)
+setp(cdo(holo_fence_cut), True, "m_fence_tool", "mFenceTool")
+finish(holo_fence_cut)
 
 # Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.
 for old in ("Unlocks/Recipe_LanePaint", "Buildables/Desc_LanePaint", "Buildables/Build_LanePaint",
@@ -298,6 +308,7 @@ else:
 # section "Edit road" with Cut Road.
 road_tools_cat = None
 edit_road_subcat = None
+edit_fence_subcat = None
 if VehicleCat:
     rtc = make_bp("Buildables", "BC_RoadTools", VehicleCat)
     rc_cdo = cdo(rtc)
@@ -312,7 +323,13 @@ if VehiclePathSubCat:
     setp(cdo(erc), 1.0, "m_menu_priority", "mMenuPriority")
     finish(erc)
     edit_road_subcat = erc.generated_class()
-ROAD_TOOLS_MENU = {"RoadCut"}
+    efc = make_bp("Buildables", "SC_EditFence", VehiclePathSubCat)
+    setp(cdo(efc), text("Edit fence"), "m_display_name", "mDisplayName")
+    setp(cdo(efc), 2.0, "m_menu_priority", "mMenuPriority")
+    finish(efc)
+    edit_fence_subcat = efc.generated_class()
+# Road Tools entries and their section.
+ROAD_TOOLS_MENU = {"RoadCut": "road", "FenceCut": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -341,6 +358,8 @@ TOOLS = [
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint. Free.",
      {}, [], road_icons, {}),
+    ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Nothing else is cut. Free.",
+     {}, [], fence_icons, {}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
     ("Fence_Jersey", RMBuildableFence, holo_fence, "Cement Blocks", "Concrete road barrier. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
@@ -359,7 +378,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "FenceCut": 2, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8,
               "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
@@ -463,9 +482,10 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, text(desc), "m_description", "mDescription")
     # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
-    if name in ROAD_TOOLS_MENU and road_tools_cat and edit_road_subcat:
+    tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat}.get(ROAD_TOOLS_MENU.get(name))
+    if tool_subcat and road_tools_cat:
         setp(dc, road_tools_cat, "m_category", "mCategory", "m_build_menu_category")
-        setp(dc, [edit_road_subcat], "m_sub_categories", "mSubCategories")
+        setp(dc, [tool_subcat], "m_sub_categories", "mSubCategories")
     elif name in WALLS_MENU and WallsCat and wall_subcat:
         setp(dc, WallsCat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [wall_subcat], "m_sub_categories", "mSubCategories")

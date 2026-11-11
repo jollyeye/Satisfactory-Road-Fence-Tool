@@ -552,3 +552,37 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 		break;
 	}
 }
+
+void ARMBuildableFence::GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const
+{
+	// Rough cross-section of each fence type (the spline runs along its foot).
+	OutBottom = -5.f;
+	switch (GetEffectiveType())
+	{
+	case ERMFenceType::GuardRail:
+		OutHalfWidth = 20.f;
+		OutTop = 90.f;
+		break;
+	case ERMFenceType::JerseyBarrier:
+		OutHalfWidth = 32.f;
+		OutTop = 85.f;
+		break;
+	case ERMFenceType::GridFence:
+		OutHalfWidth = 12.f;
+		OutTop = 205.f;
+		break;
+	default: // fence walls (4 m)
+		OutHalfWidth = 28.f;
+		OutTop = GetWallHeight() + 5.f;
+		break;
+	}
+}
+
+void ARMBuildableFence::CopyCutSettingsTo(ARMBuildableSpline* New) const
+{
+	if (ARMBuildableFence* Fence = Cast<ARMBuildableFence>(New))
+	{
+		Fence->mInwardSign = mInwardSign;
+		Fence->mWallLook = mWallLook;
+	}
+}

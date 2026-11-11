@@ -150,38 +150,6 @@ void ARMBuildableRoad::ApplyCustomizationData_Native(const FFactoryCustomization
 
 namespace
 {
-	/** Spawns a copy of Source (class, recipe, paint, lines) along the given world curve. */
-	ARMBuildableRoad* SpawnRoadPiece(ARMBuildableRoad* Source, const TArray<FRMSplinePoint>& World, int32 CostMultiplier)
-	{
-		UWorld* W = Source->GetWorld();
-		if (!W || World.Num() < 2)
-		{
-			return nullptr;
-		}
-		// Same convention as the hologram: actor at the first point, yawed along its direction.
-		const FVector Dir = FVector(World[0].Tangent.X, World[0].Tangent.Y, 0.f).GetSafeNormal();
-		const FRotator Yaw(0.f, Dir.IsNearlyZero() ? 0.f : Dir.Rotation().Yaw, 0.f);
-		const FTransform T(Yaw, World[0].Location);
-		TArray<FRMSplinePoint> Local;
-		for (const FRMSplinePoint& P : World)
-		{
-			Local.Add(FRMSplinePoint(T.InverseTransformPosition(P.Location), T.InverseTransformVectorNoScale(P.Tangent)));
-		}
-		ARMBuildableRoad* New = W->SpawnActorDeferred<ARMBuildableRoad>(Source->GetClass(), T, nullptr, nullptr,
-			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (!New)
-		{
-			return nullptr;
-		}
-		New->SetBuiltWithRecipe(Source->GetBuiltWithRecipe());
-		New->SetCostMultiplier(CostMultiplier);
-		New->SetSplinePoints(Local);
-		New->SetMarkings(Source->GetMarkings());
-		New->SetCustomizationData_Native(Source->GetCustomizationData_Native());
-		UGameplayStatics::FinishSpawningActor(New, T);
-		return New;
-	}
-
 	/**
 	 * Where a track / path spline crosses the cut: the plane through the cut point facing along the
 	 * road, within the road's width (plus 1 m) and 4 m above / below.
@@ -248,34 +216,6 @@ namespace
 	}
 }
 
-bool ARMBuildableRoad::GetFrameAt(float Dist, FRMFrame& OutFrame) const
-{
-	TArray<FRMFrame> Frames;
-	GetWorldFrames(Frames, 25.f);
-	if (Frames.Num() < 2)
-	{
-		return false;
-	}
-	OutFrame = Frames.Last();
-	for (int32 I = 1; I < Frames.Num(); ++I)
-	{
-		if (Frames[I].Dist >= Dist)
-		{
-			const FRMFrame& A = Frames[I - 1];
-			const FRMFrame& B = Frames[I];
-			const float Alpha = FMath::Clamp((Dist - A.Dist) / FMath::Max(B.Dist - A.Dist, KINDA_SMALL_NUMBER), 0.f, 1.f);
-			OutFrame = A;
-			OutFrame.Pos = FMath::Lerp(A.Pos, B.Pos, Alpha);
-			OutFrame.Fwd = FMath::Lerp(A.Fwd, B.Fwd, Alpha).GetSafeNormal();
-			OutFrame.Right = FMath::Lerp(A.Right, B.Right, Alpha).GetSafeNormal();
-			OutFrame.Up = FMath::Lerp(A.Up, B.Up, Alpha).GetSafeNormal();
-			OutFrame.Dist = Dist;
-			break;
-		}
-	}
-	return true;
-}
-
 int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const
 {
 	OutSplits.Reset();
@@ -315,100 +255,27 @@ int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>&
 	return TooShort;
 }
 
-ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSecond)
+bool ARMBuildableRoad::CanCutAt(float Dist) const
 {
-	if (OutSecond)
-	{
-		*OutSecond = nullptr;
-	}
-	if (!HasAuthority() || GetIsDismantled() || IsActorBeingDestroyed())
-	{
-		return nullptr;
-	}
-	TArray<FRMFrame> Frames;
-	GetWorldFrames(Frames, 25.f);
-	if (Frames.Num() < 3)
-	{
-		return nullptr;
-	}
-	const float Total = Frames.Last().Dist;
-	if (Dist <= 1.f || Dist >= Total - 1.f)
-	{
-		return nullptr;
-	}
-
-	// The exact cut frame, between the two samples around Dist.
-	FRMFrame Cut = Frames.Last();
-	for (int32 I = 1; I < Frames.Num(); ++I)
-	{
-		if (Frames[I].Dist >= Dist)
-		{
-			const FRMFrame& A = Frames[I - 1];
-			const FRMFrame& B = Frames[I];
-			const float Alpha = (Dist - A.Dist) / FMath::Max(B.Dist - A.Dist, KINDA_SMALL_NUMBER);
-			Cut = A;
-			Cut.Pos = FMath::Lerp(A.Pos, B.Pos, Alpha);
-			Cut.Fwd = FMath::Lerp(A.Fwd, B.Fwd, Alpha).GetSafeNormal();
-			Cut.Right = FMath::Lerp(A.Right, B.Right, Alpha).GetSafeNormal();
-			Cut.Up = FMath::Lerp(A.Up, B.Up, Alpha).GetSafeNormal();
-			Cut.Dist = Dist;
-			break;
-		}
-	}
-	TArray<FRMFrame> FirstFrames;
-	TArray<FRMFrame> SecondFrames;
-	SecondFrames.Add(Cut);
-	for (const FRMFrame& F : Frames)
-	{
-		if (F.Dist < Dist - 0.5f)
-		{
-			FirstFrames.Add(F);
-		}
-		else if (F.Dist > Dist + 0.5f)
-		{
-			SecondFrames.Add(F);
-		}
-	}
-	FirstFrames.Add(Cut);
-	// Second piece measured from its own start.
-	for (FRMFrame& F : SecondFrames)
-	{
-		F.Dist -= Dist;
-	}
-
-	// Each piece is refitted through its own part of the curve (keys every 2 m, exact end points and
-	// end directions), so both follow the original road.
-	TArray<FRMSplinePoint> FirstPoints, SecondPoints;
-	RMGeometry::OffsetCurve(FirstFrames, 0.f, 200.f, FirstPoints);
-	RMGeometry::OffsetCurve(SecondFrames, 0.f, 200.f, SecondPoints);
-	if (FirstPoints.Num() < 2 || SecondPoints.Num() < 2)
-	{
-		return nullptr;
-	}
-	// Tracks / paths on the road that the cut crosses; one too short to split: no cut.
+	// Tracks / paths on the road that the cut crosses: refused if one would get too short a piece.
 	TArray<TPair<AActor*, float>> Splits;
-	if (PlanRiderCuts(Dist, Splits) > 0)
+	return PlanRiderCuts(Dist, Splits) == 0;
+}
+
+void ARMBuildableRoad::CopyCutSettingsTo(ARMBuildableSpline* New) const
+{
+	if (ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(New))
 	{
-		return nullptr;
+		Road->SetMarkings(mMarkings);
 	}
-	const int32 FirstCost = FMath::Max(1, FMath::RoundToInt(mCostMultiplier * Dist / Total));
-	const int32 SecondCost = FMath::Max(1, mCostMultiplier - FirstCost);
-	ARMBuildableRoad* First = SpawnRoadPiece(this, FirstPoints, FirstCost);
-	ARMBuildableRoad* Second = SpawnRoadPiece(this, SecondPoints, SecondCost);
-	if (!First || !Second)
-	{
-		if (First)
-		{
-			First->Destroy();
-		}
-		if (Second)
-		{
-			Second->Destroy();
-		}
-		return nullptr;
-	}
+}
+
+void ARMBuildableRoad::BeforeCutDismantle(float Dist)
+{
 	// Game rail tracks and vehicle paths built on this road are split at the same place (the game's
-	// own split, which keeps the pieces connected). A piece shorter than the game allows: no cut.
+	// own split, which keeps the pieces connected); the dismantle below leaves them alone.
+	TArray<TPair<AActor*, float>> Splits;
+	PlanRiderCuts(Dist, Splits);
 	for (const TPair<AActor*, float>& Split : Splits)
 	{
 		if (AFGBuildableRailroadTrack* Track = Cast<AFGBuildableRailroadTrack>(Split.Key))
@@ -420,16 +287,12 @@ ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSeco
 			Path->Split(Split.Value);
 		}
 	}
-
-	// Out of the way at once (the dismantle takes a moment): aiming must find the new pieces. Its
-	// riders stay (they were split above and now run on the new pieces).
 	mBeingCut = true;
-	SetActorEnableCollision(false);
-	SetActorHiddenInGame(true);
-	IFGDismantleInterface::Execute_Dismantle(this);
-	if (OutSecond)
-	{
-		*OutSecond = Second;
-	}
-	return First;
+}
+
+void ARMBuildableRoad::GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const
+{
+	OutHalfWidth = GetRoadWidth() * 0.5f;
+	OutBottom = -FMath::Max(mRoadHeight, 10.f);
+	OutTop = 0.f;
 }
