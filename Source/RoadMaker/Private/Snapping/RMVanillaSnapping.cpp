@@ -1681,11 +1681,11 @@ namespace
 	/** Logs every static mesh the game's beam hologram is made of (to learn how the H-beam is built). */
 	void BeamLog(const AFGHologram* Hologram)
 	{
-		if (CVarSignLog.GetValueOnGameThread() == 0 || !SignLogDue(Hologram, 40, 2.0))
+		if (CVarSignLog.GetValueOnGameThread() == 0 || !Hologram->GetBuildClass() || !Hologram->GetBuildClass()->GetName().Contains(TEXT("Beam")) || !SignLogDue(Hologram, 40, 2.0))
 		{
 			return;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog hologram %s loc=%s rot=%s"), *Hologram->GetName(), *Hologram->GetActorLocation().ToCompactString(), *Hologram->GetActorRotation().ToCompactString());
+		UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog hologram %s buildClass=%s loc=%s rot=%s"), *Hologram->GetName(), Hologram->GetBuildClass() ? *Hologram->GetBuildClass()->GetName() : TEXT("none"), *Hologram->GetActorLocation().ToCompactString(), *Hologram->GetActorRotation().ToCompactString());
 		TInlineComponentArray<UStaticMeshComponent*> Comps(Hologram);
 		for (UStaticMeshComponent* C : Comps)
 		{
@@ -2079,6 +2079,12 @@ void RMVanillaSnapping::InstallHooks()
 
 #undef RM_HOOK_SET_LOCATION
 
+	// Debug log: the meshes of every beam-like hologram (connectors, shelf, supports) for the gantry.
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBuildableHologram>(),
+		[](AFGBuildableHologram* Hologram, const FHitResult& Hit)
+		{
+			BeamLog(Hologram);
+		});
 	// Debug log: which meshes the game's beam hologram uses (H-beam gantry research).
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
 		[](AFGBeamHologram* Hologram, const FHitResult& Hit)
