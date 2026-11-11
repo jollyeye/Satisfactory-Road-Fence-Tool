@@ -19,6 +19,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 | 11 | Traffic lights (decorative) | S-M | Pole + light heads, lights cycle on a timer (emissive material parameter), no traffic logic. Snap to intersection corners. |
 
 ## Moved to 1.3.0
+- **Build animations for each piece** (replace the temporary 0.6 s rise, a bit fast): a proper animation per piece type (roads and fences revealed along their length, intersection, gantry...), tied to the game's build time; plus a duplicate guard (refuse a piece identical to one already there).
 - **Join tool** (the inverse of Cut Road / Cut Fence / Split Road: join two roads or fences end to end, merge roads side by side). Decided 2026-11-11: no undo, the join tool is the answer.
 
 ## Added later
