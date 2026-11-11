@@ -45,7 +45,6 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 
 	// No game build effect (it would hide the piece for the whole animation and show nothing); see StartRiseAnimation.
 	mSkipBuildEffect = true;
-	mHideOnBuildEffectStart = false;
 }
 
 void ARMBuildableProcedural::BeginPlay()
