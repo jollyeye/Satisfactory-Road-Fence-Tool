@@ -100,6 +100,7 @@ void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 		TArray<FRMFrame> Frames;
 		mTarget->GetWorldFrames(Frames, 25.f);
 		float Best = TNumericLimits<float>::Max();
+		const FRMFrame* Nearest = nullptr;
 		for (const FRMFrame& F : Frames)
 		{
 			const float D = FVector::DistSquared2D(F.Pos, hitResult.Location);
@@ -107,8 +108,17 @@ void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 			{
 				Best = D;
 				mCutDist = F.Dist;
+				Nearest = &F;
 				SetActorLocation(F.Pos);
 			}
+		}
+		if (mSplitTool && Nearest)
+		{
+			// Where across the road you aim, in whole foundations from its left edge (every 8 m).
+			const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
+			const float Half = Road->GetRoadWidth() * 0.5f;
+			const float FromLeft = Half + FVector::DotProduct(hitResult.Location - Nearest->Pos, Nearest->Right);
+			mSplitLeft = FMath::Clamp(FMath::RoundToInt(FromLeft / RM::FoundationSize), 1, FMath::Max(1, Road->GetWidthInFoundations() - 1));
 		}
 	}
 	else
@@ -210,10 +220,6 @@ void ARMRoadCutHologram::CheckValidPlacement()
 		if (!IsCutValid())
 		{
 			AddConstructDisqualifier(URMCD_RoadTooNarrow::StaticClass());
-		}
-		else if (!Road->CanSplitLengthwise())
-		{
-			AddConstructDisqualifier(URMCD_RidersOnRoad::StaticClass());
 		}
 	}
 	else if (!IsCutValid())
@@ -393,7 +399,7 @@ void ARMRoadCutHologram::RebuildOverlay()
 	{
 		// A line along the whole road where it is split, just above the surface.
 		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
-		const bool bOk = IsCutValid() && Road->CanSplitLengthwise();
+		const bool bOk = IsCutValid();
 		TArray<FRMFrame> Frames;
 		mTarget->GetWorldFrames(Frames, 100.f);
 		const float Across = -Road->GetRoadWidth() * 0.5f + mSplitLeft * RM::FoundationSize;

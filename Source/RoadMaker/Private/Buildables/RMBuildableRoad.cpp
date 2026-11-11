@@ -262,10 +262,7 @@ bool ARMBuildableRoad::CanSplitLengthwise() const
 	{
 		return false;
 	}
-	// Tracks and vehicle paths lie across both halves: not split, the player moves them first.
-	TArray<AActor*> Riders;
-	IFGDismantleInterface::Execute_GetChildDismantleActors(const_cast<ARMBuildableRoad*>(this), Riders);
-	return Riders.Num() == 0;
+	return true;
 }
 
 ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)

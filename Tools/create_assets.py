@@ -362,7 +362,7 @@ TOOLS = [
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint; train tracks and vehicle paths on it are cut too. Build mode \"Cut also fences\" also cuts the road's own fences at the same place (white outlines). Free.",
      {}, [], road_icons, {}),
-    ("RoadSplit", RMBuildableRoadTool, holo_split, "Split Road", "Aim across a road 2 or more wide: the orange line shows where it is split lengthwise, in steps of 8 m. Click to replace it with two roads side by side that keep its curve, lines and paint (a 2 wide road becomes two 1 wide roads, a 4 wide one for example 1 + 3). Train tracks and vehicle paths on the road must be removed first. Free.",
+    ("RoadSplit", RMBuildableRoadTool, holo_split, "Split Road", "Aim across a road 2 or more wide: the orange line shows where it is split lengthwise, in steps of 8 m. Click to replace it with two roads side by side that keep its curve, lines and paint (a 2 wide road becomes two 1 wide roads, a 4 wide one for example 1 + 3). Free.",
      {}, [], road_icons, {}),
     ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
      {}, [], fence_icons, {}),
