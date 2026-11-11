@@ -163,8 +163,8 @@ void ARMRoadCutHologram::FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>&
 		{
 			continue;
 		}
-		// Quick reject: nowhere near the cut.
-		if (!Other->GetComponentsBoundingBox().ExpandBy(500.f).IsInside(Cut.Pos))
+		// Quick reject: no point of its spline can be near the cut (the actor sits at its first point).
+		if (FVector::Dist(Other->GetActorLocation(), Cut.Pos) > Other->GetLength() + 3000.f)
 		{
 			continue;
 		}
@@ -268,11 +268,14 @@ namespace
 			}
 			float Half = 0.f, Bottom = 0.f, Top = 0.f;
 			Piece->GetCutSection(Half, Bottom, Top);
-			const FVector Up = F.Up;
-			const FVector TL = F.Pos - F.Right * Half + Up * (Top + 2.f);
-			const FVector TR = F.Pos + F.Right * Half + Up * (Top + 2.f);
-			const FVector BL = F.Pos - F.Right * Half + Up * Bottom;
-			const FVector BR = F.Pos + F.Right * Half + Up * Bottom;
+			// Upright pieces: vertical outline, level across.
+			const bool bUpright = Piece->IsCutSectionUpright();
+			const FVector Up = bUpright ? FVector::UpVector : F.Up;
+			const FVector Right = bUpright ? FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal() : F.Right;
+			const FVector TL = F.Pos - Right * Half + Up * (Top + 2.f);
+			const FVector TR = F.Pos + Right * Half + Up * (Top + 2.f);
+			const FVector BL = F.Pos - Right * Half + Up * Bottom;
+			const FVector BR = F.Pos + Right * Half + Up * Bottom;
 			Line(TL, TR, 4.f, Color);
 			Line(TR, BR, 4.f, Color);
 			Line(BR, BL, 4.f, Color);
@@ -301,11 +304,22 @@ void ARMRoadCutHologram::RebuildOverlay()
 	B.Section(mTarget, mCutDist, bValid ? FLinearColor(1.f, 0.35f, 0.f) : FLinearColor(1.f, 0.05f, 0.05f));
 	if (bValid && IsWithFences())
 	{
-		TArray<TPair<ARMBuildableSpline*, float>> Side;
-		FindSideCuts(Side);
-		for (const TPair<ARMBuildableSpline*, float>& S : Side)
+		// Searched again only when the cut point moves.
+		if (mSideCutsTarget.Get() != mTarget || !FMath::IsNearlyEqual(mSideCutsDist, mCutDist))
 		{
-			B.Section(S.Key, S.Value, FLinearColor(1.f, 1.f, 1.f));
+			mSideCutsTarget = mTarget;
+			mSideCutsDist = mCutDist;
+			mSideCutsCache.Reset();
+			TArray<TPair<ARMBuildableSpline*, float>> Side;
+			FindSideCuts(Side);
+			for (const TPair<ARMBuildableSpline*, float>& S : Side)
+			{
+				mSideCutsCache.Add(TPair<TWeakObjectPtr<ARMBuildableSpline>, float>(S.Key, S.Value));
+			}
+		}
+		for (const TPair<TWeakObjectPtr<ARMBuildableSpline>, float>& S : mSideCutsCache)
+		{
+			B.Section(S.Key.Get(), S.Value, FLinearColor(1.f, 1.f, 1.f));
 		}
 	}
 

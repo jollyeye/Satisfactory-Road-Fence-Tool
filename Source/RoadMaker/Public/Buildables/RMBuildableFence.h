@@ -101,6 +101,11 @@ public:
 	// Cut Fence: both pieces keep the side and look; outline of the fence's cross-section.
 	virtual void GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const override;
 	virtual void CopyCutSettingsTo(ARMBuildableSpline* New) const override;
+	virtual bool IsCutSectionUpright() const override
+	{
+		const ERMFenceType Type = GetEffectiveType();
+		return Type != ERMFenceType::GuardRail && Type != ERMFenceType::JerseyBarrier;
+	}
 
 	/** Spline points in world space (for stacking). */
 	void GetWorldSplinePoints(TArray<FRMSplinePoint>& Out) const;

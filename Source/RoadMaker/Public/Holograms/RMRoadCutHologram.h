@@ -62,4 +62,9 @@ protected:
 
 	/** Cut Road with fences: fences on the road's sides and roads beside it crossing the cut, and where. */
 	void FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>& Out) const;
+
+	/** Side cuts of the preview, kept until the cut point moves. */
+	TArray<TPair<TWeakObjectPtr<ARMBuildableSpline>, float>> mSideCutsCache;
+	TWeakObjectPtr<ARMBuildableSpline> mSideCutsTarget;
+	float mSideCutsDist = -1.f;
 };

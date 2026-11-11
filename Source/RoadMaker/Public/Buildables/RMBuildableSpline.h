@@ -43,13 +43,17 @@ public:
 	/** Extra conditions for a cut at Dist (e.g. what is built on it). */
 	virtual bool CanCutAt(float Dist) const { return true; }
 
-	/** Cross-section shown by the cut tools: half width, and bottom / top along the spline's up. */
+	/**
+	 * Cross-section shown by the cut tools: half width, and bottom / top along the spline's up.
+	 * Upright pieces (fence walls, grid fences) stand vertical on slopes: their outline does too.
+	 */
 	virtual void GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const
 	{
 		OutHalfWidth = 50.f;
 		OutBottom = 0.f;
 		OutTop = 100.f;
 	}
+	virtual bool IsCutSectionUpright() const { return false; }
 
 protected:
 	/** Cut: settings of this piece that the two new pieces take over (lines, side, look...). */
