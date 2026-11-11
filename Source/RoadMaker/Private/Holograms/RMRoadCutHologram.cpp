@@ -403,11 +403,16 @@ void ARMRoadCutHologram::RebuildOverlay()
 		TArray<FRMFrame> Frames;
 		mTarget->GetWorldFrames(Frames, 100.f);
 		const float Across = -Road->GetRoadWidth() * 0.5f + mSplitLeft * RM::FoundationSize;
-		const FLinearColor Color = bOk ? FLinearColor(1.f, 0.35f, 0.f) : FLinearColor(1.f, 0.05f, 0.05f);
-		for (int32 I = 1; I < Frames.Num(); ++I)
+		// Bright cyan (red if refused) on a dark border: visible on yellow lane lines and asphalt alike.
+		const FLinearColor Color = bOk ? FLinearColor(0.f, 0.9f, 1.f) : FLinearColor(1.f, 0.05f, 0.05f);
+		const FLinearColor Border(0.f, 0.f, 0.f);
+		for (int32 Pass = 0; Pass < 2; ++Pass)
 		{
-			B.Line(Frames[I - 1].Pos + Frames[I - 1].Right * Across + Frames[I - 1].Up * 4.f,
-				Frames[I].Pos + Frames[I].Right * Across + Frames[I].Up * 4.f, 4.f, Color);
+			for (int32 I = 1; I < Frames.Num(); ++I)
+			{
+				B.Line(Frames[I - 1].Pos + Frames[I - 1].Right * Across + Frames[I - 1].Up * 4.f,
+					Frames[I].Pos + Frames[I].Right * Across + Frames[I].Up * 4.f, Pass == 0 ? 11.f : 6.f, Pass == 0 ? Border : Color);
+			}
 		}
 		static UMaterialInterface* SplitMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
 		mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
