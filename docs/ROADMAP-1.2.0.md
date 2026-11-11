@@ -24,7 +24,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 ## Added later
 | # | Item | Notes |
 |---|---|---|
-| 12 | Fix sign placement on fence walls (**built, awaiting in-game test**) | Signs placed by us on the face of a fence wall: turn with the curve, free along it, 1 m levels in height (5 per 4 m wall), leg hologram disabled, one click (`RMVanillaSnapping`, `PlaceSignOnFenceWall`; `SignYawOffset` if the model's front is off). Also: fences and fence walls snap to roads, curbs and other fences only while the snap key is held. |
+| 12 | Fix sign placement on fence walls (**built, awaiting in-game test**) | Signs placed by us on the face of a fence wall (snap key held; follows the slope, scroll = 45 degrees in the plane): turn with the curve, free along it, 1 m levels in height (5 per 4 m wall), leg hologram disabled, one click (`RMVanillaSnapping`, `PlaceSignOnFenceWall`; `SignYawOffset` if the model's front is off). Also: fences and fence walls snap to roads, curbs and other fences only while the snap key is held. |
 | 13 | Roads beside intersection curbs | **Done (to test):** snap key + aim at an intersection = road along the aimed curb, outside the junction, one click. |
 | 14 | Cut Fence + Cut Road "Cut also fences" | **Done (to test):** cutting moved to `ARMBuildableSpline::CutAt` (roads add lines / riders via `CanCutAt`, `CopyCutSettingsTo`, `BeforeCutDismantle`; fences side and look). One hologram class for both tools (`mFenceTool`); the road tool's build mode `BM_CutWithFences` also cuts this road's fences only: road fences within its edges, fence walls within half width + 40 cm (centred on the edge), up to 30 m up (stacked walls). Roads beside it and their fences are not cut. Section Edit fence. |
 

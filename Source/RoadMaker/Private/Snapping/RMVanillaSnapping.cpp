@@ -1586,6 +1586,9 @@ namespace
 	/** Sign holograms currently placed by us on a fence wall (no leg, one click). */
 	TSet<TWeakObjectPtr<const AFGHologram>> GSignsOnWall;
 
+	/** Scroll steps (45 degrees each) a sign on a wall is turned in its plane. */
+	TMap<TWeakObjectPtr<const AFGHologram>, int32> GSignRoll;
+
 	/** Correction between "facing" and the sign model's own front axis. */
 	constexpr float SignYawOffset = -90.f;
 
@@ -1606,17 +1609,19 @@ namespace
 	}
 
 	/**
-	 * Signs on fence walls: the game's sign hologram does not know our curved walls (it kept its leg,
-	 * needed a second click and did not turn with the curve). Aimed at a wall, the sign is placed here:
-	 * flat on the face you aim at, turned with the curve, free along the wall and snapped every 1 m in
-	 * height (5 levels on a 4 m wall), without its leg, built with one click.
+	 * Signs on fence walls (snap key held): the game's sign hologram does not know our curved walls.
+	 * Aimed at a wall, the sign is placed here: flat on the face you aim at, turned and tilted with the
+	 * curve, free along the wall and snapped every 1 m in height (5 levels on a 4 m wall), turned in
+	 * its plane with the scroll wheel (45 degrees), without its leg, built with one click.
 	 */
 	template <typename TScope, typename THologram>
 	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
 		TArray<FRMFrame> Frames;
-		if (Wall && Wall->IsWall())
+		// Only with the snap key held: otherwise the sign places normally (with its leg), even when
+		// you aim at a wall.
+		if (Wall && Wall->IsWall() && FRMSnapAccess::IsSnapHeld(Hologram))
 		{
 			Wall->GetWorldFrames(Frames, 25.f);
 		}
@@ -1642,6 +1647,7 @@ namespace
 		const FRMFrame& Near = Frames[Closest];
 		const FVector Right = Near.Right.GetSafeNormal2D();
 		const FVector Fwd = Near.Fwd.GetSafeNormal2D();
+		const FVector Fwd3 = Near.Fwd.GetSafeNormal();
 		// Side: the face you hit (its normal), else where the aim point lies.
 		float Side = FVector::DotProduct(Hit.ImpactNormal, Right);
 		if (FMath::Abs(Side) < 0.3f)
@@ -1651,20 +1657,33 @@ namespace
 		Side = Side >= 0.f ? 1.f : -1.f;
 		const FVector Normal = Right * Side;
 
-		// Along the wall: where you aim. Height: two rows of 2 m, the sign centred in its row.
+		// Along the wall: where you aim, on the wall's centre line (it climbs with the wall).
 		const float Along = FVector::DotProduct(Hit.Location - Near.Pos, Fwd);
+		const FVector OnLine = Near.Pos + Fwd3 * Along;
 		// Five heights, 1 m apart: the bottom and top edge of the wall and three on its face.
-		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - Near.Pos.Z) / 100.f), 0.f, 4.f);
+		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - OnLine.Z) / 100.f), 0.f, 4.f);
 		const float HalfThickness = 25.f; // walls are 0.5 m thick
-		FVector Location = Near.Pos + Fwd * Along + Normal * (HalfThickness + 1.f);
-		Location.Z = Near.Pos.Z + 100.f * Level;
+		FVector Location = OnLine + Normal * (HalfThickness + 1.f);
+		Location.Z = OnLine.Z + 100.f * Level;
+
+		// Facing: turned with the curve, and tilted with the wall's slope. The model's X axis runs
+		// along the wall (SignYawOffset), Y towards the viewer.
+		const FQuat Yawed = FRotator(0.f, Normal.Rotation().Yaw + SignYawOffset, 0.f).Quaternion();
+		FVector AxisX = Yawed.GetAxisX();
+		const FVector AxisY = Yawed.GetAxisY();
+		const float Slope = Fwd3.Z / FMath::Max(Fwd3.Size2D(), KINDA_SMALL_NUMBER);
+		AxisX = (AxisX + FVector(0.f, 0.f, Slope * (FVector::DotProduct(AxisX, Fwd) >= 0.f ? 1.f : -1.f))).GetSafeNormal();
+		const FQuat Base = FRotationMatrix::MakeFromXY(AxisX, AxisY).ToQuat();
+		// Scroll turns it in the plane of the wall, 45 degrees per step.
+		const int32 Steps = GSignRoll.FindRef(Hologram);
+		const FQuat Final = FQuat(Normal, FMath::DegreesToRadians(45.f * Steps)) * Base;
 
 		if (GSignsOnWall.Contains(Hologram) == false)
 		{
 			GSignsOnWall.Add(Hologram);
 		}
 		SetSignPoleDisabled(Hologram, true);
-		Hologram->SetActorLocationAndRotation(Location, FRotator(0.f, Normal.Rotation().Yaw + SignYawOffset, 0.f));
+		Hologram->SetActorLocationAndRotation(Location, Final);
 		Scope.Cancel();
 		return true;
 	}
@@ -1953,6 +1972,25 @@ void RMVanillaSnapping::InstallHooks()
 			if (IsSignOnWall(Hologram))
 			{
 				Scope.Override(true);
+			}
+		});
+	// Scrolling a sign on a wall turns it in the plane of the wall, 45 degrees per step.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::Scroll, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](auto& Scope, AFGStandaloneSignHologram* Hologram, int32 Delta)
+		{
+			if (Delta != 0 && IsSignOnWall(Hologram))
+			{
+				GSignRoll.FindOrAdd(Hologram) += Delta > 0 ? 1 : -1;
+				Scope.Cancel();
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::ScrollRotate, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](auto& Scope, AFGBuildableHologram* Hologram, int32 Delta, int32 Step)
+		{
+			if (Delta != 0 && IsSignOnWall(Hologram))
+			{
+				GSignRoll.FindOrAdd(Hologram) += Delta > 0 ? 1 : -1;
+				Scope.Cancel();
 			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::CheckValidFloor, GetMutableDefault<AFGStandaloneSignHologram>(),
