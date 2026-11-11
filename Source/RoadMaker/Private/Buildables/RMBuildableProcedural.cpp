@@ -283,15 +283,5 @@ UMaterialInterface* ARMBuildableProcedural::LookMaterial(const TArray<UMaterialI
 
 void ARMBuildableProcedural::AdjustColorsForLook(const FFactoryCustomizationData& Data, FLinearColor& Primary, FLinearColor& Secondary) const
 {
-	if (GetShownLook() != 2)
-	{
-		return;
-	}
-	// Unpainted (no swatch, or the road swatch the game hands out): the cyberpunk colours.
-	const bool bUnpainted = !Data.SwatchDesc || (sDefaultRoadSwatch && Data.SwatchDesc == sDefaultRoadSwatch);
-	if (bUnpainted)
-	{
-		Primary = FLinearColor(0.32f, 0.02f, 0.40f, 1.f);
-		Secondary = FLinearColor(0.f, 0.85f, 1.f, 1.f);
-	}
+	// Every look uses the colours as painted; unpainted roads show the game's default swatch (FICSIT orange).
 }
