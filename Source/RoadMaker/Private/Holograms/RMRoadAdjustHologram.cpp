@@ -73,10 +73,33 @@ void ARMRoadAdjustHologram::SetGrabbedRoadsHidden(bool bMakeHidden)
 	mRoadsHidden = bMakeHidden;
 	for (ARMBuildableRoad* Road : { mRoadA, mRoadB })
 	{
-		if (IsValid(Road) && !Road->GetIsDismantled())
+		if (!IsValid(Road) || Road->GetIsDismantled())
 		{
-			Road->SetActorHiddenInGame(bMakeHidden);
+			continue;
 		}
+		Road->SetActorHiddenInGame(bMakeHidden);
+		TArray<UPrimitiveComponent*> Components;
+		Road->GetComponents<UPrimitiveComponent>(Components);
+		for (UPrimitiveComponent* Component : Components)
+		{
+			if (bMakeHidden)
+			{
+				// Still solid for players and vehicles (nobody falls), but invisible to the build gun's
+				// aim and to the hologram's clearance checks.
+				mSavedResponses.Add(Component, Component->GetCollisionResponseToChannels());
+				Component->SetCollisionResponseToAllChannels(ECR_Ignore);
+				Component->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+				Component->SetCollisionResponseToChannel(ECC_Vehicle, ECR_Block);
+			}
+			else if (const FCollisionResponseContainer* Saved = mSavedResponses.Find(Component))
+			{
+				Component->SetCollisionResponseToChannels(*Saved);
+			}
+		}
+	}
+	if (!bMakeHidden)
+	{
+		mSavedResponses.Reset();
 	}
 }
 

@@ -56,6 +56,9 @@ protected:
 	void SetGrabbedRoadsHidden(bool bMakeHidden);
 	bool mRoadsHidden = false;
 
+	/** Collision responses of the grabbed roads before they were limited to players and vehicles. */
+	TMap<TWeakObjectPtr<UPrimitiveComponent>, FCollisionResponseContainer> mSavedResponses;
+
 	/** The road ends near the player (refreshed twice a second). */
 	void RefreshEnds();
 	int32 FindAimedEnd(const FVector& Aim) const;
