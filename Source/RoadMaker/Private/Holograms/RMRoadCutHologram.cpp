@@ -114,7 +114,8 @@ void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 	{
 		SetActorLocation(hitResult.Location);
 	}
-	if (mTarget && mFenceTool)
+	// Snap key held: the cut goes in line with a nearby road end.
+	if (mTarget && mFenceTool && mSnapToGuideLines)
 	{
 		SnapFenceCutToRoadEnd();
 	}

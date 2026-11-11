@@ -358,7 +358,7 @@ TOOLS = [
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint; train tracks and vehicle paths on it are cut too. Build mode \"Cut also fences\" also cuts the road's own fences at the same place (white outlines). Free.",
      {}, [], road_icons, {}),
-    ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Near a road end (for example where the road was cut) the cut snaps in line with it. Nothing else is cut. Free.",
+    ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
      {}, [], fence_icons, {}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
