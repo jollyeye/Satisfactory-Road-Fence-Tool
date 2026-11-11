@@ -138,7 +138,7 @@ ATLAS_UV_HLSL = r"""
 float3 a = abs(N);
 float2 p = WP.xy;
 if (Tri > 0.5 && a.z < 0.7) { p = a.x > a.y ? WP.yz : WP.xz; }
-if (RW > 0.5) { p = RUV * 100.0; }
+if (RW > 0.5) { p = float2(RUV.y, -RUV.x) * 100.0; }   // turned 90 degrees: u along, v across
 float2 h = frac(p / (2.0 * Period));
 float2 m = 1.0 - abs(h * 2.0 - 1.0);
 return Rect.xy + m * Rect.zw;
@@ -158,10 +158,11 @@ if (Tri > 0.5 && a.z < 0.7)
 }
 if (RW > 0.5)
 {
-    // Along the road: V = mesh tangent (forward), U = across (to the right), W = surface normal.
-    p = RUV * 100.0;
-    V = normalize(Tg);
-    U = normalize(cross(N, V));
+    // Along the road, turned 90 degrees: U = mesh tangent (forward), V = across (to the left),
+    // W = surface normal.
+    p = float2(RUV.y, -RUV.x) * 100.0;
+    U = normalize(Tg);
+    V = -normalize(cross(N, U));
     W = normalize(N);
 }
 float2 h = frac(p / (2.0 * Period));

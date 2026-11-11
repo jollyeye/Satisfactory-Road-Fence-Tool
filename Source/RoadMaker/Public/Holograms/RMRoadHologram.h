@@ -15,6 +15,7 @@ class ROADMAKER_API ARMRoadHologram : public ARMSplineHologram
 public:
 	virtual void CheckValidPlacement() override;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
@@ -29,6 +30,22 @@ protected:
 	 * it), road top level with the foundation top, pointing straight out of / into that edge.
 	 */
 	bool TrySnapToFoundation(const FHitResult& hitResult);
+
+	/**
+	 * Snap key held, aiming at a built road: the new road runs beside it as a parallel curve, edge to
+	 * edge and flush with its top (to fill gaps with a flat surface). The first click picks where it
+	 * starts along that road, the second where it ends.
+	 */
+	bool TrySnapBesideRoad(const FHitResult& hitResult);
+
+	/** The road the new one runs beside (picked at the first click), which side, and from where. */
+	TWeakObjectPtr<ARMBuildableRoad> mSideRoad;
+	float mSideSign = 1.f;
+	float mSideStartDist = 0.f;
+
+	/** The current curve is a parallel of another road: only geometry limits apply. */
+	UPROPERTY(Replicated, CustomSerialization)
+	bool mBesideRoad = false;
 
 	/** Markings for the new road: copied from the road it snaps to, otherwise the default. */
 	UPROPERTY(CustomSerialization)

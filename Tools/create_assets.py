@@ -332,6 +332,10 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
+MENU_ORDER = {"Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+              "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8,
+              "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
+
 FenceEnum = getattr(unreal, "RMFenceType", None)
 
 # Light default swatch for roads (lines would otherwise start FICSIT orange / grey).
@@ -414,6 +418,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, b.generated_class(), "m_buildable_class", "mBuildableClass")
     setp(dc, text(display), "m_display_name", "mDisplayName")
     setp(dc, text(desc), "m_description", "mDescription")
+    # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
+    setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
     if name in WALLS_MENU and WallsCat and wall_subcat:
         setp(dc, WallsCat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [wall_subcat], "m_sub_categories", "mSubCategories")

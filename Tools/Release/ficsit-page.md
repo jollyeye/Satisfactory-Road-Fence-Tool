@@ -83,6 +83,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - The Smooth build mode is now called "Smooth (quadratic Bezier)".
 - **Nudging:** with the hologram locked (H), the arrow keys move the point being placed along its own direction and across it (not the world axes); this now works for the end point too.
 - **Asphalt follows the road:** the asphalt texture runs along the road's curve instead of being projected from above.
+- **New: roads beside roads.** Hold the snap key and aim at a built road: the new road runs beside it as a parallel curve, edge to edge and flush with its top (to cover gaps with a flat surface). First click: where it starts along that road (snaps to the road's ends within 2 m), second click: where it ends. Only geometry limits apply (no turn radius or slope rules).
+- Build menu order: roads 1, 2, 3, 4 wide, then the intersection and road fences.
 
 ## Changelog for version 1.1.1
 - Road Lines options are no longer listed as items (e.g. under Parts in the creative mode item list).

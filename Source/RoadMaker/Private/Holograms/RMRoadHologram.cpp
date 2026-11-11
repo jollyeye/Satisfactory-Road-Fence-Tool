@@ -7,6 +7,8 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Net/UnrealNetwork.h"
+#include "Algo/Reverse.h"
 
 const ARMBuildableRoad* ARMRoadHologram::GetRoadDefaults() const
 {
@@ -25,8 +27,132 @@ int32 ARMRoadHologram::GetCostWidthFactor() const
 	return GetRoadDefaults()->mWidthInFoundations;
 }
 
+void ARMRoadHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ARMRoadHologram, mBesideRoad);
+}
+
+bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
+{
+	// Step 0: the road under the crosshair. Step 1: the road picked at the first click, wherever
+	// the crosshair is (its nearest point along that road).
+	ARMBuildableRoad* Road = mStep == 0 ? Cast<ARMBuildableRoad>(hitResult.GetActor()) : mSideRoad.Get();
+	if (!Road || (mStep != 0 && !mBesideRoad))
+	{
+		return false;
+	}
+	TArray<FRMFrame> Frames;
+	Road->GetWorldFrames(Frames, 50.f);
+	if (Frames.Num() < 2)
+	{
+		return false;
+	}
+	int32 Closest = 0;
+	float Best = TNumericLimits<float>::Max();
+	for (int32 I = 0; I < Frames.Num(); ++I)
+	{
+		const float D = FVector::DistSquared2D(Frames[I].Pos, hitResult.Location);
+		if (D < Best)
+		{
+			Best = D;
+			Closest = I;
+		}
+	}
+	// Within 2 m of the road's ends, use the end itself (so pieces line up with it).
+	const float Total = Frames.Last().Dist;
+	float Dist = Frames[Closest].Dist;
+	if (Dist < 200.f)
+	{
+		Dist = 0.f;
+	}
+	else if (Total - Dist < 200.f)
+	{
+		Dist = Total;
+	}
+
+	const float NewWidth = GetRoadDefaults()->GetRoadWidth();
+	if (mStep == 0)
+	{
+		mSideRoad = Road;
+		mSideSign = FVector::DotProduct(hitResult.Location - Frames[Closest].Pos, Frames[Closest].Right) >= 0.f ? 1.f : -1.f;
+		mSideStartDist = Dist;
+	}
+	const float Offset = mSideSign * (Road->GetRoadWidth() + NewWidth) * 0.5f;
+
+	// The stretch of the other road between the start and the current point (at least 1 m, so the
+	// preview shows before the first click), as a parallel curve.
+	float From = mSideStartDist;
+	float To = mStep == 0 ? FMath::Min(mSideStartDist + RM::FoundationSize, Total) : Dist;
+	if (mStep == 0 && To - From < 100.f)
+	{
+		From = FMath::Max(0.f, To - RM::FoundationSize);
+	}
+	const bool bReverse = To < From;
+	const float Lo = FMath::Min(From, To);
+	const float Hi = FMath::Max(From, To);
+	TArray<FRMFrame> Part;
+	for (const FRMFrame& F : Frames)
+	{
+		if (F.Dist >= Lo - 1.f && F.Dist <= Hi + 1.f)
+		{
+			Part.Add(F);
+		}
+	}
+	if (Part.Num() < 2)
+	{
+		// Too short: keep the start, wait for the crosshair to move along.
+		Part.Reset();
+		const int32 I = FMath::Clamp(Closest, 0, Frames.Num() - 2);
+		Part.Add(Frames[I]);
+		Part.Add(Frames[I + 1]);
+	}
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::OffsetCurve(Part, Offset, 400.f, Points);
+	if (Points.Num() < 2)
+	{
+		return false;
+	}
+	if (bReverse)
+	{
+		// Build towards the crosshair: reverse the curve and its directions.
+		Algo::Reverse(Points);
+		for (FRMSplinePoint& P : Points)
+		{
+			P.Tangent = -P.Tangent;
+		}
+	}
+
+	mBesideRoad = true;
+	if (mStep == 0)
+	{
+		mStart = Points[0].Location;
+		mStartDir = Points[0].Tangent.GetSafeNormal();
+		mStartSnapped = false;
+	}
+	else
+	{
+		mEnd = Points.Last().Location;
+		mEndDir = Points.Last().Tangent.GetSafeNormal();
+		mEndSnapped = false;
+	}
+	SetWorldPoints(Points);
+	return true;
+}
+
 bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 {
+	// Snap key held, aiming at a road: a parallel road beside it.
+	if (mSnapToGuideLines && TrySnapBesideRoad(hitResult))
+	{
+		return true;
+	}
+	mBesideRoad = false;
+	if (mStep == 0)
+	{
+		mSideRoad = nullptr;
+	}
+
 	// Any free road end near the aim point, whether you aim at the road or the ground next to it.
 	TArray<FRMRoadEndRef> Ends;
 	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSnapRadius, 1, nullptr, Ends);
@@ -92,6 +218,25 @@ void ARMRoadHologram::CheckValidPlacement()
 	TArray<FRMFrame> Frames;
 	GetPreviewFrames(Frames, 50.f);
 	const FRMSplineStats Stats = RMGeometry::Analyze(Frames);
+
+	if (mBesideRoad)
+	{
+		// A parallel of a built road: no turn / grade / length rules, only what would break the
+		// mesh (the inner edge folding over itself on a bend tighter than half the width).
+		if (Stats.Length < 50.f)
+		{
+			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
+		}
+		if (Stats.Length > Road->mMaxLength)
+		{
+			AddConstructDisqualifier(URMCD_TooLong::StaticClass());
+		}
+		if (Stats.MinTurnRadius < Road->GetRoadWidth() * 0.5f * 1.02f)
+		{
+			AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());
+		}
+		return;
+	}
 
 	if (Stats.Length < Road->mMinLength)
 	{
