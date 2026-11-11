@@ -5,6 +5,10 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "RoadMakerModule.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/World.h"
 
 ARMGantryHologram::ARMGantryHologram()
 {
@@ -34,6 +38,11 @@ void ARMGantryHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 int32 ARMGantryHologram::GetBaseCostMultiplier() const
 {
 	return ARMBuildableGantry::CostUnits(mHalfSpan, mBeamBottom);
+}
+
+bool ARMGantryHologram::IsValidHitResult(const FHitResult& hitResult) const
+{
+	return mStep == 1 || Super::IsValidHitResult(hitResult);
 }
 
 void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
@@ -75,18 +84,31 @@ void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& hitResu
 		// The beam is as high as the aim passes the centre of the gantry (closest point between the
 		// view line and the vertical line through the gantry), in 2 m steps.
 		const FVector Origin = GetActorLocation();
-		const FVector Start = hitResult.TraceStart;
-		const FVector Dir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
+		FVector Start = hitResult.TraceStart;
+		FVector Dir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
+		// The aim at the sky has no usable trace: use the player's camera.
+		APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		if (PC && PC->PlayerCameraManager)
+		{
+			Start = PC->PlayerCameraManager->GetCameraLocation();
+			Dir = PC->PlayerCameraManager->GetCameraRotation().Vector();
+		}
 		const FVector W0 = Start - Origin;
 		const float B = Dir.Z;
 		const float D = FVector::DotProduct(Dir, W0);
 		const float E = W0.Z;
 		const float Denom = 1.f - B * B;
+		float Height = -1.f;
 		if (Denom > 0.01f)
 		{
-			const float Height = (E - B * D) / Denom;
+			Height = (E - B * D) / Denom;
 			const float Steps = FMath::RoundToFloat(Height / ARMBuildableGantry::HeightStep);
 			mBeamBottom = FMath::Clamp(Steps * ARMBuildableGantry::HeightStep, ARMBuildableGantry::MinClearance, ARMBuildableGantry::MaxClearance);
+		}
+		if (!FMath::IsNearlyEqual(mShownBottom, mBeamBottom, 0.5f))
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Gantry height step: camera %s dir %s -> aim height %.0f, beam bottom %.0f"),
+				*Start.ToCompactString(), *Dir.ToCompactString(), Height, mBeamBottom);
 		}
 	}
 	RebuildPreview();
@@ -102,6 +124,7 @@ bool ARMGantryHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		}
 		mStep = 1;
 		mBeamBottom = ARMBuildableGantry::MinClearance;
+		UE_LOG(LogRoadMaker, Display, TEXT("Gantry: first click, now setting the height"));
 		return false;
 	}
 	return true;

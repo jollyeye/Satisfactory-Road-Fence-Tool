@@ -34,6 +34,8 @@
 #include "Hologram/FGFoundationHologram.h"
 #include "Hologram/FGStandaloneSignHologram.h"
 #include "Hologram/FGSignPoleHologram.h"
+#include "HAL/PlatformTime.h"
+#include "HAL/IConsoleManager.h"
 
 namespace
 {
@@ -1609,6 +1611,55 @@ namespace
 		return GSignsOnWall.Contains(Hologram);
 	}
 
+	// ---- Debug log of the game's sign hologram (prefix "RMSignLog"): how it places, snaps, adjusts height ----
+	TAutoConsoleVariable<int32> CVarSignLog(TEXT("rm.SignLog"), 1, TEXT("Log what the game's sign hologram does (RMSignLog lines)."));
+
+	FString DescribeSign(const AFGStandaloneSignHologram* H)
+	{
+		if (!H)
+		{
+			return TEXT("null");
+		}
+		uint8 Step = 255;
+		if (const FProperty* P = FindFProperty<FProperty>(AFGStandaloneSignHologram::StaticClass(), TEXT("mBuildStep")))
+		{
+			Step = *P->ContainerPtrToValuePtr<uint8>(H);
+		}
+		FString Out = FString::Printf(TEXT("sign %s step=%d loc=%s rot=%s hidden=%d wall=%d"), *H->GetName(), Step,
+			*H->GetActorLocation().ToCompactString(), *H->GetActorRotation().ToCompactString(), H->IsHidden() ? 1 : 0, IsSignOnWall(H) ? 1 : 0);
+		for (const AFGHologram* Child : H->GetHologramChildren())
+		{
+			if (const AFGSignPoleHologram* Pole = Cast<AFGSignPoleHologram>(Child))
+			{
+				Out += FString::Printf(TEXT(" | pole loc=%s rot=%s hidden=%d disabled=%d height=%.0f dirZ=%.1f"), *Pole->GetActorLocation().ToCompactString(),
+					*Pole->GetActorRotation().ToCompactString(), Pole->IsHidden() ? 1 : 0, Pole->IsDisabled() ? 1 : 0, Pole->GetPoleHeight(),
+					const_cast<AFGSignPoleHologram*>(Pole)->GetDirectionZ());
+			}
+			else if (Child)
+			{
+				Out += FString::Printf(TEXT(" | child %s"), *Child->GetClass()->GetName());
+			}
+		}
+		return Out;
+	}
+
+	FString DescribeHit(const FHitResult& Hit)
+	{
+		return FString::Printf(TEXT("hit actor=%s (%s) loc=%s normal=%s trace=%s->%s blocking=%d"),
+			Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"), Hit.GetActor() ? *Hit.GetActor()->GetClass()->GetName() : TEXT("-"),
+			*Hit.ImpactPoint.ToCompactString(), *Hit.ImpactNormal.ToCompactString(), *Hit.TraceStart.ToCompactString(), *Hit.TraceEnd.ToCompactString(), Hit.bBlockingHit ? 1 : 0);
+	}
+
+	void SignLog(const TCHAR* Event, const AFGStandaloneSignHologram* H, const FHitResult* Hit = nullptr, const TCHAR* Extra = nullptr)
+	{
+		if (CVarSignLog.GetValueOnGameThread() == 0)
+		{
+			return;
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("RMSignLog %s: %s%s%s%s%s"), Event, *DescribeSign(H), Hit ? TEXT(" || ") : TEXT(""),
+			Hit ? *DescribeHit(*Hit) : TEXT(""), Extra ? TEXT(" || ") : TEXT(""), Extra ? Extra : TEXT(""));
+	}
+
 	/** Puts a sign on a surface: no leg, turned to face along Normal (and tilted with Slope), scroll rolls it. */
 	template <typename TScope, typename THologram>
 	void FinishSignPlacement(TScope& Scope, THologram* Hologram, const FVector& Location, const FVector& Normal, const FVector& Fwd, float Slope)
@@ -1983,6 +2034,85 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 #undef RM_HOOK_SET_LOCATION
+
+	// Debug log: how the game's own sign hologram works (aim at a wall, at the ground, two-click leg height...).
+	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](auto& Scope, AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
+		{
+			static TMap<TWeakObjectPtr<const AFGHologram>, double> LastLogged;
+			double& Last = LastLogged.FindOrAdd(Hologram);
+			const double Now = FPlatformTime::Seconds();
+			if (Now - Last > 0.25)
+			{
+				Last = Now;
+				SignLog(TEXT("SetLocation(before)"), Hologram, &Hit);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
+		{
+			static TMap<TWeakObjectPtr<const AFGHologram>, double> LastLogged;
+			double& Last = LastLogged.FindOrAdd(Hologram);
+			const double Now = FPlatformTime::Seconds();
+			if (Now - Last > 0.25)
+			{
+				Last = Now;
+				SignLog(TEXT("SetLocation(after)"), Hologram);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::DoMultiStepPlacement, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](bool Result, AFGStandaloneSignHologram* Hologram, bool bIsInputFromARelease)
+		{
+			SignLog(TEXT("DoMultiStepPlacement(after)"), Hologram, nullptr, *FString::Printf(TEXT("result=%d fromRelease=%d"), Result ? 1 : 0, bIsInputFromARelease ? 1 : 0));
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::TrySnapToActor, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](bool Result, AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
+		{
+			SignLog(TEXT("TrySnapToActor(after)"), Hologram, &Hit, *FString::Printf(TEXT("result=%d"), Result ? 1 : 0));
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::IsValidHitResult, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](bool Result, const AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
+		{
+			static double Last = 0.0;
+			const double Now = FPlatformTime::Seconds();
+			if (Now - Last > 0.5)
+			{
+				Last = Now;
+				SignLog(TEXT("IsValidHitResult(after)"), Hologram, &Hit, *FString::Printf(TEXT("result=%d"), Result ? 1 : 0));
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::PreHologramPlacement, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](AFGStandaloneSignHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
+		{
+			SignLog(TEXT("PreHologramPlacement(after)"), Hologram, &Hit);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::PostHologramPlacement, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](AFGStandaloneSignHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
+		{
+			static double Last = 0.0;
+			const double Now = FPlatformTime::Seconds();
+			if (Now - Last > 0.5)
+			{
+				Last = Now;
+				SignLog(TEXT("PostHologramPlacement(after)"), Hologram, &Hit);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::Scroll, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](AFGStandaloneSignHologram* Hologram, int32 Delta)
+		{
+			SignLog(TEXT("Scroll(after)"), Hologram, nullptr, *FString::Printf(TEXT("delta=%d"), Delta));
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::OnInvalidHitResult, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](AFGStandaloneSignHologram* Hologram)
+		{
+			static double Last = 0.0;
+			const double Now = FPlatformTime::Seconds();
+			if (Now - Last > 0.5)
+			{
+				Last = Now;
+				SignLog(TEXT("OnInvalidHitResult(after)"), Hologram);
+			}
+		});
 
 	// A sign on a fence wall has no leg: one click builds it, and it needs no floor.
 	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::DoMultiStepPlacement, GetMutableDefault<AFGStandaloneSignHologram>(),

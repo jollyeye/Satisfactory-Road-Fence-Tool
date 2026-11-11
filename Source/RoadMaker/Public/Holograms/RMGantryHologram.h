@@ -20,6 +20,8 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual bool TrySnapToActor(const FHitResult& hitResult) override { return false; }
+	/** While setting the height every aim is valid (also at the sky), like the game's pole height step. */
+	virtual bool IsValidHitResult(const FHitResult& hitResult) const override;
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual void CheckValidPlacement() override;
