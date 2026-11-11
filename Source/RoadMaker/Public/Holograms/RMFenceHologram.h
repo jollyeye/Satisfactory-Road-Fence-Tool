@@ -20,14 +20,11 @@ public:
 	virtual void SetHologramLocationAndRotation(const FHitResult& hitResult) override;
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 	virtual void CheckValidPlacement() override;
-	virtual bool CanNudgeHologram() const override { return !mOnRoadEdge && Super::CanNudgeHologram(); }
-	virtual void SetHologramNudgeLocation() override
-	{
-		if (!mOnRoadEdge)
-		{
-			Super::SetHologramNudgeLocation();
-		}
-	}
+	// Nudging (lock with H, then the nudge keys): a free fence moves its point like the road tool; a fence
+	// following a road edge or curb moves as a whole, up / down and along the horizontal axes nearest the camera.
+	virtual void SetHologramNudgeLocation() override;
+	virtual ENudgeFailReason NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult) override;
+	virtual void OnHologramLockStateChanged() override;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -55,6 +52,10 @@ protected:
 	float mFoundationGridStep = 100.f;
 
 	bool mOnRoadEdge = false;
+
+	/** Snapped fence, locked: where the hologram was when the lock started, and the nudge since (world). */
+	FVector mSnapBase = FVector::ZeroVector;
+	FVector mSnapNudge = FVector::ZeroVector;
 
 	/** The fence this hologram replaces (snap key held, aiming at it), else null. */
 	UPROPERTY(Replicated, CustomSerialization)

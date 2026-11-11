@@ -1836,7 +1836,8 @@ namespace
 		return (Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")))) || Name.Contains(TEXT("Ladder"));
 	}
 
-	/** Ladders sit on the face of the wall; everything else goes on its middle line. */
+	/** Ladders sit on the face of the wall, 25 cm out from it; everything else goes on its middle line. */
+	constexpr float LadderStandOff = 25.f;
 	bool IsFaceMountedPiece(const AFGHologram* Hologram)
 	{
 		return Hologram->GetBuildClass() && Hologram->GetBuildClass()->GetName().Contains(TEXT("Ladder"));
@@ -1874,7 +1875,7 @@ namespace
 		}
 		// The piece's origin goes on the middle of the wall, so two-sided pieces show on both faces and
 		// the back of a one-sided one is hidden inside it.
-		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * (IsFaceMountedPiece(Hologram) ? 0.f : Face.Depth), FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
+		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * (IsFaceMountedPiece(Hologram) ? -LadderStandOff : Face.Depth), FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
 		if (!GAttachOnWall.Contains(Hologram))
 		{
 			GAttachOnWall.Add(Hologram);

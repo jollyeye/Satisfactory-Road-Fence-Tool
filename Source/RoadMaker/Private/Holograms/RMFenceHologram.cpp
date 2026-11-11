@@ -9,6 +9,9 @@
 #include "FGCharacterPlayer.h"
 #include "FGInventoryComponent.h"
 #include "FGDismantleInterface.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/World.h"
 
 const ARMBuildableFence* ARMFenceHologram::GetFenceDefaults() const
 {
@@ -197,6 +200,57 @@ void ARMFenceHologram::SetHologramLocationAndRotation(const FHitResult& hitResul
 	{
 		SetHiddenTarget(nullptr);
 	}
+}
+
+void ARMFenceHologram::OnHologramLockStateChanged()
+{
+	Super::OnHologramLockStateChanged();
+	mSnapBase = GetActorLocation();
+	mSnapNudge = FVector::ZeroVector;
+}
+
+void ARMFenceHologram::SetHologramNudgeLocation()
+{
+	if (!mOnRoadEdge)
+	{
+		Super::SetHologramNudgeLocation();
+		return;
+	}
+	if (IsHologramLocked())
+	{
+		SetActorLocation(mSnapBase + mSnapNudge);
+	}
+}
+
+ENudgeFailReason ARMFenceHologram::NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult)
+{
+	if (!mOnRoadEdge || !IsHologramLocked())
+	{
+		return Super::NudgeHologram(NudgeInput, HitResult);
+	}
+	const FVector Step(FMath::Sign(NudgeInput.X), FMath::Sign(NudgeInput.Y), FMath::Sign(NudgeInput.Z));
+	if (Step.IsNearlyZero())
+	{
+		return ENudgeFailReason::NFR_Disallowed;
+	}
+	// Forward / right are the world axes nearest to where the camera looks; Z is up / down.
+	float CameraYaw = 0.f;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (PC->PlayerCameraManager)
+			{
+				CameraYaw = PC->PlayerCameraManager->GetCameraRotation().Yaw;
+			}
+		}
+	}
+	const float AxisYaw = FMath::RoundToFloat(CameraYaw / 90.f) * 90.f;
+	const FVector Forward = FRotator(0.f, AxisYaw, 0.f).Vector();
+	const FVector Right = FRotator(0.f, AxisYaw + 90.f, 0.f).Vector();
+	mSnapNudge += (Forward * Step.X + Right * Step.Y + FVector::UpVector * Step.Z) * GetNudgeDistance();
+	SetHologramNudgeLocation();
+	return ENudgeFailReason::NFR_Success;
 }
 
 void ARMFenceHologram::SetHiddenTarget(AActor* Target)
