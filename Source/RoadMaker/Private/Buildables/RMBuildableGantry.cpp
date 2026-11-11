@@ -1,5 +1,7 @@
 #include "Buildables/RMBuildableGantry.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Net/UnrealNetwork.h"
 
 ARMBuildableGantry::ARMBuildableGantry(const FObjectInitializer& ObjectInitializer)
@@ -25,96 +27,91 @@ void ARMBuildableGantry::SetShape(float HalfSpan, float BeamBottom)
 	}
 }
 
+namespace
+{
+	/** The game's H-beam: a 1 m long piece (about 1 m x 0.8 m in section) that the game stretches along its local Z. */
+	UStaticMesh* LoadHBeamMesh()
+	{
+		static TWeakObjectPtr<UStaticMesh> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/FactoryGame/Buildable/Building/Pillars/Mesh/SM_Beam_04.SM_Beam_04"));
+		}
+		return Cached.Get();
+	}
+
+	/** The game's own rotation of its beam mesh (a beam runs along the actor's X). */
+	const FRotator HBeamMeshRotation(0.f, 90.f, -90.f);
+	const float HBeamMeshLength = 100.f;
+
+	void PlacePart(UStaticMeshComponent* Part, const FVector& Center, const FRotator& Outer, float Length)
+	{
+		Part->SetRelativeLocation(Center);
+		Part->SetRelativeRotation(FRotator(Outer.Quaternion() * HBeamMeshRotation.Quaternion()));
+		Part->SetRelativeScale3D(FVector(1.f, 1.f, Length / HBeamMeshLength));
+	}
+}
+
 void ARMBuildableGantry::RebuildMesh()
 {
+	// Collision only: invisible boxes around the parts.
 	mMesh->ClearAllMeshSections();
 	ClearFarMesh();
-	FRMMesh Steel;
-	BuildGantryMesh(mHalfSpan, mBeamBottom, Steel);
-	Steel.ApplyToSection(mMesh, 0, true);
-	ApplyMaterial(0, mMainMaterial);
+	FRMMesh Boxes;
+	BuildGantryMesh(mHalfSpan, mBeamBottom, Boxes);
+	Boxes.ApplyToSection(mMesh, 0, true);
+	ApplyMaterial(0, nullptr);
+	mMesh->SetRenderInMainPass(false);
+	mMesh->SetRenderInDepthPass(false);
+	mMesh->SetCastShadow(false);
+
+	UStaticMesh* BeamMesh = LoadHBeamMesh();
+	if (mParts.Num() == 0 && BeamMesh)
+	{
+		for (int32 I = 0; I < 3; ++I)
+		{
+			UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);
+			Part->SetupAttachment(GetRootComponent());
+			Part->SetStaticMesh(BeamMesh);
+			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Part->RegisterComponent();
+			mParts.Add(Part);
+		}
+	}
+	if (mParts.Num() == 3)
+	{
+		// Columns (length along the gantry's Z: pitch 90) and the cross beam (along Y: yaw 90), resting
+		// on top of the columns so the flanges do not intersect.
+		PlacePart(mParts[0], FVector(0.f, -mHalfSpan, mBeamBottom * 0.5f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
+		PlacePart(mParts[1], FVector(0.f, mHalfSpan, mBeamBottom * 0.5f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
+		PlacePart(mParts[2], FVector(0.f, 0.f, mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f), 2.f * (mHalfSpan + BeamOverhang));
+	}
 }
 
 int32 ARMBuildableGantry::CostUnits(float HalfSpan, float BeamBottom)
 {
-	const float Length = 2.f * (BeamBottom + BeamDepth) + 2.f * HalfSpan + 2.f * ColumnInset;
+	const float Length = 2.f * BeamBottom + 2.f * (HalfSpan + BeamOverhang);
 	return FMath::Max(1, FMath::CeilToInt(Length / 800.f));
-}
-
-namespace
-{
-	/** A square-section bar between two points. */
-	void AddStrut(FRMMesh& Out, const FVector& A, const FVector& B, float HalfThickness)
-	{
-		const FVector D = B - A;
-		const float Len = D.Size();
-		if (Len < 1.f)
-		{
-			return;
-		}
-		const FVector AxisX = D / Len;
-		const FVector Ref = FMath::Abs(AxisX.Z) > 0.95f ? FVector::ForwardVector : FVector::UpVector;
-		const FVector AxisY = FVector::CrossProduct(Ref, AxisX).GetSafeNormal();
-		const FVector AxisZ = FVector::CrossProduct(AxisX, AxisY);
-		Out.AddBox((A + B) * 0.5f, AxisX, AxisY, AxisZ, FVector(Len * 0.5f, HalfThickness, HalfThickness), 100.f);
-	}
-
-	void AddAxisBox(FRMMesh& Out, const FVector& Center, const FVector& Half)
-	{
-		Out.AddBox(Center, FVector::ForwardVector, FVector::RightVector, FVector::UpVector, Half, 100.f);
-	}
 }
 
 void ARMBuildableGantry::BuildGantryMesh(float HalfSpan, float BeamBottom, FRMMesh& Out)
 {
-	const float Top = BeamBottom + BeamDepth;
-	const float Lx = BeamHalfThickness;
-
-	// Columns: four chords, diagonal bracing on the front and back planes, a foot plate.
+	auto AddAxisBox = [&Out](const FVector& Center, const FVector& Half)
+	{
+		Out.AddBox(Center, FVector::ForwardVector, FVector::RightVector, FVector::UpVector, Half, 100.f);
+	};
 	for (float Side : { -1.f, 1.f })
 	{
-		const float Y = Side * HalfSpan;
-		for (float X : { -Lx, Lx })
-		{
-			for (float Dy : { -18.f, 18.f })
-			{
-				AddStrut(Out, FVector(X, Y + Dy, 0.f), FVector(X, Y + Dy, Top), 6.f);
-			}
-			// Zigzag between the two chords every 1.5 m.
-			const int32 Cells = FMath::Max(1, FMath::RoundToInt(Top / 150.f));
-			for (int32 I = 0; I < Cells; ++I)
-			{
-				const float Z0 = Top * I / Cells;
-				const float Z1 = Top * (I + 1) / Cells;
-				const bool bFlip = (I % 2) == 0;
-				AddStrut(Out, FVector(X, Y + (bFlip ? -18.f : 18.f), Z0), FVector(X, Y + (bFlip ? 18.f : -18.f), Z1), 3.5f);
-			}
-		}
-		AddAxisBox(Out, FVector(0.f, Y, 7.f), FVector(55.f, 45.f, 7.f));
+		AddAxisBox(FVector(0.f, Side * HalfSpan, BeamBottom * 0.5f), FVector(ColumnHalfAlong, ColumnHalfAcross, BeamBottom * 0.5f));
 	}
-
-	// Beam: front and back plates, top and bottom plates, edge chords; a little longer than the span.
-	const float Y0 = -HalfSpan - 40.f;
-	const float Y1 = HalfSpan + 40.f;
-	const float YC = (Y0 + Y1) * 0.5f;
-	const float HalfLen = (Y1 - Y0) * 0.5f;
-	for (float X : { -1.f, 1.f })
-	{
-		AddAxisBox(Out, FVector(X * (Lx - 4.f), YC, BeamBottom + BeamDepth * 0.5f), FVector(4.f, HalfLen, BeamDepth * 0.5f));
-		for (float Z : { BeamBottom + 6.f, Top - 6.f })
-		{
-			AddStrut(Out, FVector(X * Lx, Y0, Z), FVector(X * Lx, Y1, Z), 6.f);
-		}
-	}
-	AddAxisBox(Out, FVector(0.f, YC, BeamBottom + 3.f), FVector(Lx - 8.f, HalfLen, 3.f));
-	AddAxisBox(Out, FVector(0.f, YC, Top - 3.f), FVector(Lx - 8.f, HalfLen, 3.f));
+	AddAxisBox(FVector(0.f, 0.f, BeamBottom + BeamDepth * 0.5f), FVector(BeamHalfThickness, HalfSpan + BeamOverhang, BeamDepth * 0.5f));
 }
 
 bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal) const
 {
 	const FTransform& T = GetActorTransform();
 	const FVector Local = T.InverseTransformPosition(Hit);
-	if (FMath::Abs(Local.Y) > mHalfSpan + 40.f || Local.Z < mBeamBottom - 60.f || Local.Z > mBeamBottom + BeamDepth + 60.f)
+	if (FMath::Abs(Local.Y) > mHalfSpan + BeamOverhang || Local.Z < mBeamBottom - 60.f || Local.Z > mBeamBottom + BeamDepth + 60.f)
 	{
 		return false;
 	}
