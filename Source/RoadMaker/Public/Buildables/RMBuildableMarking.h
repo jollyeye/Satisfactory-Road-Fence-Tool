@@ -69,8 +69,8 @@ public:
 	/** Half the length of a marking drawn for this width (cm). */
 	static float HalfLength(ERMMarkingKind Kind, float LaneWidth);
 
-	/** Markings grow with their lane up to this lane width (1.5 times the 2 m lane of the smallest ones). */
-	static constexpr float MaxLaneWidth = 300.f;
+	/** Markings grow with their lane up to this lane width: one and a half foundations (12 m). */
+	static constexpr float MaxLaneWidth = 1200.f;
 
 	/** Detailed (draped) up to this distance, then the flat copy, gone beyond MaxDrawDistance. */
 	static constexpr float DrapedDistance = 5000.f;

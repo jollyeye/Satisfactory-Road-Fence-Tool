@@ -664,10 +664,16 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 		const FRMFrame F = MarkingFrameAtDist(NewFrames, Share * NewLength);
 		const FVector Aim = F.Pos + F.Right * Across;
 		const FFactoryCustomizationData Paint = M->GetCustomizationData_Native();
-		if (SpawnOn(M->GetClass(), M->GetBuiltWithRecipe(), To, M->GetVariant(), 1.f, Aim, F.Fwd * Dir, &Paint, M->GetLook()))
+		ARMBuildableMarking* New = SpawnOn(M->GetClass(), M->GetBuiltWithRecipe(), To, M->GetVariant(), 1.f, Aim, F.Fwd * Dir, &Paint, M->GetLook());
+		if (New)
 		{
 			++Moved;
 		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking move: %s at %s (share %.2f, across %.0f) -> %s at %s"), *M->GetName(), *P.ToCompactString(),
+			Share, Across, New ? *New->GetName() : TEXT("none"), New ? *New->GetActorLocation().ToCompactString() : TEXT("-"));
+		// Out of the way at once (like a replaced road), then dismantled.
+		M->SetActorEnableCollision(false);
+		M->SetActorHiddenInGame(true);
 		IFGDismantleInterface::Execute_Dismantle(M);
 	}
 	if (Moved > 0)
