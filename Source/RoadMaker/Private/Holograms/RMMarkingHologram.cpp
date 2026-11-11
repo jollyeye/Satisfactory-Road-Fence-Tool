@@ -68,46 +68,26 @@ void ARMMarkingHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 		return;
 	}
 
-	// The spot along the road: the frame nearest the aim; the lane: the centre nearest across.
-	const FRMFrame* Near = &Frames[0];
-	float Best = TNumericLimits<float>::Max();
-	for (const FRMFrame& F : Frames)
-	{
-		const float D = FVector::DistSquared(F.Pos, hitResult.Location);
-		if (D < Best)
-		{
-			Best = D;
-			Near = &F;
-		}
-	}
-	TArray<float> Offsets;
-	float LaneWidth = 200.f;
-	Road->GetLaneCentres(Offsets, LaneWidth);
-	const float U = FVector::DotProduct(hitResult.Location - Near->Pos, Near->Right);
-	float Off = 0.f;
-	float BestOff = TNumericLimits<float>::Max();
-	for (float O : Offsets)
-	{
-		if (FMath::Abs(O - U) < BestOff)
-		{
-			BestOff = FMath::Abs(O - U);
-			Off = O;
-		}
-	}
-
-	// Faces the way you look along the road.
+	// Same placement as the customizer's Road Lines markings: lane centre, facing the way you look, capped
+	// size, lying on the road (draped).
 	FVector LookDir = FVector::ForwardVector;
 	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 	if (PC && PC->PlayerCameraManager)
 	{
 		LookDir = PC->PlayerCameraManager->GetCameraRotation().Vector();
 	}
-	const FVector Dir = FVector::DotProduct(LookDir, Near->Fwd) >= 0.f ? Near->Fwd : -Near->Fwd;
-	const FRotator Rot = FRotationMatrix::MakeFromXZ(Dir, Near->Up).Rotator();
-	SetActorLocationAndRotation(Near->Pos + Near->Right * Off, Rot);
-
 	const ARMBuildableMarking* Default = GetDefaultBuildable<ARMBuildableMarking>();
-	mLaneWidth = LaneWidth * (Default ? Default->mSizeMultiplier : 1.f);
+	FTransform T;
+	float Width = 200.f;
+	if (!Default || !ARMBuildableMarking::PlanOn(Road, hitResult.Location, LookDir, Default->mKind, Default->mSizeMultiplier, T, Width, mDrape))
+	{
+		mOnRoad = false;
+		SetActorLocationAndRotation(hitResult.Location, FRotator::ZeroRotator);
+		return;
+	}
+	SetActorTransform(T);
+	mLaneWidth = Width;
+	mShownVariant = -1; // the drape changes with every spot
 	mRoadLook = Road->GetLook();
 	if (mPaintedFrom.Get() != Road)
 	{
@@ -134,6 +114,18 @@ void ARMMarkingHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	{
 		M->SetShape(static_cast<uint8>(mVariant), mLaneWidth);
 		M->SetLook(mRoadLook);
+		// The road surface under it, worked out again here (on the server in multiplayer).
+		const FVector Location = GetActorLocation();
+		if (ARMBuildableRoad* Road = ARMBuildableMarking::FindRoadAt(GetWorld(), Location))
+		{
+			FTransform T;
+			float Width = mLaneWidth;
+			FRMMarkingDrape Drape;
+			if (ARMBuildableMarking::PlanOn(Road, Location, GetActorForwardVector(), M->mKind, 1.f, T, Width, Drape))
+			{
+				M->SetDrape(Drape);
+			}
+		}
 	}
 }
 
@@ -148,7 +140,7 @@ void ARMMarkingHologram::RebuildPreview()
 	mPreviewMesh->ClearAllMeshSections();
 	const ARMBuildableMarking* Default = GetDefaultBuildable<ARMBuildableMarking>();
 	FRMMesh Paint;
-	ARMBuildableMarking::BuildMarkingMesh(Default ? Default->mKind : ERMMarkingKind::Arrow, static_cast<uint8>(mVariant), mLaneWidth, Paint);
+	ARMBuildableMarking::BuildMarkingMesh(Default ? Default->mKind : ERMMarkingKind::Arrow, static_cast<uint8>(mVariant), mLaneWidth, Paint, &mDrape);
 	Paint.ApplyToSection(mPreviewMesh, 0, false);
 	UpdateHologramLook();
 }

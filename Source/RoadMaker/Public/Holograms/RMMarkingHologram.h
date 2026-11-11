@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "Hologram/FGBuildableHologram.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "RMMarkingHologram.generated.h"
 
 class UProceduralMeshComponent;
@@ -54,6 +55,8 @@ protected:
 	bool mOnRoad = false;
 
 	int32 mShownVariant = -1;
+	/** The road surface under the preview. */
+	FRMMarkingDrape mDrape;
 	float mShownLaneWidth = -1.f;
 	TWeakObjectPtr<ARMBuildableRoad> mPaintedFrom;
 };
