@@ -32,6 +32,7 @@
 #include "Buildables/FGBuildableFoundation.h"
 #include "Hologram/FGFoundationHologram.h"
 #include "Hologram/FGStandaloneSignHologram.h"
+#include "Hologram/FGSignPoleHologram.h"
 
 namespace
 {
@@ -1582,23 +1583,49 @@ namespace
 		return false;
 	}
 
+	/** Sign holograms currently placed by us on a fence wall (no leg, one click). */
+	TSet<TWeakObjectPtr<const AFGHologram>> GSignsOnWall;
+
+	/** Correction between "facing" and the sign model's own front axis. */
+	constexpr float SignYawOffset = 0.f;
+
+	void SetSignPoleDisabled(AFGHologram* Sign, bool bDisabled)
+	{
+		for (AFGHologram* Child : Sign->GetHologramChildren())
+		{
+			if (Child && Child->IsA<AFGSignPoleHologram>())
+			{
+				Child->SetDisabled(bDisabled);
+			}
+		}
+	}
+
+	bool IsSignOnWall(const AFGHologram* Hologram)
+	{
+		return GSignsOnWall.Contains(Hologram);
+	}
+
 	/**
-	 * Signs on fence walls: the game's sign hologram snaps to flat walls on its own grid, which means
-	 * nothing on a curved wall. Hand it a hit on the wall's face instead (horizontal normal, so it
-	 * mounts flat and drops its leg like on a vertical wall) at the nearest 2 m step along the curve.
+	 * Signs on fence walls: the game's sign hologram does not know our curved walls (it kept its leg,
+	 * needed a second click and did not turn with the curve). Aimed at a wall, the sign is placed here:
+	 * flat on the face you aim at, turned with the curve, free along the wall and snapped every 2 m in
+	 * height (two rows of a 4 m wall), without its leg, built with one click.
 	 */
 	template <typename TScope, typename THologram>
 	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
-		if (!Wall || !Wall->IsWall())
-		{
-			return false;
-		}
 		TArray<FRMFrame> Frames;
-		Wall->GetWorldFrames(Frames, 25.f);
+		if (Wall && Wall->IsWall())
+		{
+			Wall->GetWorldFrames(Frames, 25.f);
+		}
 		if (Frames.Num() < 2)
 		{
+			if (GSignsOnWall.Remove(Hologram) > 0)
+			{
+				SetSignPoleDisabled(Hologram, false); // back to the game's own placement, with its leg
+			}
 			return false;
 		}
 		int32 Closest = 0;
@@ -1613,38 +1640,31 @@ namespace
 			}
 		}
 		const FRMFrame& Near = Frames[Closest];
+		const FVector Right = Near.Right.GetSafeNormal2D();
+		const FVector Fwd = Near.Fwd.GetSafeNormal2D();
 		// Side: the face you hit (its normal), else where the aim point lies.
-		FVector Right = Near.Right.GetSafeNormal2D();
 		float Side = FVector::DotProduct(Hit.ImpactNormal, Right);
 		if (FMath::Abs(Side) < 0.3f)
 		{
 			Side = FVector::DotProduct(Hit.Location - Near.Pos, Right);
 		}
 		Side = Side >= 0.f ? 1.f : -1.f;
-
-		// Nearest 2 m step along the wall, from its start.
-		const float Step = 200.f;
-		const float Target = FMath::Clamp(FMath::RoundToFloat(Near.Dist / Step) * Step, Frames[0].Dist, Frames.Last().Dist);
-		int32 Hi = 1;
-		while (Hi < Frames.Num() - 1 && Frames[Hi].Dist < Target)
-		{
-			++Hi;
-		}
-		const FRMFrame& A = Frames[Hi - 1];
-		const FRMFrame& B = Frames[Hi];
-		const float Span = FMath::Max(B.Dist - A.Dist, 1.f);
-		const float T = FMath::Clamp((Target - A.Dist) / Span, 0.f, 1.f);
-		const FVector Pos = FMath::Lerp(A.Pos, B.Pos, T);
-		Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal2D();
 		const FVector Normal = Right * Side;
-		const float HalfThickness = 25.f; // walls are 0.5 m thick
 
-		FHitResult Placed = Hit;
-		Placed.Location = FVector(Pos.X, Pos.Y, Hit.Location.Z) + Normal * HalfThickness;
-		Placed.ImpactPoint = Placed.Location;
-		Placed.Normal = Normal;
-		Placed.ImpactNormal = Normal;
-		Scope(Hologram, Placed);
+		// Along the wall: where you aim. Height: two rows of 2 m, the sign centred in its row.
+		const float Along = FVector::DotProduct(Hit.Location - Near.Pos, Fwd);
+		const float Row = FMath::Clamp(FMath::FloorToFloat((Hit.Location.Z - Near.Pos.Z) / 200.f), 0.f, 1.f);
+		const float HalfThickness = 25.f; // walls are 0.5 m thick
+		FVector Location = Near.Pos + Fwd * Along + Normal * (HalfThickness + 1.f);
+		Location.Z = Near.Pos.Z + 100.f + 200.f * Row;
+
+		if (GSignsOnWall.Contains(Hologram) == false)
+		{
+			GSignsOnWall.Add(Hologram);
+		}
+		SetSignPoleDisabled(Hologram, true);
+		Hologram->SetActorLocationAndRotation(Location, FRotator(0.f, Normal.Rotation().Yaw + SignYawOffset, 0.f));
+		Scope.Cancel();
 		return true;
 	}
 
@@ -1924,6 +1944,24 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 #undef RM_HOOK_SET_LOCATION
+
+	// A sign on a fence wall has no leg: one click builds it, and it needs no floor.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::DoMultiStepPlacement, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](auto& Scope, AFGStandaloneSignHologram* Hologram, bool bIsInputFromARelease)
+		{
+			if (IsSignOnWall(Hologram))
+			{
+				Scope.Override(true);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::CheckValidFloor, GetMutableDefault<AFGStandaloneSignHologram>(),
+		[](auto& Scope, AFGStandaloneSignHologram* Hologram)
+		{
+			if (IsSignOnWall(Hologram))
+			{
+				Scope.Cancel();
+			}
+		});
 
 	// Scrolling while a vehicle path sits on a road-end snap point flips it 180 instead of turning.
 	SUBSCRIBE_METHOD_VIRTUAL(AFGVehiclePathSegmentHologram::ScrollRotate, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
