@@ -56,6 +56,13 @@ protected:
 	UPROPERTY(Replicated, CustomSerialization)
 	float mCutDist = 0.f;
 
+	/** Cut Fence: a road end within this distance (cm, along the fence) of the aim snaps the cut to it. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	float mEndSnapDistance = 300.f;
+
+	/** Cut Fence: puts the cut in line with a nearby road end (e.g. where the road was cut). */
+	void SnapFenceCutToRoadEnd();
+
 	bool IsWithFences() const;
 	bool IsCutValid() const;
 	float MinPieceLength() const { return mFenceTool ? 50.f : 100.f; }

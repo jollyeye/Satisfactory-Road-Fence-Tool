@@ -10,6 +10,41 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
+namespace
+{
+	/**
+	 * Where a piece's spline crosses the plane through Cut facing along it: distance along the piece
+	 * and the crossing's offset across (Right) and up from the cut point. The crossing nearest to the
+	 * cut point; false if none.
+	 */
+	bool FindPlaneCrossing(const TArray<FRMFrame>& Frames, const FRMFrame& Cut, float& OutDist, float& OutAcross, float& OutUp)
+	{
+		bool bFound = false;
+		float BestDistSq = TNumericLimits<float>::Max();
+		for (int32 I = 1; I < Frames.Num(); ++I)
+		{
+			const float SA = FVector::DotProduct(Frames[I - 1].Pos - Cut.Pos, Cut.Fwd);
+			const float SB = FVector::DotProduct(Frames[I].Pos - Cut.Pos, Cut.Fwd);
+			if ((SA <= 0.f) == (SB <= 0.f))
+			{
+				continue;
+			}
+			const float Alpha = FMath::Clamp(SA / (SA - SB), 0.f, 1.f);
+			const FVector P = FMath::Lerp(Frames[I - 1].Pos, Frames[I].Pos, Alpha);
+			const float DSq = FVector::DistSquared(P, Cut.Pos);
+			if (DSq < BestDistSq)
+			{
+				BestDistSq = DSq;
+				OutDist = FMath::Lerp(Frames[I - 1].Dist, Frames[I].Dist, Alpha);
+				OutAcross = FVector::DotProduct(P - Cut.Pos, Cut.Right);
+				OutUp = FVector::DotProduct(P - Cut.Pos, Cut.Up);
+				bFound = true;
+			}
+		}
+		return bFound;
+	}
+}
+
 ARMRoadCutHologram::ARMRoadCutHologram()
 {
 	mOverlayMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("CutOverlay"));
@@ -79,8 +114,75 @@ void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 	{
 		SetActorLocation(hitResult.Location);
 	}
+	if (mTarget && mFenceTool)
+	{
+		SnapFenceCutToRoadEnd();
+	}
 	SetActorRotation(FRotator::ZeroRotator);
 	RebuildOverlay();
+}
+
+void ARMRoadCutHologram::SnapFenceCutToRoadEnd()
+{
+	// A road end near the aimed point (e.g. where a road was cut): the fence is cut exactly in line
+	// with it, so the fence pieces match the road pieces.
+	FRMFrame Aim;
+	if (!mTarget->GetFrameAt(mCutDist, Aim) || !GetWorld())
+	{
+		return;
+	}
+	TArray<FRMFrame> Frames;
+	mTarget->GetWorldFrames(Frames, 25.f);
+	float BestDelta = mEndSnapDistance;
+	float BestDist = -1.f;
+	for (TActorIterator<ARMBuildableRoad> It(GetWorld()); It; ++It)
+	{
+		ARMBuildableRoad* Road = *It;
+		if (Road->GetIsDismantled() || Road->IsActorBeingDestroyed() || Road->IsHidden())
+		{
+			continue;
+		}
+		for (int32 E = 0; E < 2; ++E)
+		{
+			FVector Loc, Outward;
+			Road->GetEndWorld(E, Loc, Outward);
+			if (FVector::Dist(Loc, Aim.Pos) > Road->GetRoadWidth() * 0.5f + mEndSnapDistance + 200.f)
+			{
+				continue;
+			}
+			// The plane of the road's end face.
+			FRMFrame End;
+			End.Pos = Loc;
+			End.Fwd = Outward.GetSafeNormal();
+			End.Right = FVector::CrossProduct(FVector::UpVector, End.Fwd).GetSafeNormal();
+			End.Up = FVector::UpVector;
+			float Dist = 0.f, Across = 0.f, Up = 0.f;
+			if (!FindPlaneCrossing(Frames, End, Dist, Across, Up))
+			{
+				continue;
+			}
+			// The fence must be by that road (on it or on its edge), not across the map.
+			if (FMath::Abs(Across) > Road->GetRoadWidth() * 0.5f + 100.f || Up < -200.f || Up > 3000.f)
+			{
+				continue;
+			}
+			const float Delta = FMath::Abs(Dist - mCutDist);
+			if (Delta <= BestDelta)
+			{
+				BestDelta = Delta;
+				BestDist = Dist;
+			}
+		}
+	}
+	if (BestDist >= 0.f)
+	{
+		mCutDist = BestDist;
+		FRMFrame Snapped;
+		if (mTarget->GetFrameAt(mCutDist, Snapped))
+		{
+			SetActorLocation(Snapped.Pos);
+		}
+	}
 }
 
 bool ARMRoadCutHologram::IsCutValid() const
@@ -105,40 +207,6 @@ void ARMRoadCutHologram::CheckValidPlacement()
 	}
 }
 
-namespace
-{
-	/**
-	 * Where a piece's spline crosses the plane through Cut facing along it: distance along the piece
-	 * and the crossing's offset across (Right) and up from the cut point. The crossing nearest to the
-	 * cut point; false if none.
-	 */
-	bool FindPlaneCrossing(const TArray<FRMFrame>& Frames, const FRMFrame& Cut, float& OutDist, float& OutAcross, float& OutUp)
-	{
-		bool bFound = false;
-		float BestDistSq = TNumericLimits<float>::Max();
-		for (int32 I = 1; I < Frames.Num(); ++I)
-		{
-			const float SA = FVector::DotProduct(Frames[I - 1].Pos - Cut.Pos, Cut.Fwd);
-			const float SB = FVector::DotProduct(Frames[I].Pos - Cut.Pos, Cut.Fwd);
-			if ((SA <= 0.f) == (SB <= 0.f))
-			{
-				continue;
-			}
-			const float Alpha = FMath::Clamp(SA / (SA - SB), 0.f, 1.f);
-			const FVector P = FMath::Lerp(Frames[I - 1].Pos, Frames[I].Pos, Alpha);
-			const float DSq = FVector::DistSquared(P, Cut.Pos);
-			if (DSq < BestDistSq)
-			{
-				BestDistSq = DSq;
-				OutDist = FMath::Lerp(Frames[I - 1].Dist, Frames[I].Dist, Alpha);
-				OutAcross = FVector::DotProduct(P - Cut.Pos, Cut.Right);
-				OutUp = FVector::DotProduct(P - Cut.Pos, Cut.Up);
-				bFound = true;
-			}
-		}
-		return bFound;
-	}
-}
 
 void ARMRoadCutHologram::FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>& Out) const
 {
