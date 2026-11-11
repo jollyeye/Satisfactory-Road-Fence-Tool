@@ -85,7 +85,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **Asphalt follows the road:** the asphalt texture runs along the road's curve instead of being projected from above.
 - **New: roads beside roads.** Hold the snap key and aim at a built road: the new road becomes the parallel of that whole road, on the side you aim at, edge to edge and flush with its top (to cover gaps with a flat surface). One click builds it. No length, turn radius or slope rules; only a bend too tight for the new road's width is refused.
 - Roads beside intersections: the same with the snap key on an intersection builds a road along the aimed curb, outside the junction.
-- **New build menu tab: Road Tools**, with **Cut Road** (section Edit road): aim at a road, an orange outline shows the cut, click to split the road into two that keep its curve, lines and paint.
+- **New build menu tab: Road Tools**, with **Cut Road** (section Edit road): aim at a road, an orange outline shows the cut, click to split the road into two that keep its curve, lines and paint. Train tracks and vehicle paths built on the road are cut at the same place.
 - Build menu order: roads 1, 2, 3, 4 wide, then the intersection and road fences.
 
 ## Changelog for version 1.1.1

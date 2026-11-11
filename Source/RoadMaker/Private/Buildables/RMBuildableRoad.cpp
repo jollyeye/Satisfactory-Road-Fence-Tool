@@ -1,6 +1,9 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "FGDismantleInterface.h"
 #include "Kismet/GameplayStatics.h"
+#include "Buildables/FGBuildableRailroadTrack.h"
+#include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "Components/SplineComponent.h"
 #include "ProceduralMeshComponent.h"
 #include "Math/RotationMatrix.h"
 #include "Net/UnrealNetwork.h"
@@ -177,6 +180,41 @@ namespace
 		UGameplayStatics::FinishSpawningActor(New, T);
 		return New;
 	}
+
+	/**
+	 * Where a track / path spline crosses the cut: the plane through the cut point facing along the
+	 * road, within the road's width (plus 1 m) and 4 m above / below. Not within 1 m of its ends.
+	 */
+	bool FindCutCrossing(const USplineComponent* Spline, const FRMFrame& Cut, float HalfWidth, float& OutDist)
+	{
+		const float Length = Spline->GetSplineLength();
+		auto Side = [&](float D)
+		{
+			return FVector::DotProduct(Spline->GetLocationAtDistanceAlongSpline(D, ESplineCoordinateSpace::World) - Cut.Pos, Cut.Fwd);
+		};
+		float PrevD = 0.f;
+		float PrevS = Side(0.f);
+		for (float D = 20.f; PrevD < Length; D += 20.f)
+		{
+			D = FMath::Min(D, Length);
+			const float S = Side(D);
+			if ((PrevS <= 0.f) != (S <= 0.f))
+			{
+				// Linear estimate between the two samples on either side of the plane.
+				const float Cross = FMath::Clamp(FMath::IsNearlyEqual(PrevS, S) ? PrevD : PrevD + (D - PrevD) * PrevS / (PrevS - S), PrevD, D);
+				const FVector P = Spline->GetLocationAtDistanceAlongSpline(Cross, ESplineCoordinateSpace::World) - Cut.Pos;
+				if (FMath::Abs(FVector::DotProduct(P, Cut.Right)) <= HalfWidth + 100.f && FMath::Abs(FVector::DotProduct(P, Cut.Up)) <= 400.f
+					&& Cross > 100.f && Cross < Length - 100.f)
+				{
+					OutDist = Cross;
+					return true;
+				}
+			}
+			PrevD = D;
+			PrevS = S;
+		}
+		return false;
+	}
 }
 
 ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSecond)
@@ -265,7 +303,33 @@ ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSeco
 		}
 		return nullptr;
 	}
-	// Out of the way at once (the dismantle takes a moment): aiming must find the new pieces.
+	// Game rail tracks and vehicle paths built on this road are split at the same place (the game's
+	// own split, which keeps the pieces connected).
+	TArray<AActor*> Riders;
+	IFGDismantleInterface::Execute_GetChildDismantleActors(this, Riders);
+	const float HalfWidth = GetRoadWidth() * 0.5f;
+	for (AActor* Rider : Riders)
+	{
+		float At = 0.f;
+		if (AFGBuildableRailroadTrack* Track = Cast<AFGBuildableRailroadTrack>(Rider))
+		{
+			if (Track->GetSplineComponent() && FindCutCrossing(Track->GetSplineComponent(), Cut, HalfWidth, At))
+			{
+				AFGBuildableRailroadTrack::Split(Track, At, true);
+			}
+		}
+		else if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(Rider))
+		{
+			if (Path->GetSplineComponent() && FindCutCrossing(Path->GetSplineComponent(), Cut, HalfWidth, At))
+			{
+				Path->Split(At);
+			}
+		}
+	}
+
+	// Out of the way at once (the dismantle takes a moment): aiming must find the new pieces. Its
+	// riders stay (they were split above and now run on the new pieces).
+	mBeingCut = true;
 	SetActorEnableCollision(false);
 	SetActorHiddenInGame(true);
 	IFGDismantleInterface::Execute_Dismantle(this);

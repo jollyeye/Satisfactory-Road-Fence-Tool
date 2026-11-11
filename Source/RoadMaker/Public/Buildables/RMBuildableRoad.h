@@ -14,7 +14,8 @@ public:
 	ARMBuildableRoad(const FObjectInitializer& ObjectInitializer);
 
 	virtual void RebuildMesh() override;
-	virtual bool DismantlesRiders() const override { return true; }
+	// Not while being cut: its tracks / paths are split and stay.
+	virtual bool DismantlesRiders() const override { return !mBeingCut; }
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -43,6 +44,12 @@ public:
 	 * second in OutSecond. Null if the cut is not possible.
 	 */
 	ARMBuildableRoad* CutAt(float Dist, ARMBuildableRoad** OutSecond = nullptr);
+
+private:
+	/** Set while this road is replaced by a cut, so dismantling it leaves its riders alone. */
+	bool mBeingCut = false;
+
+public:
 
 	/**
 	 * End 0 = start, end 1 = end. OutOutward points away from the road, the direction a road or
