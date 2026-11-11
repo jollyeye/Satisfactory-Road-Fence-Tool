@@ -35,10 +35,9 @@ void ARMRoadHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 
 bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 {
-	// Step 0: the road under the crosshair. Step 1: the road picked at the first click, wherever
-	// the crosshair is (its nearest point along that road).
-	ARMBuildableRoad* Road = mStep == 0 ? Cast<ARMBuildableRoad>(hitResult.GetActor()) : mSideRoad.Get();
-	if (!Road || (mStep != 0 && !mBesideRoad))
+	// Only for a new road (before the first click): the whole road is placed in one click.
+	ARMBuildableRoad* Road = mStep == 0 ? Cast<ARMBuildableRoad>(hitResult.GetActor()) : nullptr;
+	if (!Road)
 	{
 		return false;
 	}
@@ -48,6 +47,7 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	{
 		return false;
 	}
+	// Which side: where the crosshair is relative to the road's centre line.
 	int32 Closest = 0;
 	float Best = TNumericLimits<float>::Max();
 	for (int32 I = 0; I < Frames.Num(); ++I)
@@ -59,85 +59,35 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 			Closest = I;
 		}
 	}
-	// Within 2 m of the road's ends, use the end itself (so pieces line up with it).
-	const float Total = Frames.Last().Dist;
-	float Dist = Frames[Closest].Dist;
-	if (Dist < 200.f)
-	{
-		Dist = 0.f;
-	}
-	else if (Total - Dist < 200.f)
-	{
-		Dist = Total;
-	}
+	const float Side = FVector::DotProduct(hitResult.Location - Frames[Closest].Pos, Frames[Closest].Right) >= 0.f ? 1.f : -1.f;
+	const float Offset = Side * (Road->GetRoadWidth() + GetRoadDefaults()->GetRoadWidth()) * 0.5f;
 
-	const float NewWidth = GetRoadDefaults()->GetRoadWidth();
-	if (mStep == 0)
-	{
-		mSideRoad = Road;
-		mSideSign = FVector::DotProduct(hitResult.Location - Frames[Closest].Pos, Frames[Closest].Right) >= 0.f ? 1.f : -1.f;
-		mSideStartDist = Dist;
-	}
-	const float Offset = mSideSign * (Road->GetRoadWidth() + NewWidth) * 0.5f;
-
-	// The stretch of the other road between the start and the current point (at least 1 m, so the
-	// preview shows before the first click), as a parallel curve.
-	float From = mSideStartDist;
-	float To = mStep == 0 ? FMath::Min(mSideStartDist + RM::FoundationSize, Total) : Dist;
-	if (mStep == 0 && To - From < 100.f)
-	{
-		From = FMath::Max(0.f, To - RM::FoundationSize);
-	}
-	const bool bReverse = To < From;
-	const float Lo = FMath::Min(From, To);
-	const float Hi = FMath::Max(From, To);
-	TArray<FRMFrame> Part;
-	for (const FRMFrame& F : Frames)
-	{
-		if (F.Dist >= Lo - 1.f && F.Dist <= Hi + 1.f)
-		{
-			Part.Add(F);
-		}
-	}
-	if (Part.Num() < 2)
-	{
-		// Too short: keep the start, wait for the crosshair to move along.
-		Part.Reset();
-		const int32 I = FMath::Clamp(Closest, 0, Frames.Num() - 2);
-		Part.Add(Frames[I]);
-		Part.Add(Frames[I + 1]);
-	}
+	// The parallel of the whole road, edge to edge, flush with its top.
 	TArray<FRMSplinePoint> Points;
-	RMGeometry::OffsetCurve(Part, Offset, 400.f, Points);
+	RMGeometry::OffsetCurve(Frames, Offset, 400.f, Points);
 	if (Points.Num() < 2)
 	{
 		return false;
 	}
-	if (bReverse)
-	{
-		// Build towards the crosshair: reverse the curve and its directions.
-		Algo::Reverse(Points);
-		for (FRMSplinePoint& P : Points)
-		{
-			P.Tangent = -P.Tangent;
-		}
-	}
-
 	mBesideRoad = true;
-	if (mStep == 0)
-	{
-		mStart = Points[0].Location;
-		mStartDir = Points[0].Tangent.GetSafeNormal();
-		mStartSnapped = false;
-	}
-	else
-	{
-		mEnd = Points.Last().Location;
-		mEndDir = Points.Last().Tangent.GetSafeNormal();
-		mEndSnapped = false;
-	}
+	mStart = Points[0].Location;
+	mStartDir = Points[0].Tangent.GetSafeNormal();
+	mStartSnapped = false;
+	mEnd = Points.Last().Location;
+	mEndDir = Points.Last().Tangent.GetSafeNormal();
+	mEndSnapped = false;
 	SetWorldPoints(Points);
 	return true;
+}
+
+bool ARMRoadHologram::DoMultiStepPlacement(bool isInputFromARelease)
+{
+	// A road beside a road is complete already: one click builds it.
+	if (mStep == 0 && mBesideRoad)
+	{
+		return true;
+	}
+	return Super::DoMultiStepPlacement(isInputFromARelease);
 }
 
 bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
@@ -148,10 +98,6 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 		return true;
 	}
 	mBesideRoad = false;
-	if (mStep == 0)
-	{
-		mSideRoad = nullptr;
-	}
 
 	// Any free road end near the aim point, whether you aim at the road or the ground next to it.
 	TArray<FRMRoadEndRef> Ends;
@@ -209,34 +155,29 @@ void ARMRoadHologram::CheckValidPlacement()
 	// No Super call on purpose: the vanilla floor check ("Surface is too uneven") is meant for
 	// box-shaped buildings and rejects spline pieces. Placement rules are checked below instead.
 
-	if (mStep == 0)
-	{
-		return; // only the finished curve is judged
-	}
-
 	const ARMBuildableRoad* Road = GetRoadDefaults();
-	TArray<FRMFrame> Frames;
-	GetPreviewFrames(Frames, 50.f);
-	const FRMSplineStats Stats = RMGeometry::Analyze(Frames);
-
 	if (mBesideRoad)
 	{
-		// A parallel of a built road: no turn / grade / length rules, only what would break the
-		// mesh (the inner edge folding over itself on a bend tighter than half the width).
-		if (Stats.Length < 50.f)
-		{
-			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
-		}
-		if (Stats.Length > Road->mMaxLength)
-		{
-			AddConstructDisqualifier(URMCD_TooLong::StaticClass());
-		}
-		if (Stats.MinTurnRadius < Road->GetRoadWidth() * 0.5f * 1.02f)
+		// A parallel of a built road (judged before the click, it is built in one): no length, turn
+		// or grade rules, only what would break the mesh (the inner edge folding over itself on a
+		// bend tighter than half the width).
+		TArray<FRMFrame> SideFrames;
+		GetPreviewFrames(SideFrames, 50.f);
+		if (RMGeometry::Analyze(SideFrames).MinTurnRadius < Road->GetRoadWidth() * 0.5f * 1.02f)
 		{
 			AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());
 		}
 		return;
 	}
+
+	if (mStep == 0)
+	{
+		return; // only the finished curve is judged
+	}
+
+	TArray<FRMFrame> Frames;
+	GetPreviewFrames(Frames, 50.f);
+	const FRMSplineStats Stats = RMGeometry::Analyze(Frames);
 
 	if (Stats.Length < Road->mMinLength)
 	{

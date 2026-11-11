@@ -32,16 +32,12 @@ protected:
 	bool TrySnapToFoundation(const FHitResult& hitResult);
 
 	/**
-	 * Snap key held, aiming at a built road: the new road runs beside it as a parallel curve, edge to
-	 * edge and flush with its top (to fill gaps with a flat surface). The first click picks where it
-	 * starts along that road, the second where it ends.
+	 * Snap key held, aiming at a built road: the new road is the parallel of that whole road, on the
+	 * side aimed at, edge to edge and flush with its top (to fill gaps with a flat surface). One
+	 * click builds it.
 	 */
 	bool TrySnapBesideRoad(const FHitResult& hitResult);
-
-	/** The road the new one runs beside (picked at the first click), which side, and from where. */
-	TWeakObjectPtr<ARMBuildableRoad> mSideRoad;
-	float mSideSign = 1.f;
-	float mSideStartDist = 0.f;
+	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 
 	/** The current curve is a parallel of another road: only geometry limits apply. */
 	UPROPERTY(Replicated, CustomSerialization)
