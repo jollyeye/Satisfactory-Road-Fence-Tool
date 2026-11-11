@@ -36,6 +36,7 @@ public:
 	virtual void RebuildMesh() PURE_VIRTUAL(ARMBuildableProcedural::RebuildMesh, );
 
 	void SetCostMultiplier(int32 InMultiplier) { mCostMultiplier = FMath::Max(1, InMultiplier); }
+	int32 GetCostMultiplier() const { return mCostMultiplier; }
 	UProceduralMeshComponent* GetProceduralMesh() const { return mMesh; }
 
 protected:

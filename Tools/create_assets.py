@@ -200,6 +200,8 @@ RMIntersectionHologram = native_class("RMIntersectionHologram")
 RMBuildableRoad = native_class("RMBuildableRoad")
 RMBuildableFence = native_class("RMBuildableFence")
 RMBuildableIntersection = native_class("RMBuildableIntersection")
+RMRoadCutHologram = native_class("RMRoadCutHologram")
+RMBuildableRoadTool = native_class("RMBuildableRoadTool")
 BuildModeDescriptor = native_class("FGHologramBuildModeDescriptor")
 BuildingDescriptor = native_class("FGBuildingDescriptor")
 Recipe = native_class("FGRecipe")
@@ -230,6 +232,9 @@ finish(holo_fence)
 
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
+
+holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)
+finish(holo_cut)
 
 # Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.
 for old in ("Unlocks/Recipe_LanePaint", "Buildables/Desc_LanePaint", "Buildables/Build_LanePaint",
@@ -289,6 +294,26 @@ if WallsSubCat:
 else:
     log("  ! SC_Walls not found: fence walls go in the Roads section")
 
+# Road Tools: own build menu tab (same look as the game's tabs: a child of the Vehicles category),
+# section "Edit road" with Cut Road.
+road_tools_cat = None
+edit_road_subcat = None
+if VehicleCat:
+    rtc = make_bp("Buildables", "BC_RoadTools", VehicleCat)
+    rc_cdo = cdo(rtc)
+    setp(rc_cdo, text("Road Tools"), "m_display_name", "mDisplayName")
+    base_prio = getp(unreal.get_default_object(VehicleCat), "m_menu_priority", "mMenuPriority") or 0.0
+    setp(rc_cdo, float(base_prio) + 0.5, "m_menu_priority", "mMenuPriority")
+    finish(rtc)
+    road_tools_cat = rtc.generated_class()
+if VehiclePathSubCat:
+    erc = make_bp("Buildables", "SC_EditRoad", VehiclePathSubCat)
+    setp(cdo(erc), text("Edit road"), "m_display_name", "mDisplayName")
+    setp(cdo(erc), 1.0, "m_menu_priority", "mMenuPriority")
+    finish(erc)
+    edit_road_subcat = erc.generated_class()
+ROAD_TOOLS_MENU = {"RoadCut"}
+
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
     scls = load_game_class(sname)
@@ -314,6 +339,8 @@ TOOLS = [
      {"m_width_in_foundations": 3}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("Road_4x", RMBuildableRoad, holo_road, "Road (4 wide)", "A road four foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint. Free.",
+     {}, [], road_icons, {}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
     ("Fence_Jersey", RMBuildableFence, holo_fence, "Cement Blocks", "Concrete road barrier. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
@@ -332,7 +359,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8,
               "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
@@ -361,6 +388,22 @@ for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
 if tasks:
     asset_tools.import_asset_tasks(tasks)
     log("  imported %d icons" % len(tasks))
+
+# Road Tools tab icon: the game's Vehicles tab brush (same size / look) with our glyph.
+if road_tools_cat:
+    try:
+        glyph = unreal.load_asset(ROOT + "/Icons/T_Icon_RoadTools.T_Icon_RoadTools")
+        brush = getp(unreal.get_default_object(VehicleCat), "m_category_icon", "mCategoryIcon")
+        if glyph and brush is not None:
+            brush.set_editor_property("resource_object", glyph)
+            rtc_bp = unreal.load_asset(ROOT + "/Buildables/BC_RoadTools.BC_RoadTools")
+            setp(cdo(rtc_bp), brush, "m_category_icon", "mCategoryIcon")
+            finish(rtc_bp)
+            log("  Road Tools tab icon set")
+        else:
+            log("  ! Road Tools tab icon: glyph or game brush missing")
+    except Exception as e:
+        log("  ! Road Tools tab icon: %s" % e)
 
 
 
@@ -420,7 +463,10 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, text(desc), "m_description", "mDescription")
     # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
-    if name in WALLS_MENU and WallsCat and wall_subcat:
+    if name in ROAD_TOOLS_MENU and road_tools_cat and edit_road_subcat:
+        setp(dc, road_tools_cat, "m_category", "mCategory", "m_build_menu_category")
+        setp(dc, [edit_road_subcat], "m_sub_categories", "mSubCategories")
+    elif name in WALLS_MENU and WallsCat and wall_subcat:
         setp(dc, WallsCat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [wall_subcat], "m_sub_categories", "mSubCategories")
     else:

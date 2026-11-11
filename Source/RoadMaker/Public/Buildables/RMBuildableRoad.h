@@ -38,6 +38,13 @@ public:
 	float GetRoadHeight() const { return mRoadHeight; }
 
 	/**
+	 * Cut Road (server): replaces this road with two roads split at Dist cm along it, keeping its
+	 * curve, lines, paint and recipe; this one goes away. Returns the first piece (start side), the
+	 * second in OutSecond. Null if the cut is not possible.
+	 */
+	ARMBuildableRoad* CutAt(float Dist, ARMBuildableRoad** OutSecond = nullptr);
+
+	/**
 	 * End 0 = start, end 1 = end. OutOutward points away from the road, the direction a road or
 	 * intersection attached here would continue in. Location is the top-centre of the end.
 	 */

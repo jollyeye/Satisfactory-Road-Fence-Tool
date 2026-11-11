@@ -104,6 +104,7 @@ def box(sc, c, hx, hy, hz, col, fwd=(1, 0, 0), layer=0):
 ASPHALT = np.array([62, 64, 68.0]); CONCRETE = np.array([178, 174, 166.0]); YELLOW = np.array([250, 190, 40.0])
 WHITE = np.array([240, 240, 236.0]); STEEL = np.array([168, 176, 186.0]); DARKSTEEL = np.array([110, 118, 128.0])
 ORANGE = np.array([250, 149, 73.0])
+ORANGE_CUT = np.array([255, 110, 20.0])
 
 def line_strip(sc, frs, lat, w, col, dash=None, z=0.02):
     for i in range(len(frs) - 1):
@@ -259,12 +260,68 @@ def fence_wall(sc, kind="concrete"):
             stripe(x - 0.09, x - 0.04, 0.0, H, groove)
             stripe(x + 0.04, x + 0.09, 0.0, H, groove)
 
+
+def road_cut(sc):
+    """A road cut in two: the pieces pulled apart, an orange outline in the gap where it was cut."""
+    frs = frames_arc(20.0, 0.5, 40)
+    k = 20
+    width, lanes, h, gap = 16, 2, 1.0, 3.6
+    hw = width / 2
+    first = frs[:k + 1]
+    f = frs[k][1]
+    second = [(p + f * gap, fw, r) for p, fw, r in frs[k:]]
+    for part in (first, second):
+        extrude(sc, part, [(-hw, 0), (hw, 0)], ASPHALT, closed=False, two=True)
+        extrude(sc, part, [(hw, 0), (hw, -h)], CONCRETE, closed=False, two=True)
+        extrude(sc, part, [(-hw, -h), (-hw, 0)], CONCRETE, closed=False, two=True)
+        cap(sc, part[0], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE)
+        cap(sc, part[-1], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE)
+        e = 0.9
+        line_strip(sc, part, -hw + e, 0.16, YELLOW)
+        line_strip(sc, part, hw - e, 0.16, YELLOW)
+        line_strip(sc, part, 0.0, 0.13, WHITE, dash=(2, 0))
+    # Cut outline, standing in the gap (bright orange, unshaded, drawn on top).
+    p, fw, r = frs[k]
+    c = p + fw * (gap / 2)
+    t = 0.35
+    def bar(a, b):
+        a = np.array(a, float); b = np.array(b, float)
+        d = (b - a) / np.linalg.norm(b - a)
+        n = np.cross(d, fw); n = n / np.linalg.norm(n) * t
+        sc.face([a - n, a + n, b + n, b - n], ORANGE_CUT, layer=2, two=True, shade=False)
+    top_l = c - r * (hw + 0.3) + np.array([0, 0, 0.3]); top_r = c + r * (hw + 0.3) + np.array([0, 0, 0.3])
+    bot_l = top_l - np.array([0, 0, h + 0.6]); bot_r = top_r - np.array([0, 0, h + 0.6])
+    bar(top_l, top_r); bar(top_r, bot_r); bar(bot_r, bot_l); bar(bot_l, top_l)
+
+
+def tools_glyph(path):
+    """Category icon: white glyph (like the game's category icons): a road split by a cut line."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    # Two road pieces with a gap, side lines and a dashed middle cut out.
+    for y0, y1 in ((120, 440), (584, 904)):
+        d.rounded_rectangle([250, y0, 774, y1], radius=40, fill=W)
+        d.rectangle([300, y0 + (0 if y0 > 200 else 40), 320, y1 - (40 if y0 > 200 else 0)], fill=(0, 0, 0, 0))
+        d.rectangle([704, y0 + (0 if y0 > 200 else 40), 724, y1 - (40 if y0 > 200 else 0)], fill=(0, 0, 0, 0))
+        for yy in range(y0 + 50, y1 - 40, 120):
+            d.rectangle([497, yy, 527, yy + 60], fill=(0, 0, 0, 0))
+    # Cut line across the gap, wider than the road.
+    d.rounded_rectangle([140, 492, 884, 532], radius=20, fill=W)
+    img = img.resize((256, 256), _I.LANCZOS)
+    img.save(path)
+
 what = sys.argv[1]; out = sys.argv[2]
+if what == "toolsglyph":
+    tools_glyph(out); sys.exit(0)
 sc = Scene()
 if what == "road1": road(sc, 8, 1)
 elif what == "road2": road(sc, 16, 2)
 elif what == "road3": road(sc, 24, 3)
 elif what == "road4": road(sc, 32, 4)
+elif what == "roadcut": road_cut(sc)
 elif what == "guard": guard_rail(sc)
 elif what == "jersey": jersey(sc)
 elif what == "grid": grid_fence(sc, 1.0)

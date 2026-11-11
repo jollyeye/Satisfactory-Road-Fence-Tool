@@ -1,6 +1,7 @@
 #include "Holograms/RMRoadHologram.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Buildables/RMBuildableRoad.h"
+#include "Buildables/RMBuildableIntersection.h"
 #include "RMRoadUtils.h"
 #include "ProceduralMeshComponent.h"
 #include "Buildables/FGBuildable.h"
@@ -36,7 +37,15 @@ void ARMRoadHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 {
 	// Only for a new road (before the first click): the whole road is placed in one click.
-	ARMBuildableRoad* Road = mStep == 0 ? Cast<ARMBuildableRoad>(hitResult.GetActor()) : nullptr;
+	if (mStep != 0)
+	{
+		return false;
+	}
+	if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
+	{
+		return SnapBesideCurb(Intersection, hitResult.Location);
+	}
+	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	if (!Road)
 	{
 		return false;
@@ -65,6 +74,55 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	// The parallel of the whole road, edge to edge, flush with its top.
 	TArray<FRMSplinePoint> Points;
 	RMGeometry::OffsetCurve(Frames, Offset, 400.f, Points);
+	if (Points.Num() < 2)
+	{
+		return false;
+	}
+	return PlaceBeside(Points);
+}
+
+bool ARMRoadHologram::SnapBesideCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint)
+{
+	TArray<TArray<FVector>> Curbs;
+	Intersection->GetWorldCurbs(Curbs);
+	int32 BestCurb = INDEX_NONE;
+	float Best = TNumericLimits<float>::Max();
+	for (int32 C = 0; C < Curbs.Num(); ++C)
+	{
+		for (const FVector& P : Curbs[C])
+		{
+			const float D = FVector::DistSquared2D(P, AimPoint);
+			if (D < Best)
+			{
+				Best = D;
+				BestCurb = C;
+			}
+		}
+	}
+	if (BestCurb == INDEX_NONE || Curbs[BestCurb].Num() < 2)
+	{
+		return false;
+	}
+	// Curbs run counter-clockwise, so the junction centre is on their +Right side: the new road goes
+	// on the other side, its centre half its width away, flush with the slab top.
+	const TArray<FVector>& Curb = Curbs[BestCurb];
+	const float Half = GetRoadDefaults()->GetRoadWidth() * 0.5f;
+	TArray<FVector> Centre;
+	for (int32 I = 0; I < Curb.Num(); ++I)
+	{
+		const FVector Prev = Curb[FMath::Max(I - 1, 0)];
+		const FVector Next = Curb[FMath::Min(I + 1, Curb.Num() - 1)];
+		const FVector Fwd = FVector(Next.X - Prev.X, Next.Y - Prev.Y, 0.f).GetSafeNormal();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+		Centre.Add(Curb[I] - Right * Half);
+	}
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::SplineThroughPoints(Centre, Points);
+	return PlaceBeside(Points);
+}
+
+bool ARMRoadHologram::PlaceBeside(const TArray<FRMSplinePoint>& Points)
+{
 	if (Points.Num() < 2)
 	{
 		return false;

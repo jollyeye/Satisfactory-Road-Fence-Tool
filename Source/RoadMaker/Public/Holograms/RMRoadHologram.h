@@ -37,6 +37,12 @@ protected:
 	 * click builds it.
 	 */
 	bool TrySnapBesideRoad(const FHitResult& hitResult);
+
+	/** Same beside an intersection: the parallel of the curb aimed at, outside the junction. */
+	bool SnapBesideCurb(class ARMBuildableIntersection* Intersection, const FVector& AimPoint);
+
+	/** Uses the given curve as the new road (beside mode). */
+	bool PlaceBeside(const TArray<FRMSplinePoint>& Points);
 	virtual bool DoMultiStepPlacement(bool isInputFromARelease) override;
 
 	/** The current curve is a parallel of another road: only geometry limits apply. */
