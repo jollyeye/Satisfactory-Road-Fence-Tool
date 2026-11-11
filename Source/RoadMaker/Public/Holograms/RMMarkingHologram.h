@@ -46,13 +46,6 @@ protected:
 	UPROPERTY(Replicated, CustomSerialization)
 	float mLaneWidth = 200.f;
 
-	/** The road's line colour for this marking (glow colour on cyberpunk) and the road's paint primary it was taken from. */
-	UPROPERTY(Replicated, CustomSerialization)
-	FLinearColor mColour = FLinearColor::White;
-
-	UPROPERTY(Replicated, CustomSerialization)
-	FLinearColor mDataPrimary = FLinearColor::White;
-
 	/** The look of the road under the hologram (the marking takes it). */
 	UPROPERTY(Replicated, CustomSerialization)
 	uint8 mRoadLook = 0;

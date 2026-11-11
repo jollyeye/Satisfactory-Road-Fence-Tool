@@ -33,9 +33,6 @@ void ARMBuildableMarking::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableMarking, mVariant);
 	DOREPLIFETIME(ARMBuildableMarking, mLaneWidth);
-	DOREPLIFETIME(ARMBuildableMarking, mColour);
-	DOREPLIFETIME(ARMBuildableMarking, mDataPrimary);
-	DOREPLIFETIME(ARMBuildableMarking, mHasColour);
 }
 
 void ARMBuildableMarking::SetShape(uint8 Variant, float LaneWidth)
@@ -46,13 +43,6 @@ void ARMBuildableMarking::SetShape(uint8 Variant, float LaneWidth)
 	{
 		RebuildMesh();
 	}
-}
-
-void ARMBuildableMarking::SetPlacementColour(const FLinearColor& Colour, const FLinearColor& DataPrimary)
-{
-	mColour = Colour;
-	mDataPrimary = DataPrimary;
-	mHasColour = true;
 }
 
 void ARMBuildableMarking::RebuildMesh()
@@ -85,23 +75,12 @@ void ARMBuildableMarking::ApplyMarkingColors(const FFactoryCustomizationData& Da
 	{
 		return;
 	}
-	// The paint is one colour (primary of the paint data); the cyberpunk look glows in it. When built it
-	// takes the road's line colour; if the paint data resolves to something else later, it was repainted.
+	// The colour of the road's side lines: the secondary colour of the paint data (a marking starts with a
+	// copy of its road's paint). Both slots, so the plain paint and the glowing cyberpunk one read the same.
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
-	FLinearColor P = Resolved.PrimaryColor;
-	if (mHasColour && P.Equals(mDataPrimary, 0.003f))
-	{
-		P = mColour;
-	}
-	else if (HasAuthority() && (!mHasColour || !P.Equals(mDataPrimary, 0.003f)))
-	{
-		mColour = P;
-		mDataPrimary = P;
-		mHasColour = true;
-	}
-	// Both slots: the plain paint reads the first, the cyberpunk one the second.
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+	const FLinearColor S = Resolved.SecondaryColor;
+	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -152,8 +131,8 @@ namespace
 	constexpr float Shaft = 0.14f;     // half width of the arrow shaft: 0.28 units across
 	constexpr float HeadHalf = 0.5f;   // arrow head half width
 	constexpr float HeadLen = 0.85f;   // forward head length (units along, stretched like the rest)
-	constexpr float SideBar = 0.15f;   // a turn's bar beyond the shaft (across, units)
-	constexpr float SideHead = 0.6f;   // a turn's head length (across, units)
+	constexpr float SideBar = 0.1f;    // a turn's bar beyond the shaft (across, units)
+	constexpr float SideHead = HeadLen * 1.8f; // a turn's head length: the same as the forward head (physical)
 	constexpr float SideTip = Shaft + SideBar + SideHead;
 
 	void BuildArrow(FShapeBuilder& B, uint8 Variant)
@@ -358,9 +337,6 @@ ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarkin
 	New->SetShape(Variant % Count, LaneWidth * SizeMultiplier);
 	New->SetLook(Road->GetLook());
 	New->SetCustomizationData_Native(Road->GetCustomizationData_Native());
-	FLinearColor Primary, Secondary;
-	Road->GetLineColours(Primary, Secondary);
-	New->SetPlacementColour(Road->GetLook() == 2 ? Secondary : Primary, Primary);
 	UGameplayStatics::FinishSpawningActor(New, T);
 	return New;
 }

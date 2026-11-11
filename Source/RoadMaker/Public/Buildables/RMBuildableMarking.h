@@ -36,12 +36,6 @@ public:
 
 	/** Which arrow / digit, and the width it is drawn at (cm; the lane width times the size of the entry). */
 	void SetShape(uint8 Variant, float LaneWidth);
-	/**
-	 * The colour it is painted with when built (the road's line colour), and the colour the game's paint
-	 * data resolves to at that moment: when the paint data later resolves to something else, the piece
-	 * was repainted and takes that colour instead.
-	 */
-	void SetPlacementColour(const FLinearColor& Colour, const FLinearColor& DataPrimary);
 	uint8 GetVariant() const { return mVariant; }
 	float GetLaneWidth() const { return mLaneWidth; }
 
@@ -89,18 +83,6 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Shape() { RebuildMesh(); }
-
-	UFUNCTION()
-	void OnRep_Colour() { ApplyMarkingColors(mCustomizationData); }
-
-	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
-	FLinearColor mColour = FLinearColor::White;
-
-	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
-	FLinearColor mDataPrimary = FLinearColor::White;
-
-	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
-	bool mHasColour = false;
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
 	uint8 mVariant = 0;

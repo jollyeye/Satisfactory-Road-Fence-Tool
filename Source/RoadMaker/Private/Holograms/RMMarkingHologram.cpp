@@ -34,8 +34,6 @@ void ARMMarkingHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(ARMMarkingHologram, mVariant);
 	DOREPLIFETIME(ARMMarkingHologram, mLaneWidth);
 	DOREPLIFETIME(ARMMarkingHologram, mRoadLook);
-	DOREPLIFETIME(ARMMarkingHologram, mColour);
-	DOREPLIFETIME(ARMMarkingHologram, mDataPrimary);
 }
 
 void ARMMarkingHologram::ScrollRotate(int32 delta, int32 step)
@@ -111,10 +109,6 @@ void ARMMarkingHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 	const ARMBuildableMarking* Default = GetDefaultBuildable<ARMBuildableMarking>();
 	mLaneWidth = LaneWidth * (Default ? Default->mSizeMultiplier : 1.f);
 	mRoadLook = Road->GetLook();
-	FLinearColor Primary, Secondary;
-	Road->GetLineColours(Primary, Secondary);
-	mDataPrimary = Primary;
-	mColour = mRoadLook == 2 ? Secondary : Primary; // the cyberpunk road's lines glow in the secondary colour
 	if (mPaintedFrom.Get() != Road)
 	{
 		// The marking is painted like this road's lines; it can be repainted on its own afterwards.
@@ -140,7 +134,6 @@ void ARMMarkingHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	{
 		M->SetShape(static_cast<uint8>(mVariant), mLaneWidth);
 		M->SetLook(mRoadLook);
-		M->SetPlacementColour(mColour, mDataPrimary);
 	}
 }
 

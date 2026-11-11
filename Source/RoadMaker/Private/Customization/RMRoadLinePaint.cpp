@@ -237,7 +237,7 @@ namespace
 		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
 		FLinearColor Primary, Secondary;
 		Road->GetLineColours(Primary, Secondary);
-		const FLinearColor C = LookIndex == 2 ? Secondary : Primary;
+		const FLinearColor C = Secondary; // the colour of the road's side lines
 		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(C.R, C.G, C.B, 1.0));
 		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(C.R, C.G, C.B, 1.0));
 		if (Variant != GGhost.Variant || !FMath::IsNearlyEqual(Width, GGhost.Width, 0.5f))
