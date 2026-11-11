@@ -294,8 +294,8 @@ def road_cut(sc):
     bar(top_l, top_r); bar(top_r, bot_r); bar(bot_r, bot_l); bar(bot_l, top_l)
 
 
-def tools_glyph(path):
-    """Category icon: white glyph (like the game's category icons): a road split by a cut line."""
+def cut_glyph(path):
+    """Cut Road icon: white flat glyph, a road split by a cut line."""
     from PIL import Image as _I, ImageDraw as _D
     n = 1024
     img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
@@ -310,12 +310,34 @@ def tools_glyph(path):
             d.rectangle([497, yy, 527, yy + 60], fill=(0, 0, 0, 0))
     # Cut line across the gap, wider than the road.
     d.rounded_rectangle([140, 492, 884, 532], radius=20, fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+def tab_glyph(path):
+    """Road Tools tab icon: white glyph of a road in perspective, like /┆\\ ."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    w = 70
+    # Edges converging towards the top.
+    d.line([(150, 930), (420, 110)], fill=W, width=w)
+    d.line([(874, 930), (604, 110)], fill=W, width=w)
+    for x, y in ((150, 930), (420, 110), (874, 930), (604, 110)):
+        d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=W)
+    # Dashed centre line, dashes shorter and thinner towards the top.
+    for y0, y1, t in ((800, 930, 64), (560, 680, 52), (360, 450, 42), (200, 260, 34)):
+        d.rounded_rectangle([512 - t / 2, y0, 512 + t / 2, y1], radius=t / 2, fill=W)
     img = img.resize((256, 256), _I.LANCZOS)
     img.save(path)
 
+
 what = sys.argv[1]; out = sys.argv[2]
-if what == "toolsglyph":
-    tools_glyph(out); sys.exit(0)
+if what == "cutglyph":
+    cut_glyph(out); sys.exit(0)
+if what == "tabglyph":
+    tab_glyph(out); sys.exit(0)
 sc = Scene()
 if what == "road1": road(sc, 8, 1)
 elif what == "road2": road(sc, 16, 2)
