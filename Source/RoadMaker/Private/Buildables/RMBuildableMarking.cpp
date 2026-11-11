@@ -669,7 +669,7 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 		{
 			++Moved;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking move: %s at %s (share %.2f, across %.0f) -> %s at %s"), *M->GetName(), *P.ToCompactString(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Marking move: %s at %s (share %.2f, across %.0f) -> %s at %s"), *M->GetName(), *P.ToCompactString(),
 			Share, Across, New ? *New->GetName() : TEXT("none"), New ? *New->GetActorLocation().ToCompactString() : TEXT("-"));
 		// Out of the way at once (like a replaced road), then dismantled.
 		M->SetActorEnableCollision(false);

@@ -7,11 +7,11 @@ Road Maker
 RoadMaker
 
 ## Short description (max 128 characters)
-Curved roads with lane lines, intersections, fences and fence walls, plus snapping for paths, rails, poles and foundations.
+Curved roads with lane lines and markings, intersections, road tools, fences, fence walls and a sign gantry, plus smart snapping.
 
 ## Full description (paste as Markdown)
 
-**Road Maker** adds real roads to Satisfactory: curved asphalt roads with concrete sides, lane markings you set in the customizer, intersections that join up to six roads, fences and 4 m fence walls that follow the road edge, and one-click vehicle paths and railway tracks along the lanes.
+**Road Maker** adds real roads to Satisfactory: curved roads in asphalt, concrete blocks or cyberpunk, lane lines, arrows and numbers you paint in the customizer, tools to cut, split and reshape roads, a sign gantry, intersections that join up to six roads, fences and 4 m fence walls that follow the road edge, and one-click vehicle paths and railway tracks along the lanes.
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
@@ -19,10 +19,12 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 ![Road Maker buildables in the build menu](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu.png)
 
-### Roads (1, 2 and 3 foundations wide)
+### Roads (1, 2, 3 and 4 foundations wide)
 - Two clicks: start and end. The road curves like a vehicle path; the mouse wheel turns it.
 - Build modes: **Default**, **Straight**, and **Smooth** (height eases in and out to join roads at different levels without kinks, up to 45°).
 - Snaps to the ends of other roads and intersections, and to foundation edges (top level with the foundation).
+- Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge, in one click.
+- **Road materials** (Customizer › Material › Roads): Asphalt, Concrete Blocks and Cyberpunk (glowing lane lines), switched in place.
 - 1 m thick, asphalt and concrete textures matched to the game's foundations.
 - Other buildings can be placed on roads, just like on foundations.
 
@@ -30,8 +32,15 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 ![The Road Lines tab in the customizer](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-lines.png)
 
 - **Sidelines:** on / off.
-- **Lanes:** 1 lane, 2 lanes dashed or continuous, 3 lanes dashed or continuous.
+- **Lanes:** 1 lane, or 2, 3 and 4 lanes, dashed or continuous.
+- **Markings:** Lane Arrow (straight, left, right, straight or left, straight or right, left or right) and Lane Number (0 to 9). Aim at a lane: a preview shows it on the lane centre, facing the way you look; the mouse wheel picks the variant, click paints it. Sized to the lane, lying on the road surface, in the road's line colours (glowing on cyberpunk roads), repaintable. Dismantle on its own or with the road.
 - Hover a road to preview, click to apply. Middle lines use the **primary colour**, side lines the **secondary colour**; roads have their own default swatch group ("Roads").
+
+### Road Tools (build menu)
+- **Cut Road** (optionally cutting its fences too), **Split Road** (lengthwise, in 8 m steps), **Adjust Curvature** (grab a road end and reshape it; lane markings move along) and **Cut Fence**. Lines, paint, fences and paths are kept.
+
+### Sign Gantry
+- Two of the game's H-beams on the fence lines of a road with a beam across, 8 to 24 m above it. Signs snap to the beam and columns every 2 m (snap key); wall attachments snap to it too.
 
 ### Road Intersection
 ![A four-way intersection with side lines and fences on the curbs](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intersection.jpg)
@@ -53,6 +62,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 4 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
 - **FICSIT**, **Concrete** and **Steel Fence Wall** use the game's own wall materials and paint exactly like the game's walls. The customizer's **Material** tab switches a fence wall between concrete, FICSIT and steel in place, with a preview while aiming; switching costs the difference, like the game's walls.
 - **Steel Mesh Fence Wall**: a steel frame with a diamond wire mesh (the former 4 m metal grid fence).
+- Signs (snap key) and wall attachments (conveyor, power and pipe wall mounts, wall holes, ladders...) snap to fence walls.
 - Aim at the upper or lower half of a fence wall to stack another one above or below it. Hold the snap key (Ctrl) to replace the aimed fence wall with a different one, like the game's walls.
 - Unlocks: FICSIT with Tier 1 **Base Building**, Steel Mesh with Tier 3 **Basic Steel Production**, Concrete and Steel together with the game's concrete and steel wall materials (AWESOME Shop).
 
@@ -69,14 +79,14 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Dismantling a road or intersection also removes the vehicle paths and tracks on it (refunded).
 
 ### Performance
-- Far-away roads, intersections and fences switch to simpler meshes; fences and fence walls have two distance levels (simpler, then simplest).
+- Far-away roads, intersections and fences switch to simpler meshes; fences and fence walls have two distance levels (simpler, then simplest). Lane markings turn flat beyond 50 m and are hidden beyond 600 m.
 - Saves stay small: only a few numbers per piece are saved, meshes are rebuilt on load.
 
 ### Notes
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
-## Changelog for version 1.2.0 (not released yet: add to it as features come in)
+## Changelog for version 1.2.0
 - **New curves:** roads and fences are drawn as quadratic Bezier curves. Gentle bends are one curve through the point where the start and end directions meet; S-curves, wide turns and U-turns become two smoothly joined curves. Same two clicks as before: the mouse wheel turns the start direction before the first click and the end direction before the second.
 - **New: Road (4 wide)**, 32 m, with its own build menu icon.
 - **Road Lines: 4 lanes** (dashed or continuous), for any road width.
@@ -95,7 +105,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **New: Sign Gantry** (build menu, Roads): two of the game's H-beams standing on upright connectors on the fence lines of a road, with a beam (H-beam and shelf-beam ends) across the top, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m, up to 24 m) and a second click builds it. Hold the snap key and aim one of the game's signs at the gantry: it goes flat on the face you aim at, on the beam (front or back, a snap point every 2 m along it, at its bottom edge, middle or top edge) or on a column (any face, every 2 m up) (scroll turns it 45 degrees). Costs steel beams and pipes (per 8 m of steel), so it unlocks with the Road Maker milestone but needs Tier 3 steel to afford.
 - **Wall attachments snap to fence walls and the gantry** (no snap key): conveyor, power and pipe wall mounts, wall holes and the like go flat on the face, free along the wall at 1 m heights (every 2 m on the gantry), tilt with a climbing wall, and turn with the scroll wheel. Conveyor wall mounts and holes stay level with the world so belts run straight.
 - **Nudge snapped fences**: a fence following a road edge or curb can now be locked (hologram lock key) and nudged as a whole, up / down and along the horizontal axes nearest the camera.
-- **New: Lane markings** (customizer, Road Lines tab, section Markings): **Lane Arrow** and **Lane Number**, sized to the lane they are painted in (wider lanes get bigger markings, up to a lane one and a half foundations wide). They lie on the road surface, following slopes and curves, and move along when the road is reshaped with Adjust Curvature. Pick one, aim at a road: a ghost shows it in the middle of the lane you aim at, pointing the way you are looking along the road; the mouse wheel picks the variant (arrows: straight, left, right, straight or left, straight or right, left or right; numbers: 0 to 9) and the click paints it. Real flat geometry, stretched along the road like painted ones. It starts in the colour of the road's lines (the middle lines' colour; on the cyberpunk road it glows like its lines), and can be repainted with a colour or switched in the Material tab. Dismantle one on its own or together with the road. Free.
+- **New: Lane markings** (customizer, Road Lines tab, section Markings): **Lane Arrow** and **Lane Number**, sized to the lane they are painted in (wider lanes get bigger markings, up to a lane one and a half foundations wide). They lie on the road surface, following slopes and curves (flat beyond 50 m, hidden beyond 600 m), and move along when the road is reshaped with Adjust Curvature. Pick one, aim at a road: a ghost shows it in the middle of the lane you aim at, pointing the way you are looking along the road; the mouse wheel picks the variant (arrows: straight, left, right, straight or left, straight or right, left or right; numbers: 0 to 9) and the click paints it. Real flat geometry, stretched along the road like painted ones. It starts in the colour of the road's lines (the middle lines' colour; on the cyberpunk road it glows like its lines), and can be repainted with a colour or switched in the Material tab. Dismantle one on its own or together with the road. Free.
 - **Changed:** fences and fence walls snap to roads, curbs and other fences only while the snap key is held; otherwise they place freely.
 - Build menu order: roads 1, 2, 3, 4 wide, then the intersection and road fences.
 
