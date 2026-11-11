@@ -149,6 +149,13 @@ void ARMBuildableRoad::ApplyCustomizationData_Implementation(const FFactoryCusto
 	ApplyMarkingColors(customizationData);
 }
 
+void ARMBuildableRoad::GetLineColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const
+{
+	const FResolvedFactoryCustomizationData Resolved(mCustomizationData, mColorSlot);
+	OutPrimary = Resolved.PrimaryColor;
+	OutSecondary = Resolved.SecondaryColor;
+}
+
 void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 {
 	if (!mMesh)

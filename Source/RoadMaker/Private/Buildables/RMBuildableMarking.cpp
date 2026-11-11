@@ -28,6 +28,9 @@ void ARMBuildableMarking::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableMarking, mVariant);
 	DOREPLIFETIME(ARMBuildableMarking, mLaneWidth);
+	DOREPLIFETIME(ARMBuildableMarking, mColour);
+	DOREPLIFETIME(ARMBuildableMarking, mDataPrimary);
+	DOREPLIFETIME(ARMBuildableMarking, mHasColour);
 }
 
 void ARMBuildableMarking::SetShape(uint8 Variant, float LaneWidth)
@@ -38,6 +41,13 @@ void ARMBuildableMarking::SetShape(uint8 Variant, float LaneWidth)
 	{
 		RebuildMesh();
 	}
+}
+
+void ARMBuildableMarking::SetPlacementColour(const FLinearColor& Colour, const FLinearColor& DataPrimary)
+{
+	mColour = Colour;
+	mDataPrimary = DataPrimary;
+	mHasColour = true;
 }
 
 void ARMBuildableMarking::RebuildMesh()
@@ -70,17 +80,28 @@ void ARMBuildableMarking::ApplyMarkingColors(const FFactoryCustomizationData& Da
 	{
 		return;
 	}
-	// Same slots as the road's lines: M_RoadMarking reads the primary, the cyberpunk one the secondary.
+	// The paint is one colour (primary of the paint data); the cyberpunk look glows in it. When built it
+	// takes the road's line colour; if the paint data resolves to something else later, it was repainted.
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
-	const FLinearColor P = Resolved.PrimaryColor;
-	const FLinearColor S = Resolved.SecondaryColor;
+	FLinearColor P = Resolved.PrimaryColor;
+	if (mHasColour && P.Equals(mDataPrimary, 0.003f))
+	{
+		P = mColour;
+	}
+	else if (HasAuthority() && (!mHasColour || !P.Equals(mDataPrimary, 0.003f)))
+	{
+		mColour = P;
+		mDataPrimary = P;
+		mHasColour = true;
+	}
+	// Both slots: the plain paint reads the first, the cyberpunk one the second.
 	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
 }
 
 // ---------------------------------------------------------------------------------------------
 // Shapes. Drawn in units (a lane-width-independent design) with X forward and Y right, then scaled
-// so the marking fits its lane: 80% of the lane across, at most 3 m along.
+// so the marking is half the width given across and stretched 1.8 times along.
 // ---------------------------------------------------------------------------------------------
 
 namespace
@@ -91,7 +112,9 @@ namespace
 		float Scale;
 		float Z;
 
-		FVector P(float X, float Y) const { return FVector(X * Scale, Y * Scale, Z); }
+		/** Markings are stretched along the road, like painted ones: seen from a driving car they would be squashed. */
+		static constexpr float Stretch = 1.8f;
+		FVector P(float X, float Y) const { return FVector(X * Scale * Stretch, Y * Scale, Z); }
 
 		/** Rectangle from (X0, Y0) to (X1, Y1) in units. */
 		void Rect(float X0, float X1, float Y0, float Y1)
@@ -242,7 +265,8 @@ void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, f
 	Variant = static_cast<uint8>(FMath::Clamp<int32>(Variant, 0, VariantCount(Kind) - 1));
 	float HalfL = 1.f, HalfW = 0.5f;
 	Extent(Kind, Variant, HalfL, HalfW);
-	const float Scale = FMath::Min(LaneWidth * 0.8f / (2.f * HalfW), 300.f / (2.f * HalfL));
+	(void)HalfL;
+	const float Scale = LaneWidth * 0.5f / (2.f * HalfW); // across: half the width it is given
 	FShapeBuilder B{ Out, Scale, Lift };
 	if (Kind == ERMMarkingKind::Arrow)
 	{

@@ -31,6 +31,9 @@ public:
 	static constexpr int32 PrimaryColorIndex = 24;
 	static constexpr int32 SecondaryColorIndex = 28;
 
+	/** The resolved paint colours: primary = dashed middle lines, secondary = side lines (and the cyberpunk glow). */
+	void GetLineColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const;
+
 	/** Lane markings; changing them rebuilds the mesh (and replicates). */
 	void SetMarkings(const FRMMarkings& InMarkings);
 	const FRMMarkings& GetMarkings() const { return mMarkings; }

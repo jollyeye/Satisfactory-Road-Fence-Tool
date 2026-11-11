@@ -31,8 +31,14 @@ public:
 	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
 	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
 
-	/** Which arrow / digit, and the width of the lane it sits in (cm; sets the size). */
+	/** Which arrow / digit, and the width it is drawn at (cm; the lane width times the size of the entry). */
 	void SetShape(uint8 Variant, float LaneWidth);
+	/**
+	 * The colour it is painted with when built (the road's line colour), and the colour the game's paint
+	 * data resolves to at that moment: when the paint data later resolves to something else, the piece
+	 * was repainted and takes that colour instead.
+	 */
+	void SetPlacementColour(const FLinearColor& Colour, const FLinearColor& DataPrimary);
 	uint8 GetVariant() const { return mVariant; }
 	float GetLaneWidth() const { return mLaneWidth; }
 
@@ -41,6 +47,10 @@ public:
 
 	/** Builds the flat mesh (top face only, a hair above the road) in the marking's local space. */
 	static void BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, float LaneWidth, FRMMesh& Out);
+
+	/** 1 for the small markings, 2 for the medium ones (double width and length). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	float mSizeMultiplier = 1.f;
 
 	/** Hair above the road surface so the paint does not fight the road's own surface. */
 	static constexpr float Lift = 1.5f;
@@ -57,6 +67,18 @@ protected:
 
 	UFUNCTION()
 	void OnRep_Shape() { RebuildMesh(); }
+
+	UFUNCTION()
+	void OnRep_Colour() { ApplyMarkingColors(mCustomizationData); }
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
+	FLinearColor mColour = FLinearColor::White;
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
+	FLinearColor mDataPrimary = FLinearColor::White;
+
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Colour)
+	bool mHasColour = false;
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
 	uint8 mVariant = 0;

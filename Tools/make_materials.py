@@ -893,6 +893,8 @@ ASSIGN = {
     "Build_SignGantry": {"m_main_material": steel},
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
+    "Build_LaneArrowMedium": MARKING_LOOKS,
+    "Build_LaneNumberMedium": MARKING_LOOKS,
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
