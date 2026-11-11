@@ -35,6 +35,7 @@ public:
 	static constexpr float ColumnHalfAcross = 40.f;
 	static constexpr float SignSpacing = 200.f;       // sign snap points every 2 m
 	static constexpr float FootHeight = 210.f;        // connection cube under each column, stood up (about 2.1 m)
+	static constexpr float FootOverlap = 10.f;        // the column sinks 10 cm into the foot (its model is a little lower than its bounds)
 	static constexpr float FootHalfAlong = 55.5f;
 	static constexpr float FootHalfAcross = 55.5f;
 	static constexpr float EndPiece = 100.f;          // the cross beam's two shelf-beam ends are 1 m each

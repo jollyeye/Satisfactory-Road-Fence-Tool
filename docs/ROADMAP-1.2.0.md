@@ -19,7 +19,6 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 | 11 | Traffic lights (decorative) | S-M | Pole + light heads, lights cycle on a timer (emissive material parameter), no traffic logic. Snap to intersection corners. |
 
 ## Moved to 1.3.0
-- **Wall attachments on the gantry** (the game's wall-mounted pieces, not only signs, snapping to the gantry's beam and columns like roadmap item 15 does for fence walls).
 - **Join tool** (the inverse of Cut Road / Cut Fence / Split Road: join two roads or fences end to end, merge roads side by side). Decided 2026-11-11: no undo, the join tool is the answer.
 
 ## Added later
@@ -28,7 +27,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 | 12 | Fix sign placement on fence walls (**built, awaiting in-game test**) | Signs placed by us on the face of a fence wall (snap key held; follows the slope, scroll = 45 degrees in the plane): turn with the curve, free along it, 1 m levels in height (5 per 4 m wall), leg hologram disabled, one click (`RMVanillaSnapping`, `PlaceSignOnFenceWall`; `SignYawOffset` if the model's front is off). Also: fences and fence walls snap to roads, curbs and other fences only while the snap key is held. |
 | 13 | Roads beside intersection curbs | **Done (to test):** snap key + aim at an intersection = road along the aimed curb, outside the junction, one click. |
 | 14 | Cut Fence + Cut Road "Cut also fences" | **Done (to test):** cutting moved to `ARMBuildableSpline::CutAt` (roads add lines / riders via `CanCutAt`, `CopyCutSettingsTo`, `BeforeCutDismantle`; fences side and look). One hologram class for both tools (`mFenceTool`); the road tool's build mode `BM_CutWithFences` also cuts this road's fences only: road fences within its edges, fence walls within half width + 40 cm (centred on the edge), up to 30 m up (stacked walls). Roads beside it and their fences are not cut. Section Edit fence. |
-| 15 | Wall attachments on fence walls | Fix all wall attachments (the game's wall-mounted pieces: conveyor / power / pipe wall mounts, wall outlets, signs done) so they snap to fence walls like they do to the game's own walls. Investigate how the game finds a wall (`FGWallAttachmentHologram`) and hand it our walls, like the signs. |
+| 15 | Wall attachments on fence walls and the gantry (**built, awaiting in-game test**) | Every wall-mounted piece (`AFGWallAttachmentHologram`: conveyor / power / pipe wall mounts, wall holes...) snaps to our fence walls and the gantry like signs, no snap key: flat on the face, free along the wall, 1 m levels (gantry: points every 2 m), tilts with a climbing wall, scroll turns it in the wall plane. The conveyor wall mount and wall hole stay level with the world (`IsLevelWallPiece`, belts). The game's "not on a wall" disqualifiers are dropped on our surfaces (`FixAttachmentValidity`; RMWallLog lists them). Console `rm.WallAttachYaw <deg>` turns pieces that sit rotated. |
 
 ## Suggested order
 Small and self-contained first, then the tools, then the big visual work:

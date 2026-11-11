@@ -105,7 +105,7 @@ void ARMBuildableGantry::RebuildMesh()
 		{
 			const float Y = (Side == 0 ? -1.f : 1.f) * mHalfSpan;
 			PlaceBlock(mParts[BaseA + Side], FVector(0.f, Y, FootHeight * 0.5f));
-			PlaceBeam(mParts[ColumnA + Side], FVector(0.f, Y, FootHeight), Up, mBeamBottom - FootHeight);
+			PlaceBeam(mParts[ColumnA + Side], FVector(0.f, Y, FootHeight - FootOverlap), Up, mBeamBottom - FootHeight + FootOverlap);
 		}
 		const float BeamZ = mBeamBottom + BeamDepth * 0.5f;
 		const float Start = -(mHalfSpan + BeamOverhang);

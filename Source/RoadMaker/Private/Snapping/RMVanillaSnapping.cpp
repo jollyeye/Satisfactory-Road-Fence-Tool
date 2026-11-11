@@ -35,6 +35,7 @@
 #include "Hologram/FGStandaloneSignHologram.h"
 #include "Hologram/FGSignPoleHologram.h"
 #include "Hologram/FGBeamHologram.h"
+#include "Hologram/FGWallAttachmentHologram.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
@@ -48,6 +49,11 @@ namespace
 		static bool IsSnapHeld(const AFGHologram* Hologram)
 		{
 			return static_cast<const FRMSnapAccess*>(Hologram)->mSnapToGuideLines;
+		}
+		/** The player's scroll turn in degrees (protected in the game). */
+		static float ScrollDegrees(const AFGHologram* Hologram)
+		{
+			return static_cast<const FRMSnapAccess*>(Hologram)->ApplyScrollRotationTo(0.f);
 		}
 	};
 
@@ -1725,44 +1731,30 @@ namespace
 		Scope.Cancel();
 	}
 
-	/**
-	 * Signs on fence walls (snap key held): the game's sign hologram does not know our curved walls.
-	 * Aimed at a wall, the sign is placed here: flat on the face you aim at, turned and tilted with the
-	 * curve, free along the wall and snapped every 1 m in height (5 levels on a 4 m wall), turned in
-	 * its plane with the scroll wheel (45 degrees), without its leg, built with one click.
-	 */
-	template <typename TScope, typename THologram>
-	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	/** Where a wall piece goes when you aim at a fence wall or the sign gantry: the face point, its normal and the wall's direction. */
+	struct FWallFace
 	{
-		// The sign gantry's beam: flat on its front or back face, at its bottom edge, middle or top edge.
+		FVector Location = FVector::ZeroVector;
+		FVector Normal = FVector::ForwardVector;
+		FVector Fwd = FVector::ZeroVector; // horizontal direction along the wall (zero on the gantry)
+		float Slope = 0.f;                 // how much the wall climbs along Fwd
+	};
+
+	bool FindWallFace(const FHitResult& Hit, FWallFace& Out)
+	{
+		// The sign gantry: flat on the face you aim at, on the beam or a column, snap points every 2 m.
 		if (ARMBuildableGantry* Gantry = Cast<ARMBuildableGantry>(Hit.GetActor()))
 		{
-			FVector GantryLocation, GantryNormal;
-			if (FRMSnapAccess::IsSnapHeld(Hologram) && Gantry->GetSignFace(Hit.Location, Hit.ImpactNormal, GantryLocation, GantryNormal))
-			{
-				FinishSignPlacement(Scope, Hologram, GantryLocation, GantryNormal, FVector::ZeroVector, 0.f);
-				return true;
-			}
-			if (GSignsOnWall.Remove(Hologram) > 0)
-			{
-				SetSignPoleDisabled(Hologram, false);
-			}
-			return false;
+			return Gantry->GetSignFace(Hit.Location, Hit.ImpactNormal, Out.Location, Out.Normal);
 		}
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
 		TArray<FRMFrame> Frames;
-		// Only with the snap key held: otherwise the sign places normally (with its leg), even when
-		// you aim at a wall.
-		if (Wall && Wall->IsWall() && FRMSnapAccess::IsSnapHeld(Hologram))
+		if (Wall && Wall->IsWall())
 		{
 			Wall->GetWorldFrames(Frames, 25.f);
 		}
 		if (Frames.Num() < 2)
 		{
-			if (GSignsOnWall.Remove(Hologram) > 0)
-			{
-				SetSignPoleDisabled(Hologram, false); // back to the game's own placement, with its leg
-			}
 			return false;
 		}
 		int32 Closest = 0;
@@ -1795,11 +1787,109 @@ namespace
 		// Five heights, 1 m apart: the bottom and top edge of the wall and three on its face.
 		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - OnLine.Z) / 100.f), 0.f, 4.f);
 		const float HalfThickness = 25.f; // walls are 0.5 m thick
-		FVector Location = OnLine + Normal * (HalfThickness + 1.f);
-		Location.Z = OnLine.Z + 100.f * Level;
-
-		FinishSignPlacement(Scope, Hologram, Location, Normal, Fwd, Fwd3.Z / FMath::Max(Fwd3.Size2D(), KINDA_SMALL_NUMBER));
+		Out.Location = OnLine + Normal * (HalfThickness + 1.f);
+		Out.Location.Z = OnLine.Z + 100.f * Level;
+		Out.Normal = Normal;
+		Out.Fwd = Fwd;
+		Out.Slope = Fwd3.Z / FMath::Max(Fwd3.Size2D(), KINDA_SMALL_NUMBER);
 		return true;
+	}
+
+	/**
+	 * Signs on fence walls and the gantry (snap key held): the game's sign hologram does not know our
+	 * walls. Aimed at one, the sign is placed here: flat on the face you aim at, turned and tilted with
+	 * the curve, free along the wall and snapped every 1 m in height (5 levels on a 4 m wall), turned in
+	 * its plane with the scroll wheel (45 degrees), without its leg, built with one click.
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		// Only with the snap key held: otherwise the sign places normally (with its leg).
+		FWallFace Face;
+		if (FRMSnapAccess::IsSnapHeld(Hologram) && FindWallFace(Hit, Face))
+		{
+			FinishSignPlacement(Scope, Hologram, Face.Location, Face.Normal, Face.Fwd, Face.Slope);
+			return true;
+		}
+		if (GSignsOnWall.Remove(Hologram) > 0)
+		{
+			SetSignPoleDisabled(Hologram, false); // back to the game's own placement, with its leg
+		}
+		return false;
+	}
+
+	// ---- Wall attachments (conveyor / power / pipe wall mounts, wall holes...) on fence walls and the gantry ----
+	TAutoConsoleVariable<float> CVarWallAttachYaw(TEXT("rm.WallAttachYaw"), 0.f, TEXT("Extra yaw (degrees) for wall attachments placed on fence walls / the gantry, if a piece sits turned."));
+	TSet<TWeakObjectPtr<const AFGHologram>> GAttachOnWall;
+
+	/** The belt carriers stay level with the world, everything else tilts with the wall. */
+	bool IsLevelWallPiece(const AFGHologram* Hologram)
+	{
+		const UClass* Build = Hologram->GetBuildClass();
+		if (!Build)
+		{
+			return false;
+		}
+		const FString Name = Build->GetName();
+		return Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")));
+	}
+
+	/** Puts a wall attachment flat on a fence wall or gantry face, no snap key needed. */
+	template <typename TScope, typename THologram>
+	bool PlaceAttachmentOnWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		FWallFace Face;
+		if (!Hologram->GetWorld() || !FindWallFace(Hit, Face))
+		{
+			GAttachOnWall.Remove(Hologram);
+			return false;
+		}
+		const bool bLevel = IsLevelWallPiece(Hologram);
+		const FQuat Base = FRotator(0.f, Face.Normal.Rotation().Yaw + CVarWallAttachYaw.GetValueOnGameThread(), 0.f).Quaternion();
+		float Turn = 0.f;
+		if (!bLevel)
+		{
+			// Tilts with a climbing wall, and the scroll wheel turns it in the plane of the wall.
+			const float SideSign = FVector::CrossProduct(Face.Normal, Face.Fwd).Z >= 0.f ? 1.f : -1.f;
+			Turn = FMath::RadiansToDegrees(FMath::Atan(Face.Slope)) * SideSign + FRMSnapAccess::ScrollDegrees(Hologram);
+		}
+		Hologram->SetActorLocationAndRotation(Face.Location, FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
+		if (!GAttachOnWall.Contains(Hologram))
+		{
+			GAttachOnWall.Add(Hologram);
+			if (CVarSignLog.GetValueOnGameThread() != 0)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("RMWallLog: %s (%s) placed on %s, level=%d normal=%s"), *Hologram->GetName(),
+					Hologram->GetBuildClass() ? *Hologram->GetBuildClass()->GetName() : TEXT("?"), *GetNameSafe(Hit.GetActor()), bLevel ? 1 : 0, *Face.Normal.ToCompactString());
+			}
+		}
+		Scope.Cancel();
+		return true;
+	}
+
+	/** After the game's placement check: on our walls, drop what only means "this is not a game wall". */
+	void FixAttachmentValidity(AFGHologram* Hologram)
+	{
+		if (!GAttachOnWall.Contains(Hologram))
+		{
+			return;
+		}
+		TArray<TSubclassOf<UFGConstructDisqualifier>> Found;
+		Hologram->GetConstructDisqualifiers(Found);
+		Hologram->ResetConstructDisqualifiers();
+		for (const TSubclassOf<UFGConstructDisqualifier>& D : Found)
+		{
+			const FString Name = D ? D->GetName() : FString();
+			const bool bKeep = Name.Contains(TEXT("Clearance")) || Name.Contains(TEXT("Overlap")) || Name.Contains(TEXT("Encroach")) || Name.Contains(TEXT("Afford"));
+			if (CVarSignLog.GetValueOnGameThread() != 0 && SignLogDue(Hologram, 50, 1.0))
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("RMWallLog: disqualifier %s %s"), *Name, bKeep ? TEXT("kept") : TEXT("dropped (we place it on our wall)"));
+			}
+			if (bKeep && D)
+			{
+				Hologram->AddConstructDisqualifier(D);
+			}
+		}
 	}
 
 	template <typename TScope, typename THologram>
@@ -2078,6 +2168,18 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 #undef RM_HOOK_SET_LOCATION
+
+	// Wall attachments: snap to our fence walls and the gantry like signs, without the snap key.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGWallAttachmentHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGWallAttachmentHologram>(),
+		[](auto& Scope, AFGWallAttachmentHologram* Hologram, const FHitResult& Hit)
+		{
+			PlaceAttachmentOnWall(Scope, Hologram, Hit);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWallAttachmentHologram::CheckValidPlacement, GetMutableDefault<AFGWallAttachmentHologram>(),
+		[](AFGWallAttachmentHologram* Hologram)
+		{
+			FixAttachmentValidity(Hologram);
+		});
 
 	// Debug log: the meshes of every beam-like hologram (connectors, shelf, supports) for the gantry.
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBuildableHologram>(),
