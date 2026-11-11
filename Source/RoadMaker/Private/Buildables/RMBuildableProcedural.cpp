@@ -305,7 +305,6 @@ void ARMBuildableProcedural::SetLook(uint8 Look)
 	{
 		return;
 	}
-	UE_LOG(LogRoadMaker, Display, TEXT("RMMarkLog SetLook %s %d -> %d"), *GetName(), mLook, Look);
 	mLook = Look;
 	if (HasActorBegunPlay())
 	{

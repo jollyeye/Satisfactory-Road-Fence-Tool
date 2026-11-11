@@ -866,16 +866,14 @@ MEL.connect_material_property(const(marking, 0.75, -300, 120), "", MP.MP_ROUGHNE
 finish(marking)
 log("Lane marking paint")
 
-# Cyberpunk: glows like the cyberpunk road's lines (emissive x4), in the hue of its colour brought to full
-# brightness, so it glows whatever swatch it is painted with (the game's swatches have dark second colours).
+# Cyberpunk: exactly the cyberpunk road's line formula (base = secondary colour, emissive = secondary x 4), so a
+# marking painted with the road's swatch glows exactly like its lines. Custom colours can hold values outside
+# 0..1 (even negative ones, e.g. (-20, 5, -18.75) glows a saturated green); they are used as they are.
 marking_cyber = new_material("M_RoadMarkingCyber")
-mc_secondary = cpd_param(marking_cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -900, 0)
-mc_bright = custom(marking_cyber, "float m = max(max(C.r, C.g), C.b);\nreturn m < 0.02 ? float3(1, 1, 1) : C.rgb / m;",
-                   unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["C"], -600, 0, "Full brightness")
-link(mc_secondary, "", mc_bright, "C")
-MEL.connect_material_property(mc_bright, "", MP.MP_BASE_COLOR)
+mc_secondary = cpd_param(marking_cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -600, 0)
+MEL.connect_material_property(mc_secondary, "", MP.MP_BASE_COLOR)
 mc_glow = node(marking_cyber, unreal.MaterialExpressionMultiply, -300, 100)
-link(mc_bright, "", mc_glow, "A")
+link(mc_secondary, "", mc_glow, "A")
 link(const(marking_cyber, 4.0, -450, 160), "", mc_glow, "B")
 MEL.connect_material_property(mc_glow, "", MP.MP_EMISSIVE_COLOR)
 MEL.connect_material_property(const(marking_cyber, 0.1, -300, 260), "", MP.MP_ROUGHNESS)

@@ -56,8 +56,6 @@ void ARMBuildableMarking::RebuildMesh()
 	// The cyberpunk look is the second entry (index look - 1); asphalt and concrete share the plain paint.
 	ApplyMaterial(0, LookMaterial(mLookTopMaterials, mMarkingMaterial));
 	ApplyMarkingColors(mCustomizationData);
-	UE_LOG(LogRoadMaker, Display, TEXT("RMMarkLog rebuild %s look=%d shown=%d material=%s"), *GetName(), mLook, GetShownLook(),
-		mMesh->GetMaterial(0) ? *mMesh->GetMaterial(0)->GetName() : TEXT("none"));
 }
 
 void ARMBuildableMarking::ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData)
@@ -82,9 +80,6 @@ void ARMBuildableMarking::ApplyMarkingColors(const FFactoryCustomizationData& Da
 	// copy of its road's paint). Both slots, so the plain paint and the glowing cyberpunk one read the same.
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor S = Resolved.SecondaryColor;
-	UE_LOG(LogRoadMaker, Display, TEXT("RMMarkLog colours %s look=%d secondary=%s primary=%s swatch=%s material=%s"), *GetName(), mLook,
-		*S.ToString(), *Resolved.PrimaryColor.ToString(), Data.SwatchDesc ? *Data.SwatchDesc->GetName() : TEXT("none"),
-		mMesh->GetMaterial(0) ? *mMesh->GetMaterial(0)->GetName() : TEXT("none"));
 	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 	mMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }
