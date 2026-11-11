@@ -235,7 +235,7 @@ finish(holo_x)
 
 bm_cut_fences = make_bp("Holograms", "BM_CutWithFences", BuildModeDescriptor)
 setp(cdo(bm_cut_fences), text("Cut also fences"), "m_display_name", "mDisplayName")
-setp(cdo(bm_cut_fences), text("Also cuts, at the same place, the fences along the road's sides (fence walls stacked on them too) and the roads built beside it. Train tracks and vehicle paths on the road are always cut."), "m_description", "mDescription")
+setp(cdo(bm_cut_fences), text("Also cuts this road's fences at the same place: road fences standing on it and fence walls on its edges (stacked walls too). Other roads and their fences are left alone. Train tracks and vehicle paths on the road are always cut."), "m_description", "mDescription")
 finish(bm_cut_fences)
 
 holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)

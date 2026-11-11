@@ -1,8 +1,8 @@
 // Cut tools (build menu Road Tools): Cut Road (Edit road) and Cut Fence (Edit fence). Aim at a piece,
 // an outline of its cross-section shows where it is cut (through other geometry, like the
 // intersection end outlines); click to split it there into two that keep its curve and settings.
-// Cut Road's build mode "Cut also fences" also cuts the fences along the road's sides and the roads
-// built beside it, at the same place.
+// Cut Road's build mode "Cut also fences" also cuts this road's fences (on it, or walls on its edges)
+// at the same place.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -42,7 +42,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	bool mFenceTool = false;
 
-	/** Cut Road: build mode that also cuts the fences along the road and the roads beside it. */
+	/** Cut Road: build mode that also cuts this road's fences. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeWithFences;
 
@@ -60,7 +60,7 @@ protected:
 	bool IsCutValid() const;
 	float MinPieceLength() const { return mFenceTool ? 50.f : 100.f; }
 
-	/** Cut Road with fences: fences on the road's sides and roads beside it crossing the cut, and where. */
+	/** Cut Road with fences: this road's fences crossing the cut, and where. */
 	void FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>& Out) const;
 
 	/** Side cuts of the preview, kept until the cut point moves. */

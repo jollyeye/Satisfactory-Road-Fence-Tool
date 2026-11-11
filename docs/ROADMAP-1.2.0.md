@@ -23,7 +23,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 |---|---|---|
 | 12 | Fix sign placement on fence walls | The game's signs do not attach properly to fence walls; to investigate. |
 | 13 | Roads beside intersection curbs | **Done (to test):** snap key + aim at an intersection = road along the aimed curb, outside the junction, one click. |
-| 14 | Cut Fence + Cut Road "Cut also fences" | **Done (to test):** cutting moved to `ARMBuildableSpline::CutAt` (roads add lines / riders via `CanCutAt`, `CopyCutSettingsTo`, `BeforeCutDismantle`; fences side and look). One hologram class for both tools (`mFenceTool`); the road tool's build mode `BM_CutWithFences` also cuts fences within the road width + 1.5 m (up to 30 m up: stacked walls) and roads edge to edge beside it. Section Edit fence. |
+| 14 | Cut Fence + Cut Road "Cut also fences" | **Done (to test):** cutting moved to `ARMBuildableSpline::CutAt` (roads add lines / riders via `CanCutAt`, `CopyCutSettingsTo`, `BeforeCutDismantle`; fences side and look). One hologram class for both tools (`mFenceTool`); the road tool's build mode `BM_CutWithFences` also cuts this road's fences only: road fences within its edges, fence walls within half width + 40 cm (centred on the edge), up to 30 m up (stacked walls). Roads beside it and their fences are not cut. Section Edit fence. |
 
 ## Suggested order
 Small and self-contained first, then the tools, then the big visual work:

@@ -157,9 +157,8 @@ void ARMRoadCutHologram::FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>&
 		{
 			continue;
 		}
-		ARMBuildableRoad* OtherRoad = Cast<ARMBuildableRoad>(Other);
 		ARMBuildableFence* Fence = Cast<ARMBuildableFence>(Other);
-		if (!OtherRoad && !Fence)
+		if (!Fence)
 		{
 			continue;
 		}
@@ -175,19 +174,11 @@ void ARMRoadCutHologram::FindSideCuts(TArray<TPair<ARMBuildableSpline*, float>>&
 		{
 			continue;
 		}
-		bool bTake = false;
-		if (Fence)
-		{
-			// On the road's sides (edge fences, centred or inset), stacked walls included.
-			bTake = FMath::Abs(Across) <= Half + 150.f && Up >= -200.f && Up <= 3000.f;
-		}
-		else
-		{
-			// A road built beside it, edge to edge, at the same height.
-			const float Beside = Half + OtherRoad->GetRoadWidth() * 0.5f;
-			bTake = FMath::Abs(FMath::Abs(Across) - Beside) <= 100.f && FMath::Abs(Up) <= 150.f;
-		}
-		const float Min = Fence ? 50.f : 100.f;
+		// Only this road's fences: road fences stand on it (inside its edges); fence walls stand
+		// centred on its edge. Fences of a road beside it stay. Stacked walls (up to 30 m) included.
+		const float MaxAcross = Fence->IsWall() ? Half + 40.f : Half;
+		const bool bTake = FMath::Abs(Across) <= MaxAcross && Up >= -200.f && Up <= 3000.f;
+		const float Min = 50.f;
 		if (bTake && Dist >= Min && Other->GetLength() - Dist >= Min && Other->CanCutAt(Dist))
 		{
 			Out.Add(TPair<ARMBuildableSpline*, float>(Other, Dist));
