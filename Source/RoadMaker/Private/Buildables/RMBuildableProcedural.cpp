@@ -1,4 +1,5 @@
 #include "Buildables/RMBuildableProcedural.h"
+#include "RoadMakerModule.h"
 #include "FGFactoryColoringTypes.h"
 #include "ProceduralMeshComponent.h"
 #include "FGInventoryComponent.h"
@@ -304,6 +305,7 @@ void ARMBuildableProcedural::SetLook(uint8 Look)
 	{
 		return;
 	}
+	UE_LOG(LogRoadMaker, Display, TEXT("RMMarkLog SetLook %s %d -> %d"), *GetName(), mLook, Look);
 	mLook = Look;
 	if (HasActorBegunPlay())
 	{
