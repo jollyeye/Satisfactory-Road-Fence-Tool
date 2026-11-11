@@ -68,14 +68,14 @@ FVector ARMRoadAdjustHologram::GetPlacedPointAxis() const
 // Step 0: the circles
 // ---------------------------------------------------------------------------------------------
 
-void ARMRoadAdjustHologram::SetGrabbedRoadsHidden(bool bHidden)
+void ARMRoadAdjustHologram::SetGrabbedRoadsHidden(bool bMakeHidden)
 {
-	mRoadsHidden = bHidden;
+	mRoadsHidden = bMakeHidden;
 	for (ARMBuildableRoad* Road : { mRoadA, mRoadB })
 	{
 		if (IsValid(Road) && !Road->GetIsDismantled())
 		{
-			Road->SetActorHiddenInGame(bHidden);
+			Road->SetActorHiddenInGame(bMakeHidden);
 		}
 	}
 }

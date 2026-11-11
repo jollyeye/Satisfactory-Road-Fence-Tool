@@ -53,7 +53,7 @@ protected:
 	bool TrySnapToFoundation(const FHitResult& hitResult);
 
 	/** The grabbed roads are hidden while their replacement is previewed. */
-	void SetGrabbedRoadsHidden(bool bHidden);
+	void SetGrabbedRoadsHidden(bool bMakeHidden);
 	bool mRoadsHidden = false;
 
 	/** The road ends near the player (refreshed twice a second). */
