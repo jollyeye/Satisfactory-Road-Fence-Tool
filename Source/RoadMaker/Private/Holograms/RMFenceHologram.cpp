@@ -24,6 +24,12 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	{
 		return SnapToFoundationGrid(hitResult);
 	}
+	// Snapping to roads, curbs and other fences works only while the snap key is held.
+	if (!mSnapToGuideLines && (Cast<ARMBuildableFence>(hitResult.GetActor()) || Cast<ARMBuildableRoad>(hitResult.GetActor())
+		|| Cast<ARMBuildableIntersection>(hitResult.GetActor())))
+	{
+		return false;
+	}
 	// With the snap key held, aiming at another fence of the same family (fence wall for fence
 	// walls, road fence for road fences) puts the new one in its place, replaced on click, like the
 	// game's walls. Fence walls also stack: aiming at the upper half of a fence wall puts the new one

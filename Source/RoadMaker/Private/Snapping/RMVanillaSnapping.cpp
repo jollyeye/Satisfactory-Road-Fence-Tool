@@ -31,6 +31,7 @@
 #include "Buildables/RMBuildableIntersection.h"
 #include "Buildables/FGBuildableFoundation.h"
 #include "Hologram/FGFoundationHologram.h"
+#include "Hologram/FGStandaloneSignHologram.h"
 
 namespace
 {
@@ -43,7 +44,7 @@ namespace
 		}
 	};
 
-	enum class ESnapKind : uint8 { None, PowerPole, StreetLight, PathStart, Foundation };
+	enum class ESnapKind : uint8 { None, PowerPole, StreetLight, PathStart, Foundation, Sign };
 
 	/** Correction between "facing" and the street light model's own forward axis (was 90 off in game). */
 	constexpr float StreetLightYawOffset = -90.f;
@@ -54,6 +55,10 @@ namespace
 		if (!Build)
 		{
 			return ESnapKind::None;
+		}
+		if (Hologram->IsA<AFGStandaloneSignHologram>())
+		{
+			return ESnapKind::Sign;
 		}
 		if (Build->IsChildOf(AFGBuildablePowerPole::StaticClass()))
 		{
@@ -1577,6 +1582,72 @@ namespace
 		return false;
 	}
 
+	/**
+	 * Signs on fence walls: the game's sign hologram snaps to flat walls on its own grid, which means
+	 * nothing on a curved wall. Hand it a hit on the wall's face instead (horizontal normal, so it
+	 * mounts flat and drops its leg like on a vertical wall) at the nearest 2 m step along the curve.
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
+		if (!Wall || !Wall->IsWall())
+		{
+			return false;
+		}
+		TArray<FRMFrame> Frames;
+		Wall->GetWorldFrames(Frames, 25.f);
+		if (Frames.Num() < 2)
+		{
+			return false;
+		}
+		int32 Closest = 0;
+		float Best = TNumericLimits<float>::Max();
+		for (int32 I = 0; I < Frames.Num(); ++I)
+		{
+			const float D = FVector::DistSquared2D(Frames[I].Pos, Hit.Location);
+			if (D < Best)
+			{
+				Best = D;
+				Closest = I;
+			}
+		}
+		const FRMFrame& Near = Frames[Closest];
+		// Side: the face you hit (its normal), else where the aim point lies.
+		FVector Right = Near.Right.GetSafeNormal2D();
+		float Side = FVector::DotProduct(Hit.ImpactNormal, Right);
+		if (FMath::Abs(Side) < 0.3f)
+		{
+			Side = FVector::DotProduct(Hit.Location - Near.Pos, Right);
+		}
+		Side = Side >= 0.f ? 1.f : -1.f;
+
+		// Nearest 2 m step along the wall, from its start.
+		const float Step = 200.f;
+		const float Target = FMath::Clamp(FMath::RoundToFloat(Near.Dist / Step) * Step, Frames[0].Dist, Frames.Last().Dist);
+		int32 Hi = 1;
+		while (Hi < Frames.Num() - 1 && Frames[Hi].Dist < Target)
+		{
+			++Hi;
+		}
+		const FRMFrame& A = Frames[Hi - 1];
+		const FRMFrame& B = Frames[Hi];
+		const float Span = FMath::Max(B.Dist - A.Dist, 1.f);
+		const float T = FMath::Clamp((Target - A.Dist) / Span, 0.f, 1.f);
+		const FVector Pos = FMath::Lerp(A.Pos, B.Pos, T);
+		Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal2D();
+		const FVector Normal = Right * Side;
+		const float HalfThickness = 25.f; // walls are 0.5 m thick
+
+		FHitResult Placed = Hit;
+		Placed.Location = FVector(Pos.X, Pos.Y, Hit.Location.Z) + Normal * HalfThickness;
+		Placed.ImpactPoint = Placed.Location;
+		Placed.Normal = Normal;
+		Placed.ImpactNormal = Normal;
+		Scope(Hologram, Placed);
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
@@ -1584,6 +1655,11 @@ namespace
 		if (Kind == ESnapKind::None || !Hologram->GetWorld() || GInPathReplace)
 		{
 			return false;
+		}
+
+		if (Kind == ESnapKind::Sign)
+		{
+			return PlaceSignOnFenceWall(Scope, Hologram, Hit);
 		}
 
 		if (Kind == ESnapKind::Foundation)
@@ -1834,6 +1910,7 @@ void RMVanillaSnapping::InstallHooks()
 	RM_HOOK_SET_LOCATION(AFGRailroadTrackHologram);
 	RM_HOOK_SET_LOCATION(AFGVehiclePathSegmentHologram);
 	RM_HOOK_SET_LOCATION(AFGFoundationHologram);
+	RM_HOOK_SET_LOCATION(AFGStandaloneSignHologram);
 
 	// Foundations snapped to a road end turn 90 degrees per scroll step.
 	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::ScrollRotate, GetMutableDefault<AFGFoundationHologram>(),

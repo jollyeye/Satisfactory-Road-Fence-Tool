@@ -24,7 +24,7 @@ Tick items off and add findings as we go. Changes for the release go in the chan
 ## Added later
 | # | Item | Notes |
 |---|---|---|
-| 12 | Fix sign placement on fence walls | The game's signs do not attach properly to fence walls; to investigate. |
+| 12 | Fix sign placement on fence walls (**built, awaiting in-game test**) | The game's signs snap every 2 m along the curve of a fence wall, flush on the face you aim at, and drop their leg like on a vertical wall (hit handed to the sign hologram, `RMVanillaSnapping`). Also: fences and fence walls snap to roads, curbs and other fences only while the snap key is held. |
 | 13 | Roads beside intersection curbs | **Done (to test):** snap key + aim at an intersection = road along the aimed curb, outside the junction, one click. |
 | 14 | Cut Fence + Cut Road "Cut also fences" | **Done (to test):** cutting moved to `ARMBuildableSpline::CutAt` (roads add lines / riders via `CanCutAt`, `CopyCutSettingsTo`, `BeforeCutDismantle`; fences side and look). One hologram class for both tools (`mFenceTool`); the road tool's build mode `BM_CutWithFences` also cuts this road's fences only: road fences within its edges, fence walls within half width + 40 cm (centred on the edge), up to 30 m up (stacked walls). Roads beside it and their fences are not cut. Section Edit fence. |
 
