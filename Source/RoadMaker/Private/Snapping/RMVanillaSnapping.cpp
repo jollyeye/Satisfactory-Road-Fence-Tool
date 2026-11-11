@@ -1660,6 +1660,20 @@ namespace
 			Hit ? *DescribeHit(*Hit) : TEXT(""), Extra ? TEXT(" || ") : TEXT(""), Extra ? Extra : TEXT(""));
 	}
 
+	/** True if this hologram has not logged under this key for Interval seconds (keeps the log readable). */
+	bool SignLogDue(const AFGHologram* Hologram, int32 Key, double Interval)
+	{
+		static TMap<uint64, double> LastLogged;
+		double& Last = LastLogged.FindOrAdd(static_cast<uint64>(reinterpret_cast<UPTRINT>(Hologram)) * 8 + static_cast<uint64>(Key));
+		const double Now = FPlatformTime::Seconds();
+		if (Now - Last <= Interval)
+		{
+			return false;
+		}
+		Last = Now;
+		return true;
+	}
+
 	/** Puts a sign on a surface: no leg, turned to face along Normal (and tilted with Slope), scroll rolls it. */
 	template <typename TScope, typename THologram>
 	void FinishSignPlacement(TScope& Scope, THologram* Hologram, const FVector& Location, const FVector& Normal, const FVector& Fwd, float Slope)
@@ -2039,24 +2053,16 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGStandaloneSignHologram>(),
 		[](auto& Scope, AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
 		{
-			static TMap<TWeakObjectPtr<const AFGHologram>, double> LastLogged;
-			double& Last = LastLogged.FindOrAdd(Hologram);
-			const double Now = FPlatformTime::Seconds();
-			if (Now - Last > 0.25)
+			if (SignLogDue(Hologram, 1, 0.25))
 			{
-				Last = Now;
 				SignLog(TEXT("SetLocation(before)"), Hologram, &Hit);
 			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGStandaloneSignHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGStandaloneSignHologram>(),
 		[](AFGStandaloneSignHologram* Hologram, const FHitResult& Hit)
 		{
-			static TMap<TWeakObjectPtr<const AFGHologram>, double> LastLogged;
-			double& Last = LastLogged.FindOrAdd(Hologram);
-			const double Now = FPlatformTime::Seconds();
-			if (Now - Last > 0.25)
+			if (SignLogDue(Hologram, 2, 0.25))
 			{
-				Last = Now;
 				SignLog(TEXT("SetLocation(after)"), Hologram);
 			}
 		});
