@@ -5,6 +5,7 @@
 #include "Buildables/RMBuildableIntersection.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Equipment/FGBuildGunBuild.h"
 #include "RMRoadUtils.h"
 #include "FGCharacterPlayer.h"
 #include "FGInventoryComponent.h"
