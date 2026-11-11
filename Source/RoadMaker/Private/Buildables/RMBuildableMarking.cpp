@@ -140,14 +140,14 @@ namespace
 	// Arrows are laid out in real proportions (units across = units along, the stretch is already in the
 	// numbers): every arrow fits the straight arrow's box, 1 wide and 3.96 long; only the turn-and-straight
 	// and left-or-right arrows reach out a little to the side. Same layout as Tools/IconSource/arrow_layout.py.
-	constexpr float Top = 1.98f, Bottom = -1.98f;
-	constexpr float Shaft = 0.14f;      // shaft half width
-	constexpr float HeadHalf = 0.5f;    // forward head half width
-	constexpr float HeadLen = 1.53f;    // forward head length
-	constexpr float SideLen = 0.5f;     // a side head's length (across)
-	constexpr float SideBase = 1.3f;    // a side head's base (along)
-	constexpr float BarThick = 0.4f;    // the bar from the shaft to a side head (along)
-	constexpr float BranchBar = 0.16f;  // that bar's length on the branching arrows (across)
+	constexpr float ArrowTop = 1.98f, ArrowBottom = -1.98f;
+	constexpr float ArrowShaft = 0.14f;      // shaft half width
+	constexpr float ArrowHeadHalf = 0.5f;    // forward head half width
+	constexpr float ArrowHeadLen = 1.53f;    // forward head length
+	constexpr float ArrowSideLen = 0.5f;     // a side head's length (across)
+	constexpr float ArrowSideBase = 1.3f;    // a side head's base (along)
+	constexpr float ArrowBarThick = 0.4f;    // the bar from the shaft to a side head (along)
+	constexpr float ArrowBranchBar = 0.16f;  // that bar's length on the branching arrows (across)
 
 	void BuildArrow(FShapeBuilder& B, uint8 Variant)
 	{
@@ -157,29 +157,29 @@ namespace
 		};
 		auto Forward = [&B](float Y)
 		{
-			B.Tri(B.Real(Top - HeadLen, Y - HeadHalf), B.Real(Top, Y), B.Real(Top - HeadLen, Y + HeadHalf));
+			B.Tri(B.Real(ArrowTop - ArrowHeadLen, Y - ArrowHeadHalf), B.Real(ArrowTop, Y), B.Real(ArrowTop - ArrowHeadLen, Y + ArrowHeadHalf));
 		};
 		// Side head pointing to Side (-1 left, +1 right), its base at BaseY, centred along at Xc.
 		auto SideHead = [&B](float Side, float Xc, float BaseY)
 		{
-			B.Tri(B.Real(Xc - SideBase * 0.5f, BaseY), B.Real(Xc + SideBase * 0.5f, BaseY), B.Real(Xc, BaseY + Side * SideLen));
+			B.Tri(B.Real(Xc - ArrowSideBase * 0.5f, BaseY), B.Real(Xc + ArrowSideBase * 0.5f, BaseY), B.Real(Xc, BaseY + Side * ArrowSideLen));
 		};
 
 		switch (Variant)
 		{
 		case 0: // straight
-			Rect(Bottom, Top - HeadLen, -Shaft, Shaft);
+			Rect(ArrowBottom, ArrowTop - ArrowHeadLen, -ArrowShaft, ArrowShaft);
 			Forward(0.f);
 			break;
 		case 1: // left: the shaft runs up the far side of the box and turns at the top
 		case 2: // right
 		{
 			const float S = Variant == 1 ? -1.f : 1.f;
-			const float Xc = Top - SideBase * 0.5f;
-			const float ShaftY = -S * (HeadHalf - Shaft);
-			const float BaseY = S * (HeadHalf - SideLen);
-			Rect(Bottom, Xc + BarThick * 0.5f, ShaftY - Shaft, ShaftY + Shaft);
-			Rect(Xc - BarThick * 0.5f, Xc + BarThick * 0.5f, ShaftY + S * Shaft, BaseY);
+			const float Xc = ArrowTop - ArrowSideBase * 0.5f;
+			const float ShaftY = -S * (ArrowHeadHalf - ArrowShaft);
+			const float BaseY = S * (ArrowHeadHalf - ArrowSideLen);
+			Rect(ArrowBottom, Xc + ArrowBarThick * 0.5f, ShaftY - ArrowShaft, ShaftY + ArrowShaft);
+			Rect(Xc - ArrowBarThick * 0.5f, Xc + ArrowBarThick * 0.5f, ShaftY + S * ArrowShaft, BaseY);
 			SideHead(S, Xc, BaseY);
 			break;
 		}
@@ -187,24 +187,24 @@ namespace
 		case 4: // straight or right
 		{
 			const float S = Variant == 3 ? -1.f : 1.f;
-			const float Tip = Shaft + BranchBar + SideLen;
-			const float Shift = -S * (Tip - HeadHalf) * 0.5f;
-			Rect(Bottom, Top - HeadLen, Shift - Shaft, Shift + Shaft);
+			const float Tip = ArrowShaft + ArrowBranchBar + ArrowSideLen;
+			const float Shift = -S * (Tip - ArrowHeadHalf) * 0.5f;
+			Rect(ArrowBottom, ArrowTop - ArrowHeadLen, Shift - ArrowShaft, Shift + ArrowShaft);
 			Forward(Shift);
-			const float Xc = Top - HeadLen - 0.15f - SideBase * 0.5f;
-			const float BaseY = Shift + S * (Shaft + BranchBar);
-			Rect(Xc - BarThick * 0.5f, Xc + BarThick * 0.5f, Shift + S * Shaft, BaseY);
+			const float Xc = ArrowTop - ArrowHeadLen - 0.15f - ArrowSideBase * 0.5f;
+			const float BaseY = Shift + S * (ArrowShaft + ArrowBranchBar);
+			Rect(Xc - ArrowBarThick * 0.5f, Xc + ArrowBarThick * 0.5f, Shift + S * ArrowShaft, BaseY);
 			SideHead(S, Xc, BaseY);
 			break;
 		}
 		default: // left or right
 		{
-			const float Xc = Top - SideBase * 0.5f;
-			Rect(Bottom, Xc + BarThick * 0.5f, -Shaft, Shaft);
+			const float Xc = ArrowTop - ArrowSideBase * 0.5f;
+			Rect(ArrowBottom, Xc + ArrowBarThick * 0.5f, -ArrowShaft, ArrowShaft);
 			for (const float S : { -1.f, 1.f })
 			{
-				const float BaseY = S * (Shaft + BranchBar);
-				Rect(Xc - BarThick * 0.5f, Xc + BarThick * 0.5f, S * Shaft, BaseY);
+				const float BaseY = S * (ArrowShaft + ArrowBranchBar);
+				Rect(Xc - ArrowBarThick * 0.5f, Xc + ArrowBarThick * 0.5f, S * ArrowShaft, BaseY);
 				SideHead(S, Xc, BaseY);
 			}
 			break;
