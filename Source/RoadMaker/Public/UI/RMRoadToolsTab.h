@@ -9,6 +9,7 @@
 #include "RMRoadToolsTab.generated.h"
 
 class UUserWidget;
+class UWidget;
 
 UCLASS()
 class ROADMAKER_API URMRoadToolsTab : public UObject
@@ -34,6 +35,10 @@ private:
 	void LeaveRoadMode(bool bRefreshBuildPage);
 	void SetButtonsActive(bool bOurs);
 	bool AnyGameTabActive() const;
+
+	/** Shows only Road Tools' category buttons on our tab, all others on the Build tab (no rebuild). */
+	void UpdateCategoryButtons(UUserWidget* Menu);
+	TSet<TWeakObjectPtr<UWidget>> mHiddenCategoryButtons;
 
 	/** The build menu's category list: only Road Tools, or everything else. */
 	void ApplyCategoryFilter(UUserWidget* Menu, bool bRoadToolsOnly);

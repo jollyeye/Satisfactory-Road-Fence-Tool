@@ -4,6 +4,7 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/PanelWidget.h"
 #include "Containers/Ticker.h"
 #include "Engine/Texture2D.h"
 #include "UObject/UObjectIterator.h"
@@ -209,6 +210,7 @@ bool URMRoadToolsTab::Tick(float DeltaTime)
 	{
 		LeaveRoadMode(true);
 	}
+	UpdateCategoryButtons(Menu);
 	return true;
 }
 
@@ -400,6 +402,64 @@ void URMRoadToolsTab::ApplyCategoryFilter(UUserWidget* Menu, bool bRoadToolsOnly
 	if (bRoadToolsOnly || !Wanted.Contains(Selected))
 	{
 		CallBP(Menu, TEXT("OnCategoryClicked"), { FRMArg::MakeInt(0) });
+	}
+}
+
+void URMRoadToolsTab::UpdateCategoryButtons(UUserWidget* Menu)
+{
+	// Build page category buttons: Widget_CategoryButton_C in mCategoryButtonsContainer.Container,
+	// each with mCategory (the category object; its class is the category, e.g. BC_RoadTools_C).
+	UObject* Browser = GetObjectProp(Menu, TEXT("mBrowser_Builder"));
+	UObject* ButtonsContainer = GetObjectProp(Browser, TEXT("mCategoryButtonsContainer"));
+	UPanelWidget* List = Cast<UPanelWidget>(GetObjectProp(ButtonsContainer, TEXT("Container")));
+	UClass* RoadTools = RoadToolsCategory();
+	if (!List || !RoadTools)
+	{
+		return;
+	}
+	bool bSelectedHidden = false;
+	for (int32 I = 0; I < List->GetChildrenCount(); ++I)
+	{
+		UWidget* Button = List->GetChildAt(I);
+		UObject* Category = Button ? GetObjectProp(Button, TEXT("mCategory")) : nullptr;
+		if (!Category)
+		{
+			continue;
+		}
+		const bool bOurs = Category->IsA(RoadTools) || Category->GetClass() == RoadTools || Category == RoadTools->GetDefaultObject();
+		// Road Tools tab: only our categories; Build tab: everything but ours.
+		const bool bHide = mRoadMode ? !bOurs : bOurs;
+		const TWeakObjectPtr<UWidget> Key(Button);
+		if (bHide)
+		{
+			if (Button->GetVisibility() != ESlateVisibility::Collapsed)
+			{
+				Button->SetVisibility(ESlateVisibility::Collapsed);
+				mHiddenCategoryButtons.Add(Key);
+			}
+			if (FBoolProperty* P = CastField<FBoolProperty>(Button->GetClass()->FindPropertyByName(TEXT("mIsSelected"))))
+			{
+				bSelectedHidden |= P->GetPropertyValue_InContainer(Button);
+			}
+		}
+		else if (mHiddenCategoryButtons.Contains(Key))
+		{
+			Button->SetVisibility(ESlateVisibility::Visible);
+			mHiddenCategoryButtons.Remove(Key);
+		}
+	}
+	// The open category was just hidden: open the first one shown instead.
+	if (bSelectedHidden)
+	{
+		for (int32 I = 0; I < List->GetChildrenCount(); ++I)
+		{
+			UWidget* Button = List->GetChildAt(I);
+			if (Button && Button->GetVisibility() != ESlateVisibility::Collapsed && GetObjectProp(Button, TEXT("mCategory")))
+			{
+				CallBP(Menu, TEXT("OnCategoryClicked"), { FRMArg::MakeInt(I) });
+				break;
+			}
+		}
 	}
 }
 
