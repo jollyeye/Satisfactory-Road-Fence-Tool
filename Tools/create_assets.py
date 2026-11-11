@@ -150,6 +150,9 @@ VanillaConcreteWall = load_game_class("Build_Wall_Concrete_8x4")
 VanillaFicsitWall = load_game_class("Build_Wall_8x4_01") or load_game_class("Build_Wall_Orange_8x4_01")
 VanillaSteelWall = load_game_class("Build_SteelWall_8x4")
 Desc_SteelBeam = load_game_class("Desc_SteelPlate")
+Desc_SteelPipe = load_game_class("Desc_SteelPipe") or load_game_class("Desc_Pipe")
+if Desc_SteelPipe:
+    log("  steel pipe item: " + Desc_SteelPipe.get_name())
 
 UnlockRecipe = load_game_class("BP_UnlockRecipe") or native_class("FGUnlockRecipe")
 
@@ -202,6 +205,8 @@ RMBuildableFence = native_class("RMBuildableFence")
 RMBuildableIntersection = native_class("RMBuildableIntersection")
 RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
+RMGantryHologram = native_class("RMGantryHologram")
+RMBuildableGantry = native_class("RMBuildableGantry")
 RMBuildableRoadTool = native_class("RMBuildableRoadTool")
 BuildModeDescriptor = native_class("FGHologramBuildModeDescriptor")
 BuildingDescriptor = native_class("FGBuildingDescriptor")
@@ -249,6 +254,9 @@ finish(holo_split)
 
 holo_adjust = make_bp("Holograms", "Holo_RoadAdjust", RMRoadAdjustHologram)
 finish(holo_adjust)
+
+holo_gantry = make_bp("Holograms", "Holo_SignGantry", RMGantryHologram)
+finish(holo_gantry)
 
 holo_fence_cut = make_bp("Holograms", "Holo_FenceCut", RMRoadCutHologram)
 setp(cdo(holo_fence_cut), True, "m_fence_tool", "mFenceTool")
@@ -386,12 +394,14 @@ TOOLS = [
      {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
+    ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Hold the snap key and aim a sign at the beam to put it flat on the beam's front or back face (scroll turns it 45 degrees). Cost is per 8 m of steel.",
+     {}, [(Desc_SteelBeam, 1), (Desc_SteelPipe, 1)], road_icons, {"m_main_material": mat_metal}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
 MENU_ORDER = {"RoadCut": 1, "RoadSplit": 2, "RoadAdjust": 3, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
-              "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8,
+              "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)

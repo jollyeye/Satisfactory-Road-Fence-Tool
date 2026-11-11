@@ -868,6 +868,7 @@ ASSIGN = {
     "Build_Road_3x": ROAD_LOOKS,
     "Build_Road_4x": ROAD_LOOKS,
     "Build_RoadIntersection": ROAD_LOOKS,
+    "Build_SignGantry": {"m_main_material": steel},
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},

@@ -81,3 +81,21 @@ def cyber(img, d):
 tile((38, 38, 42, 255), asphalt, "T_Icon_RoadMat_Asphalt.png")
 tile((160, 158, 152, 255), concrete, "T_Icon_RoadMat_Concrete.png")
 tile((66, 8, 86, 255), cyber, "T_Icon_RoadMat_Cyber.png")
+
+
+def gantry(img, d):
+    d.rectangle((0, 0, S, S), fill=(52, 58, 66, 255))
+    d.rectangle((0, 196, S, S), fill=(38, 38, 42, 255))          # road
+    for x in range(10, S, 60):
+        d.rectangle((x, 222, x + 28, 228), fill=(236, 236, 224, 255))
+    steel = (176, 184, 192, 255)
+    dark = (110, 118, 128, 255)
+    for x in (40, S - 64):                                        # columns
+        d.rectangle((x, 60, x + 24, 200), fill=steel, outline=dark, width=2)
+        for y in range(70, 190, 24):
+            d.line((x, y, x + 24, y + 24), fill=dark, width=2)
+    d.rectangle((24, 44, S - 24, 92), fill=steel, outline=dark, width=3)   # beam
+    d.rectangle((84, 52, S - 84, 84), fill=(24, 120, 70, 255), outline=(240, 240, 240, 255), width=3)  # sign
+
+
+tile((38, 38, 42, 255), gantry, "T_Icon_SignGantry.png")
