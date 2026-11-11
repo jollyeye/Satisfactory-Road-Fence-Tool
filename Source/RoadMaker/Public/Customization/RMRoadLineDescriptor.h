@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "FGFactoryColoringTypes.h"
 #include "RMGeometry.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "RMRoadLineDescriptor.generated.h"
 
 UCLASS(Blueprintable, BlueprintType)
@@ -35,6 +36,24 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
 	bool mContinuous = false;
+
+	/** True: this option paints a lane marking (an arrow or a digit) on the aimed road instead of changing its lines. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
+	bool mIsMarking = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
+	ERMMarkingKind mMarkingKind = ERMMarkingKind::Arrow;
+
+	/** 1 = small, 2 = medium (double width and length). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
+	float mMarkingSize = 1.f;
+
+	/** The buildable and the recipe it is "built with" (so it can be dismantled like any piece). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
+	TSubclassOf<ARMBuildableMarking> mMarkingClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Road Lines")
+	TSubclassOf<UFGRecipe> mMarkingRecipe;
 
 	/** Writes this option into existing markings, leaving the other setting as it was. */
 	static void ApplyTo(TSubclassOf<URMRoadLineDescriptor> Option, FRMMarkings& InOut)

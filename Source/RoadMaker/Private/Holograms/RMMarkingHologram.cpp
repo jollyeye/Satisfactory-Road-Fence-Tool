@@ -11,43 +11,6 @@
 #include "Engine/World.h"
 #include "Math/RotationMatrix.h"
 
-namespace
-{
-	/** The road a point on its surface belongs to (nearest road frame). */
-	ARMBuildableRoad* FindRoadAt(UWorld* World, const FVector& Location)
-	{
-		TArray<ARMBuildableRoad*> Roads;
-		RMRoadUtils::GatherNearby(World, Location, 150.f, Roads);
-		ARMBuildableRoad* Best = nullptr;
-		float BestDist = TNumericLimits<float>::Max();
-		for (ARMBuildableRoad* Road : Roads)
-		{
-			if (!Road || Road->GetIsDismantled() || Road->IsActorBeingDestroyed())
-			{
-				continue;
-			}
-			TArray<FRMFrame> Frames;
-			Road->GetWorldFrames(Frames, 50.f);
-			for (const FRMFrame& F : Frames)
-			{
-				const FVector Rel = Location - F.Pos;
-				// Within the road's width and just above / below its surface.
-				if (FMath::Abs(FVector::DotProduct(Rel, F.Right)) > Road->GetRoadWidth() * 0.5f + 20.f)
-				{
-					continue;
-				}
-				const float D = Rel.SizeSquared();
-				if (D < BestDist)
-				{
-					BestDist = D;
-					Best = Road;
-				}
-			}
-		}
-		return Best;
-	}
-}
-
 ARMMarkingHologram::ARMMarkingHologram()
 {
 	mPreviewMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("PreviewMesh"));
@@ -92,7 +55,7 @@ void ARMMarkingHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	if (!Road && hitResult.GetActor() && hitResult.GetActor()->IsA<ARMBuildableMarking>())
 	{
-		Road = FindRoadAt(World, hitResult.Location); // aiming at a marking: the road under it
+		Road = ARMBuildableMarking::FindRoadAt(World, hitResult.Location); // aiming at a marking: the road under it
 	}
 	TArray<FRMFrame> Frames;
 	if (Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed())

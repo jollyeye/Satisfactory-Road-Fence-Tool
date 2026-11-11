@@ -4,6 +4,10 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "Net/RMRemoteCallObject.h"
+#include "Buildables/RMBuildableMarking.h"
+#include "ProceduralMeshComponent.h"
+#include "Framework/Application/IInputProcessor.h"
+#include "Framework/Application/SlateApplication.h"
 #include "UObject/UnrealType.h"
 #include "Equipment/FGBuildGun.h"
 #include "Equipment/FGBuildGunPaint.h"
@@ -33,15 +37,46 @@ namespace
 {
 	TSubclassOf<URMRoadLineDescriptor> GActiveSides;
 	TSubclassOf<URMRoadLineDescriptor> GActiveLanes;
+	/** A lane marking option (arrow / digit) picked in the customizer, and the variant the mouse wheel chose. */
+	TSubclassOf<URMRoadLineDescriptor> GActiveMarking;
+	int32 GMarkingVariant = 0;
+
+	const URMRoadLineDescriptor* MarkingOption()
+	{
+		return GActiveMarking ? GActiveMarking->GetDefaultObject<URMRoadLineDescriptor>() : nullptr;
+	}
+
+	int32 MarkingVariantCount()
+	{
+		const URMRoadLineDescriptor* D = MarkingOption();
+		return D ? ARMBuildableMarking::VariantCount(D->mMarkingKind) : 1;
+	}
+
+	FString MarkingVariantName()
+	{
+		static const TCHAR* ArrowNames[] = { TEXT("straight"), TEXT("left"), TEXT("right"), TEXT("straight or left"), TEXT("straight or right"), TEXT("left or right") };
+		const URMRoadLineDescriptor* D = MarkingOption();
+		const int32 V = GMarkingVariant % FMath::Max(MarkingVariantCount(), 1);
+		if (D && D->mMarkingKind == ERMMarkingKind::Digit)
+		{
+			return FString::FromInt(V);
+		}
+		return ArrowNames[FMath::Clamp(V, 0, 5)];
+	}
 }
 
 bool RMRoadLinePaint::IsAnyActive()
 {
-	return GActiveSides || GActiveLanes;
+	return GActiveSides || GActiveLanes || GActiveMarking;
 }
 
 FText RMRoadLinePaint::GetActiveText()
 {
+	if (GActiveMarking)
+	{
+		return FText::FromString(FString::Printf(TEXT("%s: %s (mouse wheel: next, click: paint)"),
+			*UFGItemDescriptor::GetItemName(GActiveMarking).ToString(), *MarkingVariantName()));
+	}
 	TArray<FString> Parts;
 	for (TSubclassOf<URMRoadLineDescriptor> D : { GActiveSides, GActiveLanes })
 	{
@@ -61,6 +96,10 @@ ARMBuildableRoad* RMRoadLinePaint::TraceRoad(APlayerController* PC)
 
 bool RMRoadLinePaint::CanApplyTo(const AActor* Target)
 {
+	if (GActiveMarking)
+	{
+		return Cast<ARMBuildableRoad>(Target) != nullptr; // markings go on roads only
+	}
 	if (Cast<ARMBuildableRoad>(Target))
 	{
 		return IsAnyActive();
@@ -94,23 +133,131 @@ void RMRoadLinePaint::ApplyToTarget(AActor* Target, TSubclassOf<URMRoadLineDescr
 	}
 }
 
+namespace
+{
+	/** The road under the crosshair (through a marking lying on it), with the aimed point and the view direction. */
+	bool TraceAim(APlayerController* PC, ARMBuildableRoad*& OutRoad, AActor*& OutActor, FVector& OutAim, FVector& OutLook)
+	{
+		OutRoad = nullptr;
+		OutActor = nullptr;
+		if (!PC || !PC->GetWorld())
+		{
+			return false;
+		}
+		FVector Eye;
+		FRotator View;
+		PC->GetPlayerViewPoint(Eye, View);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMRoadLineTrace), true, PC->GetPawn());
+		FHitResult Hit;
+		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
+		{
+			return false;
+		}
+		AActor* Actor = Hit.GetActor();
+		if (Actor && Actor->IsA<ARMBuildableMarking>())
+		{
+			Actor = ARMBuildableMarking::FindRoadAt(PC->GetWorld(), Hit.Location); // a marking: the road under it
+		}
+		if (!Cast<ARMBuildableRoad>(Actor) && !Cast<ARMBuildableIntersection>(Actor))
+		{
+			return false;
+		}
+		OutActor = Actor;
+		OutRoad = Cast<ARMBuildableRoad>(Actor);
+		OutAim = Hit.Location;
+		OutLook = View.Vector();
+		return true;
+	}
+}
+
+
+namespace
+{
+	/** Local-only picture of the marking about to be painted (never replicated or saved). */
+	struct FGhost
+	{
+		TWeakObjectPtr<AActor> Actor;
+		TWeakObjectPtr<UProceduralMeshComponent> Mesh;
+		int32 Variant = -1;
+		float Width = -1.f;
+	} GGhost;
+
+	void DestroyGhost()
+	{
+		if (AActor* A = GGhost.Actor.Get())
+		{
+			A->Destroy();
+		}
+		GGhost = FGhost();
+	}
+
+	void UpdateGhost(APlayerController* PC, ARMBuildableRoad* Road)
+	{
+		const URMRoadLineDescriptor* D = MarkingOption();
+		const ARMBuildableMarking* Default = D && D->mMarkingClass ? D->mMarkingClass->GetDefaultObject<ARMBuildableMarking>() : nullptr;
+		ARMBuildableRoad* AimRoad;
+		AActor* AimActor;
+		FVector Aim, Look;
+		FTransform T;
+		float Lane = 200.f;
+		if (!Default || !Road || !PC || !TraceAim(PC, AimRoad, AimActor, Aim, Look) || AimRoad != Road
+			|| !ARMBuildableMarking::FindPlacement(Road, Aim, Look, T, Lane))
+		{
+			DestroyGhost();
+			return;
+		}
+		if (!GGhost.Actor.IsValid())
+		{
+			FActorSpawnParameters Params;
+			Params.ObjectFlags = RF_Transient;
+			AActor* A = PC->GetWorld()->SpawnActor<AActor>(AActor::StaticClass(), T, Params);
+			if (!A)
+			{
+				return;
+			}
+			UProceduralMeshComponent* M = NewObject<UProceduralMeshComponent>(A, TEXT("Ghost"), RF_Transient);
+			M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			M->SetCastShadow(false);
+			A->SetRootComponent(M);
+			M->RegisterComponent();
+			GGhost.Actor = A;
+			GGhost.Mesh = M;
+			GGhost.Variant = -1;
+		}
+		UProceduralMeshComponent* M = GGhost.Mesh.Get();
+		if (!M)
+		{
+			DestroyGhost();
+			return;
+		}
+		GGhost.Actor->SetActorTransform(T);
+		const int32 Variant = GMarkingVariant % FMath::Max(MarkingVariantCount(), 1);
+		const float Width = Lane * D->mMarkingSize;
+		const uint8 LookIndex = Road->GetLook();
+		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
+		FLinearColor Primary, Secondary;
+		Road->GetLineColours(Primary, Secondary);
+		const FLinearColor C = LookIndex == 2 ? Secondary : Primary;
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(C.R, C.G, C.B, 1.0));
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(C.R, C.G, C.B, 1.0));
+		if (Variant != GGhost.Variant || !FMath::IsNearlyEqual(Width, GGhost.Width, 0.5f))
+		{
+			GGhost.Variant = Variant;
+			GGhost.Width = Width;
+			FRMMesh Paint;
+			ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint);
+			Paint.ApplyToSection(M, 0, false);
+			M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
+		}
+	}
+}
+
 AActor* RMRoadLinePaint::TraceTarget(APlayerController* PC)
 {
-	if (!PC || !PC->GetWorld())
-	{
-		return nullptr;
-	}
-	FVector Eye;
-	FRotator View;
-	PC->GetPlayerViewPoint(Eye, View);
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(RMRoadLineTrace), true, PC->GetPawn());
-	FHitResult Hit;
-	if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
-	{
-		return nullptr;
-	}
-	AActor* Actor = Hit.GetActor();
-	return Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor) ? Actor : nullptr;
+	ARMBuildableRoad* Road;
+	AActor* Actor;
+	FVector Aim, Look;
+	return TraceAim(PC, Road, Actor, Aim, Look) ? Actor : nullptr;
 }
 
 bool RMRoadLinePaint::IsPaintStateActive(APlayerController* PC)
@@ -156,10 +303,19 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	if (!bShow)
 	{
 		UpdatePreview(nullptr);
+		DestroyGhost();
 		return;
 	}
 	AActor* Target = RMRoadLinePaint::TraceTarget(PC);
-	UpdatePreview(RMRoadLinePaint::CanApplyTo(Target) ? Target : nullptr);
+	UpdatePreview(GActiveMarking || !RMRoadLinePaint::CanApplyTo(Target) ? nullptr : Target);
+	if (GActiveMarking && RMRoadLinePaint::CanApplyTo(Target))
+	{
+		UpdateGhost(PC, Cast<ARMBuildableRoad>(Target));
+	}
+	else
+	{
+		DestroyGhost();
+	}
 	if (RMRoadLinePaint::CanApplyTo(Target))
 	{
 		Text->SetText(Cast<ARMBuildableIntersection>(Target)
@@ -170,7 +326,8 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	else if (Target)
 	{
 		// An intersection with only a lane option picked: lanes do not exist there.
-		Text->SetText(NSLOCTEXT("RoadMaker", "IntersectionSidesOnly", "Intersections take Sidelines only"));
+		Text->SetText(GActiveMarking ? NSLOCTEXT("RoadMaker", "MarkingsOnRoads", "Lane markings go on roads")
+			: NSLOCTEXT("RoadMaker", "IntersectionSidesOnly", "Intersections take Sidelines only"));
 		Box->SetBrushColor(FLinearColor(0.6f, 0.08f, 0.05f, 0.85f));
 	}
 	else
@@ -184,6 +341,7 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 void URMRoadLinesHint::NativeDestruct()
 {
 	UpdatePreview(nullptr);
+	DestroyGhost();
 	Super::NativeDestruct();
 }
 
@@ -252,13 +410,27 @@ namespace
 		if (Desc && Desc->IsChildOf(URMRoadLineDescriptor::StaticClass()))
 		{
 			TSubclassOf<URMRoadLineDescriptor> Option(Desc.Get());
-			if (Option->GetDefaultObject<URMRoadLineDescriptor>()->mIsSideLineOption)
+			const URMRoadLineDescriptor* Picked = Option->GetDefaultObject<URMRoadLineDescriptor>();
+			if (Picked->mIsMarking)
+			{
+				// A marking replaces the line options (the click paints it); a line option replaces the marking.
+				if (GActiveMarking != Option)
+				{
+					GMarkingVariant = 0;
+				}
+				GActiveMarking = Option;
+				GActiveSides = nullptr;
+				GActiveLanes = nullptr;
+			}
+			else if (Picked->mIsSideLineOption)
 			{
 				GActiveSides = Option;
+				GActiveMarking = nullptr;
 			}
 			else
 			{
 				GActiveLanes = Option;
+				GActiveMarking = nullptr;
 			}
 			EnsureHint(State);
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines: selected %s"), *Desc->GetName());
@@ -267,6 +439,7 @@ namespace
 		{
 			GActiveSides = nullptr;
 			GActiveLanes = nullptr;
+			GActiveMarking = nullptr;
 			// Road Lines options are material-type descriptors. If the paint gun still holds one as
 			// its active material (e.g. a colour was picked after it), drop it so it never gets
 			// applied to a building as a material.
@@ -657,8 +830,51 @@ namespace
 	}
 }
 
+namespace
+{
+	/** While a marking is selected in the paint gun the mouse wheel picks the arrow / digit instead of anything else. */
+	class FMarkingWheel : public IInputProcessor
+	{
+	public:
+		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override {}
+		virtual bool HandleMouseWheelOrGestureEvent(FSlateApplication&, const FPointerEvent& WheelEvent, const FPointerEvent*) override
+		{
+			if (!GActiveMarking || WheelEvent.GetWheelDelta() == 0.f || !GEngine)
+			{
+				return false;
+			}
+			APlayerController* PC = nullptr;
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (Context.WorldType == EWorldType::Game && Context.World())
+				{
+					PC = Context.World()->GetFirstPlayerController();
+					break;
+				}
+			}
+			if (!RMRoadLinePaint::IsPaintStateActive(PC))
+			{
+				return false; // in the customizer menu or another state: the game keeps the wheel
+			}
+			const int32 Count = FMath::Max(MarkingVariantCount(), 1);
+			GMarkingVariant = ((GMarkingVariant + (WheelEvent.GetWheelDelta() > 0.f ? 1 : -1)) % Count + Count) % Count;
+			return true;
+		}
+	};
+}
+
 void RMRoadLinePaint::InstallHooks()
 {
+	// The wheel: registered once Slate is up.
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+	{
+		if (!FSlateApplication::IsInitialized())
+		{
+			return !IsRunningDedicatedServer();
+		}
+		FSlateApplication::Get().RegisterInputPreProcessor(MakeShared<FMarkingWheel>());
+		return false;
+	}), 1.0f);
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(UFGBuildGunStatePaint::TickState_Implementation, GetMutableDefault<UFGBuildGunStatePaint>(),
 		[](UFGBuildGunStatePaint* State, float DeltaTime)
 		{
@@ -709,6 +925,7 @@ void RMRoadLinePaint::InstallHooks()
 	{
 		GActiveSides = nullptr;
 		GActiveLanes = nullptr;
+		GActiveMarking = nullptr;
 	});
 
 	SUBSCRIBE_METHOD_AFTER(UFGBuildGunStatePaint::RemoveCustomization,
@@ -722,6 +939,10 @@ void RMRoadLinePaint::InstallHooks()
 			{
 				GActiveLanes = nullptr;
 			}
+			if (Desc == GActiveMarking.Get())
+			{
+				GActiveMarking = nullptr;
+			}
 		});
 
 	// Fire with a Road Lines option selected: apply it to the aimed road instead of painting.
@@ -734,6 +955,26 @@ void RMRoadLinePaint::InstallHooks()
 		Scope.Cancel();
 		APawn* Pawn = Cast<APawn>(Gun->GetOwner());
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+		if (GActiveMarking)
+		{
+			ARMBuildableRoad* Road;
+			AActor* Actor;
+			FVector Aim, Look;
+			if (!TraceAim(PC, Road, Actor, Aim, Look) || !Road)
+			{
+				return; // the hint says "Aim at a road"
+			}
+			const URMRoadLineDescriptor* D = MarkingOption();
+			if (Road->HasAuthority())
+			{
+				ARMBuildableMarking::SpawnOn(D->mMarkingClass, D->mMarkingRecipe, Road, static_cast<uint8>(GMarkingVariant), D->mMarkingSize, Aim, Look);
+			}
+			else if (URMRemoteCallObject* RCO = URMRemoteCallObject::Get(PC))
+			{
+				RCO->ServerPaintMarking(GActiveMarking, Road, GMarkingVariant, Aim, Look);
+			}
+			return;
+		}
 		AActor* Target = TraceTarget(PC);
 		if (!CanApplyTo(Target))
 		{

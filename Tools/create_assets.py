@@ -350,13 +350,10 @@ if VehiclePathSubCat:
     setp(cdo(efc), 2.0, "m_menu_priority", "mMenuPriority")
     finish(efc)
     edit_fence_subcat = efc.generated_class()
-    lmc = make_bp("Buildables", "SC_LaneMarkings", VehiclePathSubCat)
-    setp(cdo(lmc), text("Lane markings"), "m_display_name", "mDisplayName")
-    setp(cdo(lmc), 3.0, "m_menu_priority", "mMenuPriority")
-    finish(lmc)
-    lane_marking_subcat = lmc.generated_class()
+    lane_marking_subcat = None
 # Road Tools entries and their section.
-ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadAdjust": "road", "FenceCut": "fence", "LaneArrow": "marking", "LaneNumber": "marking", "LaneArrowMedium": "marking", "LaneNumberMedium": "marking"}
+MARKING_TOOLS = ("LaneArrow", "LaneNumber", "LaneArrowMedium", "LaneNumberMedium")  # painted from the customizer (Road Lines), not in the build menu
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadAdjust": "road", "FenceCut": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -529,8 +526,10 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, text(desc), "m_description", "mDescription")
     # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
-    tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat, "marking": lane_marking_subcat}.get(ROAD_TOOLS_MENU.get(name))
-    if tool_subcat and road_tools_cat:
+    tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat}.get(ROAD_TOOLS_MENU.get(name))
+    if name in MARKING_TOOLS:
+        pass  # no build menu entry: the Road Lines options paint it
+    elif tool_subcat and road_tools_cat:
         setp(dc, road_tools_cat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [tool_subcat], "m_sub_categories", "mSubCategories")
     elif name in WALLS_MENU and WallsCat and wall_subcat:
@@ -572,7 +571,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
             wall_recipes.append(r.generated_class())
         if name == "Fence_GridTall" and basic_steel:
             recipe_unlocked_by[r.generated_class()] = basic_steel
-    else:
+    elif name not in MARKING_TOOLS:
         recipes.append(r.generated_class())
 
 # ---------------------------------------------------------------------------------------------
@@ -627,7 +626,7 @@ if brush_tex:
 finish(cat)
 
 subcats = {}
-for i, (key, display) in enumerate((("Sidelines", "Sidelines"), ("Lanes", "Lanes"))):
+for i, (key, display) in enumerate((("Sidelines", "Sidelines"), ("Lanes", "Lanes"), ("Markings", "Markings"))):
     sc = make_bp("Customization", "CustSub_RoadLines_" + key, CustSubCategory)
     setp(cdo(sc), text(display), "m_display_name", "mDisplayName")
     setp(cdo(sc), float(i), "m_menu_priority", "mMenuPriority")
@@ -684,6 +683,52 @@ for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIO
     setp(c, sides, "m_side_lines", "mSideLines")
     setp(c, max(lanes, 1), "m_lanes", "mLanes")
     setp(c, continuous, "m_continuous", "mContinuous")
+    finish(d)
+
+    r = make_bp("Customization", "Recipe_RoadLines_" + key, CustRecipe)
+    rc = cdo(r)
+    setp(rc, text(display), "m_display_name", "mDisplayName")
+    setp(rc, d.generated_class(), "m_customization_desc", "mCustomizationDesc")
+    setp(rc, [item_amount(d.generated_class(), 1)], "m_product", "mProduct")
+    if cust_produced_in:
+        setp(rc, cust_produced_in, "m_produced_in", "mProducedIn")
+    finish(r)
+    recipes.append(r.generated_class())
+
+
+# Markings (arrows, digits): picked here, painted on the aimed lane with the click, wheel = variant.
+MARKING_OPTIONS = [
+    # key, icon, display, tool entry (the buildable), kind, size
+    ("MarkArrow", "MarkArrow", "Lane Arrow", "LaneArrow", "ARROW", 1.0, 9130),
+    ("MarkNumber", "MarkNumber", "Lane Number", "LaneNumber", "DIGIT", 1.0, 9131),
+    ("MarkArrowMedium", "MarkArrow", "Lane Arrow (medium)", "LaneArrowMedium", "ARROW", 2.0, 9132),
+    ("MarkNumberMedium", "MarkNumber", "Lane Number (medium)", "LaneNumberMedium", "DIGIT", 2.0, 9133),
+]
+for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_OPTIONS):
+    d = make_bp("Customization", "RoadLines_" + key, LineDesc)
+    c = cdo(d)
+    setp(c, text(display), "m_display_name", "mDisplayName")
+    what = "arrow" if kind == "ARROW" else "single digit (0 to 9)"
+    big = " Medium size: double the width and length of the small one." if size > 1 else ""
+    setp(c, text("Paints a " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + ("arrow" if kind == "ARROW" else "digit") + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."), "m_description", "mDescription")
+    setp(c, cat.generated_class(), "m_category", "mCategory")
+    setp(c, [subcats["Markings"]], "m_sub_categories", "mSubCategories")
+    setp(c, float(i), "m_menu_priority", "mMenuPriority")
+    setp(c, [RMBuildableRoad], "m_valid_buildables", "mValidBuildables")
+    setp(c, ident, "id", "ID")
+    tex = icon(icon_name)
+    if tex:
+        setp(c, tex, "m_icon", "mIcon")
+        setp(c, tex, "m_small_icon", "mSmallIcon")
+        setp(c, tex, "m_persistent_big_icon", "mPersistentBigIcon")
+    rf = getattr(unreal, "ResourceForm", None)
+    if rf is not None and hasattr(rf, "RF_INVALID"):
+        setp(c, rf.RF_INVALID, "m_form", "mForm")
+    setp(c, True, "m_is_marking", "mIsMarking")
+    setp(c, getattr(MarkingKindEnum, kind, kind) if MarkingKindEnum is not None else kind, "m_marking_kind", "mMarkingKind")
+    setp(c, size, "m_marking_size", "mMarkingSize")
+    setp(c, tool_classes.get(tool), "m_marking_class", "mMarkingClass")
+    setp(c, tool_recipe_classes.get(tool), "m_marking_recipe", "mMarkingRecipe")
     finish(d)
 
     r = make_bp("Customization", "Recipe_RoadLines_" + key, CustRecipe)

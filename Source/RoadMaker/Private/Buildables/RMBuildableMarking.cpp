@@ -4,6 +4,11 @@
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Buildables/RMSwatchGroupRoads.h"
+#include "RMRoadUtils.h"
+#include "FGRecipe.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Math/RotationMatrix.h"
 
 ARMBuildableMarking::ARMBuildableMarking(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -276,4 +281,114 @@ void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, f
 	{
 		BuildDigit(B, Variant);
 	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Finding the road and the lane, and painting a marking
+// ---------------------------------------------------------------------------------------------
+
+ARMBuildableRoad* ARMBuildableMarking::FindRoadAt(UWorld* World, const FVector& Location)
+{
+	TArray<ARMBuildableRoad*> Roads;
+	RMRoadUtils::GatherNearby(World, Location, 150.f, Roads);
+	ARMBuildableRoad* Best = nullptr;
+	float BestDist = TNumericLimits<float>::Max();
+	for (ARMBuildableRoad* Road : Roads)
+	{
+		if (!Road || Road->GetIsDismantled() || Road->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 50.f);
+		for (const FRMFrame& F : Frames)
+		{
+			const FVector Rel = Location - F.Pos;
+			// Within the road's width.
+			if (FMath::Abs(FVector::DotProduct(Rel, F.Right)) > Road->GetRoadWidth() * 0.5f + 20.f)
+			{
+				continue;
+			}
+			const float D = Rel.SizeSquared();
+			if (D < BestDist)
+			{
+				BestDist = D;
+				Best = Road;
+			}
+		}
+	}
+	return Best;
+}
+
+bool ARMBuildableMarking::FindPlacement(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, FTransform& OutTransform, float& OutLaneWidth)
+{
+	TArray<FRMFrame> Frames;
+	if (Road)
+	{
+		Road->GetWorldFrames(Frames, 25.f);
+	}
+	if (Frames.Num() < 2)
+	{
+		return false;
+	}
+	// The spot along the road: the frame nearest the aim; the lane: the centre nearest across.
+	const FRMFrame* Near = &Frames[0];
+	float Best = TNumericLimits<float>::Max();
+	for (const FRMFrame& F : Frames)
+	{
+		const float D = FVector::DistSquared(F.Pos, Aim);
+		if (D < Best)
+		{
+			Best = D;
+			Near = &F;
+		}
+	}
+	TArray<float> Offsets;
+	Road->GetLaneCentres(Offsets, OutLaneWidth);
+	const float U = FVector::DotProduct(Aim - Near->Pos, Near->Right);
+	float Off = 0.f;
+	float BestOff = TNumericLimits<float>::Max();
+	for (float O : Offsets)
+	{
+		if (FMath::Abs(O - U) < BestOff)
+		{
+			BestOff = FMath::Abs(O - U);
+			Off = O;
+		}
+	}
+	const FVector Dir = FVector::DotProduct(LookDir, Near->Fwd) >= 0.f ? Near->Fwd : -Near->Fwd;
+	OutTransform = FTransform(FRotationMatrix::MakeFromXZ(Dir, Near->Up).ToQuat(), Near->Pos + Near->Right * Off);
+	return true;
+}
+
+UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look) const
+{
+	return Look > 0 && mLookTopMaterials.IsValidIndex(Look - 1) && mLookTopMaterials[Look - 1] ? mLookTopMaterials[Look - 1] : mMarkingMaterial;
+}
+
+ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarking> Class, TSubclassOf<UFGRecipe> Recipe, ARMBuildableRoad* Road,
+	uint8 Variant, float SizeMultiplier, const FVector& Aim, const FVector& LookDir)
+{
+	UWorld* World = Road ? Road->GetWorld() : nullptr;
+	FTransform T;
+	float LaneWidth = 200.f;
+	if (!World || !Class || !FindPlacement(Road, Aim, LookDir, T, LaneWidth))
+	{
+		return nullptr;
+	}
+	ARMBuildableMarking* New = World->SpawnActorDeferred<ARMBuildableMarking>(Class, T, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!New)
+	{
+		return nullptr;
+	}
+	const uint8 Count = static_cast<uint8>(VariantCount(New->mKind));
+	New->SetBuiltWithRecipe(Recipe);
+	New->SetShape(Variant % Count, LaneWidth * SizeMultiplier);
+	New->SetLook(Road->GetLook());
+	New->SetCustomizationData_Native(Road->GetCustomizationData_Native());
+	FLinearColor Primary, Secondary;
+	Road->GetLineColours(Primary, Secondary);
+	New->SetPlacementColour(Road->GetLook() == 2 ? Secondary : Primary, Primary);
+	UGameplayStatics::FinishSpawningActor(New, T);
+	return New;
 }

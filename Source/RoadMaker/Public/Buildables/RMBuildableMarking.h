@@ -10,6 +10,9 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "RMBuildableMarking.generated.h"
 
+class ARMBuildableRoad;
+class UFGRecipe;
+
 UENUM()
 enum class ERMMarkingKind : uint8
 {
@@ -51,6 +54,25 @@ public:
 	/** 1 for the small markings, 2 for the medium ones (double width and length). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	float mSizeMultiplier = 1.f;
+
+	/** The road a point on its surface belongs to (nearest road frame), else null. */
+	static ARMBuildableRoad* FindRoadAt(UWorld* World, const FVector& Location);
+
+	/**
+	 * Where a marking goes when the aim hits Road at Aim: the middle of the nearest lane, at that spot along the
+	 * road, facing the way LookDir runs along it. OutLaneWidth is the width of that lane (cm).
+	 */
+	static bool FindPlacement(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, FTransform& OutTransform, float& OutLaneWidth);
+
+	/** The marking material for a look (0 asphalt, 1 concrete, 2 cyberpunk). */
+	UMaterialInterface* GetPaintMaterial(uint8 Look) const;
+
+	/**
+	 * Server: paints a marking on Road (the customizer's Road Lines options do this). Takes the road's look
+	 * and line colour. Returns null if there is no valid spot.
+	 */
+	static ARMBuildableMarking* SpawnOn(TSubclassOf<ARMBuildableMarking> Class, TSubclassOf<UFGRecipe> Recipe, ARMBuildableRoad* Road,
+		uint8 Variant, float SizeMultiplier, const FVector& Aim, const FVector& LookDir);
 
 	/** Hair above the road surface so the paint does not fight the road's own surface. */
 	static constexpr float Lift = 1.5f;

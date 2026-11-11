@@ -19,6 +19,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerApplyRoadLines(AActor* Target, TSubclassOf<URMRoadLineDescriptor> Sides, TSubclassOf<URMRoadLineDescriptor> Lanes);
 
+	/** Paints a lane marking on a road (customizer Road Lines > Markings), on the server. */
+	UFUNCTION(Server, Reliable)
+	void ServerPaintMarking(TSubclassOf<URMRoadLineDescriptor> Option, class ARMBuildableRoad* Road, int32 Variant, FVector Aim, FVector LookDir);
+
 	/** Switches a fence wall's look (customizer Material tab), on the server. */
 	UFUNCTION(Server, Reliable)
 	void ServerSetFenceWallLook(class ARMBuildableFence* Wall, uint8 Look);
