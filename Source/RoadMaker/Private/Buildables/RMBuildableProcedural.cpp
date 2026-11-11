@@ -10,6 +10,7 @@
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "FGDismantleInterface.h"
 #include "HAL/PlatformTime.h"
+#include "Engine/World.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -41,13 +42,51 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 	mFar2Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mFar2Mesh->SetCanEverAffectNavigation(false);
 	mFar2Mesh->SetCastShadow(false);
+
+	// No game build effect (it would hide the piece for the whole animation and show nothing); see StartRiseAnimation.
+	mSkipBuildEffect = true;
+	mHideOnBuildEffectStart = false;
 }
 
 void ARMBuildableProcedural::BeginPlay()
 {
+	// Just built: not restored from a save, and not one of the actors that arrive with the world when it
+	// loads or when a client joins (those all start within the first seconds).
+	const UWorld* World = GetWorld();
+	const bool bJustBuilt = !mLoadedFromSave && World && World->GetTimeSeconds() > 20.0;
 	Super::BeginPlay();
 	UpdateLODDistances();
 	RebuildMesh();
+	if (bJustBuilt)
+	{
+		StartRiseAnimation();
+	}
+}
+
+void ARMBuildableProcedural::StartRiseAnimation()
+{
+	if (UWorld* World = GetWorld())
+	{
+		mRiseStart = World->GetTimeSeconds();
+		SetActorScale3D(FVector(1.f, 1.f, 0.02f));
+		World->GetTimerManager().SetTimer(mRiseTimer, this, &ARMBuildableProcedural::StepRiseAnimation, 0.02f, true);
+	}
+}
+
+void ARMBuildableProcedural::StepRiseAnimation()
+{
+	const UWorld* World = GetWorld();
+	const float T = World ? FMath::Clamp(static_cast<float>(World->GetTimeSeconds() - mRiseStart) / RiseDuration, 0.f, 1.f) : 1.f;
+	const float Eased = T * T * (3.f - 2.f * T);
+	SetActorScale3D(FVector(1.f, 1.f, FMath::Max(0.02f, Eased)));
+	if (T >= 1.f)
+	{
+		SetActorScale3D(FVector::OneVector);
+		if (World)
+		{
+			GetWorldTimerManager().ClearTimer(mRiseTimer);
+		}
+	}
 }
 
 void ARMBuildableProcedural::UpdateLODDistances()
@@ -148,6 +187,7 @@ void ARMBuildableProcedural::GetLifetimeReplicatedProps(TArray<FLifetimeProperty
 void ARMBuildableProcedural::PostLoadGame_Implementation(int32 saveVersion, int32 gameVersion)
 {
 	Super::PostLoadGame_Implementation(saveVersion, gameVersion);
+	mLoadedFromSave = true;
 	// Saved inputs are restored by now; the mesh itself is never saved.
 	RebuildMesh();
 }

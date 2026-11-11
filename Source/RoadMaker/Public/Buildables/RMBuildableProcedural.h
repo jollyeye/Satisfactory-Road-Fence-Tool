@@ -6,6 +6,7 @@
 #include "CoreMinimal.h"
 #include "Buildables/FGBuildable.h"
 #include "RMGeometry.h"
+#include "TimerManager.h"
 #include "RMBuildableProcedural.generated.h"
 
 class UProceduralMeshComponent;
@@ -53,6 +54,19 @@ public:
 	static TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> sDefaultRoadSwatch;
 
 protected:
+	/**
+	 * Build animation. The game's build effect cannot show a procedural mesh (it hides the building and
+	 * animates copies of static meshes), so it is switched off for Road Maker pieces and a short rise
+	 * plays instead: the piece grows up from the ground in a fraction of a second (only for pieces that
+	 * were just built: not restored from a save, not part of the world that loads or replicates in at the start).
+	 */
+	void StartRiseAnimation();
+	void StepRiseAnimation();
+	bool mLoadedFromSave = false;
+	FTimerHandle mRiseTimer;
+	double mRiseStart = 0.0;
+	static constexpr float RiseDuration = 0.6f;
+
 	/** Top / body material for the shown look (index look - 1 of the arrays, else the default). */
 	UMaterialInterface* LookMaterial(const TArray<UMaterialInterface*>& Looks, UMaterialInterface* Default) const;
 
