@@ -83,7 +83,7 @@ void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
 {
 	FRMMarkings Clean = InMarkings;
-	Clean.Lanes = FMath::Clamp<uint8>(Clean.Lanes, 1, 3);
+	Clean.Lanes = FMath::Clamp<uint8>(Clean.Lanes, 1, 4);
 	if (Clean == mMarkings)
 	{
 		return;

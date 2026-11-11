@@ -223,7 +223,7 @@ TArray<FVector> FRMRoadEndRef::GetSnapPoints(UWorld* World) const
 			}
 		}
 	}
-	const int32 Lanes = LaneRoad ? FMath::Clamp<int32>(LaneRoad->GetMarkings().Lanes, 1, 3) : 1;
+	const int32 Lanes = LaneRoad ? FMath::Clamp<int32>(LaneRoad->GetMarkings().Lanes, 1, 4) : 1;
 	if (Lanes <= 1)
 	{
 		return GetPointsAcross(200.f);

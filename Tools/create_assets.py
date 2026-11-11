@@ -215,8 +215,8 @@ setp(cdo(bm), text("Straight"), "m_display_name", "mDisplayName")
 finish(bm)
 
 bm_smooth = make_bp("Holograms", "BM_Smooth", BuildModeDescriptor)
-setp(cdo(bm_smooth), text("Smooth"), "m_display_name", "mDisplayName")
-setp(cdo(bm_smooth), text("Height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
+setp(cdo(bm_smooth), text("Smooth (quadratic Bezier)"), "m_display_name", "mDisplayName")
+setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
 finish(bm_smooth)
 
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
@@ -312,6 +312,8 @@ TOOLS = [
      {"m_width_in_foundations": 2}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("Road_3x", RMBuildableRoad, holo_road, "Road (3 wide)", "A road three foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 3}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("Road_4x", RMBuildableRoad, holo_road, "Road (4 wide)", "A road four foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Lines are set in the customizer (Road Lines). Free to build.",
+     {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
     ("Fence_Jersey", RMBuildableFence, holo_fence, "Cement Blocks", "Concrete road barrier. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
@@ -535,6 +537,8 @@ OPTIONS = [
     ("Lanes2Solid", "Lanes", "2 lanes, continuous", False, True, 2, True),
     ("Lanes3Dashed", "Lanes", "3 lanes, dashed", False, True, 3, False),
     ("Lanes3Solid", "Lanes", "3 lanes, continuous", False, True, 3, True),
+    ("Lanes4Dashed", "Lanes", "4 lanes, dashed", False, True, 4, False),
+    ("Lanes4Solid", "Lanes", "4 lanes, continuous", False, True, 4, True),
 ]
 for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIONS):
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)

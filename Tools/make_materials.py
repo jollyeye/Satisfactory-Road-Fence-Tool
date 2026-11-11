@@ -534,6 +534,7 @@ ASSIGN = {
     "Build_Road_1x": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_Road_2x": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_Road_3x": {"m_top_material": asphalt, "m_body_material": concrete},
+    "Build_Road_4x": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_RoadIntersection": {"m_top_material": asphalt, "m_body_material": concrete},
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},

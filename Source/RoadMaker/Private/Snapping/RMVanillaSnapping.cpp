@@ -657,7 +657,7 @@ namespace
 		}
 		const float U = FVector::DotProduct(Hit.Location - Frames[NearIdx].Pos, Frames[NearIdx].Right);
 		const float Width = Road->GetRoadWidth();
-		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 3);
+		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 4);
 		TArray<float> Offsets;
 		if (Lanes <= 1)
 		{
@@ -926,7 +926,7 @@ namespace
 		}
 		const float U = FVector::DotProduct(Hit.Location - Frames[NearIdx].Pos, Frames[NearIdx].Right);
 		const float Width = Road->GetRoadWidth();
-		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 3);
+		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 4);
 		TArray<float> Offsets;
 		if (Lanes <= 1)
 		{

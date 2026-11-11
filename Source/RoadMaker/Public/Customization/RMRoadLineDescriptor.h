@@ -50,7 +50,7 @@ public:
 		}
 		else
 		{
-			InOut.Lanes = static_cast<uint8>(FMath::Clamp(D->mLanes, 1, 3));
+			InOut.Lanes = static_cast<uint8>(FMath::Clamp(D->mLanes, 1, 4));
 			InOut.bContinuous = D->mContinuous;
 		}
 	}

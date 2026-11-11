@@ -1,4 +1,4 @@
-// Road section. One C++ class; make three Blueprint children with mWidthInFoundations = 1, 2 and 3.
+// Road section. One C++ class; make Blueprint children with mWidthInFoundations = 1, 2, 3 and 4.
 #pragma once
 
 #include "CoreMinimal.h"

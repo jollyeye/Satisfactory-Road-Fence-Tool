@@ -207,7 +207,7 @@ void URMRoadLinesHint::UpdatePreview(AActor* Target)
 		FRMMarkings M = Road->GetMarkings();
 		URMRoadLineDescriptor::ApplyTo(GActiveSides, M);
 		URMRoadLineDescriptor::ApplyTo(GActiveLanes, M);
-		M.Lanes = FMath::Clamp<uint8>(M.Lanes, 1, 3);
+		M.Lanes = FMath::Clamp<uint8>(M.Lanes, 1, 4);
 		Road->SetPreviewMarkings(M);
 	}
 	else if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(Target))
