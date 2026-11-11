@@ -199,9 +199,10 @@ namespace
 		AActor* AimActor;
 		FVector Aim, Look;
 		FTransform T;
-		float Lane = 200.f;
+		float Width = 200.f;
+		FRMMarkingDrape Drape;
 		if (!Default || !Road || !PC || !TraceAim(PC, AimRoad, AimActor, Aim, Look) || AimRoad != Road
-			|| !ARMBuildableMarking::FindPlacement(Road, Aim, Look, T, Lane))
+			|| !ARMBuildableMarking::PlanOn(Road, Aim, Look, D->mMarkingKind, D->mMarkingSize, T, Width, Drape))
 		{
 			DestroyGhost();
 			return;
@@ -232,22 +233,18 @@ namespace
 		}
 		GGhost.Actor->SetActorTransform(T);
 		const int32 Variant = GMarkingVariant % FMath::Max(MarkingVariantCount(), 1);
-		const float Width = Lane * D->mMarkingSize;
 		const uint8 LookIndex = Road->GetLook();
-		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
 		FLinearColor Primary, Secondary;
 		Road->GetLineColours(Primary, Secondary);
 		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Primary.R, Primary.G, Primary.B, 1.0));
 		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
-		if (Variant != GGhost.Variant || !FMath::IsNearlyEqual(Width, GGhost.Width, 0.5f))
-		{
-			GGhost.Variant = Variant;
-			GGhost.Width = Width;
-			FRMMesh Paint;
-			ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint);
-			Paint.ApplyToSection(M, 0, false);
-			M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
-		}
+		// Rebuilt every tick: it lies on the road under it, which changes as the aim moves.
+		GGhost.Variant = Variant;
+		GGhost.Width = Width;
+		FRMMesh Paint;
+		ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint, &Drape);
+		Paint.ApplyToSection(M, 0, false);
+		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
 	}
 }
 

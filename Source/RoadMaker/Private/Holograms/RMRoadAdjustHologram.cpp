@@ -1,4 +1,5 @@
 #include "Holograms/RMRoadAdjustHologram.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Holograms/RMHologramLook.h"
 #include "Buildables/RMBuildableRoad.h"
@@ -544,6 +545,12 @@ AActor* ARMRoadAdjustHologram::Construct(TArray<AActor*>& out_children, FNetCons
 		ARMBuildableSpline* NewB = mRoadB ? Replace(mRoadB, B) : nullptr;
 		if (NewA && (!mRoadB || NewB))
 		{
+			// Lane markings go along to the reshaped roads.
+			ARMBuildableMarking::MoveMarkings(mRoadA, Cast<ARMBuildableRoad>(NewA));
+			if (mRoadB)
+			{
+				ARMBuildableMarking::MoveMarkings(mRoadB, Cast<ARMBuildableRoad>(NewB));
+			}
 			mRoadA->DismantleReplaced();
 			if (mRoadB)
 			{
