@@ -1,4 +1,6 @@
 #include "Module/RMGameWorldModule.h"
+#include "Styling/SlateBrush.h"
+#include "Engine/Texture2D.h"
 #include "RoadMakerModule.h"
 #include "FGSchematic.h"
 #include "FGSchematicManager.h"
@@ -29,6 +31,7 @@ void URMGameWorldModule::DispatchLifecycleEvent(ELifecyclePhase Phase)
 		GrantRecipesOfPurchasedSchematics();
 		GrantExtraRecipesIfPurchased();
 		EnsureRoadSwatchGroup();
+		SetRoadToolsCategoryIcon();
 	}
 }
 
@@ -248,4 +251,21 @@ void URMGameWorldModule::EnsureRoadSwatchGroup()
 	Datum->Add(Roads);
 	GameState->ForceNetUpdate();
 	UE_LOG(LogRoadMaker, Display, TEXT("Added Roads swatch group (default %s)"), mDefaultRoadSwatch ? *mDefaultRoadSwatch->GetName() : TEXT("none"));
+}
+
+void URMGameWorldModule::SetRoadToolsCategoryIcon()
+{
+	// BC_RoadTools is a child of the game's Vehicles category (same look in the build menu); the icon
+	// set by create_assets.py did not show in game (the truck was inherited), so set it on the class
+	// default object here: the build menu reads category icons from there.
+	UClass* Category = LoadClass<UObject>(nullptr, TEXT("/RoadMaker/Buildables/BC_RoadTools.BC_RoadTools_C"));
+	UTexture2D* Glyph = LoadObject<UTexture2D>(nullptr, TEXT("/RoadMaker/Icons/T_Icon_RoadTools.T_Icon_RoadTools"));
+	FStructProperty* Prop = Category ? CastField<FStructProperty>(Category->FindPropertyByName(TEXT("mCategoryIcon"))) : nullptr;
+	if (!Glyph || !Prop || Prop->Struct != FSlateBrush::StaticStruct())
+	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("Road Tools category icon not set (category %d, glyph %d, property %d)"), Category != nullptr, Glyph != nullptr, Prop != nullptr);
+		return;
+	}
+	FSlateBrush* Brush = Prop->ContainerPtrToValuePtr<FSlateBrush>(Category->GetDefaultObject());
+	Brush->SetResourceObject(Glyph);
 }

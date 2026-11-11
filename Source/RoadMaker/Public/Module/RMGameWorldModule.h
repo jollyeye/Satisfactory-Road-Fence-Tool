@@ -21,6 +21,9 @@ protected:
 	/** Adds "Roads" to the game's swatch groups (customizer "set as default for" list) if missing. */
 	void EnsureRoadSwatchGroup();
 
+	/** Road Tools build category: its side icon is our road glyph (not the Vehicles truck it inherits). */
+	void SetRoadToolsCategoryIcon();
+
 	/** Adds mExtraRecipes to the recipe unlock of mExtraRecipesSchematic (a game milestone). */
 	void AddRecipesToGameSchematic();
 
