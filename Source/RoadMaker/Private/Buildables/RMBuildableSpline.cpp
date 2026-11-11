@@ -37,7 +37,10 @@ void ARMBuildableSpline::GetLocalFrames(TArray<FRMFrame>& OutFrames, float Step)
 void ARMBuildableSpline::GetWorldFrames(TArray<FRMFrame>& OutFrames, float Step) const
 {
 	GetLocalFrames(OutFrames, Step);
-	const FTransform& T = GetActorTransform();
+	// Without the actor's scale: a piece that was just built is squashed while its rise animation plays,
+	// but its frames are where it will be (pieces placed on it at once, e.g. moved lane markings, need that).
+	FTransform T = GetActorTransform();
+	T.SetScale3D(FVector::OneVector);
 	for (FRMFrame& F : OutFrames)
 	{
 		F.Pos = T.TransformPosition(F.Pos);
