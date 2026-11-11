@@ -98,4 +98,4 @@ def gantry(img, d):
     d.rectangle((84, 52, S - 84, 84), fill=(24, 120, 70, 255), outline=(240, 240, 240, 255), width=3)  # sign
 
 
-tile((38, 38, 42, 255), gantry, "T_Icon_SignGantry.png")
+# The gantry icon is rendered by render_icons.py (isometric, like the other buildables).

@@ -413,6 +413,26 @@ def tab_glyph(path):
     img.save(path)
 
 
+def sign_gantry(sc):
+    """A straight road with a gantry across it: two columns on dark feet, a beam, a classic green sign."""
+    road(sc, 16, 2, length=18.0, bend=0.0)
+    GREEN = np.array([22, 128, 74.0]); DARK = np.array([58, 60, 66.0])
+    x = 9.0
+    for y in (-7.5, 7.5):
+        box(sc, (x, y, 1.05), 0.6, 0.6, 1.05, DARK, layer=1)
+        box(sc, (x, y, 5.1), 0.5, 0.42, 3.05, ORANGE, layer=1)
+    box(sc, (x, 0, 9.6), 0.42, 8.4, 0.5, ORANGE, layer=1)
+    box(sc, (x + 0.52, 0, 7.5), 0.07, 4.4, 1.75, GREEN, layer=1)
+    xf = x + 0.6
+    W = np.array([240, 240, 236.0])
+    def deco(y0, y1, z0, z1):
+        sc.quad((xf, y0, z0), (xf, y1, z0), (xf, y1, z1), (xf, y0, z1), W, layer=2, two=True, shade=False)
+    deco(-4.1, 4.1, 5.85, 5.95); deco(-4.1, 4.1, 9.05, 9.15)      # border
+    deco(-4.1, -4.0, 5.85, 9.15); deco(4.0, 4.1, 5.85, 9.15)
+    deco(-3.2, 1.2, 8.1, 8.5); deco(-3.2, -0.6, 7.2, 7.55)         # "text"
+    deco(2.0, 3.2, 6.35, 8.5)                                       # arrow shaft
+    sc.quad((xf, 1.5, 6.9), (xf, 3.7, 6.9), (xf, 2.6, 6.2), (xf, 2.6, 6.2), W, layer=2, two=True, shade=False)
+
 what = sys.argv[1]; out = sys.argv[2]
 if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
@@ -435,6 +455,7 @@ elif what == "jersey": jersey(sc)
 elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
+elif what == "gantry": sign_gantry(sc)
 elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")

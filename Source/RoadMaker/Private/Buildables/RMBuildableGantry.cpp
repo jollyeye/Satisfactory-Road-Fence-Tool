@@ -47,15 +47,15 @@ namespace
 		Part->SetRelativeScale3D(FVector(1.f, 1.f, Length / HBeamMeshLength));
 	}
 
-	/** A connection cube (centred, native orientation, long side along the road). */
+	/** A connection cube (centred), stood up on its long side. */
 	void PlaceBlock(UStaticMeshComponent* Part, const FVector& Center)
 	{
 		Part->SetRelativeLocation(Center);
-		Part->SetRelativeRotation(FRotator::ZeroRotator);
+		Part->SetRelativeRotation(FRotator(90.f, 0.f, 0.f));
 		Part->SetRelativeScale3D(FVector::OneVector);
 	}
 
-	enum EPart { ColumnA, ColumnB, Crossbeam, BaseA, BaseB, BraceA, BraceB, NumParts };
+	enum EPart { ColumnA, ColumnB, BeamEndA, BeamMid, BeamEndB, BaseA, BaseB, NumParts };
 }
 
 void ARMBuildableGantry::RebuildMesh()
@@ -73,11 +73,11 @@ void ARMBuildableGantry::RebuildMesh()
 
 	if (mParts.Num() == 0)
 	{
-		// H-beam for the columns and braces, shelf beam for the cross beam, wide connection cubes as feet.
+		// H-beam for the columns and the middle of the cross beam, shelf beams for its two ends, connection cubes as feet.
 		UStaticMesh* HBeam = LoadPillarMesh(TEXT("SM_Beam_04"));
 		UStaticMesh* Shelf = LoadPillarMesh(TEXT("SM_Beam_05"));
 		UStaticMesh* Block = LoadPillarMesh(TEXT("SM_ConnectionCube_Wide_01"));
-		UStaticMesh* Meshes[NumParts] = { HBeam, HBeam, Shelf, Block, Block, HBeam, HBeam };
+		UStaticMesh* Meshes[NumParts] = { HBeam, HBeam, Shelf, HBeam, Shelf, Block, Block };
 		for (int32 I = 0; I < NumParts; ++I)
 		{
 			if (!Meshes[I])
@@ -95,30 +95,30 @@ void ARMBuildableGantry::RebuildMesh()
 	if (mParts.Num() == NumParts)
 	{
 		// The game's beam mesh starts at its origin and runs along its length (not centred), so beams are
-		// placed by their start point. Columns (along the gantry's Z: pitch 90) stand on a wide connector
-		// at the foot; the cross beam (along Y: yaw 90) starts at the left column's outer face and rests on
-		// top of the columns so the flanges do not intersect; a brace on each column runs up and in.
+		// placed by their start point. Columns (along the gantry's Z: pitch 90) stand on an upright
+		// connection cube; the cross beam (along Y: yaw 90) rests on top of the columns so the flanges do
+		// not intersect. It is three pieces: a 1 m shelf beam at each end (the shelf beam repeats its
+		// pattern when stretched) and a stretched H-beam between them.
 		const FQuat Up = FRotator(90.f, 0.f, 0.f).Quaternion();
+		const FQuat Across = FRotator(0.f, 90.f, 0.f).Quaternion();
 		for (int32 Side = 0; Side < 2; ++Side)
 		{
 			const float Y = (Side == 0 ? -1.f : 1.f) * mHalfSpan;
 			PlaceBlock(mParts[BaseA + Side], FVector(0.f, Y, FootHeight * 0.5f));
 			PlaceBeam(mParts[ColumnA + Side], FVector(0.f, Y, FootHeight), Up, mBeamBottom - FootHeight);
-
-			const float In = BraceInset(mHalfSpan);
-			const FVector From(0.f, Y, mBeamBottom - In);
-			const FVector To(0.f, Y - (Side == 0 ? -In : In), mBeamBottom);
-			const FVector Dir = To - From;
-			PlaceBeam(mParts[BraceA + Side], From, FRotationMatrix::MakeFromX(Dir).ToQuat(), Dir.Size());
 		}
-		PlaceBeam(mParts[Crossbeam], FVector(0.f, -(mHalfSpan + BeamOverhang), mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f).Quaternion(), 2.f * (mHalfSpan + BeamOverhang));
+		const float BeamZ = mBeamBottom + BeamDepth * 0.5f;
+		const float Start = -(mHalfSpan + BeamOverhang);
+		const float Total = 2.f * (mHalfSpan + BeamOverhang);
+		PlaceBeam(mParts[BeamEndA], FVector(0.f, Start, BeamZ), Across, EndPiece);
+		PlaceBeam(mParts[BeamMid], FVector(0.f, Start + EndPiece, BeamZ), Across, Total - 2.f * EndPiece);
+		PlaceBeam(mParts[BeamEndB], FVector(0.f, Start + Total - EndPiece, BeamZ), Across, EndPiece);
 	}
 }
 
 int32 ARMBuildableGantry::CostUnits(float HalfSpan, float BeamBottom)
 {
-	const float Brace = BraceInset(HalfSpan) * 1.42f;
-	const float Length = 2.f * BeamBottom + 2.f * (HalfSpan + BeamOverhang) + 2.f * Brace + 2.f * 2.f * FootHeight;
+	const float Length = 2.f * BeamBottom + 2.f * (HalfSpan + BeamOverhang);
 	return FMath::Max(1, FMath::CeilToInt(Length / 800.f));
 }
 
@@ -160,7 +160,7 @@ bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNorma
 	}
 	else
 	{
-		// A column: on any of its four faces, a point every 2 m up the column.
+		// A column: on any of its four faces, a point every 2 m up the column (the lowest above the foot).
 		const float ColumnY = Local.Y >= 0.f ? mHalfSpan : -mHalfSpan;
 		if (FMath::Abs(Local.Y - ColumnY) > ColumnHalfAcross + 60.f || FMath::Abs(Local.X) > ColumnHalfAlong + 60.f)
 		{
@@ -177,7 +177,7 @@ bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNorma
 		{
 			bAlongRoadFace = FMath::Abs(RelX) / ColumnHalfAlong >= FMath::Abs(RelY) / ColumnHalfAcross;
 		}
-		const float Z = FMath::Clamp(FMath::RoundToFloat(Local.Z / SignSpacing) * SignSpacing, SignSpacing, FMath::Max(SignSpacing, mBeamBottom - SignSpacing * 0.5f));
+		const float Z = FMath::Clamp(FMath::RoundToFloat(Local.Z / SignSpacing) * SignSpacing, 2.f * SignSpacing, FMath::Max(2.f * SignSpacing, mBeamBottom - SignSpacing * 0.5f));
 		if (bAlongRoadFace)
 		{
 			const float Side = (FMath::Abs(LocalNormal.X) > 0.3f ? LocalNormal.X : RelX) >= 0.f ? 1.f : -1.f;
