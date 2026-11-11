@@ -33,6 +33,7 @@ public:
 	static constexpr float BeamHalfThickness = 40.f;  // ... and 0.8 m wide
 	static constexpr float ColumnHalfAlong = 50.f;    // column: 1 m along the road, 0.8 m across it
 	static constexpr float ColumnHalfAcross = 40.f;
+	static constexpr float SignSpacing = 200.f;       // sign snap points every 2 m
 	static constexpr float BeamOverhang = 40.f;       // the beam ends flush with the columns' outer faces
 
 	/** Boxes around the columns and the beam in local space: collision, and the hologram's preview shape. */
@@ -42,9 +43,9 @@ public:
 	static int32 CostUnits(float HalfSpan, float BeamBottom);
 
 	/**
-	 * Where a sign goes on the beam when you aim at the world point Hit (with the face normal): flat
-	 * on the front or back face, free along the beam, at the bottom edge, the middle or the top edge.
-	 * False if the point is not on the beam.
+	 * Where a sign goes when you aim at the world point Hit (with the face normal): flat on the face
+	 * you aim at, on the beam (front or back, a point every 2 m along it, at the bottom edge, middle or
+	 * top edge) or on a column (any of its four faces, a point every 2 m up). False if not on the gantry.
 	 */
 	bool GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal) const;
 

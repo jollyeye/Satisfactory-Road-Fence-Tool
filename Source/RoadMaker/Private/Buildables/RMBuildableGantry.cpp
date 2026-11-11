@@ -113,17 +113,58 @@ bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNorma
 {
 	const FTransform& T = GetActorTransform();
 	const FVector Local = T.InverseTransformPosition(Hit);
-	if (FMath::Abs(Local.Y) > mHalfSpan + BeamOverhang || Local.Z < mBeamBottom - 60.f || Local.Z > mBeamBottom + BeamDepth + 60.f)
-	{
-		return false;
-	}
 	const FVector LocalNormal = T.InverseTransformVectorNoScale(HitNormal);
-	float Side = FMath::Abs(LocalNormal.X) > 0.3f ? LocalNormal.X : Local.X;
-	Side = Side >= 0.f ? 1.f : -1.f;
-	// Bottom edge, middle, top edge of the beam.
-	const float Level = FMath::Clamp(FMath::RoundToFloat((Local.Z - mBeamBottom) / (BeamDepth * 0.5f)), 0.f, 2.f);
-	const FVector OnFace(Side * (BeamHalfThickness + 1.f), FMath::Clamp(Local.Y, -mHalfSpan, mHalfSpan), mBeamBottom + Level * BeamDepth * 0.5f);
+	FVector OnFace;
+	FVector FaceNormal;
+
+	if (Local.Z >= mBeamBottom - 20.f)
+	{
+		// The cross beam: flat on its front or back face, a point every 2 m along it (counted from the
+		// middle), at the bottom edge, the middle or the top edge.
+		if (FMath::Abs(Local.Y) > mHalfSpan + BeamOverhang || Local.Z > mBeamBottom + BeamDepth + 60.f)
+		{
+			return false;
+		}
+		const float Side = (FMath::Abs(LocalNormal.X) > 0.3f ? LocalNormal.X : Local.X) >= 0.f ? 1.f : -1.f;
+		const float Along = FMath::Clamp(FMath::RoundToFloat(Local.Y / SignSpacing) * SignSpacing, -mHalfSpan, mHalfSpan);
+		const float Level = FMath::Clamp(FMath::RoundToFloat((Local.Z - mBeamBottom) / (BeamDepth * 0.5f)), 0.f, 2.f);
+		OnFace = FVector(Side * (BeamHalfThickness + 1.f), Along, mBeamBottom + Level * BeamDepth * 0.5f);
+		FaceNormal = FVector(Side, 0.f, 0.f);
+	}
+	else
+	{
+		// A column: on any of its four faces, a point every 2 m up the column.
+		const float ColumnY = Local.Y >= 0.f ? mHalfSpan : -mHalfSpan;
+		if (FMath::Abs(Local.Y - ColumnY) > ColumnHalfAcross + 60.f || FMath::Abs(Local.X) > ColumnHalfAlong + 60.f)
+		{
+			return false;
+		}
+		const float RelX = Local.X;
+		const float RelY = Local.Y - ColumnY;
+		bool bAlongRoadFace; // the faces looking along the road (+-X) or across it (+-Y)
+		if (FMath::Abs(LocalNormal.X) > 0.3f || FMath::Abs(LocalNormal.Y) > 0.3f)
+		{
+			bAlongRoadFace = FMath::Abs(LocalNormal.X) >= FMath::Abs(LocalNormal.Y);
+		}
+		else
+		{
+			bAlongRoadFace = FMath::Abs(RelX) / ColumnHalfAlong >= FMath::Abs(RelY) / ColumnHalfAcross;
+		}
+		const float Z = FMath::Clamp(FMath::RoundToFloat(Local.Z / SignSpacing) * SignSpacing, SignSpacing, FMath::Max(SignSpacing, mBeamBottom - SignSpacing * 0.5f));
+		if (bAlongRoadFace)
+		{
+			const float Side = (FMath::Abs(LocalNormal.X) > 0.3f ? LocalNormal.X : RelX) >= 0.f ? 1.f : -1.f;
+			OnFace = FVector(Side * (ColumnHalfAlong + 1.f), ColumnY, Z);
+			FaceNormal = FVector(Side, 0.f, 0.f);
+		}
+		else
+		{
+			const float Side = (FMath::Abs(LocalNormal.Y) > 0.3f ? LocalNormal.Y : RelY) >= 0.f ? 1.f : -1.f;
+			OnFace = FVector(0.f, ColumnY + Side * (ColumnHalfAcross + 1.f), Z);
+			FaceNormal = FVector(0.f, Side, 0.f);
+		}
+	}
 	OutLocation = T.TransformPosition(OnFace);
-	OutNormal = T.TransformVectorNoScale(FVector(Side, 0.f, 0.f));
+	OutNormal = T.TransformVectorNoScale(FaceNormal);
 	return true;
 }
