@@ -1,4 +1,5 @@
 #include "Buildables/RMBuildableRoad.h"
+#include "RoadMakerModule.h"
 #include "FGDismantleInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "Buildables/FGBuildableRailroadTrack.h"
@@ -183,7 +184,7 @@ namespace
 
 	/**
 	 * Where a track / path spline crosses the cut: the plane through the cut point facing along the
-	 * road, within the road's width (plus 1 m) and 4 m above / below. Not within 1 m of its ends.
+	 * road, within the road's width (plus 1 m) and 4 m above / below.
 	 */
 	bool FindCutCrossing(const USplineComponent* Spline, const FRMFrame& Cut, float HalfWidth, float& OutDist)
 	{
@@ -203,8 +204,7 @@ namespace
 				// Linear estimate between the two samples on either side of the plane.
 				const float Cross = FMath::Clamp(FMath::IsNearlyEqual(PrevS, S) ? PrevD : PrevD + (D - PrevD) * PrevS / (PrevS - S), PrevD, D);
 				const FVector P = Spline->GetLocationAtDistanceAlongSpline(Cross, ESplineCoordinateSpace::World) - Cut.Pos;
-				if (FMath::Abs(FVector::DotProduct(P, Cut.Right)) <= HalfWidth + 100.f && FMath::Abs(FVector::DotProduct(P, Cut.Up)) <= 400.f
-					&& Cross > 100.f && Cross < Length - 100.f)
+				if (FMath::Abs(FVector::DotProduct(P, Cut.Right)) <= HalfWidth + 100.f && FMath::Abs(FVector::DotProduct(P, Cut.Up)) <= 400.f)
 				{
 					OutDist = Cross;
 					return true;
@@ -215,6 +215,104 @@ namespace
 		}
 		return false;
 	}
+
+	/**
+	 * Shortest piece the game builds for this track / path: its hologram's mMinLength (tracks) or
+	 * mMinPathLength (vehicle paths), read from the build class's hologram; 1 m if not found.
+	 */
+	float RiderMinLength(const AActor* Rider)
+	{
+		static TMap<TWeakObjectPtr<UClass>, float> Cache;
+		UClass* Class = Rider->GetClass();
+		if (const float* Found = Cache.Find(Class))
+		{
+			return *Found;
+		}
+		float Min = 100.f;
+		const FClassProperty* HoloProp = FindFProperty<FClassProperty>(AFGBuildable::StaticClass(), TEXT("mHologramClass"));
+		UClass* Holo = HoloProp ? Cast<UClass>(HoloProp->GetObjectPropertyValue_InContainer(Class->GetDefaultObject())) : nullptr;
+		if (Holo)
+		{
+			for (const TCHAR* Name : { TEXT("mMinLength"), TEXT("mMinPathLength") })
+			{
+				if (const FFloatProperty* P = FindFProperty<FFloatProperty>(Holo, Name))
+				{
+					Min = FMath::Max(Min, P->GetPropertyValue_InContainer(Holo->GetDefaultObject()));
+					break;
+				}
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Cut Road: shortest %s piece = %.0f cm"), *Class->GetName(), Min);
+		Cache.Add(Class, Min);
+		return Min;
+	}
+}
+
+bool ARMBuildableRoad::GetFrameAt(float Dist, FRMFrame& OutFrame) const
+{
+	TArray<FRMFrame> Frames;
+	GetWorldFrames(Frames, 25.f);
+	if (Frames.Num() < 2)
+	{
+		return false;
+	}
+	OutFrame = Frames.Last();
+	for (int32 I = 1; I < Frames.Num(); ++I)
+	{
+		if (Frames[I].Dist >= Dist)
+		{
+			const FRMFrame& A = Frames[I - 1];
+			const FRMFrame& B = Frames[I];
+			const float Alpha = FMath::Clamp((Dist - A.Dist) / FMath::Max(B.Dist - A.Dist, KINDA_SMALL_NUMBER), 0.f, 1.f);
+			OutFrame = A;
+			OutFrame.Pos = FMath::Lerp(A.Pos, B.Pos, Alpha);
+			OutFrame.Fwd = FMath::Lerp(A.Fwd, B.Fwd, Alpha).GetSafeNormal();
+			OutFrame.Right = FMath::Lerp(A.Right, B.Right, Alpha).GetSafeNormal();
+			OutFrame.Up = FMath::Lerp(A.Up, B.Up, Alpha).GetSafeNormal();
+			OutFrame.Dist = Dist;
+			break;
+		}
+	}
+	return true;
+}
+
+int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const
+{
+	OutSplits.Reset();
+	FRMFrame Cut;
+	if (!GetFrameAt(Dist, Cut))
+	{
+		return 0;
+	}
+	TArray<AActor*> Riders;
+	IFGDismantleInterface::Execute_GetChildDismantleActors(const_cast<ARMBuildableRoad*>(this), Riders);
+	const float HalfWidth = GetRoadWidth() * 0.5f;
+	int32 TooShort = 0;
+	for (AActor* Rider : Riders)
+	{
+		const USplineComponent* Spline = nullptr;
+		if (const AFGBuildableRailroadTrack* Track = Cast<AFGBuildableRailroadTrack>(Rider))
+		{
+			Spline = Track->GetSplineComponent();
+		}
+		else if (const AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(Rider))
+		{
+			Spline = Path->GetSplineComponent();
+		}
+		float At = 0.f;
+		if (!Spline || !FindCutCrossing(Spline, Cut, HalfWidth, At))
+		{
+			continue;
+		}
+		const float Min = RiderMinLength(Rider);
+		if (At < Min || Spline->GetSplineLength() - At < Min)
+		{
+			++TooShort;
+			continue;
+		}
+		OutSplits.Add(TPair<AActor*, float>(Rider, At));
+	}
+	return TooShort;
 }
 
 ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSecond)
@@ -287,6 +385,12 @@ ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSeco
 	{
 		return nullptr;
 	}
+	// Tracks / paths on the road that the cut crosses; one too short to split: no cut.
+	TArray<TPair<AActor*, float>> Splits;
+	if (PlanRiderCuts(Dist, Splits) > 0)
+	{
+		return nullptr;
+	}
 	const int32 FirstCost = FMath::Max(1, FMath::RoundToInt(mCostMultiplier * Dist / Total));
 	const int32 SecondCost = FMath::Max(1, mCostMultiplier - FirstCost);
 	ARMBuildableRoad* First = SpawnRoadPiece(this, FirstPoints, FirstCost);
@@ -304,26 +408,16 @@ ARMBuildableRoad* ARMBuildableRoad::CutAt(float Dist, ARMBuildableRoad** OutSeco
 		return nullptr;
 	}
 	// Game rail tracks and vehicle paths built on this road are split at the same place (the game's
-	// own split, which keeps the pieces connected).
-	TArray<AActor*> Riders;
-	IFGDismantleInterface::Execute_GetChildDismantleActors(this, Riders);
-	const float HalfWidth = GetRoadWidth() * 0.5f;
-	for (AActor* Rider : Riders)
+	// own split, which keeps the pieces connected). A piece shorter than the game allows: no cut.
+	for (const TPair<AActor*, float>& Split : Splits)
 	{
-		float At = 0.f;
-		if (AFGBuildableRailroadTrack* Track = Cast<AFGBuildableRailroadTrack>(Rider))
+		if (AFGBuildableRailroadTrack* Track = Cast<AFGBuildableRailroadTrack>(Split.Key))
 		{
-			if (Track->GetSplineComponent() && FindCutCrossing(Track->GetSplineComponent(), Cut, HalfWidth, At))
-			{
-				AFGBuildableRailroadTrack::Split(Track, At, true);
-			}
+			AFGBuildableRailroadTrack::Split(Track, Split.Value, true);
 		}
-		else if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(Rider))
+		else if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(Split.Key))
 		{
-			if (Path->GetSplineComponent() && FindCutCrossing(Path->GetSplineComponent(), Cut, HalfWidth, At))
-			{
-				Path->Split(At);
-			}
+			Path->Split(Split.Value);
 		}
 	}
 

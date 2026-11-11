@@ -84,6 +84,14 @@ void ARMRoadCutHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 	}
+	else
+	{
+		TArray<TPair<AActor*, float>> Splits;
+		if (mTarget->PlanRiderCuts(mCutDist, Splits) > 0)
+		{
+			AddConstructDisqualifier(URMCD_RiderTooShort::StaticClass());
+		}
+	}
 }
 
 AActor* ARMRoadCutHologram::Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID)

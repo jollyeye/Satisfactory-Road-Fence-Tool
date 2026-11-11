@@ -70,3 +70,11 @@ class ROADMAKER_API URMCD_BadIntersection : public UFGConstructDisqualifier
 public:
 	URMCD_BadIntersection() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "BadIntersection", "These road ends cannot form an intersection"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_RiderTooShort : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_RiderTooShort() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RiderTooShort", "A train track or vehicle path on the road would be cut too close to its end"); }
+};

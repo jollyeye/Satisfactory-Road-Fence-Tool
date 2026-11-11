@@ -9,6 +9,8 @@
 #include "Equipment/FGBuildGunBuild.h"
 #include "Hologram/FGHologram.h"
 #include "Patching/NativeHookManager.h"
+
+namespace RMDiag { void InstallHooks(); }
 #include "GameFramework/PlayerController.h"
 #include "UObject/UnrealType.h"
 #include "FGPlayerController.h"
@@ -79,6 +81,9 @@ void FRoadMakerModule::StartupModule()
 
 	// Customizer Material tab on fence walls (concrete / FICSIT / steel), switched in place.
 	RMFenceWallPaint::InstallHooks();
+
+	// Development logger (temporary, remove before release).
+	RMDiag::InstallHooks();
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)

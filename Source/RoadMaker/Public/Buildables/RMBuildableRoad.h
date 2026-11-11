@@ -45,6 +45,16 @@ public:
 	 */
 	ARMBuildableRoad* CutAt(float Dist, ARMBuildableRoad** OutSecond = nullptr);
 
+	/**
+	 * Game rail tracks / vehicle paths on this road that a cut at Dist crosses, with where along them
+	 * (OutSplits). Returns how many would be left with a piece shorter than the game allows (the
+	 * track's / path's own minimum length): the cut is refused then.
+	 */
+	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;
+
+	/** The cut frame (position and directions) at Dist along this road. */
+	bool GetFrameAt(float Dist, FRMFrame& OutFrame) const;
+
 private:
 	/** Set while this road is replaced by a cut, so dismantling it leaves its riders alone. */
 	bool mBeingCut = false;
