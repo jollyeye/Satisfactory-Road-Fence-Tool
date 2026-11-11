@@ -1833,7 +1833,24 @@ namespace
 			return false;
 		}
 		const FString Name = Build->GetName();
-		return Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")));
+		return (Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")))) || Name.Contains(TEXT("Ladder"));
+	}
+
+	/** Ladders sit on the face of the wall; everything else goes on its middle line. */
+	bool IsFaceMountedPiece(const AFGHologram* Hologram)
+	{
+		return Hologram->GetBuildClass() && Hologram->GetBuildClass()->GetName().Contains(TEXT("Ladder"));
+	}
+
+	/** Other pieces that mount on walls without being wall attachments: fans, vents, ladders and the beam connectors / supports. */
+	bool IsExtraWallPiece(const AFGHologram* Hologram)
+	{
+		if (!Hologram->GetBuildClass() || Hologram->IsA<AFGBeamHologram>() || Hologram->IsA<AFGWallAttachmentHologram>())
+		{
+			return false;
+		}
+		const FString Name = Hologram->GetBuildClass()->GetName();
+		return Name.Contains(TEXT("Fan")) || Name.Contains(TEXT("Vent")) || Name.Contains(TEXT("Ladder")) || Name.Contains(TEXT("Beam"));
 	}
 
 	/** Puts a wall attachment flat on a fence wall or gantry face, no snap key needed. */
@@ -1857,7 +1874,7 @@ namespace
 		}
 		// The piece's origin goes on the middle of the wall, so two-sided pieces show on both faces and
 		// the back of a one-sided one is hidden inside it.
-		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * Face.Depth, FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
+		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * (IsFaceMountedPiece(Hologram) ? 0.f : Face.Depth), FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
 		if (!GAttachOnWall.Contains(Hologram))
 		{
 			GAttachOnWall.Add(Hologram);
@@ -2183,6 +2200,31 @@ void RMVanillaSnapping::InstallHooks()
 		[](AFGWallAttachmentHologram* Hologram)
 		{
 			FixAttachmentValidity(Hologram);
+		});
+
+	// Fans, vents, ladders and the beam connectors / supports: the same, on the middle of the wall (ladders on its face).
+	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBuildableHologram>(),
+		[](auto& Scope, AFGBuildableHologram* Hologram, const FHitResult& Hit)
+		{
+			if (IsExtraWallPiece(Hologram))
+			{
+				PlaceAttachmentOnWall(Scope, Hologram, Hit);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::CheckValidPlacement, GetMutableDefault<AFGBuildableHologram>(),
+		[](AFGBuildableHologram* Hologram)
+		{
+			FixAttachmentValidity(Hologram);
+		});
+	// The beams themselves: the start point goes on the middle of the wall (their direction stays the game's).
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
+		[](AFGBeamHologram* Hologram, const FHitResult& Hit)
+		{
+			FWallFace Face;
+			if (IsStartStep(Hologram) && FindWallFace(Hit, Face))
+			{
+				Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
+			}
 		});
 
 	// Debug log: the meshes of every beam-like hologram (connectors, shelf, supports) for the gantry.
