@@ -120,6 +120,8 @@ Layouts found (see `RMGeometry.cpp` / `RMBuildableFence.cpp`):
 
 ## Ideas for Road Maker 1.2.0 (agreed in brainstorming, not started)
 
+The full 1.2.0 list is in `docs/ROADMAP-1.2.0.md` (item 6 is the plastic road below).
+
 **New road surface: matte "toy" plastic with circuit-board grooves** (concepts in `docs/concepts/`).
 - A **Roads** section in the game's Material tab with two options: Asphalt and Plastic. Switching works
   in place like the fence walls (preview on hover, cost difference). Intersections get it too.
