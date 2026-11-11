@@ -1,4 +1,5 @@
 #include "Buildables/RMBuildableRoad.h"
+#include "FGRecipe.h"
 #include "RoadMakerModule.h"
 #include "FGDismantleInterface.h"
 #include "Kismet/GameplayStatics.h"
@@ -253,6 +254,84 @@ int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>&
 		OutSplits.Add(TPair<AActor*, float>(Rider, At));
 	}
 	return TooShort;
+}
+
+bool ARMBuildableRoad::CanSplitLengthwise() const
+{
+	if (mWidthInFoundations < 2)
+	{
+		return false;
+	}
+	// Tracks and vehicle paths lie across both halves: not split, the player moves them first.
+	TArray<AActor*> Riders;
+	IFGDismantleInterface::Execute_GetChildDismantleActors(const_cast<ARMBuildableRoad*>(this), Riders);
+	return Riders.Num() == 0;
+}
+
+ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)
+{
+	if (OutRight)
+	{
+		*OutRight = nullptr;
+	}
+	const int32 RightFoundations = mWidthInFoundations - LeftFoundations;
+	if (!HasAuthority() || GetIsDismantled() || IsActorBeingDestroyed() || LeftFoundations < 1 || RightFoundations < 1 || !CanSplitLengthwise())
+	{
+		return nullptr;
+	}
+	TArray<FRMFrame> Frames;
+	GetWorldFrames(Frames, 25.f);
+	if (Frames.Num() < 3)
+	{
+		return nullptr;
+	}
+	// Each half is this road's curve moved sideways to the centre of its half.
+	const float Half = GetRoadWidth() * 0.5f;
+	const float LeftW = LeftFoundations * RM::FoundationSize;
+	const float RightW = RightFoundations * RM::FoundationSize;
+	TArray<FRMSplinePoint> LeftPoints, RightPoints;
+	RMGeometry::OffsetCurve(Frames, -Half + LeftW * 0.5f, 200.f, LeftPoints);
+	RMGeometry::OffsetCurve(Frames, Half - RightW * 0.5f, 200.f, RightPoints);
+	if (LeftPoints.Num() < 2 || RightPoints.Num() < 2)
+	{
+		return nullptr;
+	}
+	auto ClassFor = [](int32 Foundations, UClass*& OutClass, UClass*& OutRecipe)
+	{
+		OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), Foundations, Foundations));
+		OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), Foundations, Foundations));
+	};
+	UClass *LeftClass = nullptr, *LeftRecipe = nullptr, *RightClass = nullptr, *RightRecipe = nullptr;
+	ClassFor(LeftFoundations, LeftClass, LeftRecipe);
+	ClassFor(RightFoundations, RightClass, RightRecipe);
+	if (!LeftClass || !RightClass)
+	{
+		return nullptr;
+	}
+	const int32 Cost = FMath::Max(1, GetCostMultiplier());
+	ARMBuildableSpline* Left = SpawnLike(LeftClass, LeftRecipe, LeftPoints, Cost);
+	ARMBuildableSpline* Right = SpawnLike(RightClass, RightRecipe, RightPoints, Cost);
+	if (!Left || !Right)
+	{
+		if (Left)
+		{
+			Left->Destroy();
+		}
+		if (Right)
+		{
+			Right->Destroy();
+		}
+		return nullptr;
+	}
+	mBeingCut = true;
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+	IFGDismantleInterface::Execute_Dismantle(this);
+	if (OutRight)
+	{
+		*OutRight = Cast<ARMBuildableRoad>(Right);
+	}
+	return Cast<ARMBuildableRoad>(Left);
 }
 
 bool ARMBuildableRoad::CanCutAt(float Dist) const

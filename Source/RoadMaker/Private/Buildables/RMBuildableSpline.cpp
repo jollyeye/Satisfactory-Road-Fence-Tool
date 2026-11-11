@@ -2,6 +2,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h"
 #include "FGDismantleInterface.h"
+#include "FGRecipe.h"
 
 ARMBuildableSpline::ARMBuildableSpline(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -86,34 +87,40 @@ namespace
 	/** Spawns a copy of Source (class, recipe, paint, settings) along the given world curve. */
 	ARMBuildableSpline* SpawnCutPiece(ARMBuildableSpline* Source, const TArray<FRMSplinePoint>& World, int32 CostMultiplier)
 	{
-		UWorld* W = Source->GetWorld();
-		if (!W || World.Num() < 2)
-		{
-			return nullptr;
-		}
-		// Same convention as the holograms: actor at the first point, yawed along its direction.
-		const FVector Dir = FVector(World[0].Tangent.X, World[0].Tangent.Y, 0.f).GetSafeNormal();
-		const FRotator Yaw(0.f, Dir.IsNearlyZero() ? 0.f : Dir.Rotation().Yaw, 0.f);
-		const FTransform T(Yaw, World[0].Location);
-		TArray<FRMSplinePoint> Local;
-		for (const FRMSplinePoint& P : World)
-		{
-			Local.Add(FRMSplinePoint(T.InverseTransformPosition(P.Location), T.InverseTransformVectorNoScale(P.Tangent)));
-		}
-		ARMBuildableSpline* New = W->SpawnActorDeferred<ARMBuildableSpline>(Source->GetClass(), T, nullptr, nullptr,
-			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-		if (!New)
-		{
-			return nullptr;
-		}
-		New->SetBuiltWithRecipe(Source->GetBuiltWithRecipe());
-		New->SetCostMultiplier(CostMultiplier);
-		New->SetSplinePoints(Local);
-		New->SetCustomizationData_Native(Source->GetCustomizationData_Native());
-		Source->CopyCutSettingsForSpawn(New);
-		UGameplayStatics::FinishSpawningActor(New, T);
-		return New;
+		return Source->SpawnLike(Source->GetClass(), Source->GetBuiltWithRecipe(), World, CostMultiplier);
 	}
+}
+
+ARMBuildableSpline* ARMBuildableSpline::SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<UFGRecipe> Recipe,
+	const TArray<FRMSplinePoint>& World, int32 CostMultiplier) const
+{
+	UWorld* W = GetWorld();
+	if (!W || World.Num() < 2 || !Class)
+	{
+		return nullptr;
+	}
+	// Same convention as the holograms: actor at the first point, yawed along its direction.
+	const FVector Dir = FVector(World[0].Tangent.X, World[0].Tangent.Y, 0.f).GetSafeNormal();
+	const FRotator Yaw(0.f, Dir.IsNearlyZero() ? 0.f : Dir.Rotation().Yaw, 0.f);
+	const FTransform T(Yaw, World[0].Location);
+	TArray<FRMSplinePoint> Local;
+	for (const FRMSplinePoint& P : World)
+	{
+		Local.Add(FRMSplinePoint(T.InverseTransformPosition(P.Location), T.InverseTransformVectorNoScale(P.Tangent)));
+	}
+	ARMBuildableSpline* New = W->SpawnActorDeferred<ARMBuildableSpline>(Class, T, nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!New)
+	{
+		return nullptr;
+	}
+	New->SetBuiltWithRecipe(Recipe);
+	New->SetCostMultiplier(CostMultiplier);
+	New->SetSplinePoints(Local);
+	New->SetCustomizationData_Native(GetCustomizationData_Native());
+	CopyCutSettingsTo(New);
+	UGameplayStatics::FinishSpawningActor(New, T);
+	return New;
 }
 
 ARMBuildableSpline* ARMBuildableSpline::CutAt(float Dist, ARMBuildableSpline** OutSecond)

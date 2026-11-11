@@ -86,3 +86,19 @@ class ROADMAKER_API URMCD_AimAtFence : public UFGConstructDisqualifier
 public:
 	URMCD_AimAtFence() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtFence", "Aim at a road fence or fence wall"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_RoadTooNarrow : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_RoadTooNarrow() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RoadTooNarrow", "Only roads 2 or more wide can be split"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_RidersOnRoad : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_RidersOnRoad() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RidersOnRoad", "Remove the train tracks and vehicle paths on the road first"); }
+};

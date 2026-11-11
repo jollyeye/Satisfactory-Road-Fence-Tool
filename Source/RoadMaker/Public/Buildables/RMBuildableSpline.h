@@ -37,6 +37,13 @@ public:
 	 */
 	ARMBuildableSpline* CutAt(float Dist, ARMBuildableSpline** OutSecond = nullptr);
 
+	/**
+	 * Server: a new piece of Class (built with Recipe) following World points (world space), with this
+	 * one's paint and cut settings. Null on failure.
+	 */
+	ARMBuildableSpline* SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<class UFGRecipe> Recipe,
+		const TArray<FRMSplinePoint>& World, int32 CostMultiplier) const;
+
 	/** Used while spawning cut pieces (CopyCutSettingsTo is protected). */
 	void CopyCutSettingsForSpawn(ARMBuildableSpline* New) const { CopyCutSettingsTo(New); }
 

@@ -56,6 +56,14 @@ protected:
 	UPROPERTY(Replicated, CustomSerialization)
 	float mCutDist = 0.f;
 
+	/** Split Road: splits the road lengthwise (aim across it) instead of across. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	bool mSplitTool = false;
+
+	/** Split Road: foundations on the left of the split (1 .. width - 1), from where you aim across the road. */
+	UPROPERTY(Replicated, CustomSerialization)
+	int32 mSplitLeft = 1;
+
 	/** Cut Fence: a road end within this distance (cm, along the fence) of the aim snaps the cut to it. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	float mEndSnapDistance = 300.f;

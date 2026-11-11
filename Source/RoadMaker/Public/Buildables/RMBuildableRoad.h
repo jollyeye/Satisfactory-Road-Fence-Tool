@@ -19,6 +19,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	int32 GetWidthInFoundations() const { return mWidthInFoundations; }
 	float GetRoadWidth() const { return mWidthInFoundations * RM::FoundationSize; }
 
 	/** Customizer: primary colour = dashed middle lines, secondary colour = side lines. */
@@ -47,6 +48,16 @@ public:
 	 * (OutSplits). Returns how many would be left with a piece shorter than the game allows (the
 	 * track's / path's own minimum length): the cut is refused then.
 	 */
+	/** Split Road: lengthwise split possible (2+ wide, nothing of the game built on it)? */
+	bool CanSplitLengthwise() const;
+
+	/**
+	 * Split Road (server): replaces this road with two roads side by side, the left one LeftFoundations
+	 * wide and the right one the rest, following its curve, with its lines and paint. Returns the left
+	 * road (OutRight the other); null if not possible.
+	 */
+	ARMBuildableRoad* SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight = nullptr);
+
 	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;
 
 

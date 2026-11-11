@@ -242,6 +242,10 @@ holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)
 setp(cdo(holo_cut), bm_cut_fences.generated_class(), "m_build_mode_with_fences", "mBuildModeWithFences")
 finish(holo_cut)
 
+holo_split = make_bp("Holograms", "Holo_RoadSplit", RMRoadCutHologram)
+setp(cdo(holo_split), True, "m_split_tool", "mSplitTool")
+finish(holo_split)
+
 holo_fence_cut = make_bp("Holograms", "Holo_FenceCut", RMRoadCutHologram)
 setp(cdo(holo_fence_cut), True, "m_fence_tool", "mFenceTool")
 finish(holo_fence_cut)
@@ -329,7 +333,7 @@ if VehiclePathSubCat:
     finish(efc)
     edit_fence_subcat = efc.generated_class()
 # Road Tools entries and their section.
-ROAD_TOOLS_MENU = {"RoadCut": "road", "FenceCut": "fence"}
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "FenceCut": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -358,6 +362,8 @@ TOOLS = [
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint; train tracks and vehicle paths on it are cut too. Build mode \"Cut also fences\" also cuts the road's own fences at the same place (white outlines). Free.",
      {}, [], road_icons, {}),
+    ("RoadSplit", RMBuildableRoadTool, holo_split, "Split Road", "Aim across a road 2 or more wide: the orange line shows where it is split lengthwise, in steps of 8 m. Click to replace it with two roads side by side that keep its curve, lines and paint (a 2 wide road becomes two 1 wide roads, a 4 wide one for example 1 + 3). Train tracks and vehicle paths on the road must be removed first. Free.",
+     {}, [], road_icons, {}),
     ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
      {}, [], fence_icons, {}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
@@ -378,7 +384,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "FenceCut": 2, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "RoadSplit": 2, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8,
               "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 

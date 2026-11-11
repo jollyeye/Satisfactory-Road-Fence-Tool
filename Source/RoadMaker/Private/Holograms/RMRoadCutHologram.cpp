@@ -67,6 +67,7 @@ void ARMRoadCutHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMRoadCutHologram, mTarget);
 	DOREPLIFETIME(ARMRoadCutHologram, mCutDist);
+	DOREPLIFETIME(ARMRoadCutHologram, mSplitLeft);
 }
 
 void ARMRoadCutHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
@@ -188,6 +189,11 @@ void ARMRoadCutHologram::SnapFenceCutToRoadEnd()
 
 bool ARMRoadCutHologram::IsCutValid() const
 {
+	if (mSplitTool)
+	{
+		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
+		return Road && Road->GetWidthInFoundations() >= 2 && mSplitLeft >= 1 && mSplitLeft < Road->GetWidthInFoundations();
+	}
 	return mTarget && mCutDist >= MinPieceLength() && mTarget->GetLength() - mCutDist >= MinPieceLength();
 }
 
@@ -197,6 +203,18 @@ void ARMRoadCutHologram::CheckValidPlacement()
 	if (!mTarget)
 	{
 		AddConstructDisqualifier(mFenceTool ? URMCD_AimAtFence::StaticClass() : URMCD_AimAtRoad::StaticClass());
+	}
+	else if (mSplitTool)
+	{
+		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
+		if (!IsCutValid())
+		{
+			AddConstructDisqualifier(URMCD_RoadTooNarrow::StaticClass());
+		}
+		else if (!Road->CanSplitLengthwise())
+		{
+			AddConstructDisqualifier(URMCD_RidersOnRoad::StaticClass());
+		}
 	}
 	else if (!IsCutValid())
 	{
@@ -260,7 +278,19 @@ AActor* ARMRoadCutHologram::Construct(TArray<AActor*>& out_children, FNetConstru
 	// The cut itself (server): new pieces replace the old ones. The first one is handed back as
 	// "what was built".
 	ARMBuildableSpline* First = nullptr;
-	if (IsCutValid())
+	if (mSplitTool)
+	{
+		if (IsCutValid())
+		{
+			ARMBuildableRoad* Right = nullptr;
+			First = Cast<ARMBuildableRoad>(mTarget)->SplitLengthwise(mSplitLeft, &Right);
+			if (Right)
+			{
+				out_children.Add(Right);
+			}
+		}
+	}
+	else if (IsCutValid())
 	{
 		if (IsWithFences())
 		{
@@ -358,6 +388,30 @@ void ARMRoadCutHologram::RebuildOverlay()
 	B.Base = GetActorLocation();
 	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+
+	if (mSplitTool)
+	{
+		// A line along the whole road where it is split, just above the surface.
+		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
+		const bool bOk = IsCutValid() && Road->CanSplitLengthwise();
+		TArray<FRMFrame> Frames;
+		mTarget->GetWorldFrames(Frames, 100.f);
+		const float Across = -Road->GetRoadWidth() * 0.5f + mSplitLeft * RM::FoundationSize;
+		const FLinearColor Color = bOk ? FLinearColor(1.f, 0.35f, 0.f) : FLinearColor(1.f, 0.05f, 0.05f);
+		for (int32 I = 1; I < Frames.Num(); ++I)
+		{
+			B.Line(Frames[I - 1].Pos + Frames[I - 1].Right * Across + Frames[I - 1].Up * 4.f,
+				Frames[I].Pos + Frames[I].Right * Across + Frames[I].Up * 4.f, 4.f, Color);
+		}
+		static UMaterialInterface* SplitMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+		mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
+		if (SplitMaterial)
+		{
+			mOverlayMesh->SetMaterial(0, SplitMaterial);
+		}
+		mOverlayMesh->SetRenderCustomDepth(false);
+		return;
+	}
 
 	// Orange where it is cut (red if the cut is refused); with fences, the extra pieces in white.
 	const bool bValid = IsCutValid() && mTarget->CanCutAt(mCutDist);

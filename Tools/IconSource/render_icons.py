@@ -313,6 +313,28 @@ def cut_glyph(path):
     img = img.resize((512, 512), _I.LANCZOS)
     img.save(path)
 
+def split_glyph(path):
+    """Split Road icon: white flat glyph, a road split lengthwise by a vertical line."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    C = (0, 0, 0, 0)
+    # Two road halves side by side with a gap; each has an edge line and a dashed line cut out.
+    for x0, x1 in ((200, 462), (562, 824)):
+        d.rounded_rectangle([x0, 120, x1, 904], radius=40, fill=W)
+        outer = x0 + 40 if x0 < 500 else x1 - 60
+        d.rectangle([outer, 160, outer + 20, 864], fill=C)
+        mid = (x0 + x1) // 2 + (20 if x0 < 500 else -20)
+        for yy in range(170, 850, 120):
+            d.rectangle([mid - 15, yy, mid + 15, yy + 60], fill=C)
+    # Split line along the middle, longer than the road.
+    d.rounded_rectangle([492, 50, 532, 974], radius=20, fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def fence_cut_glyph(path):
     """Cut Fence icon: white flat glyph, a brick wall split by a vertical cut line."""
     from PIL import Image as _I, ImageDraw as _D
@@ -362,6 +384,8 @@ def tab_glyph(path):
 what = sys.argv[1]; out = sys.argv[2]
 if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
+if what == "splitglyph":
+    split_glyph(out); sys.exit(0)
 if what == "fencecutglyph":
     fence_cut_glyph(out); sys.exit(0)
 if what == "tabglyph":
