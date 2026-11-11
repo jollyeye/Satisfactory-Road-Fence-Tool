@@ -602,6 +602,59 @@ void ARMRoadAdjustHologram::RebuildCircles()
 	{
 		Disc(mJoint + FVector(0.f, 0.f, 12.f), 335.f, FLinearColor(0.f, 0.f, 0.f));
 		Disc(mJoint + FVector(0.f, 0.f, 13.f), 300.f, FLinearColor(1.f, 0.35f, 0.f));
+
+		// The grabbed roads are hidden (their collision stays, nobody falls): a wireframe marks them.
+		APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		if (PC && PC->PlayerCameraManager)
+		{
+			int32 ViewW = 0, ViewH = 0;
+			PC->GetViewportSize(ViewW, ViewH);
+			const FVector Camera = PC->PlayerCameraManager->GetCameraLocation();
+			const float WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+			const FLinearColor WireColor(0.55f, 0.85f, 1.f);
+			auto Line = [&](FVector A, FVector B)
+			{
+				const float Pixels = 3.f;
+				const FVector Dir = (B - A).GetSafeNormal();
+				const float HA = Pixels * WorldPerPixel * FMath::Max(FVector::Dist(A, Camera), 10.f) * 0.5f;
+				const float HB = Pixels * WorldPerPixel * FMath::Max(FVector::Dist(B, Camera), 10.f) * 0.5f;
+				const FVector SA = FVector::CrossProduct(Dir, Camera - A).GetSafeNormal();
+				const FVector SB = FVector::CrossProduct(Dir, Camera - B).GetSafeNormal();
+				const int32 I = Vertices.Num();
+				for (const FVector& P : { A - SA * HA, A + SA * HA, B + SB * HB, B - SB * HB })
+				{
+					Vertices.Add(P - Base);
+					Colors.Add(WireColor);
+				}
+				Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
+			};
+			for (const ARMBuildableRoad* Road : { mRoadA, mRoadB })
+			{
+				if (!IsValid(Road))
+				{
+					continue;
+				}
+				TArray<FRMFrame> Frames;
+				Road->GetWorldFrames(Frames, 200.f);
+				const float Half = Road->GetRoadWidth() * 0.5f;
+				auto Edge = [&](const FRMFrame& F, float Side) { return F.Pos + F.Right * (Half * Side) + F.Up * 4.f; };
+				float NextRib = 0.f;
+				for (int32 I = 0; I < Frames.Num(); ++I)
+				{
+					if (I > 0)
+					{
+						Line(Edge(Frames[I - 1], -1.f), Edge(Frames[I], -1.f));
+						Line(Edge(Frames[I - 1], 1.f), Edge(Frames[I], 1.f));
+					}
+					// A rib across every 4 m (and at both ends).
+					if (Frames[I].Dist >= NextRib || I == Frames.Num() - 1)
+					{
+						Line(Edge(Frames[I], -1.f), Edge(Frames[I], 1.f));
+						NextRib = Frames[I].Dist + 400.f;
+					}
+				}
+			}
+		}
 	}
 	if (Vertices.Num() == 0)
 	{
