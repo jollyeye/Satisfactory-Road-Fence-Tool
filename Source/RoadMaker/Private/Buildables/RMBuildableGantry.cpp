@@ -2,6 +2,7 @@
 #include "ProceduralMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Math/RotationMatrix.h"
 #include "Net/UnrealNetwork.h"
 
 ARMBuildableGantry::ARMBuildableGantry(const FObjectInitializer& ObjectInitializer)
@@ -29,27 +30,32 @@ void ARMBuildableGantry::SetShape(float HalfSpan, float BeamBottom)
 
 namespace
 {
-	/** The game's H-beam: a 1 m long piece (about 1 m x 0.8 m in section) that the game stretches along its local Z. */
-	UStaticMesh* LoadHBeamMesh()
+	UStaticMesh* LoadPillarMesh(const TCHAR* Name)
 	{
-		static TWeakObjectPtr<UStaticMesh> Cached;
-		if (!Cached.IsValid())
-		{
-			Cached = LoadObject<UStaticMesh>(nullptr, TEXT("/Game/FactoryGame/Buildable/Building/Pillars/Mesh/SM_Beam_04.SM_Beam_04"));
-		}
-		return Cached.Get();
+		return LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/FactoryGame/Buildable/Building/Pillars/Mesh/%s.%s"), Name, Name));
 	}
 
-	/** The game's own rotation of its beam mesh (a beam runs along the actor's X). */
+	/** The game's own rotation of its beam meshes (a beam runs along the actor's X, from its origin). */
 	const FRotator HBeamMeshRotation(0.f, 90.f, -90.f);
 	const float HBeamMeshLength = 100.f;
 
-	void PlacePart(UStaticMeshComponent* Part, const FVector& Center, const FRotator& Outer, float Length)
+	/** A stretched game beam starting at Start, running along Direction for Length. */
+	void PlaceBeam(UStaticMeshComponent* Part, const FVector& Start, const FQuat& Outer, float Length)
 	{
-		Part->SetRelativeLocation(Center);
-		Part->SetRelativeRotation(FRotator(Outer.Quaternion() * HBeamMeshRotation.Quaternion()));
+		Part->SetRelativeLocation(Start);
+		Part->SetRelativeRotation(FRotator(Outer * HBeamMeshRotation.Quaternion()));
 		Part->SetRelativeScale3D(FVector(1.f, 1.f, Length / HBeamMeshLength));
 	}
+
+	/** A connection cube (centred, native orientation, long side along the road). */
+	void PlaceBlock(UStaticMeshComponent* Part, const FVector& Center)
+	{
+		Part->SetRelativeLocation(Center);
+		Part->SetRelativeRotation(FRotator::ZeroRotator);
+		Part->SetRelativeScale3D(FVector::OneVector);
+	}
+
+	enum EPart { ColumnA, ColumnB, Crossbeam, BaseA, BaseB, BraceA, BraceB, NumParts };
 }
 
 void ARMBuildableGantry::RebuildMesh()
@@ -65,34 +71,54 @@ void ARMBuildableGantry::RebuildMesh()
 	mMesh->SetRenderInDepthPass(false);
 	mMesh->SetCastShadow(false);
 
-	UStaticMesh* BeamMesh = LoadHBeamMesh();
-	if (mParts.Num() == 0 && BeamMesh)
+	if (mParts.Num() == 0)
 	{
-		for (int32 I = 0; I < 3; ++I)
+		// H-beam for the columns and braces, shelf beam for the cross beam, wide connection cubes as feet.
+		UStaticMesh* HBeam = LoadPillarMesh(TEXT("SM_Beam_04"));
+		UStaticMesh* Shelf = LoadPillarMesh(TEXT("SM_Beam_05"));
+		UStaticMesh* Block = LoadPillarMesh(TEXT("SM_ConnectionCube_Wide_01"));
+		UStaticMesh* Meshes[NumParts] = { HBeam, HBeam, Shelf, Block, Block, HBeam, HBeam };
+		for (int32 I = 0; I < NumParts; ++I)
 		{
+			if (!Meshes[I])
+			{
+				continue;
+			}
 			UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);
 			Part->SetupAttachment(GetRootComponent());
-			Part->SetStaticMesh(BeamMesh);
+			Part->SetStaticMesh(Meshes[I]);
 			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Part->RegisterComponent();
 			mParts.Add(Part);
 		}
 	}
-	if (mParts.Num() == 3)
+	if (mParts.Num() == NumParts)
 	{
-		// The game's beam mesh starts at its origin and runs along its length (not centred), so each part is
-		// placed by its start point. Columns (length along the gantry's Z: pitch 90) from the road up; the
-		// cross beam (along Y: yaw 90) from the left column's outer face, resting on top of the columns so
-		// the flanges do not intersect.
-		PlacePart(mParts[0], FVector(0.f, -mHalfSpan, 0.f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
-		PlacePart(mParts[1], FVector(0.f, mHalfSpan, 0.f), FRotator(90.f, 0.f, 0.f), mBeamBottom);
-		PlacePart(mParts[2], FVector(0.f, -(mHalfSpan + BeamOverhang), mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f), 2.f * (mHalfSpan + BeamOverhang));
+		// The game's beam mesh starts at its origin and runs along its length (not centred), so beams are
+		// placed by their start point. Columns (along the gantry's Z: pitch 90) stand on a wide connector
+		// at the foot; the cross beam (along Y: yaw 90) starts at the left column's outer face and rests on
+		// top of the columns so the flanges do not intersect; a brace on each column runs up and in.
+		const FQuat Up = FRotator(90.f, 0.f, 0.f).Quaternion();
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const float Y = (Side == 0 ? -1.f : 1.f) * mHalfSpan;
+			PlaceBlock(mParts[BaseA + Side], FVector(0.f, Y, FootHeight * 0.5f));
+			PlaceBeam(mParts[ColumnA + Side], FVector(0.f, Y, FootHeight), Up, mBeamBottom - FootHeight);
+
+			const float In = BraceInset(mHalfSpan);
+			const FVector From(0.f, Y, mBeamBottom - In);
+			const FVector To(0.f, Y - (Side == 0 ? -In : In), mBeamBottom);
+			const FVector Dir = To - From;
+			PlaceBeam(mParts[BraceA + Side], From, FRotationMatrix::MakeFromX(Dir).ToQuat(), Dir.Size());
+		}
+		PlaceBeam(mParts[Crossbeam], FVector(0.f, -(mHalfSpan + BeamOverhang), mBeamBottom + BeamDepth * 0.5f), FRotator(0.f, 90.f, 0.f).Quaternion(), 2.f * (mHalfSpan + BeamOverhang));
 	}
 }
 
 int32 ARMBuildableGantry::CostUnits(float HalfSpan, float BeamBottom)
 {
-	const float Length = 2.f * BeamBottom + 2.f * (HalfSpan + BeamOverhang);
+	const float Brace = BraceInset(HalfSpan) * 1.42f;
+	const float Length = 2.f * BeamBottom + 2.f * (HalfSpan + BeamOverhang) + 2.f * Brace + 2.f * 2.f * FootHeight;
 	return FMath::Max(1, FMath::CeilToInt(Length / 800.f));
 }
 
@@ -105,6 +131,7 @@ void ARMBuildableGantry::BuildGantryMesh(float HalfSpan, float BeamBottom, FRMMe
 	for (float Side : { -1.f, 1.f })
 	{
 		AddAxisBox(FVector(0.f, Side * HalfSpan, BeamBottom * 0.5f), FVector(ColumnHalfAlong, ColumnHalfAcross, BeamBottom * 0.5f));
+		AddAxisBox(FVector(0.f, Side * HalfSpan, FootHeight * 0.5f), FVector(FootHalfAlong, FootHalfAcross, FootHeight * 0.5f));
 	}
 	AddAxisBox(FVector(0.f, 0.f, BeamBottom + BeamDepth * 0.5f), FVector(BeamHalfThickness, HalfSpan + BeamOverhang, BeamDepth * 0.5f));
 }

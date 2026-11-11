@@ -1,6 +1,6 @@
-// Sign gantry: two H-beam columns standing on the road on the fence lines, and an H-beam across the
-// road at least 8 m above it, resting on top of the columns (the game's own H-beam mesh, stretched to
-// length). Signs snap to the beam's faces with the snap key. Only two numbers are saved (half span,
+// Sign gantry: two H-beam columns standing on wide connection cubes on the road's fence lines, a brace
+// on each, and a shelf beam across the road at least 8 m above it, resting on top of the columns (the
+// game's own meshes, beams stretched to length). Signs snap to the beam's faces with the snap key. Only two numbers are saved (half span,
 // beam height); the parts are rebuilt from them. An invisible box shape gives the collision.
 // Local space: X along the road, Y across it, Z up from the road surface at the gantry's centre.
 #pragma once
@@ -34,6 +34,10 @@ public:
 	static constexpr float ColumnHalfAlong = 50.f;    // column: 1 m along the road, 0.8 m across it
 	static constexpr float ColumnHalfAcross = 40.f;
 	static constexpr float SignSpacing = 200.f;       // sign snap points every 2 m
+	static constexpr float FootHeight = 111.f;        // wide connection cube under each column
+	static constexpr float FootHalfAlong = 105.f;
+	static constexpr float FootHalfAcross = 55.5f;
+	static float BraceInset(float HalfSpan) { return FMath::Clamp(HalfSpan * 0.5f, 100.f, 250.f); } // brace runs up and in
 	static constexpr float BeamOverhang = 40.f;       // the beam ends flush with the columns' outer faces
 
 	/** Boxes around the columns and the beam in local space: collision, and the hologram's preview shape. */
