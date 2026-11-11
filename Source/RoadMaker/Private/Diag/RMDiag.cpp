@@ -12,6 +12,7 @@
 #include "Containers/Ticker.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/UnrealType.h"
+#include "HAL/PlatformTime.h"
 
 namespace RMDiag
 {
@@ -192,6 +193,27 @@ namespace
 					S += FString::Printf(TEXT("%d=%s "), (int32)Modes->GetValueByIndex(I), *Modes->GetDisplayNameTextByIndex(I).ToString());
 				}
 				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] EBuildMenu_Modes: %s"), *S);
+			}
+		}
+		// The Build page with its category buttons (filled after the first dump).
+		static double ShownSince = 0.0;
+		static bool bBrowserDumped = false;
+		const double Now = FPlatformTime::Seconds();
+		if (ShownSince == 0.0)
+		{
+			ShownSince = Now;
+		}
+		if (!bBrowserDumped && Now - ShownSince > 1.5)
+		{
+			bBrowserDumped = true;
+			if (FObjectProperty* P = CastField<FObjectProperty>(Menu->GetClass()->FindPropertyByName(TEXT("mBrowser_Builder"))))
+			{
+				if (UWidget* Browser = Cast<UWidget>(P->GetObjectPropertyValue_InContainer(Menu)))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("[Diag] ===== Build page (mBrowser_Builder) with categories ====="));
+					TSet<UClass*> Seen;
+					DiagDump(Browser, 0, Seen);
+				}
 			}
 		}
 		DiagSet(TEXT("menu mBuildMenuMode"), DiagValue(Menu, TEXT("mBuildMenuMode")));

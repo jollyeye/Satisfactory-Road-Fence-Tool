@@ -209,14 +209,6 @@ bool URMRoadToolsTab::Tick(float DeltaTime)
 	{
 		LeaveRoadMode(true);
 	}
-	// The game rebuilds the category list (opening, unlocks): keep it filtered.
-	TArray<UClass*> Current;
-	ReadCategories(Menu, Current);
-	const bool bHasRoadTools = Current.Contains(RoadToolsCategory());
-	if (mRoadMode ? !(Current.Num() == 1 && bHasRoadTools) : bHasRoadTools)
-	{
-		ApplyCategoryFilter(Menu, mRoadMode);
-	}
 	return true;
 }
 
@@ -413,6 +405,7 @@ void URMRoadToolsTab::ApplyCategoryFilter(UUserWidget* Menu, bool bRoadToolsOnly
 
 void URMRoadToolsTab::OnOurTabClicked()
 {
+	UE_LOG(LogRoadMaker, Display, TEXT("Road Tools tab: clicked"));
 	EnterRoadMode();
 }
 
@@ -429,7 +422,16 @@ void URMRoadToolsTab::EnterRoadMode()
 		CallBP(Menu, TEXT("UpdateBuildMenuMode"), { FRMArg::MakeInt(0), FRMArg::MakeBool(true), FRMArg::MakeBool(true), FRMArg::MakeBool(true) });
 	}
 	mRoadMode = true;
-	ApplyCategoryFilter(Menu, true);
+	// For now: open the Road Tools category (hiding the other categories needs the category buttons,
+	// being mapped with the logger).
+	TArray<UClass*> Current;
+	ReadCategories(Menu, Current);
+	const int32 Index = Current.IndexOfByKey(RoadToolsCategory());
+	UE_LOG(LogRoadMaker, Display, TEXT("Road Tools tab: Road Tools is category %d of %d"), Index, Current.Num());
+	if (Index != INDEX_NONE)
+	{
+		CallBP(Menu, TEXT("OnCategoryClicked"), { FRMArg::MakeInt(Index) });
+	}
 	SetButtonsActive(true);
 }
 
@@ -445,10 +447,6 @@ void URMRoadToolsTab::LeaveRoadMode(bool bRefreshBuildPage)
 		return;
 	}
 	mRoadMode = false;
-	if (UUserWidget* Menu = mMenu.Get())
-	{
-		ApplyCategoryFilter(Menu, false);
-	}
 	if (UUserWidget* Ours = mOurButton.Get())
 	{
 		CallBP(Ours, TEXT("SetActive"), { FRMArg::MakeBool(false) });
