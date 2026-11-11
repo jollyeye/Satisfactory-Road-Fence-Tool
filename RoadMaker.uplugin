@@ -1,8 +1,8 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.2.0",
-	"SemVersion": "1.2.0",
+	"VersionName": "1.2.1",
+	"SemVersion": "1.2.1",
 	"GameVersion": ">=513885",
 	"FriendlyName": "Road Maker",
 	"Description": "Curved roads 1 to 4 foundations wide with lane lines, lane markings and three road materials, intersections joining up to 6 roads, road tools (cut, split, adjust), fences, fence walls and a sign gantry.",

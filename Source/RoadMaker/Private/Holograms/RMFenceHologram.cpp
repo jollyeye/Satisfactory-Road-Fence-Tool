@@ -28,8 +28,11 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	{
 		return SnapToFoundationGrid(hitResult);
 	}
-	// Snapping to roads, curbs and other fences works only while the snap key is held.
-	if (!mSnapToGuideLines && (Cast<ARMBuildableFence>(hitResult.GetActor()) || Cast<ARMBuildableRoad>(hitResult.GetActor())
+	// Snapping to roads, curbs and other fences works only while the snap key is held, except stacking:
+	// a fence wall aimed at another fence wall always goes on top of it (upper half) or below it (lower half).
+	const ARMBuildableFence* AimedFence = Cast<ARMBuildableFence>(hitResult.GetActor());
+	const bool bStacking = AimedFence && AimedFence->IsWall() && GetFenceDefaults()->IsWall();
+	if (!mSnapToGuideLines && !bStacking && (AimedFence || Cast<ARMBuildableRoad>(hitResult.GetActor())
 		|| Cast<ARMBuildableIntersection>(hitResult.GetActor())))
 	{
 		return false;
