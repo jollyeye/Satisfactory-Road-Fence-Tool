@@ -15,9 +15,9 @@ Curved roads with lane lines and markings, intersections, road tools, fences, fe
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
-![A curved road through the jungle with a grid fence, cement blocks and street lights](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro.jpg)
+![A curved asphalt road with lane arrows beside a glowing cyberpunk road, grid fence, street lights and a sign gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.2.jpg)
 
-![Road Maker buildables in the build menu](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu.png)
+![Road Maker in the build menu: roads 1 to 4 wide, intersection, fences and the Sign Gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu-1.2.png)
 
 ### Roads (1, 2, 3 and 4 foundations wide)
 - Two clicks: start and end. The road curves like a vehicle path; the mouse wheel turns it.
@@ -37,6 +37,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Hover a road to preview, click to apply. Middle lines use the **primary colour**, side lines the **secondary colour**; roads have their own default swatch group ("Roads").
 
 ### Road Tools (build menu)
+![The Road Tools tab: Cut Road, Split Road, Adjust Curvature and Cut Fence](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-tools.png)
+
 - **Cut Road** (optionally cutting its fences too), **Split Road** (lengthwise, in 8 m steps), **Adjust Curvature** (grab a road end and reshape it; lane markings move along) and **Cut Fence**. Lines, paint, fences and paths are kept.
 
 ### Sign Gantry
