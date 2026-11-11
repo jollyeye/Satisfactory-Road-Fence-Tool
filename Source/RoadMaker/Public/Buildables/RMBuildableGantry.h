@@ -51,8 +51,9 @@ public:
 	 * Where a sign goes when you aim at the world point Hit (with the face normal): flat on the face
 	 * you aim at, on the beam (front or back, a point every 2 m along it, at the bottom edge, middle or
 	 * top edge) or on a column (any of its four faces, a point every 2 m up). False if not on the gantry.
+	 * OutDepth: distance from the face to the middle of the beam / column.
 	 */
-	bool GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal) const;
+	bool GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal, float* OutDepth = nullptr) const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mMainMaterial = nullptr; // unused now (the game's H-beam material is used)

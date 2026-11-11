@@ -136,8 +136,9 @@ void ARMBuildableGantry::BuildGantryMesh(float HalfSpan, float BeamBottom, FRMMe
 	AddAxisBox(FVector(0.f, 0.f, BeamBottom + BeamDepth * 0.5f), FVector(BeamHalfThickness, HalfSpan + BeamOverhang, BeamDepth * 0.5f));
 }
 
-bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal) const
+bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNormal, FVector& OutLocation, FVector& OutNormal, float* OutDepth) const
 {
+	float Depth = BeamHalfThickness + 1.f;
 	const FTransform& T = GetActorTransform();
 	const FVector Local = T.InverseTransformPosition(Hit);
 	const FVector LocalNormal = T.InverseTransformVectorNoScale(HitNormal);
@@ -157,6 +158,7 @@ bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNorma
 		const float Level = FMath::Clamp(FMath::RoundToFloat((Local.Z - mBeamBottom) / (BeamDepth * 0.5f)), 0.f, 2.f);
 		OnFace = FVector(Side * (BeamHalfThickness + 1.f), Along, mBeamBottom + Level * BeamDepth * 0.5f);
 		FaceNormal = FVector(Side, 0.f, 0.f);
+		Depth = BeamHalfThickness + 1.f;
 	}
 	else
 	{
@@ -183,15 +185,21 @@ bool ARMBuildableGantry::GetSignFace(const FVector& Hit, const FVector& HitNorma
 			const float Side = (FMath::Abs(LocalNormal.X) > 0.3f ? LocalNormal.X : RelX) >= 0.f ? 1.f : -1.f;
 			OnFace = FVector(Side * (ColumnHalfAlong + 1.f), ColumnY, Z);
 			FaceNormal = FVector(Side, 0.f, 0.f);
+			Depth = ColumnHalfAlong + 1.f;
 		}
 		else
 		{
 			const float Side = (FMath::Abs(LocalNormal.Y) > 0.3f ? LocalNormal.Y : RelY) >= 0.f ? 1.f : -1.f;
 			OnFace = FVector(0.f, ColumnY + Side * (ColumnHalfAcross + 1.f), Z);
 			FaceNormal = FVector(0.f, Side, 0.f);
+			Depth = ColumnHalfAcross + 1.f;
 		}
 	}
 	OutLocation = T.TransformPosition(OnFace);
 	OutNormal = T.TransformVectorNoScale(FaceNormal);
+	if (OutDepth)
+	{
+		*OutDepth = Depth;
+	}
 	return true;
 }

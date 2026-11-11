@@ -1738,6 +1738,7 @@ namespace
 		FVector Normal = FVector::ForwardVector;
 		FVector Fwd = FVector::ZeroVector; // horizontal direction along the wall (zero on the gantry)
 		float Slope = 0.f;                 // how much the wall climbs along Fwd
+		float Depth = 26.f;                // from the face to the middle of the wall (or beam / column)
 	};
 
 	bool FindWallFace(const FHitResult& Hit, FWallFace& Out)
@@ -1745,7 +1746,7 @@ namespace
 		// The sign gantry: flat on the face you aim at, on the beam or a column, snap points every 2 m.
 		if (ARMBuildableGantry* Gantry = Cast<ARMBuildableGantry>(Hit.GetActor()))
 		{
-			return Gantry->GetSignFace(Hit.Location, Hit.ImpactNormal, Out.Location, Out.Normal);
+			return Gantry->GetSignFace(Hit.Location, Hit.ImpactNormal, Out.Location, Out.Normal, &Out.Depth);
 		}
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
 		TArray<FRMFrame> Frames;
@@ -1787,7 +1788,8 @@ namespace
 		// Five heights, 1 m apart: the bottom and top edge of the wall and three on its face.
 		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - OnLine.Z) / 100.f), 0.f, 4.f);
 		const float HalfThickness = 25.f; // walls are 0.5 m thick
-		Out.Location = OnLine + Normal * (HalfThickness + 1.f);
+		Out.Depth = HalfThickness + 1.f;
+		Out.Location = OnLine + Normal * Out.Depth;
 		Out.Location.Z = OnLine.Z + 100.f * Level;
 		Out.Normal = Normal;
 		Out.Fwd = Fwd;
@@ -1853,7 +1855,9 @@ namespace
 			const float SideSign = FVector::CrossProduct(Face.Normal, Face.Fwd).Z >= 0.f ? 1.f : -1.f;
 			Turn = FMath::RadiansToDegrees(FMath::Atan(Face.Slope)) * SideSign + FRMSnapAccess::ScrollDegrees(Hologram);
 		}
-		Hologram->SetActorLocationAndRotation(Face.Location, FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
+		// The piece's origin goes on the middle of the wall, so two-sided pieces show on both faces and
+		// the back of a one-sided one is hidden inside it.
+		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * Face.Depth, FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
 		if (!GAttachOnWall.Contains(Hologram))
 		{
 			GAttachOnWall.Add(Hologram);
