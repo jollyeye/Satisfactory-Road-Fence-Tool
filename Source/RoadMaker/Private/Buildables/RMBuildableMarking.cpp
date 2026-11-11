@@ -149,39 +149,24 @@ namespace
 		}
 	};
 
-	constexpr float Shaft = 0.14f;   // half width of the arrow shaft: 0.28 units
-	constexpr float HeadHalf = 0.5f; // arrow head half width
-	constexpr float HeadLen = 0.55f; // arrow head length
-
-	/** Half length (along) and half width (across) of a shape in units, to scale it into its lane. */
-	void Extent(ERMMarkingKind Kind, uint8 Variant, float& OutHalfLength, float& OutHalfWidth)
-	{
-		if (Kind == ERMMarkingKind::Digit)
-		{
-			OutHalfLength = 0.9f;
-			OutHalfWidth = 0.5f;
-			return;
-		}
-		OutHalfLength = 1.1f;
-		OutHalfWidth = Variant == 5 ? 0.95f : (Variant >= 3 ? 0.7f : (Variant == 0 ? 0.5f : 0.55f));
-	}
+	constexpr float Shaft = 0.14f;     // half width of the arrow shaft: 0.28 units across
+	constexpr float HeadHalf = 0.5f;   // arrow head half width
+	constexpr float HeadLen = 0.85f;   // forward head length (units along, stretched like the rest)
+	constexpr float SideBar = 0.15f;   // a turn's bar beyond the shaft (across, units)
+	constexpr float SideHead = 0.6f;   // a turn's head length (across, units)
+	constexpr float SideTip = Shaft + SideBar + SideHead;
 
 	void BuildArrow(FShapeBuilder& B, uint8 Variant)
 	{
-		// Arms leave the shaft sideways: the arm (a short bar) and its head. Y shifts keep the whole arrow centred.
-		auto Arm = [&B](float Side, float AtX, float ArmEnd, float HeadTip, float HeadHalfLength, float ShiftY)
+		// Along X everything is stretched, so thicknesses measured along X are divided by the stretch to
+		// match the same thickness across: the turn arms look like the straight arrow's shaft and head.
+		const float ShX = Shaft / FShapeBuilder::Stretch;
+		const float HeadX = 0.5f / FShapeBuilder::Stretch;
+		// A side arm at X = At leaving the shaft toward Side (-1 left, +1 right); Y shifted by Shift.
+		auto SideArm = [&B, ShX, HeadX](float Side, float At, float Shift)
 		{
-			// Bar from the shaft edge to ArmEnd, head beyond it.
-			if (Side < 0.f)
-			{
-				B.Rect(AtX - Shaft, AtX + Shaft, -ArmEnd + ShiftY, -Shaft + ShiftY);
-				B.HeadSide(-1.f, -ArmEnd + ShiftY, -HeadTip + ShiftY, HeadHalfLength, AtX);
-			}
-			else
-			{
-				B.Rect(AtX - Shaft, AtX + Shaft, Shaft + ShiftY, ArmEnd + ShiftY);
-				B.HeadSide(1.f, ArmEnd + ShiftY, HeadTip + ShiftY, HeadHalfLength, AtX);
-			}
+			B.Rect(At - ShX, At + ShX, Side * Shaft + Shift, Side * (Shaft + SideBar) + Shift);
+			B.HeadSide(Side, Side * (Shaft + SideBar) + Shift, Side * SideTip + Shift, HeadX, At);
 		};
 
 		switch (Variant)
@@ -194,36 +179,25 @@ namespace
 		case 2: // right
 		{
 			const float S = Variant == 1 ? -1.f : 1.f;
-			const float Shift = -S * 0.4f; // centre the bend
-			B.Rect(-1.1f, 0.f + Shaft, -Shaft + Shift, Shaft + Shift);
-			Arm(S, 0.f, 0.45f, 0.95f, 0.45f, Shift);
+			const float Shift = -S * (SideTip - Shaft) * 0.5f; // centre the bend
+			B.Rect(-1.1f, ShX, -Shaft + Shift, Shaft + Shift);
+			SideArm(S, 0.f, Shift);
 			break;
 		}
 		case 3: // straight or left
 		case 4: // straight or right
 		{
 			const float S = Variant == 3 ? -1.f : 1.f;
-			const float Shift = -S * 0.2f;
+			const float Shift = -S * (SideTip - HeadHalf) * 0.5f;
 			B.Rect(-1.1f, 1.1f - HeadLen, -Shaft + Shift, Shaft + Shift);
 			B.HeadForward(1.1f - HeadLen, 1.1f, HeadHalf, Shift);
-			// The branch leaves the shaft below the head, at 0.3 units back from the middle.
-			const float At = -0.3f;
-			if (S < 0.f)
-			{
-				B.Rect(At - Shaft, At + Shaft, -0.5f + Shift, -Shaft + Shift);
-				B.HeadSide(-1.f, -0.5f + Shift, -0.9f + Shift, 0.4f, At);
-			}
-			else
-			{
-				B.Rect(At - Shaft, At + Shaft, Shaft + Shift, 0.5f + Shift);
-				B.HeadSide(1.f, 0.5f + Shift, 0.9f + Shift, 0.4f, At);
-			}
+			SideArm(S, -0.4f, Shift); // leaves the shaft below the head
 			break;
 		}
 		default: // left or right
-			B.Rect(-1.1f, 0.f + Shaft, -Shaft, Shaft);
-			Arm(-1.f, 0.f, 0.45f, 0.95f, 0.45f, 0.f);
-			Arm(1.f, 0.f, 0.45f, 0.95f, 0.45f, 0.f);
+			B.Rect(-1.1f, ShX, -Shaft, Shaft);
+			SideArm(-1.f, 0.f, 0.f);
+			SideArm(1.f, 0.f, 0.f);
 			break;
 		}
 	}
@@ -268,10 +242,8 @@ namespace
 void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, float LaneWidth, FRMMesh& Out)
 {
 	Variant = static_cast<uint8>(FMath::Clamp<int32>(Variant, 0, VariantCount(Kind) - 1));
-	float HalfL = 1.f, HalfW = 0.5f;
-	Extent(Kind, Variant, HalfL, HalfW);
-	(void)HalfL;
-	const float Scale = LaneWidth * 0.5f / (2.f * HalfW); // across: half the width it is given
+	// One size for every shape, so the turn arrows match the straight one: its head is half the width given.
+	const float Scale = LaneWidth * 0.5f;
 	FShapeBuilder B{ Out, Scale, Lift };
 	if (Kind == ERMMarkingKind::Arrow)
 	{

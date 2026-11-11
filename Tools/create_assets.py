@@ -528,7 +528,9 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
     tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat}.get(ROAD_TOOLS_MENU.get(name))
     if name in MARKING_TOOLS:
-        pass  # no build menu entry: the Road Lines options paint it
+        # No build menu entry: the Road Lines options paint it. Clear what an earlier run set.
+        setp(dc, None, "m_category", "mCategory", "m_build_menu_category")
+        setp(dc, [], "m_sub_categories", "mSubCategories")
     elif tool_subcat and road_tools_cat:
         setp(dc, road_tools_cat, "m_category", "mCategory", "m_build_menu_category")
         setp(dc, [tool_subcat], "m_sub_categories", "mSubCategories")
