@@ -34,6 +34,9 @@
 #include "Hologram/FGFoundationHologram.h"
 #include "Hologram/FGStandaloneSignHologram.h"
 #include "Hologram/FGSignPoleHologram.h"
+#include "Hologram/FGBeamHologram.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
 #include "HAL/IConsoleManager.h"
 
@@ -1674,6 +1677,33 @@ namespace
 		return true;
 	}
 
+
+	/** Logs every static mesh the game's beam hologram is made of (to learn how the H-beam is built). */
+	void BeamLog(const AFGHologram* Hologram)
+	{
+		if (CVarSignLog.GetValueOnGameThread() == 0 || !SignLogDue(Hologram, 40, 2.0))
+		{
+			return;
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog hologram %s loc=%s rot=%s"), *Hologram->GetName(), *Hologram->GetActorLocation().ToCompactString(), *Hologram->GetActorRotation().ToCompactString());
+		TInlineComponentArray<UStaticMeshComponent*> Comps(Hologram);
+		for (UStaticMeshComponent* C : Comps)
+		{
+			const UStaticMesh* M = C->GetStaticMesh();
+			const FBoxSphereBounds B = C->Bounds;
+			FString Mats;
+			for (int32 i = 0; i < C->GetNumMaterials(); ++i)
+			{
+				Mats += (C->GetMaterial(i) ? C->GetMaterial(i)->GetPathName() : FString(TEXT("none"))) + TEXT(" ");
+			}
+			const UInstancedStaticMeshComponent* Inst = Cast<UInstancedStaticMeshComponent>(C);
+			UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog  comp %s (%s) mesh=%s relLoc=%s relRot=%s relScale=%s worldExtent=%s instances=%d mats=%s"),
+				*C->GetName(), *C->GetClass()->GetName(), M ? *M->GetPathName() : TEXT("none"), *C->GetRelativeLocation().ToCompactString(),
+				*C->GetRelativeRotation().ToCompactString(), *C->GetRelativeScale3D().ToCompactString(), *B.BoxExtent.ToCompactString(),
+				Inst ? Inst->GetInstanceCount() : 0, *Mats);
+		}
+	}
+
 	/** Puts a sign on a surface: no leg, turned to face along Normal (and tilted with Slope), scroll rolls it. */
 	template <typename TScope, typename THologram>
 	void FinishSignPlacement(TScope& Scope, THologram* Hologram, const FVector& Location, const FVector& Normal, const FVector& Fwd, float Slope)
@@ -2048,6 +2078,13 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 #undef RM_HOOK_SET_LOCATION
+
+	// Debug log: which meshes the game's beam hologram uses (H-beam gantry research).
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
+		[](AFGBeamHologram* Hologram, const FHitResult& Hit)
+		{
+			BeamLog(Hologram);
+		});
 
 	// Debug log: how the game's own sign hologram works (aim at a wall, at the ground, two-click leg height...).
 	SUBSCRIBE_METHOD_VIRTUAL(AFGStandaloneSignHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGStandaloneSignHologram>(),
