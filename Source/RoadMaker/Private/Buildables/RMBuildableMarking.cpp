@@ -436,7 +436,7 @@ namespace
 		FTransform Transform;
 	};
 
-	bool FindSpot(const ARMBuildableRoad* Road, const TArray<FRMFrame>& Frames, const FVector& Aim, const FVector& LookDir, FMarkingSpot& Out)
+	bool FindMarkingSpot(const ARMBuildableRoad* Road, const TArray<FRMFrame>& Frames, const FVector& Aim, const FVector& LookDir, FMarkingSpot& Out)
 	{
 		if (!Road || Frames.Num() < 2)
 		{
@@ -473,7 +473,7 @@ namespace
 	}
 
 	/** The road's frame at a distance along it, straight on past its ends. */
-	FRMFrame FrameAtDist(const TArray<FRMFrame>& Frames, float Dist)
+	FRMFrame MarkingFrameAtDist(const TArray<FRMFrame>& Frames, float Dist)
 	{
 		if (Dist <= 0.f)
 		{
@@ -515,7 +515,7 @@ bool ARMBuildableMarking::FindPlacement(const ARMBuildableRoad* Road, const FVec
 		Road->GetWorldFrames(Frames, 25.f);
 	}
 	FMarkingSpot Spot;
-	if (!FindSpot(Road, Frames, Aim, LookDir, Spot))
+	if (!FindMarkingSpot(Road, Frames, Aim, LookDir, Spot))
 	{
 		return false;
 	}
@@ -533,7 +533,7 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 		Road->GetWorldFrames(Frames, 25.f);
 	}
 	FMarkingSpot Spot;
-	if (!FindSpot(Road, Frames, Aim, LookDir, Spot))
+	if (!FindMarkingSpot(Road, Frames, Aim, LookDir, Spot))
 	{
 		return false;
 	}
@@ -549,7 +549,7 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 	for (int32 K = 0; K < Count; ++K)
 	{
 		const float X = OutDrape.Start + K * OutDrape.Step;
-		const FRMFrame F = FrameAtDist(Frames, Spot.Dist + Spot.DirSign * X);
+		const FRMFrame F = MarkingFrameAtDist(Frames, Spot.Dist + Spot.DirSign * X);
 		OutDrape.Pos.Add(OutTransform.InverseTransformPosition(F.Pos + F.Right * Spot.Offset));
 		OutDrape.Right.Add(OutTransform.InverseTransformVectorNoScale(F.Right * Spot.DirSign));
 		OutDrape.Up.Add(OutTransform.InverseTransformVectorNoScale(F.Up));
@@ -661,7 +661,7 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 		const float Across = FVector::DotProduct(P - Near->Pos, Near->Right);
 		const float Dir = FVector::DotProduct(M->GetActorForwardVector(), Near->Fwd) >= 0.f ? 1.f : -1.f;
 
-		const FRMFrame F = FrameAtDist(NewFrames, Share * NewLength);
+		const FRMFrame F = MarkingFrameAtDist(NewFrames, Share * NewLength);
 		const FVector Aim = F.Pos + F.Right * Across;
 		const FFactoryCustomizationData Paint = M->GetCustomizationData_Native();
 		if (SpawnOn(M->GetClass(), M->GetBuiltWithRecipe(), To, M->GetVariant(), 1.f, Aim, F.Fwd * Dir, &Paint, M->GetLook()))
