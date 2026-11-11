@@ -9,6 +9,7 @@
 #include "Equipment/FGBuildGunBuild.h"
 #include "Hologram/FGHologram.h"
 #include "Patching/NativeHookManager.h"
+#include "UI/RMRoadToolsTab.h"
 
 namespace RMDiag { void InstallHooks(); }
 #include "GameFramework/PlayerController.h"
@@ -81,6 +82,9 @@ void FRoadMakerModule::StartupModule()
 
 	// Customizer Material tab on fence walls (concrete / FICSIT / steel), switched in place.
 	RMFenceWallPaint::InstallHooks();
+
+	// "Road Tools" tab in the build menu, after Blueprints.
+	URMRoadToolsTab::Install();
 
 	// Development logger (temporary, remove before release).
 	RMDiag::InstallHooks();
