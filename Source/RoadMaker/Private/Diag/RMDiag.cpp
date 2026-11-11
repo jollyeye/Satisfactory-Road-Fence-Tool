@@ -89,17 +89,30 @@ namespace
 		}
 	}
 
+	TSet<FString> GDiagSeenClasses;
+
 	bool DiagTick(float)
 	{
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
 			UUserWidget* W = *It;
-			if (!W || W->IsTemplate() || !W->IsInViewport())
+			if (!W || W->IsTemplate() || !W->GetCachedWidget().IsValid() || !W->IsVisible())
 			{
 				continue;
 			}
 			const FString ClassName = W->GetClass()->GetName();
-			if (!ClassName.Contains(TEXT("BuildMenu")) || GDiagDumped.Contains(ClassName))
+			// Every widget class seen on screen, once (to find the build menu's own name).
+			if (!GDiagSeenClasses.Contains(ClassName))
+			{
+				GDiagSeenClasses.Add(ClassName);
+				UUserWidget* Outer = W->GetTypedOuter<UUserWidget>();
+				UE_LOG(LogRoadMaker, Display, TEXT("[Diag] shown: %s (in %s)"), *ClassName, Outer ? *Outer->GetClass()->GetName() : TEXT("-"));
+			}
+			// Dump the outermost build menu widget (not one nested in another build menu widget).
+			const bool bBuildMenu = ClassName.Contains(TEXT("BuildMenu")) || ClassName.Contains(TEXT("Build_Menu"));
+			UUserWidget* Parent = W->GetTypedOuter<UUserWidget>();
+			const bool bNested = Parent && (Parent->GetClass()->GetName().Contains(TEXT("BuildMenu")) || Parent->GetClass()->GetName().Contains(TEXT("Build_Menu")));
+			if (!bBuildMenu || bNested || GDiagDumped.Contains(ClassName))
 			{
 				continue;
 			}
