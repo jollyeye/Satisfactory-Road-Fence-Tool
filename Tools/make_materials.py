@@ -132,10 +132,13 @@ def custom(mat, code, out_type, inputs, x, y, desc):
 
 # Planar world projection: top faces use XY; with Triplanar the dominant axis of the vertex normal
 # picks XY, YZ or XZ (for the sides of the slab and the barriers).
+# Roads (RW > 0.5, the road width in UV2) map along the curve instead: RUV = UV1 = (metres across,
+# metres along the centre line), so the texture follows the road's bends.
 ATLAS_UV_HLSL = r"""
 float3 a = abs(N);
 float2 p = WP.xy;
 if (Tri > 0.5 && a.z < 0.7) { p = a.x > a.y ? WP.yz : WP.xz; }
+if (RW > 0.5) { p = RUV * 100.0; }
 float2 h = frac(p / (2.0 * Period));
 float2 m = 1.0 - abs(h * 2.0 - 1.0);
 return Rect.xy + m * Rect.zw;
@@ -153,6 +156,14 @@ if (Tri > 0.5 && a.z < 0.7)
     if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); W = float3(N.x >= 0 ? 1 : -1, 0, 0); }
     else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); W = float3(0, N.y >= 0 ? 1 : -1, 0); }
 }
+if (RW > 0.5)
+{
+    // Along the road: V = mesh tangent (forward), U = across (to the right), W = surface normal.
+    p = RUV * 100.0;
+    V = normalize(Tg);
+    U = normalize(cross(N, V));
+    W = normalize(N);
+}
 float2 h = frac(p / (2.0 * Period));
 float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
 // Signs checked in game (the first guess lit bumps from the wrong side).
@@ -162,14 +173,28 @@ return normalize(lerp(n, normalize(N), Flat));
 NORMAL_STRENGTH = 2.5
 
 
-def world_normal(mat, tex_n, rect, triplanar, flat, x, y):
+def road_inputs(mat, node_, road, x, y):
+    """RUV / RW inputs of the atlas nodes: the road's UV1 / UV2 nodes, or zeros (world projection)."""
+    if road:
+        link(road[0], "", node_, "RUV")
+        rw = node(mat, unreal.MaterialExpressionComponentMask, x, y, r=True, g=False, b=False, a=False)
+        link(road[1], "", rw, "")
+        link(rw, "", node_, "RW")
+    else:
+        link(node(mat, unreal.MaterialExpressionConstant2Vector, x, y), "", node_, "RUV")
+        link(const(mat, 0.0, x, y + 60), "", node_, "RW")
+
+
+def world_normal(mat, tex_n, rect, triplanar, flat, x, y, road=None):
     """Connects the atlas normal map (world space) to the material's Normal."""
-    t = atlas_sample(mat, tex_n, rect, triplanar, x - 500, y)
+    t = atlas_sample(mat, tex_n, rect, triplanar, x - 500, y, road)
     mat.set_editor_property("tangent_space_normal", False)
     wp = node(mat, unreal.MaterialExpressionWorldPosition, x - 300, y + 250)
     vn = node(mat, unreal.MaterialExpressionVertexNormalWS, x - 300, y + 330)
     wn = custom(mat, WORLD_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3,
-                ["T", "WP", "N", "Tri", "Period", "Flat", "Str"], x, y, "WorldNormal")
+                ["T", "WP", "N", "Tri", "Period", "Flat", "Str", "RUV", "RW", "Tg"], x, y, "WorldNormal")
+    road_inputs(mat, wn, road, x - 300, y + 700)
+    link(node(mat, unreal.MaterialExpressionVertexTangentWS, x - 300, y + 820), "", wn, "Tg")
     link(t, "", wn, "T")
     link(wp, "", wn, "WP")
     link(vn, "", wn, "N")
@@ -183,11 +208,12 @@ def world_normal(mat, tex_n, rect, triplanar, flat, x, y):
     MEL.connect_material_property(wn, "", MP.MP_NORMAL)
 
 
-def atlas_sample(mat, tex, rect, triplanar, x, y):
-    """Texture sample of one atlas square, mirrored every 8 m in world space."""
+def atlas_sample(mat, tex, rect, triplanar, x, y, road=None):
+    """Texture sample of one atlas square, mirrored every 8 m in world space (or along the road)."""
     wp = node(mat, unreal.MaterialExpressionWorldPosition, x - 600, y)
     vn = node(mat, unreal.MaterialExpressionVertexNormalWS, x - 600, y + 100)
-    uv = custom(mat, ATLAS_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["WP", "N", "Rect", "Tri", "Period"], x - 350, y, "AtlasUV")
+    uv = custom(mat, ATLAS_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["WP", "N", "Rect", "Tri", "Period", "RUV", "RW"], x - 350, y, "AtlasUV")
+    road_inputs(mat, uv, road, x - 600, y + 450)
     link(wp, "", uv, "WP")
     link(vn, "", uv, "N")
     rc = node(mat, unreal.MaterialExpressionConstant4Vector, x - 600, y + 200, constant=unreal.LinearColor(*rect))
@@ -245,13 +271,16 @@ return float2(saturate(mid), saturate(side));
 asphalt = new_material("M_RoadAsphalt")
 tex_bc = load_tex(ASPHALT_BC)
 tex_n = load_tex(ASPHALT_N)
+uv1 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+uv2 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
+# Roads: the asphalt follows the curve (UV1 metres across / along); intersections (no UV2 width)
+# keep the world projection.
+road_uv = (uv1, uv2)
 if tex_bc:
-    base = atlas_sample(asphalt, tex_bc, RECT_TOP_LEFT, False, -700, -400)
+    base = atlas_sample(asphalt, tex_bc, RECT_TOP_LEFT, False, -700, -400, road_uv)
 else:
     base = noise_blend(asphalt, (0.025, 0.025, 0.027), (0.06, 0.06, 0.062), 0.08, 0)
 
-uv1 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
-uv2 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 uv3 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 800, coordinate_index=3)
 marks = node(asphalt, unreal.MaterialExpressionCustom, -800, 650)
 marks.set_editor_property("code", MARKINGS_HLSL)
@@ -304,7 +333,7 @@ MEL.connect_material_property(rough, "", MP.MP_ROUGHNESS)
 
 if tex_bc and tex_n:
     # Flat where lines are painted.
-    world_normal(asphalt, tex_n, RECT_TOP_LEFT, False, any_line, -250, 1300)
+    world_normal(asphalt, tex_n, RECT_TOP_LEFT, False, any_line, -250, 1300, road_uv)
 finish(asphalt)
 log("Asphalt with lane markings")
 

@@ -4,6 +4,7 @@
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Holograms/RMHologramLook.h"
+#include "Equipment/FGBuildGunBuild.h"
 
 ARMSplineHologram::ARMSplineHologram()
 {
@@ -226,6 +227,8 @@ bool ARMSplineHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		mScrollAtStepStart = GetScrollRotateValue();
 		mEnd = mStart + mStartDir * RM::FoundationSize;
 		UpdateCurve();
+		// A lock carried over from the start point now nudges the end, from where it is.
+		ResetNudge();
 		return false;
 	}
 	return true;
@@ -263,19 +266,51 @@ bool ARMSplineHologram::CanNudgeHologram() const
 void ARMSplineHologram::OnHologramLockStateChanged()
 {
 	Super::OnHologramLockStateChanged();
+	ResetNudge();
+}
+
+FVector ARMSplineHologram::GetPlacedPointAxis() const
+{
+	FVector Dir = mStartDir;
+	if (mStep != 0)
+	{
+		// The end's travel direction (last tangent of the curve), else start to end.
+		Dir = mLocalPoints.Num() >= 2 ? GetActorTransform().TransformVectorNoScale(mLocalPoints.Last().Tangent) : mEnd - mStart;
+	}
+	Dir.Z = 0.f;
+	return Dir.Normalize() ? Dir : FVector::ForwardVector;
+}
+
+void ARMSplineHologram::ResetNudge()
+{
 	mNudgeBase = mStep == 0 ? mStart : mEnd;
+	mNudgeAxis = GetPlacedPointAxis();
+	SetNudgeOffset(FVector::ZeroVector);
 }
 
 FTransform ARMSplineHologram::GetNudgeSpaceTransform() const
 {
-	// Forward/back/left/right relative to the direction of the point being placed.
-	FVector Dir = mStep == 0 ? mStartDir : (mEnd - mStart);
-	Dir.Z = 0.f;
-	if (!Dir.Normalize())
+	// Forward/back/left/right relative to the point's direction when the nudge started (kept fixed,
+	// so moving the point does not turn the axes).
+	return FTransform(FRotator(0.f, mNudgeAxis.Rotation().Yaw, 0.f), mNudgeBase);
+}
+
+ENudgeFailReason ARMSplineHologram::NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult)
+{
+	if (!CanNudgeHologram())
 	{
-		Dir = FVector::ForwardVector;
+		return Super::NudgeHologram(NudgeInput, HitResult);
 	}
-	return FTransform(FRotator(0.f, Dir.Rotation().Yaw, 0.f), mStep == 0 ? mStart : mEnd);
+	// The game turns the input into the world axis nearest to the camera; we keep the point's axes:
+	// X = forward / back along the point's direction, Y = right / left, Z = up / down.
+	const FVector Step(FMath::Sign(NudgeInput.X), FMath::Sign(NudgeInput.Y), FMath::Sign(NudgeInput.Z));
+	if (Step.IsNearlyZero())
+	{
+		return ENudgeFailReason::NFR_Disallowed;
+	}
+	SetNudgeOffset(GetHologramNudgeOffset() + Step * GetNudgeDistance());
+	SetHologramNudgeLocation();
+	return ENudgeFailReason::NFR_Success;
 }
 
 void ARMSplineHologram::SetHologramNudgeLocation()

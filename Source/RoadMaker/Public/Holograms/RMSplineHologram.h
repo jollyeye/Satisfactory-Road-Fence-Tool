@@ -36,6 +36,8 @@ public:
 	virtual void SetHologramNudgeLocation() override;
 	virtual void OnHologramLockStateChanged() override;
 	virtual FTransform GetNudgeSpaceTransform() const override;
+	/** Arrow keys move the point along its own direction (forward / back) and across it, not the world axes. */
+	virtual ENudgeFailReason NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult) override;
 
 	// AFGBuildableHologram
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
@@ -116,6 +118,15 @@ protected:
 
 	/** Where the point being placed was when the hologram got locked; nudges are relative to it. */
 	FVector mNudgeBase = FVector::ZeroVector;
+
+	/** Level direction of the point being placed when the nudge started (forward of the nudge axes). */
+	FVector mNudgeAxis = FVector::ForwardVector;
+
+	/** Starts nudging the point being placed from where it is now, along its current direction. */
+	void ResetNudge();
+
+	/** Level direction of the point being placed: the start direction, or the end's travel direction. */
+	FVector GetPlacedPointAxis() const;
 
 	/** Scroll value when the current step started, so each step rotates from zero. */
 	int32 mScrollAtStepStart = 0;

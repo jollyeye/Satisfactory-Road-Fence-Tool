@@ -81,6 +81,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **New: Road (4 wide)**, 32 m, with its own build menu icon.
 - **Road Lines: 4 lanes** (dashed or continuous), for any road width.
 - The Smooth build mode is now called "Smooth (quadratic Bezier)".
+- **Nudging:** with the hologram locked (H), the arrow keys move the point being placed along its own direction and across it (not the world axes); this now works for the end point too.
+- **Asphalt follows the road:** the asphalt texture runs along the road's curve instead of being projected from above.
 
 ## Changelog for version 1.1.1
 - Road Lines options are no longer listed as items (e.g. under Parts in the creative mode item list).
