@@ -2211,11 +2211,7 @@ void RMVanillaSnapping::InstallHooks()
 				PlaceAttachmentOnWall(Scope, Hologram, Hit);
 			}
 		});
-	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::CheckValidPlacement, GetMutableDefault<AFGBuildableHologram>(),
-		[](AFGBuildableHologram* Hologram)
-		{
-			FixAttachmentValidity(Hologram);
-		});
+	// (Their placement check is protected in the game, so no hook there yet: if one of them shows red on our walls, that is the next step.)
 	// The beams themselves: the start point goes on the middle of the wall (their direction stays the game's).
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
 		[](AFGBeamHologram* Hologram, const FHitResult& Hit)
