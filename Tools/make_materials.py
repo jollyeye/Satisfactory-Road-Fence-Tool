@@ -780,7 +780,11 @@ def bump_normal(mat, height, strength, flat, x, y):
     else:
         link(flat, "", bn, "Flat")
     mat.set_editor_property("tangent_space_normal", False)
-    MEL.connect_material_property(bn, "", MP.MP_NORMAL)
+    # Low quality (graphics settings): no bump, the plain vertex normal.
+    qs = node(mat, unreal.MaterialExpressionQualitySwitch, x + 300, y)
+    link(bn, "", qs, "Default")
+    link(node(mat, unreal.MaterialExpressionVertexNormalWS, x, y + 480), "", qs, "Low")
+    MEL.connect_material_property(qs, "", MP.MP_NORMAL)
     return bn
 
 
@@ -816,7 +820,12 @@ link(const(cyber, 0.5, -450, 380), "", faint, "B")
 link(faint, "", c_surface, "Alpha")
 cm, cs, _, _ = lane_masks(cyber, -1100, 1000)
 c_col = lines_on(cyber, c_surface, cm, cs, c_secondary, c_secondary, 50, 150)
-MEL.connect_material_property(c_col, "", MP.MP_BASE_COLOR)
+# Low quality: plain plastic, no circuit pattern in the colour either.
+c_col_low = lines_on(cyber, plastic, cm, cs, c_secondary, c_secondary, 50, -150)
+c_qs = node(cyber, unreal.MaterialExpressionQualitySwitch, 300, 150)
+link(c_col, "", c_qs, "Default")
+link(c_col_low, "", c_qs, "Low")
+MEL.connect_material_property(c_qs, "", MP.MP_BASE_COLOR)
 c_any = node(cyber, unreal.MaterialExpressionMax, -350, 450)
 link(cm, "", c_any, "A")
 link(cs, "", c_any, "B")
@@ -832,8 +841,8 @@ link(const(cyber, 0.14, -200, 650), "", c_rough, "A")
 link(const(cyber, 0.1, -200, 720), "", c_rough, "B")
 link(c_any, "", c_rough, "Alpha")
 MEL.connect_material_property(c_rough, "", MP.MP_ROUGHNESS)
-# The circuit is an emboss in the normal map (0.6 cm); flat under the lane lines.
-bump_normal(cyber, cc, 0.6, c_any, 300, 1100)
+# The circuit is carved into the normal map (0.6 cm); flat under the lane lines.
+bump_normal(cyber, cc, -0.6, c_any, 300, 1100)
 finish(cyber)
 log("Cyberpunk road")
 
