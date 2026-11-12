@@ -40,7 +40,13 @@ namespace RMMapLayer
 		constexpr int32 MapLineThick = 3; // side line width in supersampled pixels (3 at 2x = 1.5 m)
 		constexpr int32 MapTileMips = 5; // 512 .. 32
 		constexpr double MapTileWorld = 51200.0; // cm
-		constexpr int32 MapTilesPerTick = 6;
+		// Work per frame while the map is open (spread out so a big save never hitches): building pieces
+		// and painting tiles each stop once their time is used (at least one item per frame).
+		constexpr double MapBuildBudget = 0.003; // s
+		constexpr double MapPaintBudget = 0.004; // s
+		constexpr double MapScanInterval = 0.25; // s between looks for new / changed / removed pieces
+		// A piece this much higher than one it overlaps is a bridge: it casts a shadow onto it.
+		constexpr float MapBridgeHeight = 400.f; // cm
 
 		/** One road or intersection, flattened to map units (0..1024). */
 		struct FRMMapPiece
@@ -278,9 +284,16 @@ namespace RMMapLayer
 		}
 
 		/** Finds new, changed and removed roads / intersections; marks their tiles dirty. */
-		void MapScanPieces(UWorld* World)
+		/**
+		 * Finds new, changed and removed pieces and marks their tiles dirty. Building a piece's shape stops
+		 * when the time budget is used: returns false then (the rest is picked up next frame).
+		 */
+		bool MapScanPieces(UWorld* World)
 		{
 			TSet<AActor*> Seen;
+			const double Deadline = FPlatformTime::Seconds() + MapBuildBudget;
+			bool bComplete = true;
+			int32 Built = 0;
 			auto Visit = [&](AActor* Actor, uint32 Key, TFunctionRef<void(FRMMapPiece&)> Build)
 			{
 				Seen.Add(Actor);
@@ -289,6 +302,12 @@ namespace RMMapLayer
 				{
 					return;
 				}
+				if (Built > 0 && FPlatformTime::Seconds() > Deadline)
+				{
+					bComplete = false; // keeps the old shape (if any) until its turn comes
+					return;
+				}
+				++Built;
 				if (Old)
 				{
 					MapMarkDirty(Old->Bounds);
@@ -324,6 +343,7 @@ namespace RMMapLayer
 					It.RemoveCurrent();
 				}
 			}
+			return bComplete;
 		}
 
 		// ---- Painting -------------------------------------------------------------------------------
@@ -364,6 +384,48 @@ namespace RMMapLayer
 					for (int32 X = XA; X <= XB; ++X)
 					{
 						Px[Y * Size + X] = C;
+					}
+				}
+			}
+		}
+
+		/** Scanline fill into a 0/1 mask (same rule as MapFillPolygon). */
+		void MapMaskPolygon(TArray<uint8>& Mask, int32 Size, const TArray<FVector2D>& Poly)
+		{
+			if (Poly.Num() < 3)
+			{
+				return;
+			}
+			double MinY = Poly[0].Y, MaxY = Poly[0].Y;
+			for (const FVector2D& P : Poly)
+			{
+				MinY = FMath::Min(MinY, P.Y);
+				MaxY = FMath::Max(MaxY, P.Y);
+			}
+			const int32 Y0 = FMath::Max(0, FMath::FloorToInt(MinY));
+			const int32 Y1 = FMath::Min(Size - 1, FMath::CeilToInt(MaxY));
+			TArray<double, TInlineAllocator<16>> Xs;
+			for (int32 Y = Y0; Y <= Y1; ++Y)
+			{
+				const double SY = Y + 0.5;
+				Xs.Reset();
+				for (int32 I = 0, J = Poly.Num() - 1; I < Poly.Num(); J = I++)
+				{
+					const FVector2D& A = Poly[J];
+					const FVector2D& B = Poly[I];
+					if ((A.Y <= SY) != (B.Y <= SY))
+					{
+						Xs.Add(A.X + (SY - A.Y) / (B.Y - A.Y) * (B.X - A.X));
+					}
+				}
+				Xs.Sort();
+				for (int32 K = 0; K + 1 < Xs.Num(); K += 2)
+				{
+					const int32 XA = FMath::Max(0, FMath::CeilToInt(Xs[K] - 0.5));
+					const int32 XB = FMath::Min(Size - 1, FMath::CeilToInt(Xs[K + 1] - 0.5) - 1);
+					for (int32 X = XA; X <= XB; ++X)
+					{
+						Mask[Y * Size + X] = 1;
 					}
 				}
 			}
@@ -537,8 +599,37 @@ namespace RMMapLayer
 			TArray<FColor> Pixels;
 			Pixels.Init(FColor(0, 0, 0, 0), Big * Big);
 			TArray<FVector2D> Poly;
-			for (const FRMMapPiece* Piece : Pieces)
+			TArray<uint8> ShadowMask;
+			// Bridge shadow: offset down-right (in metres on the map), darkens what is already painted under it.
+			const FVector2D ShadowOffset(3.0 * MapSuperSample, 3.0 * MapSuperSample);
+			for (int32 PieceIndex = 0; PieceIndex < Pieces.Num(); ++PieceIndex)
 			{
+				const FRMMapPiece* Piece = Pieces[PieceIndex];
+				bool bBridge = false;
+				for (int32 Lower = 0; Lower < PieceIndex && !bBridge; ++Lower)
+				{
+					bBridge = Pieces[Lower]->Z < Piece->Z - MapBridgeHeight && Pieces[Lower]->Bounds.Intersect(Piece->Bounds);
+				}
+				if (bBridge)
+				{
+					ShadowMask.Init(0, Big * Big);
+					for (const TArray<FVector2D>& Fill : Piece->Fills)
+					{
+						Poly.Reset();
+						for (const FVector2D& M : Fill) { Poly.Add(ToPx(M) + ShadowOffset); }
+						MapMaskPolygon(ShadowMask, Big, Poly);
+					}
+					for (int32 I = 0; I < ShadowMask.Num(); ++I)
+					{
+						FColor& C = Pixels[I];
+						if (ShadowMask[I] && C.A != 0)
+						{
+							C.R = uint8(C.R * 45 / 100);
+							C.G = uint8(C.G * 45 / 100);
+							C.B = uint8(C.B * 45 / 100);
+						}
+					}
+				}
 				for (const TArray<FVector2D>& Fill : Piece->Fills)
 				{
 					Poly.Reset();
@@ -658,36 +749,65 @@ namespace RMMapLayer
 			{
 				return true;
 			}
-			UUserWidget* Painter = nullptr;
-			for (TObjectIterator<UUserWidget> It; It; ++It)
-			{
-				UUserWidget* W = *It;
-				if (W && !W->IsTemplate() && W->GetWorld() == World && W->IsVisible()
-					&& W->GetClass()->GetName().Contains(TEXT("MapAreaPainter")))
-				{
-					Painter = W;
-					break;
-				}
-			}
-			if (!Painter || !MapUpdateMapping(World))
+			// Every frame while there is work, otherwise every MapScanInterval.
+			static double NextScan = 0.0;
+			static bool bPending = false;
+			static TWeakObjectPtr<UUserWidget> CachedPainter;
+			const double Now = FPlatformTime::Seconds();
+			if (!bPending && Now < NextScan)
 			{
 				return true;
 			}
-			MapAttach(Painter);
-			MapScanPieces(World);
-			int32 Budget = MapTilesPerTick;
-			for (auto It = GMapDirty.CreateIterator(); It && Budget > 0; ++It, --Budget)
+			NextScan = Now + MapScanInterval;
+			UUserWidget* Painter = CachedPainter.Get();
+			// Searched again while hidden: the game may have made a new map widget.
+			if (!Painter || Painter->GetWorld() != World || !Painter->IsVisible())
 			{
-				MapPaintTile(*It);
-				It.RemoveCurrent();
+				Painter = nullptr;
+				for (TObjectIterator<UUserWidget> It; It; ++It)
+				{
+					UUserWidget* W = *It;
+					if (W && !W->IsTemplate() && W->GetWorld() == World
+						&& W->GetClass()->GetName().Contains(TEXT("MapAreaPainter")))
+					{
+						Painter = W;
+						if (W->IsVisible())
+						{
+							break;
+						}
+					}
+				}
+				CachedPainter = Painter;
 			}
+			if (!Painter || !Painter->IsVisible() || !MapUpdateMapping(World))
+			{
+				bPending = false;
+				return true;
+			}
+			MapAttach(Painter);
+			const bool bScanned = MapScanPieces(World);
+			// Tiles wait until every piece is known (no half-painted tiles while a big save is first read).
+			if (bScanned)
+			{
+				const double Deadline = FPlatformTime::Seconds() + MapPaintBudget;
+				for (auto It = GMapDirty.CreateIterator(); It; ++It)
+				{
+					MapPaintTile(*It);
+					It.RemoveCurrent();
+					if (FPlatformTime::Seconds() > Deadline)
+					{
+						break;
+					}
+				}
+			}
+			bPending = !bScanned || GMapDirty.Num() > 0;
 			return true;
 		}
 	}
 
 	void InstallHooks()
 	{
-		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&MapLayerTick), 0.25f);
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&MapLayerTick), 0.f);
 	}
 }
 #endif
