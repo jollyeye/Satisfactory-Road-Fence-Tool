@@ -700,8 +700,19 @@ namespace
 			{
 				continue;
 			}
+			// The title ("4 lanes, continuous") sits above the box, in the menu around it: look at the texts
+			// of the box and of its parent widget itself (not inside the option tiles).
 			TArray<UWidget*> Widgets;
 			CollectWidgets(Box, Widgets);
+			if (UUserWidget* Around = Box->GetTypedOuter<UUserWidget>())
+			{
+				TArray<UWidget*> AroundWidgets;
+				if (Around->WidgetTree)
+				{
+					Around->WidgetTree->GetAllWidgets(AroundWidgets);
+				}
+				Widgets.Append(AroundWidgets);
+			}
 			{
 				// TEMPORARY (RMInfoLog): the info box's texts, logged when they change.
 				static FString LastTexts;
