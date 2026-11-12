@@ -680,6 +680,67 @@ namespace
 		return Keys;
 	}
 
+	/**
+	 * TEMPORARY diagnostics (RMInfoLog, remove before release): every visible image in the customizer
+	 * menu outside the option tiles (the info panel), with its widget, size, brush resource and icon
+	 * material parameters, logged when it changes (at most 300 lines a session).
+	 */
+	TMap<TWeakObjectPtr<const UImage>, FString> GInfoStates;
+	int32 GInfoLogLines = 0;
+
+	void LogCustomizerImages()
+	{
+		if (GInfoLogLines >= 300)
+		{
+			return;
+		}
+		for (TObjectIterator<UImage> It; It; ++It)
+		{
+			UImage* Image = *It;
+			if (!Image || Image->IsTemplate() || !Image->IsVisible())
+			{
+				continue;
+			}
+			UUserWidget* Owner = Image->GetTypedOuter<UUserWidget>();
+			const FString OwnerName = Owner ? Owner->GetClass()->GetName() : FString();
+			if (!OwnerName.Contains(TEXT("Custom")) || OwnerName.Contains(TEXT("CustomiserIcon")))
+			{
+				continue;
+			}
+			UObject* Res = Image->GetBrush().GetResourceObject();
+			FString Detail = FString::Printf(TEXT("%s.%s size=%s res=%s"), *OwnerName, *Image->GetName(),
+				*Image->GetBrush().GetImageSize().ToString(), Res ? *Res->GetName() : TEXT("none"));
+			if (UMaterialInstance* MI = Cast<UMaterialInstance>(Res))
+			{
+				TArray<FMaterialParameterInfo> Infos;
+				TArray<FGuid> Ids;
+				MI->GetAllTextureParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& Info : Infos)
+				{
+					UTexture* T = nullptr;
+					MI->GetTextureParameterValue(Info, T);
+					Detail += FString::Printf(TEXT(" %s=%s"), *Info.Name.ToString(), T ? *T->GetName() : TEXT("none"));
+				}
+				Infos.Reset();
+				Ids.Reset();
+				MI->GetAllScalarParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& Info : Infos)
+				{
+					float V = 0.f;
+					MI->GetScalarParameterValue(Info, V);
+					Detail += FString::Printf(TEXT(" %s=%.2f"), *Info.Name.ToString(), V);
+				}
+			}
+			FString& Last = GInfoStates.FindOrAdd(Image);
+			if (Last != Detail)
+			{
+				Last = Detail;
+				++GInfoLogLines;
+				UE_LOG(LogRoadMaker, Display, TEXT("RMInfoLog %s"), *Detail);
+			}
+		}
+	}
+
 	bool FixCustomizerIcons(float)
 	{
 		UWorld* World = nullptr;
@@ -701,6 +762,7 @@ namespace
 		}
 		BuildIconTable();
 		RestoreReusedTiles();
+		LogCustomizerImages();
 		static bool bLoggedLabels = false;
 		TArray<FString> SeenLabels;
 		int32 Matches = 0;
