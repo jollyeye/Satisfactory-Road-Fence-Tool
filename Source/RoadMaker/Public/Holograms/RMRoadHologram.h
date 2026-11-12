@@ -17,6 +17,12 @@ public:
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	// A road beside a road (snap key), locked: nudging moves the whole road, up / down and along the
+	// world axes nearest to where the camera looks (like snapped fences).
+	virtual ENudgeFailReason NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult) override;
+	virtual void SetHologramNudgeLocation() override;
+	virtual void OnHologramLockStateChanged() override;
+
 protected:
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
 	virtual float GetSurfaceOffset() const override;
@@ -48,6 +54,10 @@ protected:
 	/** The current curve is a parallel of another road: only geometry limits apply. */
 	UPROPERTY(Replicated, CustomSerialization)
 	bool mBesideRoad = false;
+
+	/** Where the locked beside-road hologram stood, and how far it has been nudged from there. */
+	FVector mBesideBase = FVector::ZeroVector;
+	FVector mBesideNudge = FVector::ZeroVector;
 
 	/** Markings for the new road: copied from the road it snaps to, otherwise the default. */
 	UPROPERTY(CustomSerialization)

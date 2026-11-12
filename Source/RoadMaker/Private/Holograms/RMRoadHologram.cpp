@@ -3,6 +3,9 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "RMRoadUtils.h"
+#include "Equipment/FGBuildGunBuild.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "ProceduralMeshComponent.h"
 #include "Buildables/FGBuildable.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -364,4 +367,55 @@ void ARMRoadHologram::ConfigureActor(AFGBuildable* inBuildable) const
 		Road->SetMarkings(mMarkings);
 		Road->SetLook(mLook);
 	}
+}
+
+void ARMRoadHologram::OnHologramLockStateChanged()
+{
+	Super::OnHologramLockStateChanged();
+	mBesideBase = GetActorLocation();
+	mBesideNudge = FVector::ZeroVector;
+}
+
+void ARMRoadHologram::SetHologramNudgeLocation()
+{
+	if (!mBesideRoad)
+	{
+		Super::SetHologramNudgeLocation();
+		return;
+	}
+	if (IsHologramLocked())
+	{
+		SetActorLocation(mBesideBase + mBesideNudge); // the whole road: its points are relative to the hologram
+	}
+}
+
+ENudgeFailReason ARMRoadHologram::NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult)
+{
+	if (!mBesideRoad || !IsHologramLocked())
+	{
+		return Super::NudgeHologram(NudgeInput, HitResult);
+	}
+	const FVector Step(FMath::Sign(NudgeInput.X), FMath::Sign(NudgeInput.Y), FMath::Sign(NudgeInput.Z));
+	if (Step.IsNearlyZero())
+	{
+		return ENudgeFailReason::NFR_Disallowed;
+	}
+	// Forward / right are the world axes nearest to where the camera looks; Z is up / down.
+	float CameraYaw = 0.f;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (PC->PlayerCameraManager)
+			{
+				CameraYaw = PC->PlayerCameraManager->GetCameraRotation().Yaw;
+			}
+		}
+	}
+	const float AxisYaw = FMath::RoundToFloat(CameraYaw / 90.f) * 90.f;
+	const FVector Forward = FRotator(0.f, AxisYaw, 0.f).Vector();
+	const FVector Right = FRotator(0.f, AxisYaw + 90.f, 0.f).Vector();
+	mBesideNudge += (Forward * Step.X + Right * Step.Y + FVector::UpVector * Step.Z) * GetNudgeDistance();
+	SetHologramNudgeLocation();
+	return ENudgeFailReason::NFR_Success;
 }

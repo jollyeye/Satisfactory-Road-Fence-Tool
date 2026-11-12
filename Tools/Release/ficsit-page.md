@@ -89,6 +89,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.2.1
+- A road built beside a road (snap key) can be locked and nudged like snapped fences: the whole road moves up / down, and along the directions nearest to where you look.
 - Roads snap to the side of a wider road end too, in 8 m steps, not only its centre: the pieces of a split road can be joined back next to a piece that is already attached (e.g. a 3-wide road split in three, sides removed: the 1-wide sides snap back on both sides of the middle one).
 - Lane markings keep their detailed shape (lying on the road) up to 300 m away, instead of 50 m.
 - Fixed: the customizer's info box showed the previous option's picture for Road Lines options; it now shows the option's own icon.
