@@ -692,15 +692,18 @@ namespace
 	{
 		TWeakObjectPtr<UImage> Image;
 		ESlateVisibility Original = ESlateVisibility::Visible;
+		ESlateVisibility Ours = ESlateVisibility::Visible;
 	};
 	TArray<FInfoBoxPatch> GInfoBoxPatches;
 
 	void SetPatchedVisibility(UImage* Image, ESlateVisibility Visibility)
 	{
-		if (!GInfoBoxPatches.ContainsByPredicate([Image](const FInfoBoxPatch& P) { return P.Image.Get() == Image; }))
+		FInfoBoxPatch* Patch = GInfoBoxPatches.FindByPredicate([Image](const FInfoBoxPatch& P) { return P.Image.Get() == Image; });
+		if (!Patch)
 		{
-			GInfoBoxPatches.Add({ Image, Image->GetVisibility() });
+			Patch = &GInfoBoxPatches.Add_GetRef({ Image, Image->GetVisibility(), Visibility });
 		}
+		Patch->Ours = Visibility;
 		if (Image->GetVisibility() != Visibility)
 		{
 			Image->SetVisibility(Visibility);
@@ -767,7 +770,9 @@ namespace
 		{
 			for (const FInfoBoxPatch& P : GInfoBoxPatches)
 			{
-				if (UImage* Image = P.Image.Get())
+				// Only if the game has not set it itself for the option it shows now.
+				UImage* Image = P.Image.Get();
+				if (Image && Image->GetVisibility() == P.Ours)
 				{
 					Image->SetVisibility(P.Original);
 				}
