@@ -40,8 +40,8 @@ namespace
 		}
 
 		/**
-		 * The outline of a road's top (both edges and both ends) as a selection outline: a dark line under
-		 * coloured dashes that run along it ("marching ants"). Dash sizes are in screen pixels.
+		 * The outline of a road's top (both edges and both ends) as a selection outline: dashes that run
+		 * along it ("marching ants"), 14 px dash / 14 px gap on screen whatever the distance.
 		 */
 		void Outline(const TArray<FRMFrame>& Frames, float Width, float Pixels, const FLinearColor& Color)
 		{
@@ -64,19 +64,12 @@ namespace
 			const FVector First = Loop[0]; // a copy: adding an element of the array itself is not allowed
 			Loop.Add(First);
 
-			// Dash length from the size of a pixel at the outline's middle.
-			FVector Mid = FVector::ZeroVector;
-			for (const FVector& P : Loop)
-			{
-				Mid += P / Loop.Num();
-			}
-			const float PerPixel = WorldPerPixel * FMath::Max(FVector::Dist(Mid, Camera), 10.f);
-			const float Dash = 14.f * PerPixel;
-			const float Period = 2.f * Dash;
-			const float Phase = FMath::Fmod(static_cast<float>(FPlatformTime::Seconds()) * 60.f * PerPixel, Period); // 60 px per second
-
-			const FLinearColor Dark(0.02f, 0.02f, 0.02f);
-			float S = 0.f; // distance along the loop
+			// The dash pattern is measured in screen pixels along the outline (each segment converted
+			// with the size of a pixel at its own distance), so near and far dashes look the same.
+			const float Dash = 14.f;                  // px
+			const float Period = 2.f * Dash;          // px: dash + equal gap
+			const float Phase = FMath::Fmod(static_cast<float>(FPlatformTime::Seconds()) * 60.f, Period); // 60 px per second
+			float S = 0.f; // pixels along the loop
 			for (int32 I = 1; I < Loop.Num(); ++I)
 			{
 				const FVector A = Loop[I - 1];
@@ -86,22 +79,22 @@ namespace
 				{
 					continue;
 				}
-				Line(A, B, Pixels + 2.f, Dark);
-				// The parts of this segment inside a dash: [k * Period - Phase, k * Period - Phase + Dash).
+				const float PerPixel = WorldPerPixel * FMath::Max(FVector::Dist((A + B) * 0.5f, Camera), 10.f);
+				const float LenPx = Len / FMath::Max(PerPixel, KINDA_SMALL_NUMBER);
 				float From = S;
-				const float To = S + Len;
+				const float To = S + LenPx;
 				while (From < To)
 				{
 					const float InPeriod = FMath::Fmod(From + Phase, Period);
 					if (InPeriod < Dash)
 					{
-						const float End = FMath::Min(To, From + FMath::Max(Dash - InPeriod, 0.5f)); // always moves on
-						Line(FMath::Lerp(A, B, (From - S) / Len), FMath::Lerp(A, B, (End - S) / Len), Pixels, Color);
+						const float End = FMath::Min(To, From + FMath::Max(Dash - InPeriod, 0.05f)); // always moves on
+						Line(FMath::Lerp(A, B, (From - S) / LenPx), FMath::Lerp(A, B, (End - S) / LenPx), Pixels, Color);
 						From = End;
 					}
 					else
 					{
-						From += FMath::Max(Period - InPeriod, 0.5f);
+						From += FMath::Max(Period - InPeriod, 0.05f);
 					}
 				}
 				S = To;
@@ -130,15 +123,21 @@ ARMRoadMergeHologram::ARMRoadMergeHologram()
 	mOverlayMesh->SetCastShadow(false);
 	mCanLockHologram = false;
 	mCanNudgeHologram = false;
-	PrimaryActorTick.bCanEverTick = true;
 }
 
-void ARMRoadMergeHologram::Tick(float DeltaSeconds)
+void ARMRoadMergeHologram::BeginPlay()
 {
-	Super::Tick(DeltaSeconds);
-	if (mFirst || mAimed)
+	Super::BeginPlay();
+	// The dashes move on their own (the game only updates the hologram when the aim changes).
+	if (UWorld* World = GetWorld())
 	{
-		RebuildOverlay();
+		World->GetTimerManager().SetTimer(mDashTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			if (mFirst || mAimed)
+			{
+				RebuildOverlay();
+			}
+		}), 0.016f, true);
 	}
 }
 
