@@ -67,7 +67,7 @@ struct FRMHologramAccess : public AFGHologram
 #endif
 
 #if !WITH_EDITOR
-namespace RMMapDiag { void InstallHooks(); }
+namespace RMMapLayer { void InstallHooks(); }
 #endif
 
 void FRoadMakerModule::StartupModule()
@@ -86,8 +86,8 @@ void FRoadMakerModule::StartupModule()
 	RMFenceWallPaint::InstallHooks();
 	RMRoadLookPaint::InstallHooks();
 
-	// TEMPORARY: map road layer research logger (RMMapLog).
-	RMMapDiag::InstallHooks();
+	// Road layer on the game map (1.3.0, test overlay for now).
+	RMMapLayer::InstallHooks();
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
