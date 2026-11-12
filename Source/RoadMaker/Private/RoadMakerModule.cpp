@@ -66,6 +66,10 @@ struct FRMHologramAccess : public AFGHologram
 };
 #endif
 
+#if !WITH_EDITOR
+namespace RMMapDiag { void InstallHooks(); }
+#endif
+
 void FRoadMakerModule::StartupModule()
 {
 #if !WITH_EDITOR
@@ -81,6 +85,9 @@ void FRoadMakerModule::StartupModule()
 	// Customizer Material tab on fence walls (concrete / FICSIT / steel), switched in place.
 	RMFenceWallPaint::InstallHooks();
 	RMRoadLookPaint::InstallHooks();
+
+	// TEMPORARY: map road layer research logger (RMMapLog).
+	RMMapDiag::InstallHooks();
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
