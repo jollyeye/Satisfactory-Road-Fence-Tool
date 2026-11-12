@@ -360,8 +360,10 @@ void ARMRoadHologram::UpdateHologramLook()
 	{
 		mPreviewMesh->SetMaterial(1, RMHologramLook::HoloVersion(Road->GetLookMaterialFor(mLook, false, Road->mBodyMaterial)));
 	}
-	// All lines in the dark side line colour: a white middle line would run into the white direction arrow.
-	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
+	// On the stub (with the white direction arrow) all lines take the dark side line colour, so the
+	// middle line does not run into the arrow; otherwise the lines show in their real colours.
+	const FLinearColor Middle = IsFadingStub() ? Secondary : Primary;
+	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Middle.R, Middle.G, Middle.B, 1.0));
 	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
 	RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
 }
