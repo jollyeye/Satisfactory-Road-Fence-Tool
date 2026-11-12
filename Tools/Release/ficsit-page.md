@@ -89,6 +89,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.2.1
+- Road fences snapped with the snap key can no longer be built on top of the same kind of road fence ("The same fence is already there"); a different kind still replaces it.
 - Road holograms show a flat white arrow on top pointing the way the road runs (its lines and markings follow that direction).
 - Fence walls can no longer be built inside another fence wall (the hologram turns red, "Another fence wall is already there"), like the game's walls; stacking on top / below and meeting end to end still work.
 - A road built beside a road (snap key) can be locked and nudged like snapped fences: the whole road moves up / down, and along the directions nearest to where you look.

@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 #include "Holograms/RMSplineHologram.h"
+#include "Buildables/RMBuildableFence.h"
 #include "RMFenceHologram.generated.h"
 
 class ARMBuildableFence;
@@ -26,8 +27,11 @@ public:
 	virtual ENudgeFailReason NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult) override;
 	virtual void OnHologramLockStateChanged() override;
 
-	/** A fence wall where this one would stand (same course, overlapping heights), not counting the one being replaced. */
-	bool OverlapsAnotherWall() const;
+	/**
+	 * A fence wall where this one would stand (same course, overlapping heights), not counting the one being
+	 * replaced; with SameRoadFence: a road fence of that kind there instead.
+	 */
+	bool OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence = TOptional<ERMFenceType>()) const;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

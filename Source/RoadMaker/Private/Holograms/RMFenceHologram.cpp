@@ -356,9 +356,15 @@ void ARMFenceHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_FenceWallTaken::StaticClass());
 	}
+	// Road fences: with the snap key, not on top of the same kind of road fence (a different kind is
+	// fine: it replaces it when aimed at, or stands beside it).
+	if (!GetFenceDefaults()->IsWall() && mSnapToGuideLines && OverlapsAnotherWall(GetFenceDefaults()->mFenceType))
+	{
+		AddConstructDisqualifier(URMCD_SameFenceTaken::StaticClass());
+	}
 }
 
-bool ARMFenceHologram::OverlapsAnotherWall() const
+bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence) const
 {
 	UWorld* World = GetWorld();
 	TArray<FRMFrame> Local;
@@ -390,7 +396,12 @@ bool ARMFenceHologram::OverlapsAnotherWall() const
 	for (TActorIterator<ARMBuildableFence> It(World); It; ++It)
 	{
 		ARMBuildableFence* Other = *It;
-		if (!Other || !Other->IsWall() || Other == mReplaceTarget || Other->GetIsDismantled() || Other->IsActorBeingDestroyed()
+		if (!Other)
+		{
+			continue;
+		}
+		const bool bCandidate = SameRoadFence.IsSet() ? (!Other->IsWall() && Other->GetEffectiveType() == SameRoadFence.GetValue()) : Other->IsWall();
+		if (!Other || !bCandidate || Other == mReplaceTarget || Other->GetIsDismantled() || Other->IsActorBeingDestroyed()
 			|| !Other->GetComponentsBoundingBox(true).Intersect(Box))
 		{
 			continue;
@@ -417,7 +428,8 @@ bool ARMFenceHologram::OverlapsAnotherWall() const
 			const FVector Rel = P - Near->Pos;
 			const float Along = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Fwd.X, Near->Fwd.Y, 0.f).GetSafeNormal()));
 			const float Across = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Right.X, Near->Right.Y, 0.f).GetSafeNormal()));
-			const float Overlap = Wall - FMath::Abs(Rel.Z); // both walls go up Wall from their base line
+			// Both go up from their base line: walls Wall high; road fences count as the same when their bases are within 1 m.
+			const float Overlap = (SameRoadFence.IsSet() ? 120.f : Wall) - FMath::Abs(Rel.Z);
 			if (Along < 30.f && Across < 40.f && Overlap > 20.f)
 			{
 				return true;

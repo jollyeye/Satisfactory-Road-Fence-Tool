@@ -104,6 +104,14 @@ public:
 };
 
 UCLASS()
+class ROADMAKER_API URMCD_SameFenceTaken : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_SameFenceTaken() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "SameFenceTaken", "The same fence is already there"); }
+};
+
+UCLASS()
 class ROADMAKER_API URMCD_FenceWallTaken : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
