@@ -136,6 +136,15 @@ namespace RMSound
 		}
 	}
 
+	void Preload()
+	{
+		if (!GSearched && !IsRunningDedicatedServer())
+		{
+			GSearched = true;
+			SoundFindEvents();
+		}
+	}
+
 	void PlayBuild(AActor* Piece, float Duration)
 	{
 		if (!Piece || !Piece->GetWorld() || IsRunningDedicatedServer())

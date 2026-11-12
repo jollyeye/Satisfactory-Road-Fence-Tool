@@ -1,4 +1,5 @@
 #include "RoadMakerModule.h"
+#include "RMSound.h"
 #include "LanePaint/RMLanePaint.h"
 #include "Snapping/RMVanillaSnapping.h"
 #include "Customization/RMRoadLinePaint.h"
@@ -107,6 +108,8 @@ void FRoadMakerModule::StartupModule()
 			if (PC && PC->PlayerCameraManager)
 			{
 				ARMBuildableProcedural::UpdateLODsForCamera(World, PC->PlayerCameraManager->GetCameraLocation());
+				// Build sounds ready before the first piece is built (their audio loads in the background).
+				RMSound::Preload();
 			}
 		}
 		return true;

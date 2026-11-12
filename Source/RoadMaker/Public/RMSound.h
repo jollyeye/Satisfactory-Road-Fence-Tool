@@ -12,4 +12,7 @@ namespace RMSound
 	 * start sound, the components "swish" during it, end sound. Local only; nothing on a dedicated server.
 	 */
 	ROADMAKER_API void PlayBuild(AActor* Piece, float Duration);
+
+	/** Finds and loads the build sounds (once): their audio data needs a moment to load. */
+	ROADMAKER_API void Preload();
 }
