@@ -4,6 +4,7 @@
 
 #include "RoadMakerModule.h"
 #include "RMRoadUtils.h"
+#include "ProceduralMeshComponent.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableGantry.h"
@@ -1158,7 +1159,69 @@ namespace
 	 * smooth curve between them as the path's points. Placement calls go through the guard so our
 	 * hook lets the game's code run.
 	 */
-	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link)
+	/**
+	 * The connection's course over the intersection: the smooth curve between the two path ends, cut into
+	 * points about every 4 m that are put back on the intersection's surface (keeping the paths' own height
+	 * above it at the two ends), so a connection over a sloped or uneven intersection follows it instead of
+	 * cutting through it.
+	 */
+	void FollowIntersectionSurface(const ARMBuildableIntersection* X, const TArray<FRMSplinePoint>& Curve,
+		TArray<FVector>& OutPoints, TArray<FVector>& OutTangents)
+	{
+		OutPoints.Reset();
+		OutTangents.Reset();
+		const FVector P0 = Curve[0].Location, T0 = Curve[0].Tangent;
+		const FVector P1 = Curve[1].Location, T1 = Curve[1].Tangent;
+		UProceduralMeshComponent* SurfMesh = X ? X->GetProceduralMesh() : nullptr;
+		auto SurfaceZ = [SurfMesh](const FVector& P, float& OutZ) -> bool
+		{
+			FHitResult H;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(RMJunctionSurface), true);
+			if (SurfMesh && SurfMesh->LineTraceComponent(H, P + FVector(0.f, 0.f, 600.f), P - FVector(0.f, 0.f, 600.f), Params))
+			{
+				OutZ = H.ImpactPoint.Z;
+				return true;
+			}
+			return false;
+		};
+		const float LinkLength = FVector::Dist(P0, P1);
+		const int32 SampleCount = FMath::Clamp(FMath::CeilToInt(LinkLength / 400.f), 1, 16);
+		float StartSurfZ = P0.Z, EndSurfZ = P1.Z;
+		const bool bStartOnSurface = SurfaceZ(P0, StartSurfZ);
+		const bool bEndOnSurface = SurfaceZ(P1, EndSurfZ);
+		const float StartAbove = bStartOnSurface ? P0.Z - StartSurfZ : 0.f;
+		const float EndAbove = bEndOnSurface ? P1.Z - EndSurfZ : 0.f;
+		for (int32 I = 0; I <= SampleCount; ++I)
+		{
+			const float A = static_cast<float>(I) / SampleCount;
+			FVector P = FMath::CubicInterp(P0, T0, P1, T1, A);
+			float Z;
+			if (I > 0 && I < SampleCount && SurfaceZ(P, Z))
+			{
+				P.Z = Z + FMath::Lerp(StartAbove, EndAbove, A);
+			}
+			OutPoints.Add(I == 0 ? P0 : (I == SampleCount ? P1 : P));
+		}
+		// Tangents: the ends keep the curve's directions; inside, along the neighbours (Catmull-Rom).
+		for (int32 I = 0; I <= SampleCount; ++I)
+		{
+			const float SegLen = I < SampleCount ? FVector::Dist(OutPoints[I], OutPoints[I + 1]) : FVector::Dist(OutPoints[I - 1], OutPoints[I]);
+			if (I == 0)
+			{
+				OutTangents.Add(T0.GetSafeNormal() * SegLen);
+			}
+			else if (I == SampleCount)
+			{
+				OutTangents.Add(T1.GetSafeNormal() * SegLen);
+			}
+			else
+			{
+				OutTangents.Add((OutPoints[I + 1] - OutPoints[I - 1]) * 0.5f);
+			}
+		}
+	}
+
+	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link, const ARMBuildableIntersection* X)
 	{
 		GJunctionHolograms.Add(H);
 		FPathState& State = GPathStates.FindOrAdd(H);
@@ -1190,7 +1253,10 @@ namespace
 		PlacePathEnd(PlaceGuarded, H, MoveHit(BaseHit, Link.Out.Location), Link.Out.Location - Link.Out.Dir * 100.f, Link.Out.Dir, State);
 		State.bFlipped = bWasFlipped;
 		FRMPathAccess::SnapToNode(H, Link.Out.Node);
-		SetPathSplineWorld(H, { Curve[0].Location, Curve[1].Location }, { Curve[0].Tangent, Curve[1].Tangent });
+		TArray<FVector> Points;
+		TArray<FVector> Tangents;
+		FollowIntersectionSurface(X, Curve, Points, Tangents);
+		SetPathSplineWorld(H, Points, Tangents);
 	}
 
 	/** Protected hologram child lists: detaching a child so the main hologram no longer checks or builds it. */
@@ -1300,7 +1366,7 @@ namespace
 		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
 		TArray<AFGVehiclePathSegmentHologram*> LinkHolograms; // per link
 		LinkHolograms.Add(Parent);
-		SetupJunctionHologram(Parent, Hit, Links[0]);
+		SetupJunctionHologram(Parent, Hit, Links[0], X);
 		for (int32 L = 1; L < Links.Num(); ++L)
 		{
 			const int32 ChildIndex = L - 1;
@@ -1328,7 +1394,7 @@ namespace
 			}
 			Child->SetDisabled(false);
 			Child->SetActorHiddenInGame(false);
-			SetupJunctionHologram(Child, Hit, Links[L]);
+			SetupJunctionHologram(Child, Hit, Links[L], X);
 			LinkHolograms.Add(Child);
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)

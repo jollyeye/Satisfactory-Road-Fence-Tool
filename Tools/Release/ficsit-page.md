@@ -89,6 +89,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.2.1
+- Intersection connections (vehicle path + snap key on an intersection) follow the intersection's surface instead of cutting straight through it when the road ends are at different heights.
 - Street lights snapped between two roads side by side no longer flicker between facing one road and the other: they face the road you aim at.
 - Signs snap to fence walls and the sign gantry automatically again, no snap key needed (like wall attachments).
 - Lane markings no longer get in the way: aiming at an arrow or number counts as aiming at the road under it (one-click lane paths and tracks, roads beside roads, fences, the gantry, Cut / Split / Adjust).
