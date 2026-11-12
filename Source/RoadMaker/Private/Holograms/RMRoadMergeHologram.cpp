@@ -201,7 +201,7 @@ void ARMRoadMergeHologram::RebuildOverlay()
 	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
 
-	const FLinearColor Cyan(0.f, 0.9f, 1.f);
+	const FLinearColor Cyan(0.f, 1.f, 0.f); // #00FF00 green (the "ok" colour of Join / Merge)
 	const FLinearColor White(1.f, 1.f, 1.f);
 	const FLinearColor Red(1.f, 0.05f, 0.05f);
 	TArray<FRMFrame> Frames;

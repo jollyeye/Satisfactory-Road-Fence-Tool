@@ -197,7 +197,7 @@ void ARMRoadJoinHologram::RebuildOverlay()
 	if (mRoad->CheckJoin(mOther, mRoadEnd, mOtherEnd, &Frames) == ARMBuildableRoad::EJoinCheck::Ok)
 	{
 		// The joined road: one outline around both.
-		B.Outline(Frames, mRoad->GetRoadWidth(), 10.f, FLinearColor(0.f, 0.9f, 1.f));
+		B.Outline(Frames, mRoad->GetRoadWidth(), 10.f, FLinearColor(0.f, 1.f, 0.f) /* #00FF00 */);
 	}
 	else
 	{
