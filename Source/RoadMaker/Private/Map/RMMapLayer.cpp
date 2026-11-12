@@ -158,7 +158,6 @@ namespace RMMapLayer
 			OutEdge = MapPaintColour(Secondary);
 		}
 
-		// Concrete blocks (look 1) draw no lines in game, so none on the map either.
 		/** Side lines sit just inside the edge: half a map pixel (1 px = 1 m). */
 		constexpr float MapEdgeInset = 50.f;
 
@@ -207,7 +206,7 @@ namespace RMMapLayer
 			}
 			for (const FVector2D& P : Left) { Out.Bounds += P; }
 			for (const FVector2D& P : Right) { Out.Bounds += P; }
-			if (Road->GetMarkings().bEdgeLines && Road->GetLook() != 1)
+			if (Road->GetMarkings().bEdgeLines)
 			{
 				Out.Edges.Add(MoveTemp(LeftLine));
 				Out.Edges.Add(MoveTemp(RightLine));
@@ -241,7 +240,7 @@ namespace RMMapLayer
 			}
 			// Side lines along the curbs (not the mouths, where roads continue), if switched on.
 			TArray<FVector2D> Run;
-			for (int32 I = 0; Isect->HasSideLines() && Isect->GetLook() != 1 && I < Inset.Num(); ++I)
+			for (int32 I = 0; Isect->HasSideLines() && I < Inset.Num(); ++I)
 			{
 				const bool bMouth = IsMouth.IsValidIndex(I) && IsMouth[I];
 				if (bMouth)
