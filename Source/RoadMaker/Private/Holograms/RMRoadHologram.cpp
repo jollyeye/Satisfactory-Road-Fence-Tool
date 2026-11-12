@@ -67,7 +67,9 @@ void ARMRoadHologram::ApplyArrowMaterial()
 void ARMRoadHologram::RebuildDirectionArrow(const TArray<FRMFrame>& Frames)
 {
 	mDirectionArrow->ClearAllMeshSections();
-	if (Frames.Num() < 2)
+	// Only on the stub before the first click: once the start is placed (or the road is placed beside
+	// another one) the preview is just the road in its material.
+	if (Frames.Num() < 2 || !IsFadingStub())
 	{
 		return;
 	}
