@@ -94,13 +94,13 @@ namespace
 					const float InPeriod = FMath::Fmod(From + Phase, Period);
 					if (InPeriod < Dash)
 					{
-						const float End = FMath::Min(To, From + (Dash - InPeriod));
+						const float End = FMath::Min(To, From + FMath::Max(Dash - InPeriod, 0.5f)); // always moves on
 						Line(FMath::Lerp(A, B, (From - S) / Len), FMath::Lerp(A, B, (End - S) / Len), Pixels, Color);
 						From = End;
 					}
 					else
 					{
-						From += Period - InPeriod;
+						From += FMath::Max(Period - InPeriod, 0.5f);
 					}
 				}
 				S = To;
