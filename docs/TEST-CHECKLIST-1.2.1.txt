@@ -54,6 +54,7 @@ Riskiest first. Tick [x] as you go. If something fails, note the line and send F
 5. INTERSECTIONS (new smooth top)
 ---------------------------------
 [ ] Build 3-, 4-, 5- and 6-way intersections with road ends at different heights: one smooth slope, no folds or creases.
+[ ] Small intersection (e.g. 8 m x 8 m): pick the ends, click in the middle = builds; click near an end = picks / unpicks it.
 [ ] Flat intersection: still flat, looks the same as before.
 [ ] Very small intersection / 2-road bend: builds normally (keeps the old simple top).
 [ ] Lighting on a sloped intersection looks right (no dark or bright facets).

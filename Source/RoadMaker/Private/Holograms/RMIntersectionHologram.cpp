@@ -75,6 +75,21 @@ void ARMIntersectionHologram::SetHologramLocationAndRotation(const FHitResult& h
 	{
 		mHover = Near[0];
 	}
+	// With 2+ ends picked, aiming nearer the middle of the picked ends than the nearest end means
+	// "build": on a small intersection every end is within the pick radius of the middle, so a click
+	// in the middle used to toggle an end instead of confirming.
+	if (mHasHover && mPicked.Num() >= 2)
+	{
+		FVector Middle = FVector::ZeroVector;
+		for (const FRMRoadEndRef& R : mPicked)
+		{
+			Middle += R.Location / mPicked.Num();
+		}
+		if (FVector::Dist2D(hitResult.Location, Middle) < FVector::Dist2D(hitResult.Location, mHover.Location))
+		{
+			mHasHover = false;
+		}
+	}
 	ApplyEnds(mPicked, hitResult.Location);
 	RebuildOverlay();
 }
