@@ -7,6 +7,9 @@ class AActor;
 
 namespace RMSound
 {
-	/** The game's build sound at the piece (local only; nothing on a dedicated server). */
-	ROADMAKER_API void PlayConstruct(AActor* Piece);
+	/**
+	 * The game's build effect sounds at the piece, spread over its build animation (Duration seconds):
+	 * start sound, the components "swish" during it, end sound. Local only; nothing on a dedicated server.
+	 */
+	ROADMAKER_API void PlayBuild(AActor* Piece, float Duration);
 }

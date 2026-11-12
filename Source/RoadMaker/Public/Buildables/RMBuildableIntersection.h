@@ -82,6 +82,7 @@ protected:
 	 * without collision shows the part built so far, cut smoothly along the front.
 	 */
 	virtual void StartRiseAnimation() override;
+	virtual float GetBuildAnimDuration() const override { return RevealDuration; }
 	void StepReveal();
 	void EndReveal();
 	/** Distance (cm, seen from above) from P (actor space) to the nearest road mouth. */

@@ -5,6 +5,8 @@
 #include "Buildables/FGBuildable.h"
 #include "FGBuildEffectActor.h"
 #include "GameFramework/Actor.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/UnrealType.h"
 
@@ -12,13 +14,20 @@ namespace RMSound
 {
 	namespace
 	{
-		UAkAudioEvent* GConstructEvent = nullptr;
+		// The three events the game's default build effect Blueprint (BuildEffect_Default) plays.
+		UAkAudioEvent* GStartEvent = nullptr;  // Play_F_BuildEffect_Switch
+		UAkAudioEvent* GSwishEvent = nullptr;  // Play_BuildEffect_SwishComponents
+		UAkAudioEvent* GEndEvent = nullptr;    // Play_F_BuildEffect_Rework
 		bool GSearched = false;
 
 		void SoundCollect(UStruct* Struct, const FString& Where, TArray<TPair<FString, UAkAudioEvent*>>& Out)
 		{
 			for (UObject* Object : Struct->ScriptAndPropertyObjectReferences)
 			{
+				if (Object && !Object->IsA<UAkAudioEvent>() && Object->GetClass()->GetName().StartsWith(TEXT("Ak")))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("RMSound: also uses %s %s (%s)"), *Object->GetClass()->GetName(), *Object->GetPathName(), *Where);
+				}
 				if (UAkAudioEvent* Event = Cast<UAkAudioEvent>(Object))
 				{
 					if (!Out.ContainsByPredicate([Event](const TPair<FString, UAkAudioEvent*>& P) { return P.Value == Event; }))
@@ -34,7 +43,7 @@ namespace RMSound
 		 * posts a Wwise event). Find that class (the one a foundation uses) and the sound events its
 		 * Blueprint code references; log them all and use the "thump" / build one.
 		 */
-		UAkAudioEvent* SoundFindConstructEvent()
+		UAkAudioEvent* SoundFindEvents()
 		{
 			UClass* EffectClass = nullptr;
 			if (UClass* Foundation = LoadClass<AFGBuildable>(nullptr, TEXT("/Game/FactoryGame/Buildable/Building/Foundation/Build_Foundation_8x4_01.Build_Foundation_8x4_01_C")))
@@ -73,45 +82,37 @@ namespace RMSound
 					}
 				}
 			}
-			UAkAudioEvent* Best = nullptr;
-			int32 BestScore = -1;
 			for (const TPair<FString, UAkAudioEvent*>& P : Found)
 			{
-				const FString Name = P.Value->GetName();
 				UE_LOG(LogRoadMaker, Display, TEXT("RMSound: event %s (%s)"), *P.Value->GetPathName(), *P.Key);
-				int32 Score = 0;
-				if (Name.Contains(TEXT("Thump")) || Name.Contains(TEXT("Thumb")))
+				const FString Name = P.Value->GetName();
+				UAkAudioEvent*& Slot = Name.Contains(TEXT("Swish")) ? GSwishEvent
+					: Name.Contains(TEXT("Rework")) ? GEndEvent
+					: GStartEvent;
+				if (!Slot)
 				{
-					Score = 3;
-				}
-				else if (Name.Contains(TEXT("Build")) || Name.Contains(TEXT("Construct")))
-				{
-					Score = 2;
-				}
-				else if (P.Key.Contains(TEXT("Thumb")))
-				{
-					Score = 1;
-				}
-				if (Name.Contains(TEXT("Dismantle")) || Name.Contains(TEXT("Stop")))
-				{
-					Score -= 5;
-				}
-				if (Score > BestScore)
-				{
-					Best = P.Value;
-					BestScore = Score;
+					Slot = P.Value;
+					Slot->AddToRoot();
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RMSound: %d events found, build sound = %s"), Found.Num(), *GetPathNameSafe(Best));
-			if (Best)
+			UE_LOG(LogRoadMaker, Display, TEXT("RMSound: start = %s, during = %s, end = %s"),
+				*GetNameSafe(GStartEvent), *GetNameSafe(GSwishEvent), *GetNameSafe(GEndEvent));
+			return GStartEvent;
+		}
+
+		void SoundPostAt(AActor* Piece, UAkAudioEvent* Event)
+		{
+			if (!Piece || !Event || !Piece->GetWorld())
 			{
-				Best->AddToRoot();
+				return;
 			}
-			return Best;
+			const FBox Bounds = Piece->GetComponentsBoundingBox();
+			const FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
+			UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
 		}
 	}
 
-	void PlayConstruct(AActor* Piece)
+	void PlayBuild(AActor* Piece, float Duration)
 	{
 		if (!Piece || !Piece->GetWorld() || IsRunningDedicatedServer())
 		{
@@ -120,13 +121,25 @@ namespace RMSound
 		if (!GSearched)
 		{
 			GSearched = true;
-			GConstructEvent = SoundFindConstructEvent();
+			SoundFindEvents();
 		}
-		if (GConstructEvent)
+		SoundPostAt(Piece, GStartEvent);
+		FTimerManager& Timers = Piece->GetWorld()->GetTimerManager();
+		const TWeakObjectPtr<AActor> Weak(Piece);
+		// During: the components swish, about every 0.4 s while the animation runs.
+		if (GSwishEvent)
 		{
-			const FBox Bounds = Piece->GetComponentsBoundingBox();
-			const FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
-			UAkGameplayStatics::PostAkEventAtLocation(Piece, GConstructEvent, Where, Piece->GetActorRotation());
+			for (float At = 0.15f; At < Duration - 0.2f; At += 0.4f)
+			{
+				FTimerHandle Handle;
+				Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]() { SoundPostAt(Weak.Get(), GSwishEvent); }), At, false);
+			}
+		}
+		// End: when the animation is done.
+		if (GEndEvent)
+		{
+			FTimerHandle Handle;
+			Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]() { SoundPostAt(Weak.Get(), GEndEvent); }), FMath::Max(Duration, 0.05f), false);
 		}
 	}
 }

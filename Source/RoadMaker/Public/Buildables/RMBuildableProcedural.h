@@ -63,6 +63,8 @@ protected:
 	 * were just built: not restored from a save, not part of the world that loads or replicates in at the start).
 	 */
 	virtual void StartRiseAnimation();
+	/** How long the build animation of this piece lasts (s): the build sound follows it. */
+	virtual float GetBuildAnimDuration() const { return RiseDuration; }
 	void StepRiseAnimation();
 	bool mLoadedFromSave = false;
 	FTimerHandle mRiseTimer;

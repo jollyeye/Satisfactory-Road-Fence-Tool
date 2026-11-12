@@ -64,7 +64,7 @@ void ARMBuildableProcedural::BeginPlay()
 		StartRiseAnimation();
 		// The game's build sound is played by its build effect, which Road Maker pieces skip (see the
 		// constructor): play the same sound ourselves.
-		RMSound::PlayConstruct(this);
+		RMSound::PlayBuild(this, GetBuildAnimDuration());
 	}
 }
 
