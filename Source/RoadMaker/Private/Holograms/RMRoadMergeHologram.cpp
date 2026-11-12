@@ -61,7 +61,8 @@ namespace
 			{
 				Loop.Add(Edge(Frames[I], 1.f));
 			}
-			Loop.Add(Loop[0]);
+			const FVector First = Loop[0]; // a copy: adding an element of the array itself is not allowed
+			Loop.Add(First);
 
 			// Dash length from the size of a pixel at the outline's middle.
 			FVector Mid = FVector::ZeroVector;
