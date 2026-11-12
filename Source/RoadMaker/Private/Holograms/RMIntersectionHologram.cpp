@@ -438,10 +438,10 @@ void ARMIntersectionHologram::UpdateHologramLook()
 {
 	const bool bInvalid = mPlacementMaterialState == EHologramMaterialState::HMS_ERROR;
 	const ARMBuildableIntersection* CDO = mBuildClass ? Cast<ARMBuildableIntersection>(mBuildClass->GetDefaultObject()) : nullptr;
-	if (!bInvalid && CDO && mPreviewMesh->GetNumSections() > 0)
+	if (CDO && mPreviewMesh->GetNumSections() > 0)
 	{
 		// The real surface: the look and paint of the first road (or intersection) joined, as the
-		// intersection will be built. The game's outline (stencil) still shows valid / warning.
+		// intersection will be built. The game's tint and outline (stencil) show valid / warning / invalid.
 		uint8 Look = 0;
 		FLinearColor Primary(1.f, 1.f, 1.f), Secondary(1.f, 1.f, 1.f);
 		CDO->GetPaintColours(Primary, Secondary);

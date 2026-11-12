@@ -346,13 +346,14 @@ void ARMRoadHologram::RebuildPreview()
 void ARMRoadHologram::UpdateHologramLook()
 {
 	const ARMBuildableRoad* Road = GetRoadDefaults();
-	if (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR || !Road || mPreviewMesh->GetNumSections() == 0)
+	if (!Road || mPreviewMesh->GetNumSections() == 0)
 	{
-		Super::UpdateHologramLook(); // the game's red hologram
+		Super::UpdateHologramLook();
 		return;
 	}
 	// The real surface in its look (copied from the road it snaps to), in the hologram version of the
-	// material (fades with the vertex alpha); the game's outline still shows valid / warning.
+	// material (fades with the vertex alpha); the game's hologram tint and outline (stencil) show
+	// valid / warning / invalid (red) on top of it.
 	FLinearColor Primary, Secondary;
 	Road->GetPaintColours(Primary, Secondary);
 	mPreviewMesh->SetMaterial(0, RMHologramLook::HoloVersion(Road->GetLookMaterialFor(mLook, true, Road->mTopMaterial)));
