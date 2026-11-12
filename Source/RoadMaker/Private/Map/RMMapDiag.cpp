@@ -102,31 +102,6 @@ namespace RMMapDiag
 			return S;
 		}
 
-		/** One line per widget of a map user widget's tree, with its depth (children of panels in order). */
-		void DumpTree(UWidget* W, const FString& Path, int32 Depth)
-		{
-			if (!W || Depth > 12)
-			{
-				return;
-			}
-			Log(Path, Describe(W));
-			if (UPanelWidget* Panel = Cast<UPanelWidget>(W))
-			{
-				for (int32 I = 0; I < Panel->GetChildrenCount(); ++I)
-				{
-					UWidget* Child = Panel->GetChildAt(I);
-					DumpTree(Child, Path + TEXT("/") + FString::FromInt(I) + TEXT(":") + (Child ? Child->GetName() : TEXT("?")), Depth + 1);
-				}
-			}
-			if (UUserWidget* User = Cast<UUserWidget>(W))
-			{
-				if (User->WidgetTree && User->WidgetTree->RootWidget)
-				{
-					DumpTree(User->WidgetTree->RootWidget, Path + TEXT(">") + User->WidgetTree->RootWidget->GetName(), Depth + 1);
-				}
-			}
-		}
-
 		bool Tick(float)
 		{
 			UWorld* World = nullptr;
