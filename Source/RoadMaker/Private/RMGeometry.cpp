@@ -1526,91 +1526,145 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 	}
 	Sorted.Sort([](const FSortedEnd& A, const FSortedEnd& B) { return A.Angle < B.Angle; });
 
-	// Outline: road mouth (First -> Second) then a curb fillet to the next road's First corner.
+	// Outline: road mouth (First -> Second) then a curb to the next road's First corner. The curbs are
+	// first made like roads (MakeQuadratic: one quadratic, or two for S-curves and wide turns); if that
+	// outline crosses itself or cannot be triangulated, the simple curbs are used (one quadratic whose
+	// control point is where the road edges meet, straight when they do not meet nearby).
 	TArray<FVector> Ring;
 	TArray<bool> EdgeIsMouth; // EdgeIsMouth[k] covers the edge Ring[k] -> Ring[k + 1]
-	for (int32 I = 0; I < Sorted.Num(); ++I)
+	TArray<int32> Tris;
+	for (int32 Attempt = 0; Attempt < 2; ++Attempt)
 	{
-		const FSortedEnd& Cur = Sorted[I];
-		const FSortedEnd& Next = Sorted[(I + 1) % Sorted.Num()];
-
-		Ring.Add(Cur.First);
-		EdgeIsMouth.Add(true);
-		Ring.Add(Cur.Second);
-		EdgeIsMouth.Add(false);
-
-		// Control point: where the edge of this road meets the edge of the next one, extended into the junction.
-		const FVector P = Cur.Second;
-		const FVector Q = Next.First;
-		const FVector DP = Cur.Inward;
-		const FVector DQ = Next.Inward;
-		const float Denom = Cross2D(DP, DQ);
-		FVector Control = (P + Q) * 0.5f;
-		if (FMath::Abs(Denom) > 1e-3f)
+		const bool bRoadCurves = Attempt == 0;
+		Ring.Reset();
+		EdgeIsMouth.Reset();
+		Tris.Reset();
+		for (int32 I = 0; I < Sorted.Num(); ++I)
 		{
-			const FVector PQ = Q - P;
-			const float T = Cross2D(PQ, DQ) / Denom;
-			const float U = Cross2D(PQ, DP) / Denom;
-			const float Limit = 4.f * FVector::Dist2D(P, Q) + 100.f;
-			if (T > 0.f && U > 0.f && T < Limit && U < Limit)
-			{
-				Control = P + DP * T;
-			}
-		}
-		Control.Z = (P.Z + Q.Z) * 0.5f;
+			const FSortedEnd& Cur = Sorted[I];
+			const FSortedEnd& Next = Sorted[(I + 1) % Sorted.Num()];
 
-		// Long curbs (big intersections) get more points so they stay round: about every 4 m
-		// (every 16 m for the far mesh, which asks for few segments).
-		const float CurbLength = FVector::Dist2D(P, Control) + FVector::Dist2D(Control, Q);
-		const int32 Segments = FMath::Clamp(FMath::Max(FilletSegments, FMath::CeilToInt(CurbLength / (FilletSegments <= 3 ? 1600.f : 400.f))), 1, 64);
-		for (int32 K = 1; K < Segments; ++K)
-		{
-			const float T = static_cast<float>(K) / Segments;
-			const float A = (1.f - T) * (1.f - T);
-			const float B = 2.f * (1.f - T) * T;
-			const float C = T * T;
-			FVector Pt = P * A + Control * B + Q * C;
-			Pt.Z = FMath::Lerp(P.Z, Q.Z, T);
-			Ring.Add(Pt);
+			Ring.Add(Cur.First);
+			EdgeIsMouth.Add(true);
+			Ring.Add(Cur.Second);
 			EdgeIsMouth.Add(false);
-		}
-	}
 
-	// Merge points that coincide (e.g. a side road whose corners sit exactly on the corners of the
-	// gap it joins: its curb fillets have zero length). The kept edge takes the dropped edge's flag.
-	{
-		TArray<FVector> Points;
-		TArray<bool> Flags;
-		for (int32 K = 0; K < Ring.Num(); ++K)
-		{
-			if (Points.Num() > 0 && FVector::Dist2D(Ring[K], Points.Last()) < 1.f)
+			const FVector P = Cur.Second;
+			const FVector Q = Next.First;
+			if (bRoadCurves)
 			{
-				Flags.Last() = EdgeIsMouth[K];
+				// Like a road from P (heading into the junction) to Q (leaving along the next road's edge).
+				TArray<FRMSplinePoint> Curve;
+				MakeQuadratic(P, Cur.Inward, Q, -Next.Inward, Curve);
+				const int32 Pieces = Curve.Num() - 1;
+				for (int32 Piece = 0; Piece < Pieces; ++Piece)
+				{
+					const FVector A = Curve[Piece].Location;
+					const FVector B = Curve[Piece + 1].Location;
+					const FVector C = A + Curve[Piece].Tangent * 0.5f; // the quadratic's control point
+					const float PieceLength = FVector::Dist2D(A, C) + FVector::Dist2D(C, B);
+					const int32 Segments = FMath::Clamp(FMath::Max(FMath::Max(FilletSegments / Pieces, 1),
+						FMath::CeilToInt(PieceLength / (FilletSegments <= 3 ? 1600.f : 400.f))), 1, 64);
+					const bool bLastPiece = Piece == Pieces - 1;
+					for (int32 K = 1; K < (bLastPiece ? Segments : Segments + 1); ++K)
+					{
+						const float T = static_cast<float>(K) / Segments;
+						Ring.Add(A * ((1.f - T) * (1.f - T)) + C * (2.f * (1.f - T) * T) + B * (T * T));
+						EdgeIsMouth.Add(false);
+					}
+				}
 				continue;
 			}
-			Points.Add(Ring[K]);
-			Flags.Add(EdgeIsMouth[K]);
+			// Control point: where the edge of this road meets the edge of the next one, extended into the junction.
+			const FVector DP = Cur.Inward;
+			const FVector DQ = Next.Inward;
+			const float Denom = Cross2D(DP, DQ);
+			FVector Control = (P + Q) * 0.5f;
+			if (FMath::Abs(Denom) > 1e-3f)
+			{
+				const FVector PQ = Q - P;
+				const float T = Cross2D(PQ, DQ) / Denom;
+				const float U = Cross2D(PQ, DP) / Denom;
+				const float Limit = 4.f * FVector::Dist2D(P, Q) + 100.f;
+				if (T > 0.f && U > 0.f && T < Limit && U < Limit)
+				{
+					Control = P + DP * T;
+				}
+			}
+			Control.Z = (P.Z + Q.Z) * 0.5f;
+
+			// Long curbs (big intersections) get more points so they stay round: about every 4 m
+			// (every 16 m for the far mesh, which asks for few segments).
+			const float CurbLength = FVector::Dist2D(P, Control) + FVector::Dist2D(Control, Q);
+			const int32 Segments = FMath::Clamp(FMath::Max(FilletSegments, FMath::CeilToInt(CurbLength / (FilletSegments <= 3 ? 1600.f : 400.f))), 1, 64);
+			for (int32 K = 1; K < Segments; ++K)
+			{
+				const float T = static_cast<float>(K) / Segments;
+				const float A = (1.f - T) * (1.f - T);
+				const float B = 2.f * (1.f - T) * T;
+				const float C = T * T;
+				FVector Pt = P * A + Control * B + Q * C;
+				Pt.Z = FMath::Lerp(P.Z, Q.Z, T);
+				Ring.Add(Pt);
+				EdgeIsMouth.Add(false);
+			}
 		}
-		while (Points.Num() > 2 && FVector::Dist2D(Points.Last(), Points[0]) < 1.f)
+
+		// Merge points that coincide (e.g. a side road whose corners sit exactly on the corners of the
+		// gap it joins: its curb fillets have zero length). The kept edge takes the dropped edge's flag.
 		{
-			Points.Pop();
-			Flags.Pop();
+			TArray<FVector> Points;
+			TArray<bool> Flags;
+			for (int32 K = 0; K < Ring.Num(); ++K)
+			{
+				if (Points.Num() > 0 && FVector::Dist2D(Ring[K], Points.Last()) < 1.f)
+				{
+					Flags.Last() = EdgeIsMouth[K];
+					continue;
+				}
+				Points.Add(Ring[K]);
+				Flags.Add(EdgeIsMouth[K]);
+			}
+			while (Points.Num() > 2 && FVector::Dist2D(Points.Last(), Points[0]) < 1.f)
+			{
+				Points.Pop();
+				Flags.Pop();
+			}
+			Ring = MoveTemp(Points);
+			EdgeIsMouth = MoveTemp(Flags);
 		}
-		Ring = MoveTemp(Points);
-		EdgeIsMouth = MoveTemp(Flags);
-	}
-	if (Ring.Num() < 3)
-	{
-		return false;
+		if (Ring.Num() < 3)
+		{
+			if (bRoadCurves)
+			{
+				continue;
+			}
+			return false;
+		}
+		bool bCrosses = false;
+		for (int32 E1 = 0; E1 < Ring.Num() && !bCrosses; ++E1)
+		{
+			for (int32 E2 = E1 + 2; E2 < Ring.Num() && !bCrosses; ++E2)
+			{
+				if (E1 == 0 && E2 == Ring.Num() - 1)
+				{
+					continue;
+				}
+				bCrosses = SegmentsCross2D(Ring[E1], Ring[E1 + 1], Ring[E2], Ring[(E2 + 1) % Ring.Num()]);
+			}
+		}
+		if (!bCrosses && TriangulatePolygon2D(Ring, Tris))
+		{
+			break;
+		}
+		if (!bRoadCurves)
+		{
+			return false;
+		}
 	}
 
 	// Top and bottom: the outline triangulated (works for concave outlines too), planar UVs so the
 	// asphalt matches across pieces.
-	TArray<int32> Tris;
-	if (!TriangulatePolygon2D(Ring, Tris))
-	{
-		return false;
-	}
 	{
 		// The top: points inside too, with smooth heights between the road ends, so an uneven intersection
 		// is one even surface (no folds along long thin triangles). Small pieces keep the plain outline.
