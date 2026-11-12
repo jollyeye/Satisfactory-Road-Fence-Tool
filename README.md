@@ -88,7 +88,7 @@ No Blueprint is edited by hand: the Python scripts are the source of truth for t
 
 ## Roadmap
 
-1.2.1 is out ([roadmap](docs/ROADMAP-1.2.0.md)). Planned for 1.3.0: traffic lights that follow the
+1.2.1 is out ([1.2.0 roadmap](docs/ROADMAP-1.2.0.md)); 1.3.0 is in progress ([1.3.0 roadmap](docs/ROADMAP-1.3.0.md)). Planned for 1.3.0: traffic lights that follow the
 intersection, a Join tool, proper build animations per piece, and a road preview on the map.
 
 ## License and credits
