@@ -142,38 +142,45 @@ namespace RMMapDiag
 			{
 				return true;
 			}
-			// Top-level map widgets: user widgets whose class says Map, visible, not inside another Map widget.
+			// The map area painter (the fog of war / map areas drawn over the map) sits inside the zoomable
+			// map content: log its ancestors (each with its direct children) up to the top, so the map
+			// picture, the icon layer and whatever applies pan / zoom show up.
 			bool bAny = false;
 			for (TObjectIterator<UUserWidget> It; It; ++It)
 			{
-				UUserWidget* W = *It;
-				if (!W || W->IsTemplate() || W->GetWorld() != World || !W->IsVisible() || !W->IsInViewport())
-				{
-					continue;
-				}
-				const FString Name = W->GetClass()->GetName();
-				// The map lives in a menu that is in the viewport; log every viewport widget whose name has Map in it,
-				// and the whole tree of each one found (the map picture is somewhere inside).
-				if (!Name.Contains(TEXT("Map")) && !Name.Contains(TEXT("Compass")))
+				UUserWidget* Painter = *It;
+				if (!Painter || Painter->IsTemplate() || Painter->GetWorld() != World || !Painter->IsVisible()
+					|| !Painter->GetClass()->GetName().Contains(TEXT("MapAreaPainter")))
 				{
 					continue;
 				}
 				bAny = true;
-				DumpTree(W, Name, 0);
-			}
-			// Also any visible user widget anywhere (not only top level) whose class has Map in it.
-			for (TObjectIterator<UUserWidget> It; It; ++It)
-			{
-				UUserWidget* W = *It;
-				if (!W || W->IsTemplate() || W->GetWorld() != World || !W->IsVisible())
+				UWidget* W = Painter;
+				int32 Level = 0;
+				while (W && Level < 25)
 				{
-					continue;
-				}
-				const FString Name = W->GetClass()->GetName();
-				if (Name.Contains(TEXT("Map")) && !W->IsInViewport())
-				{
-					bAny = true;
-					DumpTree(W, TEXT("nested:") + Name + TEXT(":") + W->GetName(), 0);
+					const FString Key = FString::Printf(TEXT("up%02d"), Level);
+					Log(Key, Describe(W) + FString::Printf(TEXT(" outer=%s"), *GetNameSafe(W->GetTypedOuter<UUserWidget>() ? W->GetTypedOuter<UUserWidget>()->GetClass() : nullptr)));
+					UPanelWidget* Parent = W->GetParent();
+					if (Parent)
+					{
+						for (int32 I = 0; I < Parent->GetChildrenCount() && I < 12; ++I)
+						{
+							UWidget* Child = Parent->GetChildAt(I);
+							if (Child && !Child->GetClass()->GetName().Contains(TEXT("MapObject")))
+							{
+								Log(FString::Printf(TEXT("up%02d.child%02d"), Level, I), Describe(Child));
+							}
+						}
+						W = Parent;
+					}
+					else
+					{
+						// Root of a user widget's tree: continue in the user widget that owns it.
+						UWidgetTree* Tree = Cast<UWidgetTree>(W->GetOuter());
+						W = Tree ? Cast<UUserWidget>(Tree->GetOuter()) : nullptr;
+					}
+					++Level;
 				}
 			}
 			if (bAny)
@@ -189,7 +196,8 @@ namespace RMMapDiag
 						Player = FString::Printf(TEXT("%s normalized=%s"), *Pawn->GetActorLocation().ToCompactString(), *N.ToString());
 					}
 				}
-				Log(TEXT("world"), FString::Printf(TEXT("bounds min=%s max=%s player=%s"), *Min.ToString(), *Max.ToString(), *Player));
+				Log(TEXT("world"), FString::Printf(TEXT("bounds min=%s max=%s capture=%s player=%s"), *Min.ToString(), *Max.ToString(),
+					*GetNameSafe(UFGMapFunctionLibrary::GetMinimapCaptureActor(World)), *Player));
 			}
 			return true;
 		}
