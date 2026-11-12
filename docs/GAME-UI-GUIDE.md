@@ -106,6 +106,46 @@ History, so nobody repeats it:
 5. Swatch tiles then showed pictures: our restore put back `IsColor = 0` on a tile the game had
    just made a colour swatch. Never restore `IsColor` → fixed (*tested 2026-11*).
 
+6. **Stale icons after loading a save a second time** (same game session; the first load was always
+   fine). Our option-name → icon table kept `TWeakObjectPtr<UTexture2D>`s taken from the
+   descriptors once. A descriptor's `mIcon` is a **soft** pointer (`TSoftObjectPtr`,
+   `UFGFactoryCustomizationDescriptor::GetIcon()` loads it); loading another save frees the textures
+   and loads new ones, the kept pointers went stale, the tiles were skipped and showed the previous
+   tab's pictures. Fix: keep the descriptor **class** (`TWeakObjectPtr<UClass>`) and call `GetIcon()`
+   every time (`IconFor` in `RMRoadLinePaint.cpp`); rebuild the table if a class went away
+   (*tested 2026-11-12*). Rule: **never cache a texture from a soft pointer across loads**.
+
+### The info box beside the menu
+The panel on the right of the customizer (title, picture, "Info", description). Logged
+(*tested 2026-11-12*):
+
+| Thing | Value |
+|---|---|
+| Widget | `Widget_BuildMenu_InfoBox_C` (inside `BPW_BuildMenu_Browser_C` inside `BPW_Customiser_C`; there is more than one instance, only one visible) |
+| Option name | `UTextBlock` named `mItemName` (the title, e.g. "4 lanes, continuous") |
+| Plain picture | `UImage` named `mPreviewIcon`, brush resource = a plain texture (`T_Icon_RoadMat_Asphalt`, `IconDesc_FicsitWall8x4_512`...); used for Material tab options |
+| Live preview | another `UImage` (generated name `Image_<number>`) whose brush is a MID of `MM_UI_CustomiserPreview` (parameters `ID`, `Type`, `StencilMaskMin/Max`): a foundation rendered with the option |
+| Our Road Lines options | the game shows the **live foundation preview** (`mPreviewIcon` hidden, keeps the last picture) |
+
+Fix (`FixInfoBoxPicture` in `RMRoadLinePaint.cpp`, in the same 0.1 s tick as the tiles): for each
+visible `*BuildMenu_InfoBox*`, if `mItemName` is one of our option names, collapse the image(s)
+whose brush resource name contains `CustomiserPreview` and show `mPreviewIcon` (`HitTestInvisible`)
+with our icon, keeping the brush's image size. Remember each image's visibility before our change and
+what we set; when another option is shown, put the old visibility back **only if the game has not
+changed it since** (it sets its own for the option it now shows).
+
+How it was found, so nobody repeats it:
+1. Assumed `mPreviewIcon` showed the stale picture and set our icon in it → no change: it was
+   hidden; the visible picture was the live foundation preview.
+2. Looked for the option name in texts **around** the info box → wrong place; the name is
+   `mItemName` inside it.
+3. Loggers: first by owner widget name containing "Custom" (missed it: the info box's own class is
+   `Widget_BuildMenu_InfoBox_C`), then "big pictures anywhere" (too much HUD noise), then "any
+   picture whose parent chain contains `Customi`" → found `mPreviewIcon` and the preview MID; a last
+   logger of the info box texts found `mItemName`. Rule: walk the **whole parent chain** when
+   filtering widgets, and log per widget instance (several info boxes exist; one shared "last text"
+   alternated between them and used up the log budget).
+
 ### Our options on the hotbar
 Hovering a tile and pressing a hotbar key binds it (`UFGFactoryCustomizationShortcut`, holding the
 customization recipe). Logged (*tested 2026-11-06*):

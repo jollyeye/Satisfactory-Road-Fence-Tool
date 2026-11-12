@@ -73,7 +73,7 @@ public:
 	static constexpr float MaxLaneWidth = 1200.f;
 
 	/** Detailed (draped) up to this distance, then the flat copy, gone beyond MaxDrawDistance. */
-	static constexpr float DrapedDistance = 5000.f;
+	static constexpr float DrapedDistance = 30000.f;
 	static constexpr float MaxDrawDistance = 60000.f;
 
 	/** Size of the entry (1; kept for the hologram). */
