@@ -81,6 +81,7 @@ Riskiest first. Tick [x] as you go. If something fails, note the line and send F
 -----------------------
 [ ] Road Lines options, Material tab road looks and fence wall looks apply and preview correctly.
 [ ] A Material tab road look selected, then a colour swatch picked: click a road / marking. Note whether it paints colour or switches look (known grey area).
+[ ] Load a save, open Road Lines (icons right), then load the save (or another) again in the same session: Road Lines icons still right.
 [ ] Hotbar shortcuts for Road Lines options and markings show the right icons.
 
 
