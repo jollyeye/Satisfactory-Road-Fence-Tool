@@ -29,6 +29,11 @@ public:
 	/** Curved curbs between neighbouring roads, in world space, at the top of the slab. */
 	void GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) const;
 
+	/** Top outline in world space (closed, last point joins the first); OutIsMouth[i]: edge i -> i+1 is a road mouth. */
+	bool GetWorldOutline(TArray<FVector>& OutOutline, TArray<bool>& OutIsMouth) const;
+	/** Cheap value that changes whenever the shape or look changes (map layer). */
+	uint32 GetShapeKey() const;
+
 	/** Side lines along the curbs (Road Lines > Sidelines in the customizer). */
 	void SetSideLines(bool bOn);
 	bool HasSideLines() const { return mSideLines; }

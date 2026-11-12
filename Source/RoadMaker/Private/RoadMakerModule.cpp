@@ -86,7 +86,7 @@ void FRoadMakerModule::StartupModule()
 	RMFenceWallPaint::InstallHooks();
 	RMRoadLookPaint::InstallHooks();
 
-	// Road layer on the game map (1.3.0, test overlay for now).
+	// Road layer on the game map (1.3.0).
 	RMMapLayer::InstallHooks();
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.

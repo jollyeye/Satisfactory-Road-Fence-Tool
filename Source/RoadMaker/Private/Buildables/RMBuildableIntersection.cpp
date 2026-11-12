@@ -157,6 +157,34 @@ void ARMBuildableIntersection::GetWorldEnds(TArray<FRMRoadEnd>& OutEnds) const
 	}
 }
 
+bool ARMBuildableIntersection::GetWorldOutline(TArray<FVector>& OutOutline, TArray<bool>& OutIsMouth) const
+{
+	OutOutline.Reset();
+	OutIsMouth.Reset();
+	FRMMesh Top, Body;
+	// A coarse inside grid: only the outline is wanted.
+	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &OutOutline, &OutIsMouth, 2000.f))
+	{
+		return false;
+	}
+	const FTransform& T = GetActorTransform();
+	for (FVector& P : OutOutline)
+	{
+		P = T.TransformPosition(P);
+	}
+	return OutOutline.Num() >= 3;
+}
+
+uint32 ARMBuildableIntersection::GetShapeKey() const
+{
+	uint32 Key = GetTypeHash(GetActorTransform().GetLocation()) ^ (GetTypeHash(GetActorRotation().Yaw) * 31u) ^ (GetLook() * 7919u);
+	for (const FRMRoadEnd& E : mEnds)
+	{
+		Key = HashCombine(Key, HashCombine(GetTypeHash(E.Center), GetTypeHash(E.Inward)));
+	}
+	return HashCombine(Key, GetTypeHash(mHeight));
+}
+
 void ARMBuildableIntersection::GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) const
 {
 	OutCurbs.Reset();
