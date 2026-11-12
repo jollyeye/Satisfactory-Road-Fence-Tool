@@ -696,12 +696,36 @@ namespace
 				continue;
 			}
 			UUserWidget* Box = Preview->GetTypedOuter<UUserWidget>();
-			if (!Box || !Box->GetClass()->GetName().Contains(TEXT("InfoBox")) || !Box->IsVisible())
+			if (!Box || !Box->GetClass()->GetName().Contains(TEXT("InfoBox")))
 			{
 				continue;
 			}
 			TArray<UWidget*> Widgets;
 			CollectWidgets(Box, Widgets);
+			{
+				// TEMPORARY (RMInfoLog): the info box's texts, logged when they change.
+				static FString LastTexts;
+				static int32 Lines = 0;
+				FString Texts = FString::Printf(TEXT("box=%s vis=%d preview=%s |"), *Box->GetClass()->GetName(), Box->IsVisible() ? 1 : 0,
+					*GetNameSafe(Preview->GetBrush().GetResourceObject()));
+				for (UWidget* W : Widgets)
+				{
+					if (const UTextBlock* T = Cast<UTextBlock>(W))
+					{
+						Texts += FString::Printf(TEXT(" %s(%d)='%s'"), *T->GetName(), T->IsVisible() ? 1 : 0, *T->GetText().ToString().Left(40));
+					}
+					else if (W && W->GetClass()->GetName().Contains(TEXT("Text")))
+					{
+						Texts += FString::Printf(TEXT(" %s<%s>"), *W->GetName(), *W->GetClass()->GetName());
+					}
+				}
+				if (Texts != LastTexts && Lines < 60)
+				{
+					LastTexts = Texts;
+					++Lines;
+					UE_LOG(LogRoadMaker, Display, TEXT("RMInfoLog %s"), *Texts);
+				}
+			}
 			for (UWidget* W : Widgets)
 			{
 				const UTextBlock* Title = Cast<UTextBlock>(W);
