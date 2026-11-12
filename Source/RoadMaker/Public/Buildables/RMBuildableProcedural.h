@@ -62,7 +62,7 @@ protected:
 	 * plays instead: the piece grows up from the ground in a fraction of a second (only for pieces that
 	 * were just built: not restored from a save, not part of the world that loads or replicates in at the start).
 	 */
-	void StartRiseAnimation();
+	virtual void StartRiseAnimation();
 	void StepRiseAnimation();
 	bool mLoadedFromSave = false;
 	FTimerHandle mRiseTimer;

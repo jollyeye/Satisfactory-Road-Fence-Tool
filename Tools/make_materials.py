@@ -529,6 +529,19 @@ MEL.connect_material_property(ovc, "", MP.MP_EMISSIVE_COLOR)
 MEL.connect_material_property(const(overlay, 1.0, -500, 200), "", MP.MP_OPACITY)
 finish(overlay)
 
+# --- Build glow: the bright front of a piece's build animation ----------------------------------
+# Unlit, additive, depth tested (hidden behind walls), colour from the vertex colours x 4.
+glow = new_material("M_RM_BuildGlow")
+glow.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+glow.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+glow.set_editor_property("two_sided", True)
+gvc = node(glow, unreal.MaterialExpressionVertexColor, -600, 0)
+gmul = node(glow, unreal.MaterialExpressionMultiply, -300, 0)
+link(gvc, "", gmul, "A")
+link(const(glow, 4.0, -600, 200), "", gmul, "B")
+MEL.connect_material_property(gmul, "", MP.MP_EMISSIVE_COLOR)
+finish(glow)
+
 # The game's own concrete wall material: the wall mesh carries the same texture layout (UV0) and the
 # wall passes the paint to it the way the game does, so it looks and paints like the game's walls.
 # Road Maker's M_RoadFenceWall stays as the fallback.
