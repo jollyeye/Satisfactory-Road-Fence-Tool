@@ -382,6 +382,50 @@ namespace RMMapLayer
 			}
 		}
 
+		/**
+		 * Transparent pixels next to painted ones take their colour (alpha stays 0). The picture is
+		 * filtered without premultiplied alpha, so a transparent black neighbour would darken every edge
+		 * into a dark outline; with the colour bled out the edge only fades.
+		 */
+		void MapBleedEdges(TArray<FColor>& Px, int32 Size)
+		{
+			for (int32 Pass = 0; Pass < 2; ++Pass)
+			{
+				const TArray<FColor> Src = Px;
+				for (int32 Y = 0; Y < Size; ++Y)
+				{
+					for (int32 X = 0; X < Size; ++X)
+					{
+						FColor& Out = Px[Y * Size + X];
+						if (Out.A != 0 || (Pass > 0 && (Out.R | Out.G | Out.B) != 0))
+						{
+							continue;
+						}
+						uint32 R = 0, G = 0, B = 0, N = 0;
+						const int32 DX[4] = { -1, 1, 0, 0 };
+						const int32 DY[4] = { 0, 0, -1, 1 };
+						for (int32 K = 0; K < 4; ++K)
+						{
+							const int32 NX = X + DX[K], NY = Y + DY[K];
+							if (NX < 0 || NY < 0 || NX >= Size || NY >= Size)
+							{
+								continue;
+							}
+							const FColor& C = Src[NY * Size + NX];
+							if (C.A != 0 || (C.R | C.G | C.B) != 0)
+							{
+								R += C.R; G += C.G; B += C.B; ++N;
+							}
+						}
+						if (N > 0)
+						{
+							Out = FColor(uint8(R / N), uint8(G / N), uint8(B / N), 0);
+						}
+					}
+				}
+			}
+		}
+
 		/** Writes the pixels (and box-filtered mips) into the tile's texture, creating it if needed. */
 		void MapUpload(FRMMapTile& Tile, const TArray<FColor>& Pixels)
 		{
@@ -419,6 +463,7 @@ namespace RMMapLayer
 			for (int32 L = 0; L < PD->Mips.Num(); ++L)
 			{
 				FTexture2DMipMap& Mip = PD->Mips[L];
+				MapBleedEdges(Level, Size);
 				void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
 				FMemory::Memcpy(Data, Level.GetData(), FMath::Min<int64>(Mip.BulkData.GetBulkDataSize(), int64(Level.Num()) * sizeof(FColor)));
 				Mip.BulkData.Unlock();
