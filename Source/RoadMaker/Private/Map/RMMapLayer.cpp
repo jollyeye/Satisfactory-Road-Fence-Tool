@@ -36,6 +36,7 @@ namespace RMMapLayer
 	namespace
 	{
 		constexpr int32 MapTilePixels = 512;
+		constexpr int32 MapSuperSample = 2; // painted at 2x, averaged down (anti-aliasing)
 		constexpr int32 MapTileMips = 5; // 512 .. 32
 		constexpr double MapTileWorld = 51200.0; // cm
 		constexpr int32 MapTilesPerTick = 6;
@@ -326,7 +327,7 @@ namespace RMMapLayer
 
 		// ---- Painting -------------------------------------------------------------------------------
 
-		void MapFillPolygon(TArray<FColor>& Px, const TArray<FVector2D>& Poly, const FColor& C)
+		void MapFillPolygon(TArray<FColor>& Px, int32 Size, const TArray<FVector2D>& Poly, const FColor& C)
 		{
 			if (Poly.Num() < 3)
 			{
@@ -339,7 +340,7 @@ namespace RMMapLayer
 				MaxY = FMath::Max(MaxY, P.Y);
 			}
 			const int32 Y0 = FMath::Max(0, FMath::FloorToInt(MinY));
-			const int32 Y1 = FMath::Min(MapTilePixels - 1, FMath::CeilToInt(MaxY));
+			const int32 Y1 = FMath::Min(Size - 1, FMath::CeilToInt(MaxY));
 			TArray<double, TInlineAllocator<16>> Xs;
 			for (int32 Y = Y0; Y <= Y1; ++Y)
 			{
@@ -358,25 +359,53 @@ namespace RMMapLayer
 				for (int32 K = 0; K + 1 < Xs.Num(); K += 2)
 				{
 					const int32 XA = FMath::Max(0, FMath::CeilToInt(Xs[K] - 0.5));
-					const int32 XB = FMath::Min(MapTilePixels - 1, FMath::CeilToInt(Xs[K + 1] - 0.5) - 1);
+					const int32 XB = FMath::Min(Size - 1, FMath::CeilToInt(Xs[K + 1] - 0.5) - 1);
 					for (int32 X = XA; X <= XB; ++X)
 					{
-						Px[Y * MapTilePixels + X] = C;
+						Px[Y * Size + X] = C;
 					}
 				}
 			}
 		}
 
-		void MapDrawLine(TArray<FColor>& Px, const FVector2D& A, const FVector2D& B, const FColor& C)
+		/** A line Thick pixels wide (centred on A-B). */
+		void MapDrawLine(TArray<FColor>& Px, int32 Size, const FVector2D& A, const FVector2D& B, int32 Thick, const FColor& C)
 		{
 			const int32 Steps = FMath::Max(1, FMath::CeilToInt((B - A).GetAbsMax() * 2.0));
+			const double Back = Thick * 0.5;
 			for (int32 S = 0; S <= Steps; ++S)
 			{
 				const FVector2D P = FMath::Lerp(A, B, double(S) / Steps);
-				const int32 X = FMath::FloorToInt(P.X), Y = FMath::FloorToInt(P.Y);
-				if (X >= 0 && Y >= 0 && X < MapTilePixels && Y < MapTilePixels)
+				const int32 X0 = FMath::RoundToInt(P.X - Back), Y0 = FMath::RoundToInt(P.Y - Back);
+				for (int32 Y = FMath::Max(0, Y0); Y < FMath::Min(Size, Y0 + Thick); ++Y)
 				{
-					Px[Y * MapTilePixels + X] = C;
+					for (int32 X = FMath::Max(0, X0); X < FMath::Min(Size, X0 + Thick); ++X)
+					{
+						Px[Y * Size + X] = C;
+					}
+				}
+			}
+		}
+
+		/** Half the size: each pixel the average of 2 x 2, colours weighted by alpha (no dark fringes). */
+		void MapDownsample(const TArray<FColor>& Src, int32 Size, TArray<FColor>& Out)
+		{
+			const int32 Half = Size / 2;
+			Out.SetNumUninitialized(Half * Half);
+			for (int32 Y = 0; Y < Half; ++Y)
+			{
+				for (int32 X = 0; X < Half; ++X)
+				{
+					const FColor* Q[4] = { &Src[(2 * Y) * Size + 2 * X], &Src[(2 * Y) * Size + 2 * X + 1],
+						&Src[(2 * Y + 1) * Size + 2 * X], &Src[(2 * Y + 1) * Size + 2 * X + 1] };
+					uint32 R = 0, G = 0, B = 0, A = 0;
+					for (const FColor* C : Q)
+					{
+						R += C->R * C->A; G += C->G * C->A; B += C->B * C->A; A += C->A;
+					}
+					Out[Y * Half + X] = A > 0
+						? FColor(uint8(R / A), uint8(G / A), uint8(B / A), uint8((A + 2) / 4))
+						: FColor(0, 0, 0, 0);
 				}
 			}
 		}
@@ -468,28 +497,10 @@ namespace RMMapLayer
 				Mip.BulkData.Unlock();
 				if (L + 1 < PD->Mips.Num())
 				{
-					// Next level: average of 2 x 2, colours weighted by alpha (no dark fringes).
-					const int32 Half = Size / 2;
 					TArray<FColor> Next;
-					Next.SetNumUninitialized(Half * Half);
-					for (int32 Y = 0; Y < Half; ++Y)
-					{
-						for (int32 X = 0; X < Half; ++X)
-						{
-							const FColor* Q[4] = { &Level[(2 * Y) * Size + 2 * X], &Level[(2 * Y) * Size + 2 * X + 1],
-								&Level[(2 * Y + 1) * Size + 2 * X], &Level[(2 * Y + 1) * Size + 2 * X + 1] };
-							uint32 R = 0, G = 0, B = 0, A = 0;
-							for (const FColor* C : Q)
-							{
-								R += C->R * C->A; G += C->G * C->A; B += C->B * C->A; A += C->A;
-							}
-							Next[Y * Half + X] = A > 0
-								? FColor(uint8(R / A), uint8(G / A), uint8(B / A), uint8(A / 4))
-								: FColor(0, 0, 0, 0);
-						}
-					}
+					MapDownsample(Level, Size, Next);
 					Level = MoveTemp(Next);
-					Size = Half;
+					Size /= 2;
 				}
 			}
 			Tile.Tex->UpdateResource();
@@ -518,10 +529,12 @@ namespace RMMapLayer
 			}
 			Pieces.Sort([](const FRMMapPiece& A, const FRMMapPiece& B) { return A.Z < B.Z; });
 
-			const double Scale = MapTilePixels / GMapTileUnits;
+			// Painted at MapSuperSample x the tile resolution, then averaged down: smooth edges and lines.
+			const int32 Big = MapTilePixels * MapSuperSample;
+			const double Scale = Big / GMapTileUnits;
 			auto ToPx = [&](const FVector2D& M) { return (M - TileMin) * Scale; };
 			TArray<FColor> Pixels;
-			Pixels.Init(FColor(0, 0, 0, 0), MapTilePixels * MapTilePixels);
+			Pixels.Init(FColor(0, 0, 0, 0), Big * Big);
 			TArray<FVector2D> Poly;
 			for (const FRMMapPiece* Piece : Pieces)
 			{
@@ -529,15 +542,21 @@ namespace RMMapLayer
 				{
 					Poly.Reset();
 					for (const FVector2D& M : Fill) { Poly.Add(ToPx(M)); }
-					MapFillPolygon(Pixels, Poly, Piece->Fill);
+					MapFillPolygon(Pixels, Big, Poly, Piece->Fill);
 				}
 				for (const TArray<FVector2D>& Edge : Piece->Edges)
 				{
 					for (int32 I = 0; I + 1 < Edge.Num(); ++I)
 					{
-						MapDrawLine(Pixels, ToPx(Edge[I]), ToPx(Edge[I + 1]), Piece->Edge);
+						MapDrawLine(Pixels, Big, ToPx(Edge[I]), ToPx(Edge[I + 1]), MapSuperSample, Piece->Edge);
 					}
 				}
+			}
+			for (int32 Size = Big; Size > MapTilePixels; Size /= 2)
+			{
+				TArray<FColor> Smaller;
+				MapDownsample(Pixels, Size, Smaller);
+				Pixels = MoveTemp(Smaller);
 			}
 
 			if (!Existing)
