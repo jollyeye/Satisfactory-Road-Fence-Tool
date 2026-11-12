@@ -30,7 +30,6 @@ public:
 	virtual void CheckValidPlacement() override;
 	virtual int32 GetBaseCostMultiplier() const override { return 1; }
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
-	virtual void BeginPlay() override;
 
 protected:
 	/** Outlines: the aimed / picked road, and the merged road (cyan, red if refused). */
@@ -47,7 +46,4 @@ protected:
 	ARMBuildableRoad* mAimed = nullptr;
 
 	double mLastClickTime = 0.0;
-
-	/** Redraws the outline about 60 times a second so its dashes move. */
-	FTimerHandle mDashTimer;
 };

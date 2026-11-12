@@ -17,6 +17,7 @@ namespace
 		FVector Base;
 		FVector Camera;
 		float WorldPerPixel = 0.f;
+		APlayerController* PC = nullptr; // projects to the screen, for dash lengths
 		TArray<FVector> Vertices;
 		TArray<int32> Triangles;
 		TArray<FLinearColor> Colors;
@@ -41,7 +42,7 @@ namespace
 
 		/**
 		 * The outline of a road's top (both edges and both ends) as a selection outline: dashes that run
-		 * along it ("marching ants"), 14 px dash / 14 px gap on screen whatever the distance.
+		 * along it, 14 px dash / 14 px gap on screen whatever the distance and angle.
 		 */
 		void Outline(const TArray<FRMFrame>& Frames, float Width, float Pixels, const FLinearColor& Color)
 		{
@@ -64,11 +65,11 @@ namespace
 			const FVector First = Loop[0]; // a copy: adding an element of the array itself is not allowed
 			Loop.Add(First);
 
-			// The dash pattern is measured in screen pixels along the outline (each segment converted
-			// with the size of a pixel at its own distance), so near and far dashes look the same.
+			// The dash pattern is measured on the screen (each segment projected), so dashes have the same
+			// length near and far and at any angle, like a 2D selection outline.
 			const float Dash = 14.f;                  // px
 			const float Period = 2.f * Dash;          // px: dash + equal gap
-			const float Phase = FMath::Fmod(static_cast<float>(FPlatformTime::Seconds()) * 60.f, Period); // 60 px per second
+			const float Phase = 0.f;
 			float S = 0.f; // pixels along the loop
 			for (int32 I = 1; I < Loop.Num(); ++I)
 			{
@@ -79,8 +80,21 @@ namespace
 				{
 					continue;
 				}
-				const float PerPixel = WorldPerPixel * FMath::Max(FVector::Dist((A + B) * 0.5f, Camera), 10.f);
-				const float LenPx = Len / FMath::Max(PerPixel, KINDA_SMALL_NUMBER);
+				float LenPx = 0.f;
+				FVector2D SA, SB;
+				if (PC && PC->ProjectWorldLocationToScreen(A, SA) && PC->ProjectWorldLocationToScreen(B, SB))
+				{
+					LenPx = FVector2D::Distance(SA, SB);
+				}
+				else
+				{
+					// Behind the camera: the size of a pixel at that distance.
+					LenPx = Len / FMath::Max(WorldPerPixel * FMath::Max(FVector::Dist((A + B) * 0.5f, Camera), 10.f), KINDA_SMALL_NUMBER);
+				}
+				if (LenPx < 0.01f)
+				{
+					continue;
+				}
 				float From = S;
 				const float To = S + LenPx;
 				while (From < To)
@@ -123,22 +137,6 @@ ARMRoadMergeHologram::ARMRoadMergeHologram()
 	mOverlayMesh->SetCastShadow(false);
 	mCanLockHologram = false;
 	mCanNudgeHologram = false;
-}
-
-void ARMRoadMergeHologram::BeginPlay()
-{
-	Super::BeginPlay();
-	// The dashes move on their own (the game only updates the hologram when the aim changes).
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimer(mDashTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
-		{
-			if (mFirst || mAimed)
-			{
-				RebuildOverlay();
-			}
-		}), 0.016f, true);
-	}
 }
 
 void ARMRoadMergeHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -259,6 +257,7 @@ void ARMRoadMergeHologram::RebuildOverlay()
 	FRMMergeOverlay B;
 	B.Base = GetActorLocation();
 	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
+	B.PC = PC;
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
 
 	const FLinearColor Cyan(0.f, 0.9f, 1.f);
