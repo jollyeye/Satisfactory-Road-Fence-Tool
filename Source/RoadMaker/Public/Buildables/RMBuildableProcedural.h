@@ -7,6 +7,7 @@
 #include "Buildables/FGBuildable.h"
 #include "RMGeometry.h"
 #include "TimerManager.h"
+#include "ProceduralMeshComponent.h"
 #include "RMBuildableProcedural.generated.h"
 
 class UProceduralMeshComponent;
@@ -69,6 +70,29 @@ protected:
 	 * were just built: not restored from a save, not part of the world that loads or replicates in at the start).
 	 */
 	virtual void StartRiseAnimation();
+
+	/**
+	 * Build animation by reveal (roads, intersections) instead of the rise: the surface appears in order
+	 * of RevealDistance (cm, per vertex, actor space) with a glowing front, over GetBuildAnimDuration().
+	 * The real mesh (with its collision) stays, hidden; a temporary mesh without collision shows the
+	 * part built so far, cut smoothly along the front.
+	 */
+	virtual bool UsesReveal() const { return false; }
+	virtual void PrepareReveal() {}
+	virtual float RevealDistance(const FVector& LocalPos) const { return 0.f; }
+	void StartReveal();
+	void StepReveal();
+	void EndReveal();
+	bool mRevealing = false;
+	TArray<FProcMeshSection> mRevealSections;
+	TArray<TArray<float>> mRevealDist;
+	float mRevealMaxDist = 0.f;
+	float mRevealDuration = 1.f;
+	double mRevealStart = 0.0;
+	FTimerHandle mRevealTimer;
+	UPROPERTY(Transient)
+	UProceduralMeshComponent* mRevealMesh = nullptr;
+	static constexpr float RevealGlowWidth = 150.f; // cm
 	/** How long the build animation of this piece lasts (s): the build sound follows it. */
 	virtual float GetBuildAnimDuration() const { return RiseDuration; }
 	void StepRiseAnimation();

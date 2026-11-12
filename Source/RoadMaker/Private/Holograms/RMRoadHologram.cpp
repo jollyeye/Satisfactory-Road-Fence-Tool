@@ -518,6 +518,7 @@ void ARMRoadHologram::ConfigureActor(AFGBuildable* inBuildable) const
 	{
 		Road->SetMarkings(mMarkings);
 		Road->SetLook(mLook);
+		Road->SetRevealFromNearest(mBesideRoad);
 	}
 }
 

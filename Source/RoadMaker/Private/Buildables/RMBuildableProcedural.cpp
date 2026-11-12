@@ -70,6 +70,11 @@ void ARMBuildableProcedural::BeginPlay()
 
 void ARMBuildableProcedural::StartRiseAnimation()
 {
+	if (UsesReveal())
+	{
+		StartReveal();
+		return;
+	}
 	if (UWorld* World = GetWorld())
 	{
 		mRiseStart = World->GetTimeSeconds();

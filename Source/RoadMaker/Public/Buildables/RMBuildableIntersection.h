@@ -76,27 +76,10 @@ protected:
 
 	TOptional<bool> mPreviewSideLines;
 
-	/**
-	 * Build animation: the surface spreads from the road mouths to the middle with a glowing front
-	 * (instead of the rise). The real mesh (with its collision) stays, hidden; a temporary mesh
-	 * without collision shows the part built so far, cut smoothly along the front.
-	 */
-	virtual void StartRiseAnimation() override;
-	virtual float GetBuildAnimDuration() const override { return RevealDuration; }
-	void StepReveal();
-	void EndReveal();
+	/** Build animation: the surface spreads from the road mouths to the middle (see ARMBuildableProcedural). */
+	virtual bool UsesReveal() const override { return mEnds.Num() >= 2; }
+	virtual float RevealDistance(const FVector& LocalPos) const override { return DistanceToMouths(LocalPos); }
+	virtual float GetBuildAnimDuration() const override { return 2.5f; }
 	/** Distance (cm, seen from above) from P (actor space) to the nearest road mouth. */
 	float DistanceToMouths(const FVector& P) const;
-
-	bool mRevealing = false;
-	FRMMesh mRevealTop, mRevealBody, mRevealLines;
-	float mRevealMaxDist = 0.f;
-	double mRevealStart = 0.0;
-	FTimerHandle mRevealTimer;
-
-	UPROPERTY(Transient)
-	UProceduralMeshComponent* mRevealMesh = nullptr;
-
-	static constexpr float RevealDuration = 2.5f;
-	static constexpr float RevealGlowWidth = 150.f; // cm
 };

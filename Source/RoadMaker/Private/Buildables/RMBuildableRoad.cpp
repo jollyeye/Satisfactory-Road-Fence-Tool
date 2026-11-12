@@ -11,6 +11,9 @@
 #include "Net/UnrealNetwork.h"
 #include "FGFactoryColoringTypes.h"
 #include "Buildables/RMSwatchGroupRoads.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "Engine/World.h"
 
 ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -83,10 +86,55 @@ void ARMBuildableRoad::GetEndWorld(int32 EndIndex, FVector& OutLocation, FVector
 	OutOutward = EndIndex == 0 ? -F.Fwd : F.Fwd;
 }
 
+void ARMBuildableRoad::PrepareReveal()
+{
+	GetLocalFrames(mRevealFrames, 100.f);
+	mRevealFromEnd = false;
+	if (mRevealFromNearest && mRevealFrames.Num() >= 2)
+	{
+		// The end nearer the local player (each player sees it from their own side).
+		const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+		const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (Pawn)
+		{
+			const FTransform& T = GetActorTransform();
+			const FVector P = Pawn->GetActorLocation();
+			mRevealFromEnd = FVector::Dist(P, T.TransformPosition(mRevealFrames.Last().Pos)) < FVector::Dist(P, T.TransformPosition(mRevealFrames[0].Pos));
+		}
+	}
+}
+
+float ARMBuildableRoad::RevealDistance(const FVector& LocalPos) const
+{
+	// Distance along the curve of the nearest centre-line point.
+	if (mRevealFrames.Num() == 0)
+	{
+		return 0.f;
+	}
+	float BestSq = TNumericLimits<float>::Max();
+	float Along = 0.f;
+	for (const FRMFrame& F : mRevealFrames)
+	{
+		const float Sq = FVector::DistSquared(LocalPos, F.Pos);
+		if (Sq < BestSq)
+		{
+			BestSq = Sq;
+			Along = F.Dist;
+		}
+	}
+	return mRevealFromEnd ? mRevealFrames.Last().Dist - Along : Along;
+}
+
+float ARMBuildableRoad::GetBuildAnimDuration() const
+{
+	return FMath::Clamp(GetLength() / 3000.f, 1.f, 4.f);
+}
+
 void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableRoad, mMarkings);
+	DOREPLIFETIME_CONDITION(ARMBuildableRoad, mRevealFromNearest, COND_InitialOnly);
 }
 
 void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)

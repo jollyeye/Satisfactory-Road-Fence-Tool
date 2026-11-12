@@ -155,4 +155,23 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	USceneComponent* mEndAnchor;
+
+public:
+	/** Build animation: from the end it was built from (see SetRevealFromNearest). */
+	void SetRevealFromNearest(bool bNearest) { mRevealFromNearest = bNearest; }
+
+protected:
+	/** Build animation: the road appears along its curve, from its start (or the end nearest the player). */
+	virtual bool UsesReveal() const override { return true; }
+	virtual void PrepareReveal() override;
+	virtual float RevealDistance(const FVector& LocalPos) const override;
+	/** About 30 m per second, 1 to 4 s. */
+	virtual float GetBuildAnimDuration() const override;
+
+	/** Built beside another road (in one click): the animation starts at the end nearest the player. */
+	UPROPERTY(Replicated)
+	bool mRevealFromNearest = false;
+
+	TArray<FRMFrame> mRevealFrames;
+	bool mRevealFromEnd = false;
 };
