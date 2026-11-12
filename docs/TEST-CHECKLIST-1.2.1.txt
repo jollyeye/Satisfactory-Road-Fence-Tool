@@ -1,0 +1,98 @@
+ROAD MAKER 1.2.1 - TEST CHECKLIST
+=================================
+Riskiest first. Tick [x] as you go. If something fails, note the line and send FactoryGame.log
+(C:\Users\<you>\AppData\Local\FactoryGame\Saved\Logs\FactoryGame.log).
+
+
+1. SAVES AND LOADING (a bug here breaks people's worlds)
+--------------------------------------------------------
+[ ] Load a save made with 1.1.x: roads, intersections, fences and walls all appear; lines, paint and looks unchanged.
+[ ] Load a 1.2.0 save with lane markings: they are on the road, right colour; cyberpunk ones glow.
+[ ] Save, quit to menu, load again: markings still follow the road's curve (not flat) and keep their variant.
+[ ] Markings painted before the "slices" update are still there (flat, but present).
+[ ] Repainted markings keep their colour after reload.
+[ ] Uneven intersections from an older save load with the new smooth top; roads still meet their mouths with no gap.
+[ ] Paths / foundations / fences already built on an uneven intersection: note any that now float or sink (a few cm is expected).
+
+
+2. DISMANTLING
+--------------
+[ ] Dismantle a road with markings, paths and tracks on it: all go together, refund correct.
+[ ] Dismantle one marking alone: only that one goes, the road stays.
+[ ] Mass dismantle (area select) over roads with markings: nothing left floating, no crash.
+[ ] Dismantle the road under a stacked fence wall: the wall stays.
+
+
+3. ROAD TOOLS WITH THINGS ON THE ROAD
+-------------------------------------
+[ ] Cut Road through a lane with markings: markings stay where they are.
+[ ] Split Road with markings in both halves: markings stay in place (only Adjust moves them).
+[ ] Adjust Curvature with markings, single road and two joined roads: markings land on the new curve, right lane, right direction.
+[ ] Adjust a road much shorter: markings that no longer fit are removed, no errors.
+[ ] Cut / Split / Adjust while aiming AT a marking: the tool works on the road under it.
+
+
+4. SNAPPING (with and without Ctrl)
+-----------------------------------
+[ ] Fence wall, NO Ctrl, aim at a fence wall: upper half = stack on top, lower half = below. Also on a curved, sloped wall.
+[ ] Fence wall + Ctrl on a DIFFERENT wall type: replaces it. Ctrl on the SAME type: stacks.
+[ ] Road fences (guard rail, cement, grid) + Ctrl: snap to road edge and curb; Ctrl on another road fence: replace.
+[ ] Without Ctrl: fences place freely on/near roads, no automatic road-edge placement.
+[ ] Signs, NO Ctrl: on a fence wall face, a stacked wall, the gantry beam and columns. Flat, every 1 m (walls) / 2 m (gantry); scroll turns 45 deg.
+[ ] Signs on normal ground / game walls: the game's own placement, with the leg.
+[ ] Wall attachments (conveyor wall mount + hole, power and pipe mounts, ladder, fan, vent, beam connectors) on fence walls and the gantry.
+[ ] Street lights + Ctrl: single road; between two roads side by side (NO flicker, faces the road you aim at); intersection curb. Scroll flips them.
+[ ] Power poles + Ctrl on road edges.
+[ ] Vehicle paths / railway tracks + Ctrl on a lane, also aiming right AT an arrow: one-click lane path.
+[ ] Vehicle path + Ctrl on an intersection: all connections shown; on an uneven intersection they follow the surface (not through it); all green; vehicles drive them smoothly.
+[ ] Railway track + Ctrl on an intersection: connections still shown and valid (old straight curve; note if they cut through an uneven top).
+[ ] Foundations / ramps / frames near a road end: snap to the end in 4 m steps; scroll turns 90 deg.
+[ ] Road + Ctrl aimed at a road: builds beside it. Aimed at a marking: same.
+[ ] Sign Gantry aimed at a road with markings: goes across the road.
+
+
+5. INTERSECTIONS (new smooth top)
+---------------------------------
+[ ] Build 3-, 4-, 5- and 6-way intersections with road ends at different heights: one smooth slope, no folds or creases.
+[ ] Flat intersection: still flat, looks the same as before.
+[ ] Very small intersection / 2-road bend: builds normally (keeps the old simple top).
+[ ] Lighting on a sloped intersection looks right (no dark or bright facets).
+[ ] Curb lines and fences on curbs follow the new surface (not floating, not sunk).
+[ ] Walk and drive across: no bumps or snags; the player does not fall through.
+[ ] From far away (far version): no visible gap or jump between near and far versions.
+[ ] Road lines customizer and Material tab still work on intersections.
+
+
+6. LANE MARKINGS
+----------------
+[ ] Paint each arrow and digit (customizer) on 1-lane, 2-lane and 4-lane roads, with and without side lines: centred in the lane, right size, never bigger than a 12 m lane.
+[ ] On hills, crests, dips, banked curves, tight curves: follows the surface, not sunk, not floating.
+[ ] Near a road end: hangs straight over the end, no weird bending.
+[ ] Middle-click a marking: build gun gives the same result as the customizer (follows the curve).
+[ ] Mouse wheel with a marking selected cycles variants; does nothing odd inside the customizer menu.
+[ ] Mouse wheel with a normal colour swatch selected: the game behaves normally.
+[ ] Distance: flat version beyond ~50 m, gone beyond ~600 m, no popping close by.
+[ ] Cyberpunk road: marking glows; repaint with several swatches; switch its look with the Material tab.
+[ ] Asphalt / concrete roads: marking uses the primary colour.
+
+
+7. CUSTOMIZER AND PAINT
+-----------------------
+[ ] Road Lines options, Material tab road looks and fence wall looks apply and preview correctly.
+[ ] A Material tab road look selected, then a colour swatch picked: click a road / marking. Note whether it paints colour or switches look (known grey area).
+[ ] Hotbar shortcuts for Road Lines options and markings show the right icons.
+
+
+8. MULTIPLAYER (if a friend can join)
+-------------------------------------
+[ ] Client paints markings: host sees them, same colour and variant.
+[ ] Client uses Adjust Curvature on a road with markings: markings move for both.
+[ ] Client stacks fence walls, places signs on walls, snaps street lights.
+[ ] Client joins a world with markings and uneven intersections: everything looks the same as for the host.
+
+
+9. PERFORMANCE (quick check)
+----------------------------
+[ ] Many roads, intersections and markings: no noticeable FPS drop looking along a long road full of markings.
+[ ] Flying over the area: markings disappear in the distance without stutter.
+[ ] Loading a big save: no noticeable extra load time from the new intersection tops.
