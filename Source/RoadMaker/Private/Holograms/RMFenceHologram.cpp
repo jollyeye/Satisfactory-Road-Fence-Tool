@@ -7,6 +7,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Equipment/FGBuildGunBuild.h"
 #include "RMRoadUtils.h"
+#include "EngineUtils.h"
 #include "FGCharacterPlayer.h"
 #include "FGInventoryComponent.h"
 #include "FGDismantleInterface.h"
@@ -349,6 +350,81 @@ void ARMFenceHologram::CheckValidPlacement()
 			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 		}
 	}
+	// Fence walls cannot share their space with another fence wall (like the game's walls): touching
+	// end to end or stacked edge to edge is fine, the same place is not.
+	if (GetFenceDefaults()->IsWall() && OverlapsAnotherWall())
+	{
+		AddConstructDisqualifier(URMCD_FenceWallTaken::StaticClass());
+	}
+}
+
+bool ARMFenceHologram::OverlapsAnotherWall() const
+{
+	UWorld* World = GetWorld();
+	TArray<FRMFrame> Local;
+	GetPreviewFrames(Local, 100.f);
+	if (!World || Local.Num() < 2)
+	{
+		return false;
+	}
+	FTransform T = GetActorTransform();
+	T.SetScale3D(FVector::OneVector);
+	const float Length = Local.Last().Dist;
+	const float Wall = ARMBuildableFence::GetWallHeight();
+	TArray<FVector> Samples; // along the new wall, leaving its two ends free (walls may meet end to end)
+	FBox Box(ForceInit);
+	for (const FRMFrame& F : Local)
+	{
+		const FVector P = T.TransformPosition(F.Pos);
+		Box += P;
+		if (F.Dist > 50.f && F.Dist < Length - 50.f)
+		{
+			Samples.Add(P);
+		}
+	}
+	if (Samples.Num() == 0)
+	{
+		Samples.Add(T.TransformPosition(Local[Local.Num() / 2].Pos));
+	}
+	Box = Box.ExpandBy(FVector(100.f, 100.f, Wall + 100.f));
+	for (TActorIterator<ARMBuildableFence> It(World); It; ++It)
+	{
+		ARMBuildableFence* Other = *It;
+		if (!Other || !Other->IsWall() || Other == mReplaceTarget || Other->GetIsDismantled() || Other->IsActorBeingDestroyed()
+			|| !Other->GetComponentsBoundingBox(true).Intersect(Box))
+		{
+			continue;
+		}
+		TArray<FRMFrame> Frames;
+		Other->GetWorldFrames(Frames, 50.f);
+		for (const FVector& P : Samples)
+		{
+			const FRMFrame* Near = nullptr;
+			float Best = TNumericLimits<float>::Max();
+			for (const FRMFrame& F : Frames)
+			{
+				const float D = FVector::DistSquared2D(F.Pos, P);
+				if (D < Best)
+				{
+					Best = D;
+					Near = &F;
+				}
+			}
+			if (!Near)
+			{
+				continue;
+			}
+			const FVector Rel = P - Near->Pos;
+			const float Along = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Fwd.X, Near->Fwd.Y, 0.f).GetSafeNormal()));
+			const float Across = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Right.X, Near->Right.Y, 0.f).GetSafeNormal()));
+			const float Overlap = Wall - FMath::Abs(Rel.Z); // both walls go up Wall from their base line
+			if (Along < 30.f && Across < 40.f && Overlap > 20.f)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void ARMFenceHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

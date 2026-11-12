@@ -25,6 +25,9 @@ public:
 	virtual void SetHologramNudgeLocation() override;
 	virtual ENudgeFailReason NudgeHologram(const FVector& NudgeInput, const FHitResult& HitResult) override;
 	virtual void OnHologramLockStateChanged() override;
+
+	/** A fence wall where this one would stand (same course, overlapping heights), not counting the one being replaced. */
+	bool OverlapsAnotherWall() const;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
