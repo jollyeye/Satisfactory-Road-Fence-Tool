@@ -3,6 +3,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "FGDismantleInterface.h"
 #include "FGRecipe.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "Engine/World.h"
 
 ARMBuildableSpline::ARMBuildableSpline(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -13,6 +16,8 @@ void ARMBuildableSpline::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableSpline, mSplinePoints);
+	DOREPLIFETIME_CONDITION(ARMBuildableSpline, mRevealFrom, COND_InitialOnly);
+	DOREPLIFETIME_CONDITION(ARMBuildableSpline, mRevealPoint, COND_InitialOnly);
 }
 
 void ARMBuildableSpline::SetSplinePoints(const TArray<FRMSplinePoint>& LocalPoints)
@@ -88,14 +93,66 @@ bool ARMBuildableSpline::GetFrameAt(float Dist, FRMFrame& OutFrame) const
 namespace
 {
 	/** Spawns a copy of Source (class, recipe, paint, settings) along the given world curve. */
-	ARMBuildableSpline* SpawnCutPiece(ARMBuildableSpline* Source, const TArray<FRMSplinePoint>& World, int32 CostMultiplier)
+	ARMBuildableSpline* SpawnCutPiece(ARMBuildableSpline* Source, const TArray<FRMSplinePoint>& World, int32 CostMultiplier, ERMRevealFrom RevealFrom)
 	{
-		return Source->SpawnLike(Source->GetClass(), Source->GetBuiltWithRecipe(), World, CostMultiplier);
+		return Source->SpawnLike(Source->GetClass(), Source->GetBuiltWithRecipe(), World, CostMultiplier, RevealFrom);
 	}
 }
 
+void ARMBuildableSpline::PrepareReveal()
+{
+	GetLocalFrames(mRevealFrames, 100.f);
+	mRevealFromEnd = mRevealFrom == ERMRevealFrom::End;
+	if (mRevealFrames.Num() >= 2 && (mRevealFrom == ERMRevealFrom::NearestPlayer || mRevealFrom == ERMRevealFrom::NearestPoint))
+	{
+		FVector From = mRevealPoint;
+		bool bHave = mRevealFrom == ERMRevealFrom::NearestPoint;
+		if (!bHave)
+		{
+			// The end nearer the local player (each player sees it from their own side).
+			const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+			if (const APawn* Pawn = PC ? PC->GetPawn() : nullptr)
+			{
+				From = Pawn->GetActorLocation();
+				bHave = true;
+			}
+		}
+		if (bHave)
+		{
+			const FTransform& T = GetActorTransform();
+			mRevealFromEnd = FVector::Dist(From, T.TransformPosition(mRevealFrames.Last().Pos)) < FVector::Dist(From, T.TransformPosition(mRevealFrames[0].Pos));
+		}
+	}
+}
+
+float ARMBuildableSpline::RevealDistance(const FVector& LocalPos) const
+{
+	// Distance along the curve of the nearest centre-line point.
+	if (mRevealFrames.Num() == 0)
+	{
+		return 0.f;
+	}
+	float BestSq = TNumericLimits<float>::Max();
+	float Along = 0.f;
+	for (const FRMFrame& F : mRevealFrames)
+	{
+		const float Sq = FVector::DistSquared(LocalPos, F.Pos);
+		if (Sq < BestSq)
+		{
+			BestSq = Sq;
+			Along = F.Dist;
+		}
+	}
+	return mRevealFromEnd ? mRevealFrames.Last().Dist - Along : Along;
+}
+
+float ARMBuildableSpline::GetBuildAnimDuration() const
+{
+	return FMath::Clamp(GetLength() / 3000.f, 1.f, 4.f);
+}
+
 ARMBuildableSpline* ARMBuildableSpline::SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<UFGRecipe> Recipe,
-	const TArray<FRMSplinePoint>& World, int32 CostMultiplier) const
+	const TArray<FRMSplinePoint>& World, int32 CostMultiplier, ERMRevealFrom RevealFrom, const FVector& RevealPoint) const
 {
 	UWorld* W = GetWorld();
 	if (!W || World.Num() < 2 || !Class)
@@ -122,6 +179,7 @@ ARMBuildableSpline* ARMBuildableSpline::SpawnLike(TSubclassOf<ARMBuildableSpline
 	New->SetSplinePoints(Local);
 	New->SetCustomizationData_Native(GetCustomizationData_Native());
 	CopyCutSettingsTo(New);
+	New->SetRevealFrom(RevealFrom, RevealPoint);
 	UGameplayStatics::FinishSpawningActor(New, T);
 	return New;
 }
@@ -202,8 +260,9 @@ ARMBuildableSpline* ARMBuildableSpline::CutAt(float Dist, ARMBuildableSpline** O
 	}
 	const int32 FirstCost = FMath::Max(1, FMath::RoundToInt(mCostMultiplier * Dist / Total));
 	const int32 SecondCost = FMath::Max(1, mCostMultiplier - FirstCost);
-	ARMBuildableSpline* First = SpawnCutPiece(this, FirstPoints, FirstCost);
-	ARMBuildableSpline* Second = SpawnCutPiece(this, SecondPoints, SecondCost);
+	// Build animations from the outer ends, meeting at the cut.
+	ARMBuildableSpline* First = SpawnCutPiece(this, FirstPoints, FirstCost, ERMRevealFrom::Start);
+	ARMBuildableSpline* Second = SpawnCutPiece(this, SecondPoints, SecondCost, ERMRevealFrom::End);
 	if (!First || !Second)
 	{
 		if (First)

@@ -534,13 +534,15 @@ AActor* ARMRoadAdjustHologram::Construct(TArray<AActor*>& out_children, FNetCons
 	TArray<FRMSplinePoint> A, B;
 	if (mRoadA && !mRoadA->GetIsDismantled() && !(mRoadB && mRoadB->GetIsDismantled()) && ComputeCurves(A, B))
 	{
-		auto Replace = [](ARMBuildableRoad* Road, const TArray<FRMSplinePoint>& Points) -> ARMBuildableSpline*
+		const FVector Grabbed = mJoint;
+		auto Replace = [Grabbed](ARMBuildableRoad* Road, const TArray<FRMSplinePoint>& Points) -> ARMBuildableSpline*
 		{
 			TArray<FRMFrame> Frames;
 			RMGeometry::SampleSpline(Points, 100.f, Frames);
 			const float NewLength = Frames.Num() > 0 ? Frames.Last().Dist : 0.f;
 			const int32 Cost = FMath::Max(1, FMath::RoundToInt(Road->GetCostMultiplier() * NewLength / FMath::Max(Road->GetLength(), 1.f)));
-			return Road->SpawnLike(Road->GetClass(), Road->GetBuiltWithRecipe(), Points, Cost);
+			// Build animation from the point that was moved.
+			return Road->SpawnLike(Road->GetClass(), Road->GetBuiltWithRecipe(), Points, Cost, ERMRevealFrom::NearestPoint, Grabbed);
 		};
 		ARMBuildableSpline* NewA = Replace(mRoadA, A);
 		ARMBuildableSpline* NewB = mRoadB ? Replace(mRoadB, B) : nullptr;

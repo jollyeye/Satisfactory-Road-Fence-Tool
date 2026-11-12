@@ -5,6 +5,16 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "RMBuildableSpline.generated.h"
 
+/** Where a spline piece's build animation starts. */
+UENUM()
+enum class ERMRevealFrom : uint8
+{
+	Start,         // its first point (where the player clicked first)
+	End,           // its last point
+	NearestPlayer, // the end nearer the local player (pieces built beside another one in one click)
+	NearestPoint,  // the end nearer mRevealPoint (Adjust Curvature: the grabbed point)
+};
+
 UCLASS(Abstract)
 class ROADMAKER_API ARMBuildableSpline : public ARMBuildableProcedural
 {
@@ -42,7 +52,11 @@ public:
 	 * one's paint and cut settings. Null on failure.
 	 */
 	ARMBuildableSpline* SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<class UFGRecipe> Recipe,
-		const TArray<FRMSplinePoint>& World, int32 CostMultiplier) const;
+		const TArray<FRMSplinePoint>& World, int32 CostMultiplier,
+		ERMRevealFrom RevealFrom = ERMRevealFrom::Start, const FVector& RevealPoint = FVector::ZeroVector) const;
+
+	/** Where the build animation starts (server, before the piece finishes spawning). */
+	void SetRevealFrom(ERMRevealFrom From, const FVector& Point = FVector::ZeroVector) { mRevealFrom = From; mRevealPoint = Point; }
 
 	/** Used while spawning cut pieces (CopyCutSettingsTo is protected). */
 	void CopyCutSettingsForSpawn(ARMBuildableSpline* New) const { CopyCutSettingsTo(New); }
@@ -74,6 +88,20 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_SplinePoints)
 	TArray<FRMSplinePoint> mSplinePoints;
+
+	/** Build animation: the piece appears along its curve, from mRevealFrom; about 30 m/s, 1 to 4 s. */
+	virtual bool UsesReveal() const override { return mSplinePoints.Num() >= 2; }
+	virtual void PrepareReveal() override;
+	virtual float RevealDistance(const FVector& LocalPos) const override;
+	virtual float GetBuildAnimDuration() const override;
+
+	UPROPERTY(Replicated)
+	ERMRevealFrom mRevealFrom = ERMRevealFrom::Start;
+	UPROPERTY(Replicated)
+	FVector mRevealPoint = FVector::ZeroVector;
+
+	TArray<FRMFrame> mRevealFrames;
+	bool mRevealFromEnd = false;
 
 	/** Distance between mesh rings in cm. Lower = smoother curves, more triangles. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
