@@ -363,6 +363,35 @@ def merge_glyph(path):
     img.save(path)
 
 
+def join_glyph(path):
+    """Join Road icon: white flat glyph, two road pieces end to end pushed together by two arrows
+    along the road (Merge Road's arrows push from the sides; Cut Road has a cut line instead)."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    C = (0, 0, 0, 0)
+    # Two road pieces in line with a thin seam; side lines and a dashed middle cut out.
+    for y0, y1 in ((262, 504), (520, 762)):
+        d.rounded_rectangle([250, y0, 774, y1], radius=36, fill=W)
+        top_pad = 36 if y0 < 500 else 0
+        bot_pad = 0 if y0 < 500 else 36
+        d.rectangle([298, y0 + top_pad, 316, y1 - bot_pad], fill=C)
+        d.rectangle([708, y0 + top_pad, 726, y1 - bot_pad], fill=C)
+        for yy in range(y0 + 40, y1 - 40, 110):
+            d.rectangle([498, yy, 526, yy + 55], fill=C)
+    # Arrows beyond the ends, pointing in along the road.
+    cx = 512
+    for side in (-1, 1):
+        tip = 512 + side * 270           # just beyond the road end
+        back = 512 + side * 480
+        d.rounded_rectangle([cx - 26, min(back, tip + side * 70), cx + 26, max(back, tip + side * 70)], radius=14, fill=W)
+        d.polygon([(cx, tip), (cx - 95, tip + side * 110), (cx + 95, tip + side * 110)], fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def adjust_glyph(path):
     """Adjust Curvature icon: white flat glyph, a curved road ending in a grab circle."""
     from PIL import Image as _I, ImageDraw as _D
@@ -484,6 +513,8 @@ if what == "cutglyph":
     cut_glyph(out); sys.exit(0)
 if what == "splitglyph":
     split_glyph(out); sys.exit(0)
+if what == "joinglyph":
+    join_glyph(out); sys.exit(0)
 if what == "mergeglyph":
     merge_glyph(out); sys.exit(0)
 if what == "adjustglyph":
