@@ -681,69 +681,43 @@ namespace
 	}
 
 	/**
-	 * TEMPORARY diagnostics (RMInfoLog, remove before release): every visible image in the customizer
-	 * menu outside the option tiles (the info panel), with its widget, size, brush resource and icon
-	 * material parameters, logged when it changes (at most 300 lines a session).
+	 * The info box beside the customizer menu (Widget_BuildMenu_InfoBox: title, description and the
+	 * picture mPreviewIcon) shows the hovered option. The game sets that picture for its own tabs only;
+	 * for a Road Lines option it kept the previous picture. When its title is a Road Lines option, put
+	 * that option's icon in.
 	 */
-	TMap<TWeakObjectPtr<const UImage>, FString> GInfoStates;
-	int32 GInfoLogLines = 0;
-
-	void LogCustomizerImages()
+	void FixInfoBoxPicture()
 	{
-		if (GInfoLogLines >= 300)
-		{
-			return;
-		}
 		for (TObjectIterator<UImage> It; It; ++It)
 		{
-			UImage* Image = *It;
-			if (!Image || Image->IsTemplate() || !Image->IsVisible())
+			UImage* Preview = *It;
+			if (!Preview || Preview->IsTemplate() || Preview->GetName() != TEXT("mPreviewIcon"))
 			{
 				continue;
 			}
-			// Anything inside the customizer menu (any parent widget named Customi...), except the option tiles.
-			UObject* Res = Image->GetBrush().GetResourceObject();
-			FString OwnerName;
-			bool bInCustomizer = false;
-			for (UUserWidget* W = Image->GetTypedOuter<UUserWidget>(); W; W = W->GetTypedOuter<UUserWidget>())
-			{
-				const FString N = W->GetClass()->GetName();
-				OwnerName = OwnerName.IsEmpty() ? N : N + TEXT(">") + OwnerName;
-				bInCustomizer |= N.Contains(TEXT("Customi")) && !N.Contains(TEXT("CustomiserIcon")) && !N.Contains(TEXT("SettingsButton"));
-			}
-			if (!Res || !bInCustomizer || OwnerName.Contains(TEXT("CustomiserIcon")) || OwnerName.Contains(TEXT("SpotLight")))
+			UUserWidget* Box = Preview->GetTypedOuter<UUserWidget>();
+			if (!Box || !Box->GetClass()->GetName().Contains(TEXT("InfoBox")) || !Box->IsVisible())
 			{
 				continue;
 			}
-			FString Detail = FString::Printf(TEXT("%s.%s size=%s res=%s"), *OwnerName, *Image->GetName(),
-				*Image->GetBrush().GetImageSize().ToString(), Res ? *Res->GetName() : TEXT("none"));
-			if (UMaterialInstance* MI = Cast<UMaterialInstance>(Res))
+			TArray<UWidget*> Widgets;
+			CollectWidgets(Box, Widgets);
+			for (UWidget* W : Widgets)
 			{
-				TArray<FMaterialParameterInfo> Infos;
-				TArray<FGuid> Ids;
-				MI->GetAllTextureParameterInfo(Infos, Ids);
-				for (const FMaterialParameterInfo& Info : Infos)
+				const UTextBlock* Title = Cast<UTextBlock>(W);
+				UTexture2D* Icon = Title && Title->IsVisible() ? IconFor(Title->GetText().ToString().TrimStartAndEnd()) : nullptr;
+				if (Icon)
 				{
-					UTexture* T = nullptr;
-					MI->GetTextureParameterValue(Info, T);
-					Detail += FString::Printf(TEXT(" %s=%s"), *Info.Name.ToString(), T ? *T->GetName() : TEXT("none"));
+					if (Preview->GetBrush().GetResourceObject() != Icon)
+					{
+						const FVector2D Size = Preview->GetBrush().GetImageSize();
+						Preview->SetBrushFromTexture(Icon, false);
+						FSlateBrush Brush = Preview->GetBrush();
+						Brush.SetImageSize(Size);
+						Preview->SetBrush(Brush);
+					}
+					break;
 				}
-				Infos.Reset();
-				Ids.Reset();
-				MI->GetAllScalarParameterInfo(Infos, Ids);
-				for (const FMaterialParameterInfo& Info : Infos)
-				{
-					float V = 0.f;
-					MI->GetScalarParameterValue(Info, V);
-					Detail += FString::Printf(TEXT(" %s=%.2f"), *Info.Name.ToString(), V);
-				}
-			}
-			FString& Last = GInfoStates.FindOrAdd(Image);
-			if (Last != Detail)
-			{
-				Last = Detail;
-				++GInfoLogLines;
-				UE_LOG(LogRoadMaker, Display, TEXT("RMInfoLog %s"), *Detail);
 			}
 		}
 	}
@@ -769,7 +743,7 @@ namespace
 		}
 		BuildIconTable();
 		RestoreReusedTiles();
-		LogCustomizerImages();
+		FixInfoBoxPicture();
 		static bool bLoggedLabels = false;
 		TArray<FString> SeenLabels;
 		int32 Matches = 0;
