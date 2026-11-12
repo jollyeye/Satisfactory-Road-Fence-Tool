@@ -54,7 +54,8 @@ void ARMRoadHologram::SetMaterialState(EHologramMaterialState state)
 void ARMRoadHologram::ApplyArrowMaterial()
 {
 	// Its own material: the game may give every mesh of a hologram the hologram material.
-	static UMaterialInterface* Overlay = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+	static UMaterialInterface* Overlay = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
 	if (Overlay && mDirectionArrow->GetNumSections() > 0)
 	{
 		mDirectionArrow->SetMaterial(0, Overlay);

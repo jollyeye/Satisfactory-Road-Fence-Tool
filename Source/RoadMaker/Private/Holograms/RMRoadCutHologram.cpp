@@ -417,7 +417,8 @@ void ARMRoadCutHologram::RebuildOverlay()
 					Frames[I].Pos + Frames[I].Right * Across + Frames[I].Up * 4.f, Pass == 0 ? 11.f : 6.f, Pass == 0 ? Border : Color);
 			}
 		}
-		static UMaterialInterface* SplitMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+		// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+		static UMaterialInterface* SplitMaterial = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
 		mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
 		if (SplitMaterial)
 		{
@@ -451,7 +452,8 @@ void ARMRoadCutHologram::RebuildOverlay()
 		}
 	}
 
-	static UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+	static UMaterialInterface* Material = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
 	mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
 	if (Material)
 	{

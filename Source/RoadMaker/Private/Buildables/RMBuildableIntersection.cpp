@@ -333,7 +333,8 @@ void ARMBuildableIntersection::StepReveal()
 		}
 		++Section;
 	};
-	static UMaterialInterface* GlowMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_BuildGlow.M_RM_BuildGlow"));
+	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+	static UMaterialInterface* GlowMaterial = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_BuildGlow.M_RM_BuildGlow")); if (M) { M->AddToRoot(); } return M; }();
 	Apply(Top, mMesh->GetMaterial(0));
 	Apply(Body, mMesh->GetMaterial(1));
 	Apply(Lines, mMesh->GetMaterial(2));

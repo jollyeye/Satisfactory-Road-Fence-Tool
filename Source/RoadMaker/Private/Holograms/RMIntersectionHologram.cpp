@@ -388,7 +388,8 @@ void ARMIntersectionHologram::RebuildOverlay()
 		B.Cap(mHover, Orange);
 	}
 
-	static UMaterialInterface* Fallback = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+	static UMaterialInterface* Fallback = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
 	UMaterialInterface* Material = mOverlayMaterial ? mOverlayMaterial : Fallback;
 	mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
 	if (Material)
@@ -431,7 +432,8 @@ void ARMIntersectionHologram::UpdateHologramLook()
 	}
 	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
 	// The pick overlay keeps its own material (the game may give every mesh the hologram material).
-	static UMaterialInterface* OverlayFallback = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+	static UMaterialInterface* OverlayFallback = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
 	if (UMaterialInterface* Overlay = mOverlayMaterial ? mOverlayMaterial : OverlayFallback)
 	{
 		if (mOverlayMesh->GetNumSections() > 0)

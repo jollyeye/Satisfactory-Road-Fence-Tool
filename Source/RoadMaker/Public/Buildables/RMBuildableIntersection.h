@@ -96,6 +96,6 @@ protected:
 	UPROPERTY(Transient)
 	UProceduralMeshComponent* mRevealMesh = nullptr;
 
-	static constexpr float RevealDuration = 1.0f;
+	static constexpr float RevealDuration = 2.5f;
 	static constexpr float RevealGlowWidth = 150.f; // cm
 };
