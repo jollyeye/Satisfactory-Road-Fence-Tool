@@ -24,9 +24,6 @@ namespace RMSound
 		// Game parameters the build effect sets on its sounds (found in its Blueprint code).
 		UAkRtpc* GSizeRtpc = nullptr;  // BuildEffect_Size_RTPC
 		UAkRtpc* GBoxRtpc = nullptr;   // RTPC_BoxVector
-		// Size parameter for our pieces. Tested in game (2026-11-12): 0 = silent, 1..1000 = the normal
-		// build sound, 10000 = the end sound of a different (big) building. 100 sits safely in the middle.
-		constexpr float GBuildSize = 100.f;
 
 		void SoundCollect(UStruct* Struct, const FString& Where, TArray<TPair<FString, UAkAudioEvent*>>& Out)
 		{
@@ -132,14 +129,9 @@ namespace RMSound
 				UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
 				return;
 			}
-			if (GSizeRtpc)
-			{
-				Comp->SetRTPCValue(GSizeRtpc, SizeValue, 0, FString());
-			}
-			if (GBoxRtpc)
-			{
-				Comp->SetRTPCValue(GBoxRtpc, SizeValue, 0, FString());
-			}
+			// The build effect's game parameters (BuildEffect_Size_RTPC, RTPC_BoxVector) are left at their
+			// defaults: setting them did not lengthen the sound, and values that sounded right in one test
+			// gave the end sound of a big building in the next (2026-11-12). Unset = the normal sounds.
 			Comp->PostAkEvent(Event, 0, FOnAkPostEventCallback());
 		}
 	}
@@ -155,7 +147,7 @@ namespace RMSound
 			GSearched = true;
 			SoundFindEvents();
 		}
-		const float Size = GBuildSize;
+		const float Size = 0.f; // (unused, see SoundPostAt)
 		SoundPostAt(Piece, GStartEvent, Size);
 		FTimerManager& Timers = Piece->GetWorld()->GetTimerManager();
 		const TWeakObjectPtr<AActor> Weak(Piece);
