@@ -13,7 +13,10 @@ class ROADMAKER_API ARMRoadHologram : public ARMSplineHologram
 	GENERATED_BODY()
 
 public:
+	ARMRoadHologram();
+
 	virtual void CheckValidPlacement() override;
+	virtual void SetMaterialState(EHologramMaterialState state) override;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -58,6 +61,13 @@ protected:
 	/** Where the locked beside-road hologram stood, and how far it has been nudged from there. */
 	FVector mBesideBase = FVector::ZeroVector;
 	FVector mBesideNudge = FVector::ZeroVector;
+
+	/** A flat white arrow on top of the road hologram (the intersection tool's arrow), pointing the way the road runs. */
+	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
+	class UProceduralMeshComponent* mDirectionArrow;
+
+	void RebuildDirectionArrow(const TArray<struct FRMFrame>& Frames);
+	void ApplyArrowMaterial();
 
 	/** Markings for the new road: copied from the road it snaps to, otherwise the default. */
 	UPROPERTY(CustomSerialization)

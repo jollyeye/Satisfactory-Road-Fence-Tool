@@ -37,6 +37,61 @@ void ARMRoadHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ARMRoadHologram, mBesideRoad);
 }
 
+ARMRoadHologram::ARMRoadHologram()
+{
+	mDirectionArrow = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("DirectionArrow"));
+	mDirectionArrow->SetupAttachment(mPreviewMesh);
+	mDirectionArrow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mDirectionArrow->SetCastShadow(false);
+}
+
+void ARMRoadHologram::SetMaterialState(EHologramMaterialState state)
+{
+	Super::SetMaterialState(state);
+	ApplyArrowMaterial();
+}
+
+void ARMRoadHologram::ApplyArrowMaterial()
+{
+	// Its own material: the game may give every mesh of a hologram the hologram material.
+	static UMaterialInterface* Overlay = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay"));
+	if (Overlay && mDirectionArrow->GetNumSections() > 0)
+	{
+		mDirectionArrow->SetMaterial(0, Overlay);
+	}
+	mDirectionArrow->SetRenderCustomDepth(false);
+}
+
+void ARMRoadHologram::RebuildDirectionArrow(const TArray<FRMFrame>& Frames)
+{
+	mDirectionArrow->ClearAllMeshSections();
+	if (Frames.Num() < 2)
+	{
+		return;
+	}
+	// The intersection tool's 4 m arrow, lying flat on the road's top in the middle of the road
+	// (hologram space), tip towards the road's end.
+	const FRMFrame& F = Frames[Frames.Num() / 2];
+	const FVector Fwd = F.Fwd.GetSafeNormal();
+	const FVector Side = F.Right.GetSafeNormal();
+	const FVector Base = F.Pos + F.Up * 5.f; // a hair above the road top
+	const FVector Tail = Base - Fwd * 200.f;
+	const FVector HeadBase = Base + Fwd * 50.f;
+	const FVector Tip = Base + Fwd * 200.f;
+	TArray<FVector> V = {
+		Tip, HeadBase + Side * 110.f, HeadBase - Side * 110.f,                                              // head
+		HeadBase - Side * 35.f, HeadBase + Side * 35.f, Tail + Side * 35.f, Tail - Side * 35.f };             // shaft
+	TArray<int32> T;
+	// Wound so the faces look up (both windings: seen from above whatever the frame's handedness).
+	T.Append({ 0, 1, 2, 0, 2, 1, 3, 4, 5, 3, 5, 6, 3, 5, 4, 3, 6, 5 });
+	TArray<FLinearColor> C;
+	C.Init(FLinearColor::White, V.Num());
+	TArray<FVector> N;
+	N.Init(F.Up, V.Num());
+	mDirectionArrow->CreateMeshSection_LinearColor(0, V, T, N, TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
+	ApplyArrowMaterial();
+}
+
 bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 {
 	// Only for a new road (before the first click): the whole road is placed in one click.
@@ -208,12 +263,14 @@ void ARMRoadHologram::RebuildPreview()
 	mPreviewMesh->ClearAllMeshSections();
 	if (Frames.Num() < 2)
 	{
+		mDirectionArrow->ClearAllMeshSections();
 		return;
 	}
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, mMarkings, Road->mEdgeLineInset, Top, Body);
 	Top.ApplyToSection(mPreviewMesh, 0, false);
 	Body.ApplyToSection(mPreviewMesh, 1, false);
+	RebuildDirectionArrow(Frames);
 }
 
 void ARMRoadHologram::CheckValidPlacement()
