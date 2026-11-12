@@ -681,79 +681,98 @@ namespace
 	}
 
 	/**
-	 * The info box beside the customizer menu (Widget_BuildMenu_InfoBox: title, description and the
-	 * picture mPreviewIcon) shows the hovered option. The game sets that picture for its own tabs only;
-	 * for a Road Lines option it kept the previous picture. When its title is a Road Lines option, put
-	 * that option's icon in.
+	 * The info box beside the customizer menu (Widget_BuildMenu_InfoBox) shows the hovered option: its
+	 * name (mItemName), and either a plain picture (mPreviewIcon, used for the Material tab) or a live
+	 * preview of a foundation (an image drawn with the material MM_UI_CustomiserPreview). For a Road
+	 * Lines option the game shows that foundation preview. When the name is a Road Lines option, the
+	 * foundation preview is hidden and the option's icon shown in mPreviewIcon; the game's own
+	 * visibility is put back when another option is shown.
 	 */
+	struct FInfoBoxPatch
+	{
+		TWeakObjectPtr<UImage> Image;
+		ESlateVisibility Original = ESlateVisibility::Visible;
+	};
+	TArray<FInfoBoxPatch> GInfoBoxPatches;
+
+	void SetPatchedVisibility(UImage* Image, ESlateVisibility Visibility)
+	{
+		if (!GInfoBoxPatches.ContainsByPredicate([Image](const FInfoBoxPatch& P) { return P.Image.Get() == Image; }))
+		{
+			GInfoBoxPatches.Add({ Image, Image->GetVisibility() });
+		}
+		if (Image->GetVisibility() != Visibility)
+		{
+			Image->SetVisibility(Visibility);
+		}
+	}
+
 	void FixInfoBoxPicture()
 	{
-		for (TObjectIterator<UImage> It; It; ++It)
+		bool bShowingOurs = false;
+		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
-			UImage* Preview = *It;
-			if (!Preview || Preview->IsTemplate() || Preview->GetName() != TEXT("mPreviewIcon"))
+			UUserWidget* Box = *It;
+			if (!Box || Box->IsTemplate() || !Box->IsVisible() || !Box->GetClass()->GetName().Contains(TEXT("BuildMenu_InfoBox")))
 			{
 				continue;
 			}
-			UUserWidget* Box = Preview->GetTypedOuter<UUserWidget>();
-			if (!Box || !Box->GetClass()->GetName().Contains(TEXT("InfoBox")))
-			{
-				continue;
-			}
-			// The title ("4 lanes, continuous") sits above the box, in the menu around it: look at the texts
-			// of the box and of its parent widget itself (not inside the option tiles).
 			TArray<UWidget*> Widgets;
 			CollectWidgets(Box, Widgets);
-			if (UUserWidget* Around = Box->GetTypedOuter<UUserWidget>())
-			{
-				TArray<UWidget*> AroundWidgets;
-				if (Around->WidgetTree)
-				{
-					Around->WidgetTree->GetAllWidgets(AroundWidgets);
-				}
-				Widgets.Append(AroundWidgets);
-			}
-			{
-				// TEMPORARY (RMInfoLog): the info box's texts, logged when they change.
-				static FString LastTexts;
-				static int32 Lines = 0;
-				FString Texts = FString::Printf(TEXT("box=%s vis=%d preview=%s |"), *Box->GetClass()->GetName(), Box->IsVisible() ? 1 : 0,
-					*GetNameSafe(Preview->GetBrush().GetResourceObject()));
-				for (UWidget* W : Widgets)
-				{
-					if (const UTextBlock* T = Cast<UTextBlock>(W))
-					{
-						Texts += FString::Printf(TEXT(" %s(%d)='%s'"), *T->GetName(), T->IsVisible() ? 1 : 0, *T->GetText().ToString().Left(40));
-					}
-					else if (W && W->GetClass()->GetName().Contains(TEXT("Text")))
-					{
-						Texts += FString::Printf(TEXT(" %s<%s>"), *W->GetName(), *W->GetClass()->GetName());
-					}
-				}
-				if (Texts != LastTexts && Lines < 60)
-				{
-					LastTexts = Texts;
-					++Lines;
-					UE_LOG(LogRoadMaker, Display, TEXT("RMInfoLog %s"), *Texts);
-				}
-			}
+			UTexture2D* Icon = nullptr;
+			UImage* PreviewIcon = nullptr;
+			TArray<UImage*> LivePreviews;
 			for (UWidget* W : Widgets)
 			{
-				const UTextBlock* Title = Cast<UTextBlock>(W);
-				UTexture2D* Icon = Title && Title->IsVisible() ? IconFor(Title->GetText().ToString().TrimStartAndEnd()) : nullptr;
-				if (Icon)
+				if (const UTextBlock* Text = Cast<UTextBlock>(W))
 				{
-					if (Preview->GetBrush().GetResourceObject() != Icon)
+					if (Text->GetName() == TEXT("mItemName"))
 					{
-						const FVector2D Size = Preview->GetBrush().GetImageSize();
-						Preview->SetBrushFromTexture(Icon, false);
-						FSlateBrush Brush = Preview->GetBrush();
-						Brush.SetImageSize(Size);
-						Preview->SetBrush(Brush);
+						Icon = IconFor(Text->GetText().ToString().TrimStartAndEnd());
 					}
-					break;
+				}
+				else if (UImage* Image = Cast<UImage>(W))
+				{
+					const UObject* Res = Image->GetBrush().GetResourceObject();
+					if (Image->GetName() == TEXT("mPreviewIcon"))
+					{
+						PreviewIcon = Image;
+					}
+					else if (Res && Res->GetName().Contains(TEXT("CustomiserPreview")))
+					{
+						LivePreviews.Add(Image);
+					}
 				}
 			}
+			if (!Icon || !PreviewIcon)
+			{
+				continue;
+			}
+			bShowingOurs = true;
+			for (UImage* Live : LivePreviews)
+			{
+				SetPatchedVisibility(Live, ESlateVisibility::Collapsed);
+			}
+			SetPatchedVisibility(PreviewIcon, ESlateVisibility::HitTestInvisible);
+			if (PreviewIcon->GetBrush().GetResourceObject() != Icon)
+			{
+				FSlateBrush Brush = PreviewIcon->GetBrush();
+				const FVector2D Size = Brush.GetImageSize();
+				Brush.SetResourceObject(Icon);
+				Brush.SetImageSize(Size.X > 1.f ? Size : FVector2D(256.f, 256.f));
+				PreviewIcon->SetBrush(Brush);
+			}
+		}
+		if (!bShowingOurs && GInfoBoxPatches.Num() > 0)
+		{
+			for (const FInfoBoxPatch& P : GInfoBoxPatches)
+			{
+				if (UImage* Image = P.Image.Get())
+				{
+					Image->SetVisibility(P.Original);
+				}
+			}
+			GInfoBoxPatches.Reset();
 		}
 	}
 
