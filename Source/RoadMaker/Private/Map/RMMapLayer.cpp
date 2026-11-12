@@ -37,6 +37,7 @@ namespace RMMapLayer
 	{
 		constexpr int32 MapTilePixels = 512;
 		constexpr int32 MapSuperSample = 2; // painted at 2x, averaged down (anti-aliasing)
+		constexpr int32 MapLineThick = 3; // side line width in supersampled pixels (3 at 2x = 1.5 m)
 		constexpr int32 MapTileMips = 5; // 512 .. 32
 		constexpr double MapTileWorld = 51200.0; // cm
 		constexpr int32 MapTilesPerTick = 6;
@@ -160,7 +161,7 @@ namespace RMMapLayer
 		}
 
 		/** Side lines sit just inside the edge: half a map pixel (1 px = 1 m). */
-		constexpr float MapEdgeInset = 50.f;
+		constexpr float MapEdgeInset = 100.f * MapLineThick / MapSuperSample * 0.5f; // line centre: half its width inside the edge
 
 		uint32 MapColourKey(const ARMBuildableProcedural* Piece)
 		{
@@ -548,7 +549,7 @@ namespace RMMapLayer
 				{
 					for (int32 I = 0; I + 1 < Edge.Num(); ++I)
 					{
-						MapDrawLine(Pixels, Big, ToPx(Edge[I]), ToPx(Edge[I + 1]), MapSuperSample, Piece->Edge);
+						MapDrawLine(Pixels, Big, ToPx(Edge[I]), ToPx(Edge[I + 1]), MapLineThick, Piece->Edge);
 					}
 				}
 			}
