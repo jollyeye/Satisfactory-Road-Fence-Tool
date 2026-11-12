@@ -159,9 +159,11 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	}
 	mBesideRoad = false;
 
-	// Any free road end near the aim point, whether you aim at the road or the ground next to it.
+	// Any free place at a road end near the aim point, whether you aim at the road or the ground next to
+	// it: the end's centre, or, on an end wider than this road, a place across it in 8 m steps (joining
+	// back the pieces of a split road beside a piece already attached).
 	TArray<FRMRoadEndRef> Ends;
-	RMRoadUtils::FindFreeEnds(GetWorld(), hitResult.Location, mSnapRadius, 1, nullptr, Ends);
+	RMRoadUtils::FindEndSlots(GetWorld(), hitResult.Location, mSnapRadius, GetRoadDefaults()->GetRoadWidth(), Ends);
 	if (Ends.Num() == 0)
 	{
 		return TrySnapToFoundation(hitResult);

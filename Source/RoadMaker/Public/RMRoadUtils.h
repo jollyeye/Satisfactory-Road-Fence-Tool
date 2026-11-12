@@ -54,6 +54,15 @@ namespace RMRoadUtils
 		const AActor* Ignore, TArray<FRMRoadEndRef>& OutEnds, bool bIncludeOccupied = false);
 
 	/**
+	 * Where a new road NewWidth wide can attach near Center: every road / intersection end gives its centre
+	 * and, when it is wider than the new road, places across it in 8 m steps (edge to edge with its sides),
+	 * so a road split lengthwise can be joined back piece by piece. A place is free when no other road or
+	 * intersection end overlaps it there. Each result is a copy of its end with Location moved to the place
+	 * and Width = NewWidth; nearest first.
+	 */
+	ROADMAKER_API void FindEndSlots(UWorld* World, const FVector& Center, float Radius, float NewWidth, TArray<FRMRoadEndRef>& OutSlots);
+
+	/**
 	 * If the hit is on a foundation-shaped building piece (classic or instanced), its transform and
 	 * local bounding box. Road Maker pieces are not foundations.
 	 */

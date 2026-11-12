@@ -289,3 +289,65 @@ FHitResult RMRoadUtils::ThroughMarking(const FHitResult& Hit)
 	Out.Component = Road->GetProceduralMesh();
 	return Out;
 }
+
+void RMRoadUtils::FindEndSlots(UWorld* World, const FVector& Center, float Radius, float NewWidth, TArray<FRMRoadEndRef>& OutSlots)
+{
+	OutSlots.Reset();
+	// Every end around (taken or not), and every end that could take a place (a bit further out).
+	TArray<FRMRoadEndRef> Ends;
+	FindFreeEnds(World, Center, Radius + RM::FoundationSize * 2.f, 0, nullptr, Ends, true);
+	TArray<FRMRoadEndRef> Others;
+	FindFreeEnds(World, Center, Radius + RM::FoundationSize * 4.f, 0, nullptr, Others, true);
+
+	for (const FRMRoadEndRef& End : Ends)
+	{
+		const FVector Out = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
+		const FVector Across = FVector::CrossProduct(FVector::UpVector, Out).GetSafeNormal();
+		TArray<float> Offsets = { 0.f };
+		if (End.Width > NewWidth + 1.f)
+		{
+			const int32 Count = FMath::RoundToInt((End.Width - NewWidth) / RM::FoundationSize);
+			for (int32 I = 0; I <= Count; ++I)
+			{
+				Offsets.AddUnique(FMath::RoundToFloat(-End.Width * 0.5f + NewWidth * 0.5f + I * RM::FoundationSize));
+			}
+		}
+		for (float Offset : Offsets)
+		{
+			const FVector Place = End.Location + Across * Offset;
+			// Taken: another end on the same line, facing the other way, whose width overlaps this place.
+			bool bTaken = false;
+			for (const FRMRoadEndRef& Other : Others)
+			{
+				if ((Other.Road && Other.Road == End.Road && Other.EndIndex == End.EndIndex)
+					|| (Other.Intersection && Other.Intersection == End.Intersection && Other.EndIndex == End.EndIndex))
+				{
+					continue; // the end itself
+				}
+				const FVector D = Other.Location - End.Location;
+				if (FMath::Abs(FVector::DotProduct(D, Out)) > 100.f || FMath::Abs(D.Z) > 100.f
+					|| FVector::DotProduct(FVector(Other.Outward.X, Other.Outward.Y, 0.f).GetSafeNormal(), Out) > -0.9f)
+				{
+					continue;
+				}
+				const float OtherOffset = FVector::DotProduct(D, Across);
+				if (FMath::Abs(OtherOffset - Offset) < (NewWidth + Other.Width) * 0.5f - 50.f)
+				{
+					bTaken = true;
+					break;
+				}
+			}
+			const float Distance = FVector::Dist(Place, Center);
+			if (bTaken || Distance > Radius)
+			{
+				continue;
+			}
+			FRMRoadEndRef Slot = End;
+			Slot.Location = Place;
+			Slot.Width = NewWidth;
+			Slot.Distance = Distance;
+			OutSlots.Add(Slot);
+		}
+	}
+	OutSlots.Sort([](const FRMRoadEndRef& A, const FRMRoadEndRef& B) { return A.Distance < B.Distance; });
+}
