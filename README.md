@@ -6,7 +6,7 @@ tools to cut, split and reshape roads, road fences and fence walls, a sign gantr
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.2.0**, for Satisfactory 1.2 with SML 3.12.
+Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 
 ![A curved asphalt road with lane arrows beside a glowing cyberpunk road, grid fence, street lights and a sign gantry](docs/screenshots/intro-1.2.jpg)
 
@@ -88,7 +88,7 @@ No Blueprint is edited by hand: the Python scripts are the source of truth for t
 
 ## Roadmap
 
-1.2.0 is out ([roadmap](docs/ROADMAP-1.2.0.md)). Planned for 1.3.0: traffic lights that follow the
+1.2.1 is out ([roadmap](docs/ROADMAP-1.2.0.md)). Planned for 1.3.0: traffic lights that follow the
 intersection, a Join tool, proper build animations per piece, and a road preview on the map.
 
 ## License and credits

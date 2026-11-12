@@ -89,21 +89,24 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
 ## Changelog for version 1.2.1
-- Road fences snapped with the snap key can no longer be built on top of the same kind of road fence ("The same fence is already there"); a different kind still replaces it.
-- Road holograms show a flat white arrow on top pointing the way the road runs (its lines and markings follow that direction).
-- Fence walls can no longer be built inside another fence wall (the hologram turns red, "Another fence wall is already there"), like the game's walls; stacking on top / below and meeting end to end still work.
-- A road built beside a road (snap key) can be locked and nudged like snapped fences: the whole road moves up / down, and along the directions nearest to where you look.
-- Roads snap to the side of a wider road end too, in 8 m steps, not only its centre: the pieces of a split road can be joined back next to a piece that is already attached (e.g. a 3-wide road split in three, sides removed: the 1-wide sides snap back on both sides of the middle one).
-- Lane markings keep their detailed shape (lying on the road) up to 300 m away, instead of 50 m.
-- Fixed: the customizer's info box showed the previous option's picture for Road Lines options; it now shows the option's own icon.
-- Fixed: after loading a save a second time in the same session, the customizer's Road Lines tab showed the previous tab's pictures instead of its own icons.
-- Road Intersection: clicking in the middle of the picked road ends builds it, also on small intersections (it used to pick or unpick the nearest end instead); click near an end to pick or unpick it.
+**Improved**
 - Intersections have a smooth top surface: where the road ends are at different heights it now rises as one even slope instead of folding along long thin triangles (better lighting, paths and vehicles ride it smoothly). Existing intersections update on load; things built on an uneven one may sit a few centimetres off where the old folds were.
 - Intersection connections (vehicle path + snap key on an intersection) follow the intersection's surface instead of cutting straight through it when the road ends are at different heights.
-- Street lights snapped between two roads side by side no longer flicker between facing one road and the other: they face the road you aim at.
-- Signs snap to fence walls and the sign gantry automatically again, no snap key needed (like wall attachments).
+- Roads snap to the side of a wider road end too, in 8 m steps, not only its centre: the pieces of a split road can be joined back next to a piece that is already attached (e.g. a 3-wide road split in three, sides removed: the 1-wide sides snap back on both sides of the middle one).
+- A road built beside a road (snap key) can be locked and nudged like snapped fences: the whole road moves up / down, and along the directions nearest to where you look.
+- Road holograms show a flat white arrow on top pointing the way the road runs (its lines and markings follow that direction).
+- Signs snap to fence walls and the sign gantry automatically, no snap key needed (like wall attachments).
+- Fence walls can no longer be built inside another fence wall (the hologram turns red, "Another fence wall is already there"), like the game's walls; stacking on top / below and meeting end to end still work.
+- Road fences snapped with the snap key can no longer be built on top of the same kind of road fence ("The same fence is already there"); a different kind still replaces it.
+- Lane markings keep their detailed shape (lying on the road) up to 300 m away, instead of 50 m.
+
+**Fixed**
+- Fence walls stack on other fence walls again without the snap key (aim at the upper half to build on top, the lower half to build below). The snap key still replaces the aimed fence wall with a different one, and still snaps fences to road edges and curbs.
 - Lane markings no longer get in the way: aiming at an arrow or number counts as aiming at the road under it (one-click lane paths and tracks, roads beside roads, fences, the gantry, Cut / Split / Adjust).
-- Fixed: fence walls stack on other fence walls again without the snap key (aim at the upper half to build on top, the lower half to build below). The snap key still replaces the aimed fence wall with a different one, and still snaps fences to road edges and curbs.
+- Road Intersection: clicking in the middle of the picked road ends builds it, also on small intersections (it used to pick or unpick the nearest end instead).
+- Street lights snapped between two roads side by side no longer flicker between the two roads: they face the road you aim at.
+- After loading a save a second time in the same session, the customizer's Road Lines tab showed the previous tab's pictures instead of its own icons.
+- The customizer's info box showed the previous option's picture for Road Lines options; it now shows the option's own icon.
 
 ## Changelog for version 1.2.0
 - **New curves:** roads and fences are drawn as quadratic Bezier curves. Gentle bends are one curve through the point where the start and end directions meet; S-curves, wide turns and U-turns become two smoothly joined curves. Same two clicks as before: the mouse wheel turns the start direction before the first click and the end direction before the second.

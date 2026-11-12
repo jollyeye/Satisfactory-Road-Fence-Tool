@@ -1,5 +1,7 @@
 # Road Maker 1.2.0 roadmap
 
+**1.2.1 released 2026-11-12** (fixes and improvements after 1.2.0, see the changelog in Tools/Release/ficsit-page.md; anything still found goes to 1.3.0).
+
 **Status 2026-11-11: everything below is done and tested in game; release pass (version 1.2.0, changelog, steel pipe item = `Desc_SteelPipe_C` verified) done.** Items 8 and 11 moved to 1.3.0.
 
 Agreed list (2026-11-11). Notes are first thoughts on how each could be done.
