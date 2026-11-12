@@ -69,18 +69,19 @@ void ARMRoadHologram::RebuildDirectionArrow(const TArray<FRMFrame>& Frames)
 	{
 		return;
 	}
-	// The intersection tool's 4 m arrow, lying flat on the road's top in the middle of the road
+	// The intersection tool's arrow (1.5 times its size), lying flat on the road's top in the middle of the road
 	// (hologram space), tip towards the road's end.
 	const FRMFrame& F = Frames[Frames.Num() / 2];
 	const FVector Fwd = F.Fwd.GetSafeNormal();
 	const FVector Side = F.Right.GetSafeNormal();
 	const FVector Base = F.Pos + F.Up * 5.f; // a hair above the road top
-	const FVector Tail = Base - Fwd * 200.f;
-	const FVector HeadBase = Base + Fwd * 50.f;
-	const FVector Tip = Base + Fwd * 200.f;
+	const float K = 1.5f; // 1.5 times the intersection tool's arrow: 6 m long
+	const FVector Tail = Base - Fwd * 200.f * K;
+	const FVector HeadBase = Base + Fwd * 50.f * K;
+	const FVector Tip = Base + Fwd * 200.f * K;
 	TArray<FVector> V = {
-		Tip, HeadBase + Side * 110.f, HeadBase - Side * 110.f,                                              // head
-		HeadBase - Side * 35.f, HeadBase + Side * 35.f, Tail + Side * 35.f, Tail - Side * 35.f };             // shaft
+		Tip, HeadBase + Side * 110.f * K, HeadBase - Side * 110.f * K,                                      // head
+		HeadBase - Side * 35.f * K, HeadBase + Side * 35.f * K, Tail + Side * 35.f * K, Tail - Side * 35.f * K }; // shaft
 	TArray<int32> T;
 	// Wound so the faces look up (both windings: seen from above whatever the frame's handedness).
 	T.Append({ 0, 1, 2, 0, 2, 1, 3, 4, 5, 3, 5, 6, 3, 5, 4, 3, 6, 5 });
