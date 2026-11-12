@@ -70,7 +70,8 @@ namespace
 	 * How many of the intersection's road slots these ends use: ends side by side count as one road
 	 * per 4 foundations of their total width (a road split in three still counts as one).
 	 */
-	int32 IsectCountRoadSlots(const TArray<FRMRoadEndRef>& Ends)
+	/** For each end, the index of its side-by-side group's root end (the same for the whole group). */
+	TArray<int32> IsectGroupEnds(const TArray<FRMRoadEndRef>& Ends)
 	{
 		TArray<int32> Group;
 		for (int32 I = 0; I < Ends.Num(); ++I)
@@ -95,10 +96,21 @@ namespace
 				}
 			}
 		}
+		TArray<int32> Out;
+		for (int32 I = 0; I < Ends.Num(); ++I)
+		{
+			Out.Add(Root(I));
+		}
+		return Out;
+	}
+
+	int32 IsectCountRoadSlots(const TArray<FRMRoadEndRef>& Ends)
+	{
+		const TArray<int32> Groups = IsectGroupEnds(Ends);
 		TMap<int32, float> Widths;
 		for (int32 I = 0; I < Ends.Num(); ++I)
 		{
-			Widths.FindOrAdd(Root(I)) += Ends[I].Width;
+			Widths.FindOrAdd(Groups[I]) += Ends[I].Width;
 		}
 		int32 Slots = 0;
 		const float MaxWidth = 4.f * RM::FoundationSize;
@@ -335,13 +347,41 @@ void ARMIntersectionHologram::RebuildOverlay()
 
 	const FLinearColor White(1.f, 1.f, 1.f);
 	const FLinearColor Orange(1.f, 0.35f, 0.f);
-	for (const FRMRoadEndRef& R : mPicked)
+	// Picked ends side by side (a split road, or roads that line up) show as one: one outline across
+	// all of them and one arrow in its middle.
+	const TArray<int32> Groups = IsectGroupEnds(mPicked);
+	for (int32 G = 0; G < mPicked.Num(); ++G)
 	{
-		if (!(mHasHover && SameEnd(R, mHover)))
+		if (Groups[G] != G)
 		{
-			B.Cap(R, White);
+			continue; // only once per group (at its root)
 		}
-		B.Arrow(R, White);
+		FRMRoadEndRef Merged = mPicked[G];
+		const FVector Out = FVector(Merged.Outward.X, Merged.Outward.Y, 0.f).GetSafeNormal();
+		const FVector Across = FVector::CrossProduct(FVector::UpVector, Out);
+		float MinAcross = TNumericLimits<float>::Max(), MaxAcross = -TNumericLimits<float>::Max();
+		int32 Members = 0;
+		bool bOnlyHover = true;
+		for (int32 I = 0; I < mPicked.Num(); ++I)
+		{
+			if (Groups[I] != G)
+			{
+				continue;
+			}
+			const float Mid = FVector::DotProduct(mPicked[I].Location - mPicked[G].Location, Across);
+			MinAcross = FMath::Min(MinAcross, Mid - mPicked[I].Width * 0.5f);
+			MaxAcross = FMath::Max(MaxAcross, Mid + mPicked[I].Width * 0.5f);
+			Merged.Height = FMath::Max(Merged.Height, mPicked[I].Height);
+			bOnlyHover &= mHasHover && SameEnd(mPicked[I], mHover);
+			++Members;
+		}
+		Merged.Location = mPicked[G].Location + Across * ((MinAcross + MaxAcross) * 0.5f);
+		Merged.Width = MaxAcross - MinAcross;
+		if (!(Members == 1 && bOnlyHover))
+		{
+			B.Cap(Merged, White);
+		}
+		B.Arrow(Merged, White);
 	}
 	if (mHasHover)
 	{
