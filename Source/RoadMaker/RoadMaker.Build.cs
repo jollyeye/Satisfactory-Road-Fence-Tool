@@ -21,6 +21,7 @@ public class RoadMaker : ModuleRules
 			"Slate",
 			"SlateCore",
 			"EnhancedInput",
+			"AkAudio", // the game's sounds (Wwise)
 			// Satisfactory + mod loader
 			"FactoryGame",
 			"SML",

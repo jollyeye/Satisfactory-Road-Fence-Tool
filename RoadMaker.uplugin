@@ -33,6 +33,11 @@
 			"Name": "ProceduralMeshComponent",
 			"Enabled": true,
 			"BasePlugin": true
+		},
+		{
+			"Name": "Wwise",
+			"Enabled": true,
+			"BasePlugin": true
 		}
 	]
 }
