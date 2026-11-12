@@ -660,6 +660,66 @@ namespace
 		return Keys;
 	}
 
+	/**
+	 * Diagnostics (RMIconLog): what a Road Lines tile shows, logged whenever it changes (at most 200
+	 * lines a session): every image in the tile, visible or not, its brush resource and, for icon
+	 * materials, their texture and IsColor parameters.
+	 */
+	TMap<TWeakObjectPtr<const UTextBlock>, FString> GTileStates;
+	int32 GIconLogLines = 0;
+
+	void LogTileState(UTextBlock* Label, UTexture2D* Wanted)
+	{
+		if (GIconLogLines >= 200)
+		{
+			return;
+		}
+		TArray<UWidget*> Widgets;
+		CollectWidgets(Label->GetTypedOuter<UUserWidget>(), Widgets);
+		FString State;
+		for (UWidget* W : Widgets)
+		{
+			UImage* Image = Cast<UImage>(W);
+			if (!Image)
+			{
+				continue;
+			}
+			UObject* Res = Image->GetBrush().GetResourceObject();
+			FString Detail = Res ? Res->GetName() : TEXT("none");
+			if (UMaterialInstance* MI = Cast<UMaterialInstance>(Res))
+			{
+				TArray<FMaterialParameterInfo> Infos;
+				TArray<FGuid> Ids;
+				MI->GetAllTextureParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& Info : Infos)
+				{
+					UTexture* T = nullptr;
+					MI->GetTextureParameterValue(Info, T);
+					Detail += FString::Printf(TEXT(" %s=%s"), *Info.Name.ToString(), T ? *T->GetName() : TEXT("none"));
+				}
+				Infos.Reset();
+				Ids.Reset();
+				MI->GetAllScalarParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& Info : Infos)
+				{
+					float V = 0.f;
+					MI->GetScalarParameterValue(Info, V);
+					Detail += FString::Printf(TEXT(" %s=%.2f"), *Info.Name.ToString(), V);
+				}
+			}
+			const UUserWidget* ImageOwner = Image->GetTypedOuter<UUserWidget>();
+			State += FString::Printf(TEXT(" | %s.%s vis=%d [%s]"), *GetNameSafe(ImageOwner ? ImageOwner->GetClass() : nullptr),
+				*Image->GetName(), static_cast<int32>(Image->GetVisibility()), *Detail);
+		}
+		FString& Last = GTileStates.FindOrAdd(Label);
+		if (Last != State)
+		{
+			Last = State;
+			++GIconLogLines;
+			UE_LOG(LogRoadMaker, Display, TEXT("RMIconLog tile '%s' wants %s:%s"), *Label->GetText().ToString(), *GetNameSafe(Wanted), *State);
+		}
+	}
+
 	bool FixCustomizerIcons(float)
 	{
 		UWorld* World = nullptr;
@@ -701,6 +761,7 @@ namespace
 			{
 				++Matches;
 				PutIconInTile(Label, Label->GetTypedOuter<UUserWidget>(), Icon->Get());
+				LogTileState(Label, Icon->Get());
 			}
 		}
 		// Once per session, when the Road Lines tab is open but no tile was matched, log what the
