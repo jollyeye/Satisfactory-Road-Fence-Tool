@@ -57,9 +57,9 @@ void ARMRoadHologram::ApplyArrowMaterial()
 	// Its own material: the game may give every mesh of a hologram the hologram material.
 	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
 	static UMaterialInterface* Overlay = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
-	if (Overlay && mDirectionArrow->GetNumSections() > 0)
+	for (int32 Section = 0; Overlay && Section < mDirectionArrow->GetNumSections(); ++Section)
 	{
-		mDirectionArrow->SetMaterial(0, Overlay);
+		mDirectionArrow->SetMaterial(Section, Overlay);
 	}
 	mDirectionArrow->SetRenderCustomDepth(false);
 }
@@ -92,6 +92,48 @@ void ARMRoadHologram::RebuildDirectionArrow(const TArray<FRMFrame>& Frames)
 	TArray<FVector> N;
 	N.Init(F.Up, V.Num());
 	mDirectionArrow->CreateMeshSection_LinearColor(0, V, T, N, TArray<FVector2D>(), C, TArray<FProcMeshTangent>(), false);
+
+	// Outline of the start cap (the road's end face where it starts): light blue, 4 pixels wide on screen.
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (PC && PC->PlayerCameraManager)
+	{
+		int32 ViewW = 0, ViewH = 0;
+		PC->GetViewportSize(ViewW, ViewH);
+		const FTransform& ToWorld = GetActorTransform();
+		const FVector Camera = ToWorld.InverseTransformPosition(PC->PlayerCameraManager->GetCameraLocation());
+		const float WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+		const ARMBuildableRoad* Road = GetRoadDefaults();
+		const FRMFrame& S = Frames[0];
+		const FVector Right = S.Right.GetSafeNormal();
+		const FVector Up = S.Up.GetSafeNormal();
+		const FVector Back = -S.Fwd.GetSafeNormal() * 2.f; // a hair outside the face
+		const float Half = Road->GetRoadWidth() * 0.5f;
+		const FVector TL = S.Pos - Right * Half + Back, TR = S.Pos + Right * Half + Back;
+		const FVector BL = TL - Up * Road->GetRoadHeight(), BR = TR - Up * Road->GetRoadHeight();
+		TArray<FVector> CV;
+		TArray<int32> CT;
+		TArray<FLinearColor> CC;
+		const FLinearColor LightBlue(0.35f, 0.75f, 1.f);
+		auto Line = [&](FVector A, FVector B)
+		{
+			const FVector Dir = (B - A).GetSafeNormal();
+			const float HA = 2.f * WorldPerPixel * FMath::Max(FVector::Dist(A, Camera), 10.f); // half of 4 px
+			const float HB = 2.f * WorldPerPixel * FMath::Max(FVector::Dist(B, Camera), 10.f);
+			A -= Dir * HA;
+			B += Dir * HB;
+			const FVector SA = FVector::CrossProduct(Dir, Camera - A).GetSafeNormal();
+			const FVector SB = FVector::CrossProduct(Dir, Camera - B).GetSafeNormal();
+			const int32 I = CV.Num();
+			CV.Append({ A - SA * HA, A + SA * HA, B + SB * HB, B - SB * HB });
+			CC.Append({ LightBlue, LightBlue, LightBlue, LightBlue });
+			CT.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
+		};
+		Line(TL, TR);
+		Line(TR, BR);
+		Line(BR, BL);
+		Line(BL, TL);
+		mDirectionArrow->CreateMeshSection_LinearColor(1, CV, CT, TArray<FVector>(), TArray<FVector2D>(), CC, TArray<FProcMeshTangent>(), false);
+	}
 	ApplyArrowMaterial();
 }
 
@@ -316,7 +358,8 @@ void ARMRoadHologram::UpdateHologramLook()
 	{
 		mPreviewMesh->SetMaterial(1, RMHologramLook::HoloVersion(Road->GetLookMaterialFor(mLook, false, Road->mBodyMaterial)));
 	}
-	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Primary.R, Primary.G, Primary.B, 1.0));
+	// All lines in the dark side line colour: a white middle line would run into the white direction arrow.
+	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
 	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
 	RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
 }

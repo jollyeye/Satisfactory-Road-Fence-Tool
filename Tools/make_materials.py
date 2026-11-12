@@ -265,6 +265,9 @@ def holo_instance(mat):
     ov = mi.get_editor_property("base_property_overrides")
     ov.set_editor_property("override_blend_mode", True)
     ov.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    # Two-sided: the hologram is seen from any angle (from below, through slopes).
+    ov.set_editor_property("override_two_sided", True)
+    ov.set_editor_property("two_sided", True)
     mi.set_editor_property("base_property_overrides", ov)
     MEL.update_material_instance(mi)
     eal.save_loaded_asset(mi, only_if_is_dirty=False)
