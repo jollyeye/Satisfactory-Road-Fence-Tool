@@ -73,6 +73,22 @@ public:
 
 	ARMBuildableRoad* SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight = nullptr);
 
+	/** Merge Road: can Other (lying beside this road) be merged with it? */
+	enum class EMergeCheck : uint8 { Ok, NotBeside, LengthMismatch, TooWide };
+	/**
+	 * Other must lie right beside this road, edge to edge (gap under 50 cm) and level with it, along
+	 * the whole length (either direction), starting and ending with it, and the two together at most
+	 * 4 foundations wide. OutCentre: the merged road's centre line (world frames), OutWidth its width.
+	 */
+	EMergeCheck CheckMerge(const ARMBuildableRoad* Other, TArray<FRMFrame>* OutCentre = nullptr, float* OutWidth = nullptr) const;
+
+	/**
+	 * Merge Road (server): replaces this road and Other with one road of their combined width along
+	 * the middle of the pair, with this road's lanes, look and paint (side lines on if either had them).
+	 * Markings, paths, tracks and fences stay where they are. Null if not possible.
+	 */
+	ARMBuildableRoad* MergeWith(ARMBuildableRoad* Other);
+
 	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;
 
 

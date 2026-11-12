@@ -1,4 +1,4 @@
-# Road Maker: creates every Blueprint asset the mod needs (all 7 tools).
+# Road Maker: creates every Blueprint asset the mod needs.
 # Run inside the editor: UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<this file>
 # Safe to re-run: existing assets are loaded and updated, not duplicated.
 import unreal
@@ -205,6 +205,7 @@ RMBuildableFence = native_class("RMBuildableFence")
 RMBuildableIntersection = native_class("RMBuildableIntersection")
 RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
+RMRoadMergeHologram = native_class("RMRoadMergeHologram")
 RMGantryHologram = native_class("RMGantryHologram")
 RMBuildableGantry = native_class("RMBuildableGantry")
 RMBuildableMarking = native_class("RMBuildableMarking")
@@ -253,6 +254,9 @@ finish(holo_cut)
 holo_split = make_bp("Holograms", "Holo_RoadSplit", RMRoadCutHologram)
 setp(cdo(holo_split), True, "m_split_tool", "mSplitTool")
 finish(holo_split)
+
+holo_merge = make_bp("Holograms", "Holo_RoadMerge", RMRoadMergeHologram)
+finish(holo_merge)
 
 holo_adjust = make_bp("Holograms", "Holo_RoadAdjust", RMRoadAdjustHologram)
 finish(holo_adjust)
@@ -359,7 +363,7 @@ if VehiclePathSubCat:
     lane_marking_subcat = None
 # Road Tools entries and their section.
 MARKING_TOOLS = ("LaneArrow", "LaneNumber")  # painted from the customizer (Road Lines), not in the build menu
-ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadAdjust": "road", "FenceCut": "fence"}
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "FenceCut": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -390,6 +394,8 @@ TOOLS = [
      {}, [], road_icons, {}),
     ("RoadSplit", RMBuildableRoadTool, holo_split, "Split Road", "Aim across a road 2 or more wide: the cyan line shows where it is split lengthwise, in steps of 8 m. Click to replace it with two roads side by side that keep its curve, lines and paint (a 2 wide road becomes two 1 wide roads, a 4 wide one for example 1 + 3). Free.",
      {}, [], road_icons, {}),
+    ("RoadMerge", RMBuildableRoadTool, holo_merge, "Merge Road", "The opposite of Split Road. Click a road to pick it (white outline), then click the road right beside it: edge to edge, at the same height, starting and ending together. The cyan outline shows the merged road; click to replace the two with one road of their combined width (at most 4 wide), with the first road's lanes, material and paint (side lines on if either had them). Markings, paths, tracks and fences stay where they are. Click the picked road again to drop it. Free.",
+     {}, [], road_icons, {}),
     ("RoadAdjust", RMBuildableRoadTool, holo_adjust, "Adjust Curvature", "Orange circles mark the road ends near you. Click one to grab that end (and the end of the road joined to it, when two roads meet end to end), then move it like a road end: the mouse wheel turns it, the snap key snaps it to a free road end, hold H to nudge it. The roads follow as holograms; click again to replace them with the new curves, keeping their other ends, lines and paint. Ends joined to an intersection stay. Free.",
      {}, [], road_icons, {}),
     ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
@@ -418,7 +424,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "RoadSplit": 2, "RoadAdjust": 3, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "RoadSplit": 2, "RoadMerge": 3, "RoadAdjust": 4, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "LaneArrow": 1, "LaneNumber": 2, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 

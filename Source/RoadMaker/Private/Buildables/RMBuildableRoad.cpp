@@ -310,6 +310,145 @@ void ARMBuildableRoad::DismantleReplaced()
 	IFGDismantleInterface::Execute_Dismantle(this);
 }
 
+ARMBuildableRoad::EMergeCheck ARMBuildableRoad::CheckMerge(const ARMBuildableRoad* Other, TArray<FRMFrame>* OutCentre, float* OutWidth) const
+{
+	if (!Other || Other == this)
+	{
+		return EMergeCheck::NotBeside;
+	}
+	if (mWidthInFoundations + Other->GetWidthInFoundations() > 4)
+	{
+		return EMergeCheck::TooWide;
+	}
+	TArray<FRMFrame> A, B;
+	GetWorldFrames(A, 100.f);
+	Other->GetWorldFrames(B, 100.f);
+	if (A.Num() < 2 || B.Num() < 2)
+	{
+		return EMergeCheck::NotBeside;
+	}
+	// The other road may run the other way.
+	const bool bReversed = FVector::DotProduct(FVector(A[0].Fwd.X, A[0].Fwd.Y, 0.f), FVector(B[0].Fwd.X, B[0].Fwd.Y, 0.f)) < 0.f;
+	const float LenB = B.Last().Dist;
+	auto BAt = [&B, LenB, bReversed](float Fraction) -> FVector
+	{
+		const float D = (bReversed ? 1.f - Fraction : Fraction) * LenB;
+		for (int32 I = 1; I < B.Num(); ++I)
+		{
+			if (B[I].Dist >= D)
+			{
+				const float Alpha = (D - B[I - 1].Dist) / FMath::Max(B[I].Dist - B[I - 1].Dist, KINDA_SMALL_NUMBER);
+				return FMath::Lerp(B[I - 1].Pos, B[I].Pos, Alpha);
+			}
+		}
+		return B.Last().Pos;
+	};
+
+	const float Tolerance = 50.f;
+	const float Expected = (GetRoadWidth() + Other->GetRoadWidth()) * 0.5f;
+	// Both ends in line with this road's ends (not longer or shorter).
+	for (const int32 End : { 0, 1 })
+	{
+		const FRMFrame& F = End == 0 ? A[0] : A.Last();
+		const FVector P = BAt(End == 0 ? 0.f : 1.f);
+		if (FMath::Abs(FVector::DotProduct(P - F.Pos, F.Fwd)) > 100.f)
+		{
+			return EMergeCheck::LengthMismatch;
+		}
+	}
+	// Beside it all the way, on one side, edge to edge and level (checked every tenth of the length).
+	float Side = 0.f;
+	const float LenA = A.Last().Dist;
+	for (int32 K = 0; K <= 10; ++K)
+	{
+		const float Fraction = K / 10.f;
+		FRMFrame F;
+		const float D = Fraction * LenA;
+		F = A.Last();
+		for (int32 I = 1; I < A.Num(); ++I)
+		{
+			if (A[I].Dist >= D)
+			{
+				F = A[I - 1];
+				break;
+			}
+		}
+		// The other road's nearest centre point (its curve runs parallel, a different length on bends).
+		FVector Nearest = B[0].Pos;
+		float BestSq = TNumericLimits<float>::Max();
+		for (const FRMFrame& G : B)
+		{
+			const float Sq = FVector::DistSquared2D(G.Pos, F.Pos);
+			if (Sq < BestSq)
+			{
+				BestSq = Sq;
+				Nearest = G.Pos;
+			}
+		}
+		const FVector Delta = Nearest - F.Pos;
+		const float Across = FVector::DotProduct(Delta, F.Right);
+		if (FMath::Abs(FMath::Abs(Across) - Expected) > Tolerance || FMath::Abs(Delta.Z) > Tolerance)
+		{
+			return EMergeCheck::NotBeside;
+		}
+		const float S = FMath::Sign(Across);
+		if (Side != 0.f && S != Side)
+		{
+			return EMergeCheck::NotBeside;
+		}
+		Side = S;
+	}
+	if (OutCentre)
+	{
+		// This road's curve moved sideways by half the other road's width, towards it.
+		TArray<FRMSplinePoint> Points;
+		RMGeometry::OffsetCurve(A, Side * Other->GetRoadWidth() * 0.5f, 200.f, Points);
+		RMGeometry::SampleSpline(Points, 100.f, *OutCentre);
+	}
+	if (OutWidth)
+	{
+		*OutWidth = GetRoadWidth() + Other->GetRoadWidth();
+	}
+	return EMergeCheck::Ok;
+}
+
+ARMBuildableRoad* ARMBuildableRoad::MergeWith(ARMBuildableRoad* Other)
+{
+	if (!HasAuthority() || !Other || GetIsDismantled() || Other->GetIsDismantled() || IsActorBeingDestroyed() || Other->IsActorBeingDestroyed())
+	{
+		return nullptr;
+	}
+	TArray<FRMFrame> Centre;
+	float Width = 0.f;
+	if (CheckMerge(Other, &Centre, &Width) != EMergeCheck::Ok || Centre.Num() < 2)
+	{
+		return nullptr;
+	}
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::OffsetCurve(Centre, 0.f, 200.f, Points);
+	const int32 Foundations = mWidthInFoundations + Other->GetWidthInFoundations();
+	UClass* Class = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), Foundations, Foundations));
+	UClass* Recipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), Foundations, Foundations));
+	if (!Class || Points.Num() < 2)
+	{
+		return nullptr;
+	}
+	// This road's lanes, look and paint (CopyCutSettingsTo); the build animation from the end nearer the player.
+	ARMBuildableRoad* Merged = Cast<ARMBuildableRoad>(SpawnLike(Class, Recipe, Points,
+		FMath::Max(1, GetCostMultiplier() + Other->GetCostMultiplier()), ERMRevealFrom::NearestPlayer));
+	if (!Merged)
+	{
+		return nullptr;
+	}
+	FRMMarkings Markings = mMarkings;
+	Markings.bEdgeLines |= Other->GetMarkings().bEdgeLines;
+	Merged->SetMarkings(Markings);
+	// The old roads go, leaving what is built on them (markings, paths, tracks) where it is.
+	DismantleReplaced();
+	Other->DismantleReplaced();
+	return Merged;
+}
+
 ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)
 {
 	if (OutRight)

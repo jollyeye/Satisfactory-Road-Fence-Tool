@@ -8,6 +8,38 @@
 // Note: "mDisqfualifyingText" is the game's own (misspelled) field name.
 
 UCLASS()
+class ROADMAKER_API URMCD_MergePickSecond : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_MergePickSecond() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergePickSecond", "Aim at the road right beside it (click the picked road again to drop it)"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_MergeNotBeside : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_MergeNotBeside() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeNotBeside", "Not right beside the picked road (edge to edge, same height, all along)"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_MergeLength : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_MergeLength() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeLength", "The roads must start and end together (cut them to match)"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_MergeTooWide : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_MergeTooWide() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeTooWide", "Together they would be wider than 4 foundations"); }
+};
+
+UCLASS()
 class ROADMAKER_API URMCD_TurnTooTight : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
