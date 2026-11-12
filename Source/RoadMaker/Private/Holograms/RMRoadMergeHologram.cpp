@@ -17,7 +17,6 @@ namespace
 		FVector Base;
 		FVector Camera;
 		float WorldPerPixel = 0.f;
-		APlayerController* PC = nullptr; // projects to the screen, for dash lengths
 		TArray<FVector> Vertices;
 		TArray<int32> Triangles;
 		TArray<FLinearColor> Colors;
@@ -40,10 +39,7 @@ namespace
 			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
 		}
 
-		/**
-		 * The outline of a road's top (both edges and both ends) as a selection outline: dashes that run
-		 * along it, 14 px dash / 14 px gap on screen whatever the distance and angle.
-		 */
+		/** The outline of a road's top seen from above: both edges and both ends, one solid line. */
 		void Outline(const TArray<FRMFrame>& Frames, float Width, float Pixels, const FLinearColor& Color)
 		{
 			if (Frames.Num() < 2)
@@ -52,67 +48,13 @@ namespace
 			}
 			const float Half = Width * 0.5f;
 			auto Edge = [&](const FRMFrame& F, float Side) { return F.Pos + F.Right * (Half * Side) + F.Up * 6.f; };
-			// One closed loop: left edge forward, far end, right edge back, near end.
-			TArray<FVector> Loop;
-			for (const FRMFrame& F : Frames)
+			for (int32 I = 1; I < Frames.Num(); ++I)
 			{
-				Loop.Add(Edge(F, -1.f));
+				Line(Edge(Frames[I - 1], -1.f), Edge(Frames[I], -1.f), Pixels, Color);
+				Line(Edge(Frames[I - 1], 1.f), Edge(Frames[I], 1.f), Pixels, Color);
 			}
-			for (int32 I = Frames.Num() - 1; I >= 0; --I)
-			{
-				Loop.Add(Edge(Frames[I], 1.f));
-			}
-			const FVector First = Loop[0]; // a copy: adding an element of the array itself is not allowed
-			Loop.Add(First);
-
-			// The dash pattern is measured on the screen (each segment projected), so dashes have the same
-			// length near and far and at any angle, like a 2D selection outline.
-			const float Dash = 14.f;                  // px
-			const float Period = 2.f * Dash;          // px: dash + equal gap
-			const float Phase = 0.f;
-			float S = 0.f; // pixels along the loop
-			for (int32 I = 1; I < Loop.Num(); ++I)
-			{
-				const FVector A = Loop[I - 1];
-				const FVector B = Loop[I];
-				const float Len = FVector::Dist(A, B);
-				if (Len < 1.f)
-				{
-					continue;
-				}
-				float LenPx = 0.f;
-				FVector2D SA, SB;
-				if (PC && PC->ProjectWorldLocationToScreen(A, SA) && PC->ProjectWorldLocationToScreen(B, SB))
-				{
-					LenPx = FVector2D::Distance(SA, SB);
-				}
-				else
-				{
-					// Behind the camera: the size of a pixel at that distance.
-					LenPx = Len / FMath::Max(WorldPerPixel * FMath::Max(FVector::Dist((A + B) * 0.5f, Camera), 10.f), KINDA_SMALL_NUMBER);
-				}
-				if (LenPx < 0.01f)
-				{
-					continue;
-				}
-				float From = S;
-				const float To = S + LenPx;
-				while (From < To)
-				{
-					const float InPeriod = FMath::Fmod(From + Phase, Period);
-					if (InPeriod < Dash)
-					{
-						const float End = FMath::Min(To, From + FMath::Max(Dash - InPeriod, 0.05f)); // always moves on
-						Line(FMath::Lerp(A, B, (From - S) / LenPx), FMath::Lerp(A, B, (End - S) / LenPx), Pixels, Color);
-						From = End;
-					}
-					else
-					{
-						From += FMath::Max(Period - InPeriod, 0.05f);
-					}
-				}
-				S = To;
-			}
+			Line(Edge(Frames[0], -1.f), Edge(Frames[0], 1.f), Pixels, Color);
+			Line(Edge(Frames.Last(), -1.f), Edge(Frames.Last(), 1.f), Pixels, Color);
 		}
 	};
 
@@ -257,7 +199,6 @@ void ARMRoadMergeHologram::RebuildOverlay()
 	FRMMergeOverlay B;
 	B.Base = GetActorLocation();
 	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
-	B.PC = PC;
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
 
 	const FLinearColor Cyan(0.f, 0.9f, 1.f);
@@ -268,13 +209,13 @@ void ARMRoadMergeHologram::RebuildOverlay()
 	{
 		// The road you would pick.
 		mAimed->GetWorldFrames(Frames, 200.f);
-		B.Outline(Frames, mAimed->GetRoadWidth(), 4.f, White);
+		B.Outline(Frames, mAimed->GetRoadWidth(), 8.f, White);
 	}
 	else if (!mAimed || mAimed == mFirst)
 	{
 		// Picked, waiting for the road beside it.
 		mFirst->GetWorldFrames(Frames, 200.f);
-		B.Outline(Frames, mFirst->GetRoadWidth(), 4.f, mAimed == mFirst ? Cyan : White);
+		B.Outline(Frames, mFirst->GetRoadWidth(), 8.f, mAimed == mFirst ? Cyan : White);
 	}
 	else
 	{
@@ -283,15 +224,15 @@ void ARMRoadMergeHologram::RebuildOverlay()
 		if (mFirst->CheckMerge(mAimed, &Centre, &Width) == ARMBuildableRoad::EMergeCheck::Ok)
 		{
 			// The merged road: one outline around both.
-			B.Outline(Centre, Width, 5.f, Cyan);
+			B.Outline(Centre, Width, 10.f, Cyan);
 		}
 		else
 		{
 			mFirst->GetWorldFrames(Frames, 200.f);
-			B.Outline(Frames, mFirst->GetRoadWidth(), 4.f, White);
+			B.Outline(Frames, mFirst->GetRoadWidth(), 8.f, White);
 			Frames.Reset();
 			mAimed->GetWorldFrames(Frames, 200.f);
-			B.Outline(Frames, mAimed->GetRoadWidth(), 4.f, Red);
+			B.Outline(Frames, mAimed->GetRoadWidth(), 8.f, Red);
 		}
 	}
 
