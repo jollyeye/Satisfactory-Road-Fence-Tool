@@ -49,6 +49,12 @@ public:
 	void SetLook(uint8 Look);
 	/** Customizer hover: shows a look without changing it; NoPreviewLook ends it. */
 	void SetPreviewLook(uint8 Look);
+	/** Top (or body) material of a look, Default for the plain look (holograms show the real surface). */
+	UMaterialInterface* GetLookMaterialFor(uint8 Look, bool bTop, UMaterialInterface* Default) const
+	{
+		const TArray<UMaterialInterface*>& Looks = bTop ? mLookTopMaterials : mLookBodyMaterials;
+		return Look > 0 && Looks.IsValidIndex(Look - 1) && Looks[Look - 1] ? Looks[Look - 1] : Default;
+	}
 	/** The painted colours as resolved from swatch / slot / custom colour (primary, secondary). */
 	void GetPaintColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const;
 

@@ -406,11 +406,23 @@ void ARMIntersectionHologram::RebuildPreview()
 	if (mLocalEnds.Num() >= 2)
 	{
 		FRMMesh Top, Body;
-		mGeometryValid = RMGeometry::BuildIntersection(mLocalEnds, mHeight, 400.f, 10, Top, Body);
+		TArray<FVector> Outline;
+		TArray<bool> IsMouth;
+		mGeometryValid = RMGeometry::BuildIntersection(mLocalEnds, mHeight, 400.f, 10, Top, Body, &Outline, &IsMouth);
 		if (mGeometryValid)
 		{
 			Top.ApplyToSection(mPreviewMesh, 0, false);
 			Body.ApplyToSection(mPreviewMesh, 1, false);
+			// Side lines, as the intersection will have them.
+			const ARMBuildableIntersection* CDO = mBuildClass ? Cast<ARMBuildableIntersection>(mBuildClass->GetDefaultObject()) : nullptr;
+			if (mSideLines && CDO)
+			{
+				TArray<TArray<FVector>> Curbs;
+				RMGeometry::GetIntersectionCurbs(Outline, IsMouth, Curbs);
+				FRMMesh Lines;
+				RMGeometry::BuildCurbLines(Curbs, CDO->mEdgeLineInset, Top, Lines);
+				Lines.ApplyToSection(mPreviewMesh, 2, false);
+			}
 		}
 	}
 	UpdateHologramLook();
@@ -424,13 +436,45 @@ void ARMIntersectionHologram::SetMaterialState(EHologramMaterialState state)
 
 void ARMIntersectionHologram::UpdateHologramLook()
 {
-	UMaterialInterface* Material = mPreviewMaterial;
-	if (!Material)
+	const bool bInvalid = mPlacementMaterialState == EHologramMaterialState::HMS_ERROR;
+	const ARMBuildableIntersection* CDO = mBuildClass ? Cast<ARMBuildableIntersection>(mBuildClass->GetDefaultObject()) : nullptr;
+	if (!bInvalid && CDO && mPreviewMesh->GetNumSections() > 0)
 	{
-		Material = (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR && mInvalidPlacementMaterial)
-			? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
+		// The real surface: the look and paint of the first road (or intersection) joined, as the
+		// intersection will be built. The game's outline (stencil) still shows valid / warning.
+		uint8 Look = 0;
+		FLinearColor Primary(1.f, 1.f, 1.f), Secondary(1.f, 1.f, 1.f);
+		CDO->GetPaintColours(Primary, Secondary);
+		for (const FRMRoadEndRef& End : mPicked)
+		{
+			const ARMBuildableProcedural* Joined = End.Road ? static_cast<const ARMBuildableProcedural*>(End.Road) : End.Intersection;
+			if (Joined)
+			{
+				Look = Joined->GetLook();
+				Joined->GetPaintColours(Primary, Secondary);
+				break;
+			}
+		}
+		UMaterialInterface* Top = CDO->GetLookMaterialFor(Look, true, CDO->mTopMaterial);
+		UMaterialInterface* Body = CDO->GetLookMaterialFor(Look, false, CDO->mBodyMaterial);
+		for (int32 I = 0; I < mPreviewMesh->GetNumSections(); ++I)
+		{
+			mPreviewMesh->SetMaterial(I, I == 1 ? Body : Top);
+		}
+		mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Primary.R, Primary.G, Primary.B, 1.0));
+		mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
+		RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
 	}
-	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+	else
+	{
+		// Can't be built: the game's red hologram.
+		UMaterialInterface* Material = mPreviewMaterial;
+		if (!Material)
+		{
+			Material = (bInvalid && mInvalidPlacementMaterial) ? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
+		}
+		RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+	}
 	// The pick overlay keeps its own material (the game may give every mesh the hologram material).
 	// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
 	static UMaterialInterface* OverlayFallback = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
