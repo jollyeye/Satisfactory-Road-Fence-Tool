@@ -2,6 +2,8 @@
 #include "RoadMakerModule.h"
 #include "AkAudioEvent.h"
 #include "AkGameplayStatics.h"
+#include "AkComponent.h"
+#include "AkRtpc.h"
 #include "Buildables/FGBuildable.h"
 #include "FGBuildEffectActor.h"
 #include "GameFramework/Actor.h"
@@ -19,11 +21,26 @@ namespace RMSound
 		UAkAudioEvent* GSwishEvent = nullptr;  // Play_BuildEffect_SwishComponents
 		UAkAudioEvent* GEndEvent = nullptr;    // Play_F_BuildEffect_Rework
 		bool GSearched = false;
+		// Game parameters the build effect sets on its sounds (found in its Blueprint code).
+		UAkRtpc* GSizeRtpc = nullptr;  // BuildEffect_Size_RTPC
+		UAkRtpc* GBoxRtpc = nullptr;   // RTPC_BoxVector
+		// TEST: the value range of the size parameter is unknown; each build tries the next value.
+		const float GSizeTests[] = { 0.f, 1.f, 5.f, 20.f, 100.f, 1000.f, 10000.f };
+		int32 GSizeTestIndex = 0;
 
 		void SoundCollect(UStruct* Struct, const FString& Where, TArray<TPair<FString, UAkAudioEvent*>>& Out)
 		{
 			for (UObject* Object : Struct->ScriptAndPropertyObjectReferences)
 			{
+				if (UAkRtpc* Rtpc = Cast<UAkRtpc>(Object))
+				{
+					UAkRtpc*& Slot = Rtpc->GetName().Contains(TEXT("Size")) ? GSizeRtpc : GBoxRtpc;
+					if (!Slot)
+					{
+						Slot = Rtpc;
+						Slot->AddToRoot();
+					}
+				}
 				if (Object && !Object->IsA<UAkAudioEvent>() && Object->GetClass()->GetName().StartsWith(TEXT("Ak")))
 				{
 					UE_LOG(LogRoadMaker, Display, TEXT("RMSound: also uses %s %s (%s)"), *Object->GetClass()->GetName(), *Object->GetPathName(), *Where);
@@ -100,7 +117,8 @@ namespace RMSound
 			return GStartEvent;
 		}
 
-		void SoundPostAt(AActor* Piece, UAkAudioEvent* Event)
+		/** Posts Event at the piece with the build effect's parameters set (size = SizeValue). */
+		void SoundPostAt(AActor* Piece, UAkAudioEvent* Event, float SizeValue)
 		{
 			if (!Piece || !Event || !Piece->GetWorld())
 			{
@@ -108,7 +126,21 @@ namespace RMSound
 			}
 			const FBox Bounds = Piece->GetComponentsBoundingBox();
 			const FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
-			UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
+			UAkComponent* Comp = UAkGameplayStatics::SpawnAkComponentAtLocation(Piece, Event, Where, Piece->GetActorRotation(), false, true);
+			if (!Comp)
+			{
+				UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
+				return;
+			}
+			if (GSizeRtpc)
+			{
+				Comp->SetRTPCValue(GSizeRtpc, SizeValue, 0, FString());
+			}
+			if (GBoxRtpc)
+			{
+				Comp->SetRTPCValue(GBoxRtpc, SizeValue, 0, FString());
+			}
+			Comp->PostAkEvent(Event, 0, FOnAkPostEventCallback());
 		}
 	}
 
@@ -123,7 +155,10 @@ namespace RMSound
 			GSearched = true;
 			SoundFindEvents();
 		}
-		SoundPostAt(Piece, GStartEvent);
+		const float Size = GSizeTests[GSizeTestIndex];
+		GSizeTestIndex = (GSizeTestIndex + 1) % UE_ARRAY_COUNT(GSizeTests);
+		UE_LOG(LogRoadMaker, Display, TEXT("RMSound: TEST build %s with size parameter %.0f"), *Piece->GetName(), Size);
+		SoundPostAt(Piece, GStartEvent, Size);
 		FTimerManager& Timers = Piece->GetWorld()->GetTimerManager();
 		const TWeakObjectPtr<AActor> Weak(Piece);
 		// During: the components swish, about every 0.4 s while the animation runs.
@@ -132,14 +167,14 @@ namespace RMSound
 			for (float At = 0.15f; At < Duration - 0.2f; At += 0.4f)
 			{
 				FTimerHandle Handle;
-				Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]() { SoundPostAt(Weak.Get(), GSwishEvent); }), At, false);
+				Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak, Size]() { SoundPostAt(Weak.Get(), GSwishEvent, Size); }), At, false);
 			}
 		}
 		// End: when the animation is done.
 		if (GEndEvent)
 		{
 			FTimerHandle Handle;
-			Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]() { SoundPostAt(Weak.Get(), GEndEvent); }), FMath::Max(Duration, 0.05f), false);
+			Timers.SetTimer(Handle, FTimerDelegate::CreateLambda([Weak, Size]() { SoundPostAt(Weak.Get(), GEndEvent, Size); }), FMath::Max(Duration, 0.05f), false);
 		}
 	}
 }
