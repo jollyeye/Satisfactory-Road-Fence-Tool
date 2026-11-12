@@ -13,6 +13,7 @@ enum class ERMRevealFrom : uint8
 	End,           // its last point
 	NearestPlayer, // the end nearer the local player (pieces built beside another one in one click)
 	NearestPoint,  // the end nearer mRevealPoint (Adjust Curvature: the grabbed point)
+	FromPoint,     // outwards both ways from mRevealPoint (Join Road: the joint)
 };
 
 UCLASS(Abstract)
@@ -102,6 +103,7 @@ protected:
 
 	TArray<FRMFrame> mRevealFrames;
 	bool mRevealFromEnd = false;
+	float mRevealPointAlong = -1.f; // FromPoint: distance along the piece of mRevealPoint
 
 	/** Distance between mesh rings in cm. Lower = smoother curves, more triangles. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")

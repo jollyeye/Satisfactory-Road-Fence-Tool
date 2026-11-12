@@ -8,6 +8,38 @@
 // Note: "mDisqfualifyingText" is the game's own (misspelled) field name.
 
 UCLASS()
+class ROADMAKER_API URMCD_JoinAimAtJoint : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_JoinAimAtJoint() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "JoinAimAtJoint", "Aim near where two roads meet end to end"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_JoinWidth : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_JoinWidth() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "JoinWidth", "The roads are not the same width"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_JoinKink : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_JoinKink() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "JoinKink", "The roads do not continue smoothly into each other"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_JoinCurve : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_JoinCurve() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "JoinCurve", "One road would not follow both curves (e.g. a straight and a curved piece)"); }
+};
+
+UCLASS()
 class ROADMAKER_API URMCD_MergePickSecond : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()

@@ -1,5 +1,6 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "FGRecipe.h"
+#include "Algo/Reverse.h"
 #include "RoadMakerModule.h"
 #include "FGDismantleInterface.h"
 #include "Kismet/GameplayStatics.h"
@@ -447,6 +448,150 @@ ARMBuildableRoad* ARMBuildableRoad::MergeWith(ARMBuildableRoad* Other)
 	DismantleReplaced();
 	Other->DismantleReplaced();
 	return Merged;
+}
+
+namespace
+{
+	/** Largest distance (seen from above) from a point of Path to the polyline Curve. */
+	float JoinMaxDeviation2D(const TArray<FRMFrame>& Path, const TArray<FRMFrame>& Curve)
+	{
+		float Worst = 0.f;
+		for (const FRMFrame& P : Path)
+		{
+			float Best = TNumericLimits<float>::Max();
+			for (int32 I = 1; I < Curve.Num(); ++I)
+			{
+				const FVector A(Curve[I - 1].Pos.X, Curve[I - 1].Pos.Y, 0.f);
+				const FVector B(Curve[I].Pos.X, Curve[I].Pos.Y, 0.f);
+				const FVector Q(P.Pos.X, P.Pos.Y, 0.f);
+				Best = FMath::Min(Best, FVector::Dist(Q, FMath::ClosestPointOnSegment(Q, A, B)));
+			}
+			Worst = FMath::Max(Worst, Best);
+		}
+		return Worst;
+	}
+}
+
+ARMBuildableRoad::EJoinCheck ARMBuildableRoad::CheckJoin(const ARMBuildableRoad* Other, int32 MyEnd, int32 OtherEnd, TArray<FRMFrame>* OutFrames) const
+{
+	if (!Other || Other == this)
+	{
+		return EJoinCheck::NotJoined;
+	}
+	TArray<FRMFrame> A, B;
+	GetWorldFrames(A, 100.f);
+	Other->GetWorldFrames(B, 100.f);
+	if (A.Num() < 2 || B.Num() < 2)
+	{
+		return EJoinCheck::NotJoined;
+	}
+	// Order: this road's outer end -> joint -> the other road's outer end.
+	// A course turned around runs the other way: its frames face the other way too.
+	auto Turn = [](TArray<FRMFrame>& Frames)
+	{
+		Algo::Reverse(Frames);
+		for (FRMFrame& F : Frames)
+		{
+			F.Fwd = -F.Fwd;
+			F.Right = -F.Right;
+		}
+	};
+	if (MyEnd == 0)
+	{
+		Turn(A);
+	}
+	if (OtherEnd == 1)
+	{
+		Turn(B);
+	}
+	const FVector Joint = A.Last().Pos;
+	if (FVector::Dist2D(Joint, B[0].Pos) > 50.f || FMath::Abs(Joint.Z - B[0].Pos.Z) > 50.f)
+	{
+		return EJoinCheck::NotJoined;
+	}
+	if (mWidthInFoundations != Other->GetWidthInFoundations())
+	{
+		return EJoinCheck::Width;
+	}
+	const FVector DirA = FVector(A.Last().Pos - A[A.Num() - 2].Pos).GetSafeNormal2D();
+	const FVector DirB = FVector(B[1].Pos - B[0].Pos).GetSafeNormal2D();
+	if (FVector::DotProduct(DirA, DirB) < 0.998f) // about 3.5 degrees
+	{
+		return EJoinCheck::Kink;
+	}
+	// The joined course, measured again from its start.
+	TArray<FRMFrame> Path = A;
+	for (int32 I = 1; I < B.Num(); ++I)
+	{
+		Path.Add(B[I]);
+	}
+	float Dist = 0.f;
+	for (int32 I = 0; I < Path.Num(); ++I)
+	{
+		Dist += I > 0 ? FVector::Dist(Path[I - 1].Pos, Path[I].Pos) : 0.f;
+		Path[I].Dist = Dist;
+	}
+	if (Dist > mMaxLength)
+	{
+		return EJoinCheck::TooLong;
+	}
+	// The curve a single road would have between the outer ends (quadratic as the road tool makes it,
+	// or the straight-mode curve): the two roads must lie on it.
+	const FVector StartDir = FVector(Path[1].Pos - Path[0].Pos).GetSafeNormal2D();
+	const FVector EndDir = FVector(Path.Last().Pos - Path[Path.Num() - 2].Pos).GetSafeNormal2D();
+	bool bMatches = false;
+	for (int32 Kind = 0; Kind < 2 && !bMatches; ++Kind)
+	{
+		TArray<FRMSplinePoint> Points;
+		if (Kind == 0)
+		{
+			RMGeometry::MakeQuadratic(Path[0].Pos, StartDir, Path.Last().Pos, EndDir, Points);
+		}
+		else
+		{
+			RMGeometry::MakeFixedEnds(Path[0].Pos, StartDir, Path.Last().Pos, EndDir, Points);
+		}
+		TArray<FRMFrame> Curve;
+		RMGeometry::SampleSpline(Points, 100.f, Curve);
+		bMatches = Curve.Num() >= 2 && JoinMaxDeviation2D(Path, Curve) <= 50.f;
+	}
+	if (!bMatches)
+	{
+		return EJoinCheck::Curve;
+	}
+	if (OutFrames)
+	{
+		*OutFrames = MoveTemp(Path);
+	}
+	return EJoinCheck::Ok;
+}
+
+ARMBuildableRoad* ARMBuildableRoad::JoinWith(ARMBuildableRoad* Other, int32 MyEnd, int32 OtherEnd)
+{
+	if (!HasAuthority() || !Other || GetIsDismantled() || Other->GetIsDismantled() || IsActorBeingDestroyed() || Other->IsActorBeingDestroyed())
+	{
+		return nullptr;
+	}
+	TArray<FRMFrame> Path;
+	if (CheckJoin(Other, MyEnd, OtherEnd, &Path) != EJoinCheck::Ok || Path.Num() < 2)
+	{
+		return nullptr;
+	}
+	// Refitted through both courses (keys every 2 m, exact ends and end directions), heights as they are.
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::OffsetCurve(Path, 0.f, 200.f, Points);
+	FVector JointLoc, JointOut;
+	GetEndWorld(MyEnd, JointLoc, JointOut);
+	// This road's lanes, look and paint; the build animation outwards from the joint (the inverse of Cut).
+	ARMBuildableRoad* Joined = Cast<ARMBuildableRoad>(SpawnLike(GetClass(), GetBuiltWithRecipe(), Points,
+		FMath::Max(1, GetCostMultiplier() + Other->GetCostMultiplier()), ERMRevealFrom::FromPoint, JointLoc));
+	if (!Joined)
+	{
+		return nullptr;
+	}
+	DismantleReplaced();
+	Other->DismantleReplaced();
+	return Joined;
 }
 
 ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)

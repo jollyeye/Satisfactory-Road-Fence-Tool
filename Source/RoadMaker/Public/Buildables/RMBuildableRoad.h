@@ -89,6 +89,23 @@ public:
 	 */
 	ARMBuildableRoad* MergeWith(ARMBuildableRoad* Other);
 
+	/** Join Road: can Other be joined to this road end to end (this road's end MyEnd meets Other's OtherEnd)? */
+	enum class EJoinCheck : uint8 { Ok, NotJoined, Width, Kink, Curve, TooLong };
+	/**
+	 * The two ends must meet (within 50 cm, same height) and continue smoothly; same width; the joined
+	 * length within the road's maximum; and the two must follow the one curve a single road would have
+	 * between the outer ends (seen from above, within 50 cm): a straight piece and a curved one, or a
+	 * curve and an S, cannot become one road. OutFrames: the joined course (world, from this road's
+	 * outer end to Other's outer end).
+	 */
+	EJoinCheck CheckJoin(const ARMBuildableRoad* Other, int32 MyEnd, int32 OtherEnd, TArray<FRMFrame>* OutFrames = nullptr) const;
+
+	/**
+	 * Join Road (server): replaces this road and Other with one road along both, with this road's lanes,
+	 * look and paint. Markings, paths, tracks and fences stay where they are. Null if not possible.
+	 */
+	ARMBuildableRoad* JoinWith(ARMBuildableRoad* Other, int32 MyEnd, int32 OtherEnd);
+
 	int32 PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>& OutSplits) const;
 
 

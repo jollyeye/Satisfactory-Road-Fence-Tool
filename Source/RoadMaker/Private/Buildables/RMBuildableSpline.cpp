@@ -103,6 +103,21 @@ void ARMBuildableSpline::PrepareReveal()
 {
 	GetLocalFrames(mRevealFrames, 100.f);
 	mRevealFromEnd = mRevealFrom == ERMRevealFrom::End;
+	mRevealPointAlong = -1.f;
+	if (mRevealFrom == ERMRevealFrom::FromPoint && mRevealFrames.Num() >= 2)
+	{
+		const FVector Local = GetActorTransform().InverseTransformPosition(mRevealPoint);
+		float BestSq = TNumericLimits<float>::Max();
+		for (const FRMFrame& F : mRevealFrames)
+		{
+			const float Sq = FVector::DistSquared(Local, F.Pos);
+			if (Sq < BestSq)
+			{
+				BestSq = Sq;
+				mRevealPointAlong = F.Dist;
+			}
+		}
+	}
 	if (mRevealFrames.Num() >= 2 && (mRevealFrom == ERMRevealFrom::NearestPlayer || mRevealFrom == ERMRevealFrom::NearestPoint))
 	{
 		FVector From = mRevealPoint;
@@ -142,6 +157,10 @@ float ARMBuildableSpline::RevealDistance(const FVector& LocalPos) const
 			BestSq = Sq;
 			Along = F.Dist;
 		}
+	}
+	if (mRevealPointAlong >= 0.f)
+	{
+		return FMath::Abs(Along - mRevealPointAlong);
 	}
 	return mRevealFromEnd ? mRevealFrames.Last().Dist - Along : Along;
 }
