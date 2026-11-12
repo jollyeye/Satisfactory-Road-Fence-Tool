@@ -26,3 +26,13 @@ Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to 
 
 ## Dropped
 - ~~**Road preview on the map** (item 8)~~: dropped (2026-11-12): opening the map cancels the hologram, so there is nothing to preview.
+
+## Later (1.4.0 or after)
+- **Integration with other mods / Automated Machines** (discussed 2026-11-12, postponed): no hard link between mods; a
+  name-based contract through Unreal reflection (works in the shipped game, where metadata is stripped). An actor is
+  "automatable" when it has `AM_GetAlarms()`, `AM_GetActions()`, `AM_DoAction(Action, On)` and an `AM_OnAlarm(Alarm)`
+  event; Automated Machines finds them by name and lists them like a machine's alarms / actions. Road Maker candidates:
+  intersection "Vehicle enters / leaves", "Busy / Clear" (the detection traffic lights need), road "Vehicle on road /
+  Road clear", boom barrier actions "Open / Closed" + alarms, traffic light "Turns green / red" + "Hold red". Optional
+  extra: a Road Maker subsystem publishing world events (road built / dismantled / cut / split / merged / joined,
+  intersection built) for other mods. Open questions: `AM_` naming as the shared standard; which vehicles count.
