@@ -126,29 +126,53 @@ namespace RMMapLayer
 			return true;
 		}
 
-		void MapLookColours(uint8 Look, FColor& OutFill, FColor& OutEdge)
+		/** A paint colour as the map can show it: HDR / negative values brought into 0..1, sRGB. */
+		FColor MapPaintColour(const FLinearColor& C)
 		{
-			switch (Look)
+			FLinearColor L(FMath::Max(C.R, 0.f), FMath::Max(C.G, 0.f), FMath::Max(C.B, 0.f), 1.f);
+			const float Peak = FMath::Max3(L.R, L.G, L.B);
+			if (Peak > 1.f)
+			{
+				L.R /= Peak; L.G /= Peak; L.B /= Peak;
+			}
+			return L.ToFColor(true);
+		}
+
+		/** Fill by look (cyberpunk: its primary colour); side lines in the secondary colour. */
+		void MapPieceColours(const ARMBuildableProcedural* Piece, FColor& OutFill, FColor& OutEdge)
+		{
+			FLinearColor Primary, Secondary;
+			Piece->GetPaintColours(Primary, Secondary);
+			switch (Piece->GetLook())
 			{
 			case 1: // concrete blocks
 				OutFill = FColor(150, 148, 140, 255);
-				OutEdge = FColor(70, 70, 70, 255);
 				break;
 			case 2: // cyberpunk
-				OutFill = FColor(55, 35, 85, 255);
-				OutEdge = FColor(40, 230, 240, 255);
+				OutFill = MapPaintColour(Primary);
 				break;
 			default: // asphalt
 				OutFill = FColor(55, 57, 62, 255);
-				OutEdge = FColor(235, 235, 235, 255);
 				break;
 			}
+			OutEdge = MapPaintColour(Secondary);
+		}
+
+		/** Side lines sit just inside the edge: half a map pixel (1 px = 1 m). */
+		constexpr float MapEdgeInset = 50.f;
+
+		uint32 MapColourKey(const ARMBuildableProcedural* Piece)
+		{
+			FColor Fill, Edge;
+			MapPieceColours(Piece, Fill, Edge);
+			return HashCombine(Fill.DWColor(), Edge.DWColor());
 		}
 
 		uint32 MapRoadKey(const ARMBuildableRoad* Road)
 		{
 			uint32 Key = HashCombine(GetTypeHash(Road->GetActorLocation()), GetTypeHash(Road->GetActorRotation().Yaw));
-			Key = HashCombine(Key, Road->GetWidthInFoundations() * 131u + Road->GetLook());
+			Key = HashCombine(Key, Road->GetWidthInFoundations() * 131u + Road->GetLook() + (Road->GetMarkings().bEdgeLines ? 7u : 0u));
+			Key = HashCombine(Key, MapColourKey(Road));
 			for (const FRMSplinePoint& P : Road->GetSplinePoints())
 			{
 				Key = HashCombine(Key, HashCombine(GetTypeHash(P.Location), GetTypeHash(P.Tangent)));
@@ -165,12 +189,15 @@ namespace RMMapLayer
 				return;
 			}
 			const float Half = Road->GetRoadWidth() * 0.5f;
-			TArray<FVector2D> Left, Right;
+			const float LineHalf = Half - MapEdgeInset;
+			TArray<FVector2D> Left, Right, LeftLine, RightLine;
 			double ZSum = 0.0;
 			for (const FRMFrame& F : Frames)
 			{
 				Left.Add(MapUnits(F.Pos - F.Right * Half));
 				Right.Add(MapUnits(F.Pos + F.Right * Half));
+				LeftLine.Add(MapUnits(F.Pos - F.Right * LineHalf));
+				RightLine.Add(MapUnits(F.Pos + F.Right * LineHalf));
 				ZSum += F.Pos.Z;
 			}
 			for (int32 I = 0; I + 1 < Frames.Num(); ++I)
@@ -179,10 +206,13 @@ namespace RMMapLayer
 			}
 			for (const FVector2D& P : Left) { Out.Bounds += P; }
 			for (const FVector2D& P : Right) { Out.Bounds += P; }
-			Out.Edges.Add(MoveTemp(Left));
-			Out.Edges.Add(MoveTemp(Right));
+			if (Road->GetMarkings().bEdgeLines)
+			{
+				Out.Edges.Add(MoveTemp(LeftLine));
+				Out.Edges.Add(MoveTemp(RightLine));
+			}
 			Out.Z = ZSum / Frames.Num();
-			MapLookColours(Road->GetLook(), Out.Fill, Out.Edge);
+			MapPieceColours(Road, Out.Fill, Out.Edge);
 		}
 
 		void MapBuildIntersection(const ARMBuildableIntersection* Isect, FRMMapPiece& Out)
@@ -193,17 +223,24 @@ namespace RMMapLayer
 			{
 				return;
 			}
-			TArray<FVector2D> Poly;
+			TArray<FVector2D> Poly, Inset;
 			double ZSum = 0.0;
+			FVector Centre = FVector::ZeroVector;
+			for (const FVector& P : Outline)
+			{
+				Centre += P;
+			}
+			Centre /= Outline.Num();
 			for (const FVector& P : Outline)
 			{
 				Poly.Add(MapUnits(P));
+				Inset.Add(MapUnits(P + (Centre - P).GetSafeNormal2D() * MapEdgeInset));
 				Out.Bounds += Poly.Last();
 				ZSum += P.Z;
 			}
-			// Curbs (not the mouths, where roads continue).
+			// Side lines along the curbs (not the mouths, where roads continue), if switched on.
 			TArray<FVector2D> Run;
-			for (int32 I = 0; I < Poly.Num(); ++I)
+			for (int32 I = 0; Isect->HasSideLines() && I < Inset.Num(); ++I)
 			{
 				const bool bMouth = IsMouth.IsValidIndex(I) && IsMouth[I];
 				if (bMouth)
@@ -212,13 +249,13 @@ namespace RMMapLayer
 					Run.Reset();
 					continue;
 				}
-				if (Run.Num() == 0) { Run.Add(Poly[I]); }
-				Run.Add(Poly[(I + 1) % Poly.Num()]);
+				if (Run.Num() == 0) { Run.Add(Inset[I]); }
+				Run.Add(Inset[(I + 1) % Inset.Num()]);
 			}
 			if (Run.Num() >= 2) { Out.Edges.Add(Run); }
 			Out.Fills.Add(MoveTemp(Poly));
 			Out.Z = ZSum / Outline.Num();
-			MapLookColours(Isect->GetLook(), Out.Fill, Out.Edge);
+			MapPieceColours(Isect, Out.Fill, Out.Edge);
 		}
 
 		void MapMarkDirty(const FBox2D& Box)
@@ -273,7 +310,7 @@ namespace RMMapLayer
 				ARMBuildableIntersection* Isect = *It;
 				if (IsValid(Isect) && !Isect->IsActorBeingDestroyed())
 				{
-					Visit(Isect, Isect->GetShapeKey(), [Isect](FRMMapPiece& P) { MapBuildIntersection(Isect, P); });
+					Visit(Isect, HashCombine(Isect->GetShapeKey(), HashCombine(MapColourKey(Isect), Isect->HasSideLines() ? 1u : 0u)), [Isect](FRMMapPiece& P) { MapBuildIntersection(Isect, P); });
 				}
 			}
 			for (auto It = GMapPieces.CreateIterator(); It; ++It)

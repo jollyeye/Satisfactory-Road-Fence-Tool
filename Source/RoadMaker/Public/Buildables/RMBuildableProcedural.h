@@ -49,6 +49,8 @@ public:
 	void SetLook(uint8 Look);
 	/** Customizer hover: shows a look without changing it; NoPreviewLook ends it. */
 	void SetPreviewLook(uint8 Look);
+	/** The painted colours as resolved from swatch / slot / custom colour (primary, secondary). */
+	void GetPaintColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const;
 
 	/** The road swatch the game gives unpainted roads (set by the module); cyberpunk roads that still have it get their own colours. */
 	static TSubclassOf<UFGFactoryCustomizationDescriptor_Swatch> sDefaultRoadSwatch;

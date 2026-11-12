@@ -331,6 +331,14 @@ UMaterialInterface* ARMBuildableProcedural::LookMaterial(const TArray<UMaterialI
 	return Look > 0 && Looks.IsValidIndex(Look - 1) && Looks[Look - 1] ? Looks[Look - 1] : Default;
 }
 
+void ARMBuildableProcedural::GetPaintColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const
+{
+	const FResolvedFactoryCustomizationData Resolved(mCustomizationData, mColorSlot);
+	OutPrimary = Resolved.PrimaryColor;
+	OutSecondary = Resolved.SecondaryColor;
+	AdjustColorsForLook(mCustomizationData, OutPrimary, OutSecondary);
+}
+
 void ARMBuildableProcedural::AdjustColorsForLook(const FFactoryCustomizationData& Data, FLinearColor& Primary, FLinearColor& Secondary) const
 {
 	// Every look uses the colours as painted; unpainted roads show the game's default swatch (FICSIT orange).
