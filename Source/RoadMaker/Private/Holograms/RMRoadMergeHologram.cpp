@@ -39,7 +39,10 @@ namespace
 			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
 		}
 
-		/** The outline of a road's top seen from above: both edges and both ends. */
+		/**
+		 * The outline of a road's top (both edges and both ends) as a selection outline: a dark line under
+		 * coloured dashes that run along it ("marching ants"). Dash sizes are in screen pixels.
+		 */
 		void Outline(const TArray<FRMFrame>& Frames, float Width, float Pixels, const FLinearColor& Color)
 		{
 			if (Frames.Num() < 2)
@@ -48,13 +51,60 @@ namespace
 			}
 			const float Half = Width * 0.5f;
 			auto Edge = [&](const FRMFrame& F, float Side) { return F.Pos + F.Right * (Half * Side) + F.Up * 6.f; };
-			for (int32 I = 1; I < Frames.Num(); ++I)
+			// One closed loop: left edge forward, far end, right edge back, near end.
+			TArray<FVector> Loop;
+			for (const FRMFrame& F : Frames)
 			{
-				Line(Edge(Frames[I - 1], -1.f), Edge(Frames[I], -1.f), Pixels, Color);
-				Line(Edge(Frames[I - 1], 1.f), Edge(Frames[I], 1.f), Pixels, Color);
+				Loop.Add(Edge(F, -1.f));
 			}
-			Line(Edge(Frames[0], -1.f), Edge(Frames[0], 1.f), Pixels, Color);
-			Line(Edge(Frames.Last(), -1.f), Edge(Frames.Last(), 1.f), Pixels, Color);
+			for (int32 I = Frames.Num() - 1; I >= 0; --I)
+			{
+				Loop.Add(Edge(Frames[I], 1.f));
+			}
+			Loop.Add(Loop[0]);
+
+			// Dash length from the size of a pixel at the outline's middle.
+			FVector Mid = FVector::ZeroVector;
+			for (const FVector& P : Loop)
+			{
+				Mid += P / Loop.Num();
+			}
+			const float PerPixel = WorldPerPixel * FMath::Max(FVector::Dist(Mid, Camera), 10.f);
+			const float Dash = 14.f * PerPixel;
+			const float Period = 2.f * Dash;
+			const float Phase = FMath::Fmod(static_cast<float>(FPlatformTime::Seconds()) * 60.f * PerPixel, Period); // 60 px per second
+
+			const FLinearColor Dark(0.02f, 0.02f, 0.02f);
+			float S = 0.f; // distance along the loop
+			for (int32 I = 1; I < Loop.Num(); ++I)
+			{
+				const FVector A = Loop[I - 1];
+				const FVector B = Loop[I];
+				const float Len = FVector::Dist(A, B);
+				if (Len < 1.f)
+				{
+					continue;
+				}
+				Line(A, B, Pixels + 2.f, Dark);
+				// The parts of this segment inside a dash: [k * Period - Phase, k * Period - Phase + Dash).
+				float From = S;
+				const float To = S + Len;
+				while (From < To)
+				{
+					const float InPeriod = FMath::Fmod(From + Phase, Period);
+					if (InPeriod < Dash)
+					{
+						const float End = FMath::Min(To, From + (Dash - InPeriod));
+						Line(FMath::Lerp(A, B, (From - S) / Len), FMath::Lerp(A, B, (End - S) / Len), Pixels, Color);
+						From = End;
+					}
+					else
+					{
+						From += Period - InPeriod;
+					}
+				}
+				S = To;
+			}
 		}
 	};
 
@@ -79,6 +129,16 @@ ARMRoadMergeHologram::ARMRoadMergeHologram()
 	mOverlayMesh->SetCastShadow(false);
 	mCanLockHologram = false;
 	mCanNudgeHologram = false;
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+void ARMRoadMergeHologram::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	if (mFirst || mAimed)
+	{
+		RebuildOverlay();
+	}
 }
 
 void ARMRoadMergeHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

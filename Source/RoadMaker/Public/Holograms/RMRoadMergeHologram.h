@@ -29,6 +29,8 @@ public:
 	virtual void CheckValidPlacement() override;
 	virtual int32 GetBaseCostMultiplier() const override { return 1; }
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
+	/** The outlines' dashes move every frame. */
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 	/** Outlines: the aimed / picked road, and the merged road (cyan, red if refused). */
