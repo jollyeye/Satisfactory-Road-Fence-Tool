@@ -24,9 +24,9 @@ namespace RMSound
 		// Game parameters the build effect sets on its sounds (found in its Blueprint code).
 		UAkRtpc* GSizeRtpc = nullptr;  // BuildEffect_Size_RTPC
 		UAkRtpc* GBoxRtpc = nullptr;   // RTPC_BoxVector
-		// TEST: the value range of the size parameter is unknown; each build tries the next value.
-		const float GSizeTests[] = { 0.f, 1.f, 5.f, 20.f, 100.f, 1000.f, 10000.f };
-		int32 GSizeTestIndex = 0;
+		// Size parameter for our pieces. Tested in game (2026-11-12): 0 = silent, 1..1000 = the normal
+		// build sound, 10000 = the end sound of a different (big) building. 100 sits safely in the middle.
+		constexpr float GBuildSize = 100.f;
 
 		void SoundCollect(UStruct* Struct, const FString& Where, TArray<TPair<FString, UAkAudioEvent*>>& Out)
 		{
@@ -155,9 +155,7 @@ namespace RMSound
 			GSearched = true;
 			SoundFindEvents();
 		}
-		const float Size = GSizeTests[GSizeTestIndex];
-		GSizeTestIndex = (GSizeTestIndex + 1) % UE_ARRAY_COUNT(GSizeTests);
-		UE_LOG(LogRoadMaker, Display, TEXT("RMSound: TEST build %s with size parameter %.0f"), *Piece->GetName(), Size);
+		const float Size = GBuildSize;
 		SoundPostAt(Piece, GStartEvent, Size);
 		FTimerManager& Timers = Piece->GetWorld()->GetTimerManager();
 		const TWeakObjectPtr<AActor> Weak(Piece);
