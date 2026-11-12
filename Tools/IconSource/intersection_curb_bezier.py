@@ -112,6 +112,32 @@ def make_quadratic(p0, u0, p1, u1):
     return [(p0, c0, m), (m, c1, p1)]
 
 
+def make_fixed_ends(p0, s, p1, e):
+    """MakeFixedEnds: Hermite tangents of a circular arc (what vehicle paths and rails use)."""
+    L = max(dist(p0, p1), 1.0)
+    s, e = norm(s), norm(e)
+    theta = math.acos(max(-1, min(1, s[0] * e[0] + s[1] * e[1])))
+    cq = math.cos(min(theta, math.radians(170)) * 0.25)
+    m = L / max(cq * cq, 0.25)
+    return mul(s, m), mul(e, m)
+
+
+def hermite(p0, t0, p1, t1, n=24, ends=False):
+    pts = []
+    for k in range(0 if ends else 1, n + 1 if ends else n):
+        t = k / n
+        h00, h10 = 2 * t**3 - 3 * t**2 + 1, t**3 - 2 * t**2 + t
+        h01, h11 = -2 * t**3 + 3 * t**2, t**3 - t**2
+        pts.append((h00 * p0[0] + h10 * t0[0] + h01 * p1[0] + h11 * t1[0],
+                    h00 * p0[1] + h10 * t0[1] + h01 * p1[1] + h11 * t1[1]))
+    return pts
+
+
+def curb_paths(p, dp, q, dq, n=24):
+    t0, t1 = make_fixed_ends(p, dp, q, (-dq[0], -dq[1]))
+    return hermite(p, t0, q, t1, n)
+
+
 def curb_new(p, dp, q, dq, n=16):
     pieces = make_quadratic(p, dp, q, (-dq[0], -dq[1]))
     pts = []
@@ -157,18 +183,15 @@ def end(cx, cy, deg, width=1600):
 
 
 CASES = [
-    ("1. Normal 4-way\n(same before and after)",
-     [end(-1600, 0, 0), end(1600, 0, 180), end(0, -1600, 90), end(0, 1600, 270)]),
-    ("2. T junction\n(straight side stays straight)",
-     [end(-1600, 0, 0), end(1600, 0, 180), end(0, -1600, 90)]),
-    ("3. Two ends offset, facing each other\n(edges parallel: was straight, now S-curve)",
-     [end(-2000, -500, 0), end(2000, 500, 180)]),
-    ("4. L bend\n(same before and after)",
-     [end(-1600, 0, 0), end(0, -1600, 90)]),
-    ("5. Narrow Y split\n(gap: was a deep V, now a round U;\n outer sides: was straight, now S-curves)",
-     [end(0, -2000, 90), end(-1100, 1900, -80), end(1100, 1900, 260)]),
-    ("6. Two roads side by side, same side\n(gap: was straight, now a small U;\n outer sides: was straight, now S-curves)",
-     [end(-1000, -1600, 90), end(1000, -1600, 90), end(0, 1800, 270, 2400)]),
+    ("Normal 4-way", [end(-1600, 0, 0), end(1600, 0, 180), end(0, -1600, 90), end(0, 1600, 270)]),
+    ("T junction", [end(-1600, 0, 0), end(1600, 0, 180), end(0, -1600, 90)]),
+    ("3-way, 60 / 150 / 150 degrees", [end(0, -1800, 90), end(-1500, 900, -30), end(1500, 900, 210)]),
+    ("Two ends offset, facing each other", [end(-2000, -500, 0), end(2000, 500, 180)]),
+    ("L bend", [end(-1600, 0, 0), end(0, -1600, 90)]),
+    ("Narrow Y split", [end(0, -2000, 90), end(-1100, 1900, -80), end(1100, 1900, 260)]),
+    ("Two roads side by side, same side", [end(-1000, -1600, 90), end(1000, -1600, 90), end(0, 1800, 270, 2400)]),
+    ("Irregular 5-way, mixed widths",
+     [end(-1900, -200, 5), end(1800, 300, 185, 2400), end(-300, -1900, 85), end(900, 1700, 250, 800), end(-1200, 1500, 300)]),
 ]
 
 
@@ -181,21 +204,62 @@ def road_stub(ax, e, length=1400):
     ax.add_patch(Polygon(pts, closed=True, facecolor="#5a5c62", edgecolor="#3a3c40", lw=0.8))
 
 
+def inside(pt, ring):
+    x, y = pt
+    c = False
+    for i in range(len(ring)):
+        (x1, y1), (x2, y2) = ring[i - 1], ring[i]
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) / (y2 - y1) * (x2 - x1):
+            c = not c
+    return c
+
+
+def lane_paths(ends):
+    """Vehicle paths through the junction like the snap-key junction tool: one lane each way per road."""
+    out = []
+    for a in ends:
+        for b in ends:
+            if a is b:
+                continue
+            (ac, ad, aw), (bc, bd, bw) = a, b
+            ad, bd = norm(ad), norm(bd)
+            ar, br = (-ad[1], ad[0]), (-bd[1], bd[0])
+            start = add(ac, mul(ar, aw / 4))            # right of the way in
+            stop = sub(bc, mul(br, bw / 4))             # right of the way out
+            t0, t1 = make_fixed_ends(start, ad, stop, (-bd[0], -bd[1]))
+            out.append(hermite(start, t0, stop, t1, 40, True))
+    return out
+
+
+def outside_count(paths, ring):
+    bad = 0
+    for path in paths:
+        if any(not inside(p, ring) for p in path[2:-2]):
+            bad += 1
+    return bad
+
+
 def main(out):
-    fig, axes = plt.subplots(2, 3, figsize=(16, 11))
+    fig, axes = plt.subplots(2, 4, figsize=(21, 11))
     fig.patch.set_facecolor("#f4f1ea")
     for ax, (title, ends) in zip(axes.flat, CASES):
         for e in ends:
             road_stub(ax, e)
         old = outline(ends, curb_current)
-        new = outline(ends, curb_new)
+        new = outline(ends, curb_paths)
+        paths = lane_paths(ends)
         ax.add_patch(Polygon(new, closed=True, facecolor="#f2c79a", edgecolor="none", alpha=0.7))
+        for path in paths:
+            xs, ys = zip(*path)
+            ax.plot(xs, ys, "-", color="#2e86c1", lw=0.9, alpha=0.8)
         xo, yo = zip(*(old + old[:1]))
         xn, yn = zip(*(new + new[:1]))
-        ax.plot(xo, yo, "--", color="#c0392b", lw=1.8, label="current")
-        ax.plot(xn, yn, "-", color="#e67e22", lw=2.4, label="roads' curves")
-        bad = self_intersects(new)
-        ax.set_title(title + ("\nOUTLINE CROSSES ITSELF -> keeps current" if bad else ""), fontsize=11)
+        ax.plot(xo, yo, "--", color="#c0392b", lw=1.8, label="current curb")
+        ax.plot(xn, yn, "-", color="#e67e22", lw=2.4, label="curb like the paths")
+        ax.plot([], [], "-", color="#2e86c1", lw=1, label="vehicle paths")
+        ob, nb = outside_count(paths, old), outside_count(paths, new)
+        extra = "\nOUTLINE CROSSES ITSELF -> keeps current" if self_intersects(new) else ""
+        ax.set_title(f"{title}\npaths leaving the curb: current {ob} / new {nb} of {len(paths)}{extra}", fontsize=11)
         ax.set_aspect("equal")
         ax.axis("off")
         ax.autoscale_view()
@@ -203,8 +267,8 @@ def main(out):
         y0, y1 = ax.get_ylim()
         ax.set_xlim(x0 - 300, x1 + 300)
         ax.set_ylim(y0 - 300, y1 + 300)
-    axes.flat[0].legend(loc="upper left", fontsize=10)
-    fig.suptitle("Intersection curbs: current vs the roads' quadratic curves (grey = roads, 1 grid = 1 m x 100)", fontsize=14)
+    axes.flat[0].legend(loc="upper left", fontsize=9)
+    fig.suptitle("Intersection curbs: current vs the same curve as vehicle paths and rails (MakeFixedEnds)", fontsize=14)
     fig.tight_layout()
     fig.savefig(out, dpi=110, facecolor=fig.get_facecolor())
 

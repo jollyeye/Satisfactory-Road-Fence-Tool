@@ -1527,9 +1527,9 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 	Sorted.Sort([](const FSortedEnd& A, const FSortedEnd& B) { return A.Angle < B.Angle; });
 
 	// Outline: road mouth (First -> Second) then a curb to the next road's First corner. The curbs are
-	// first made like roads (MakeQuadratic: one quadratic, or two for S-curves and wide turns); if that
-	// outline crosses itself or cannot be triangulated, the simple curbs are used (one quadratic whose
-	// control point is where the road edges meet, straight when they do not meet nearby).
+	// first made like the vehicle paths / rails through the junction (MakeFixedEnds); if that outline
+	// crosses itself or cannot be triangulated, the simple curbs are used (one quadratic whose control
+	// point is where the road edges meet, straight when they do not meet nearby).
 	TArray<FVector> Ring;
 	TArray<bool> EdgeIsMouth; // EdgeIsMouth[k] covers the edge Ring[k] -> Ring[k + 1]
 	TArray<int32> Tris;
@@ -1553,25 +1553,19 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 			const FVector Q = Next.First;
 			if (bRoadCurves)
 			{
-				// Like a road from P (heading into the junction) to Q (leaving along the next road's edge).
+				// The same curve as vehicle paths and rails through the junction (MakeFixedEnds: tangents of a
+				// circular arc), from P heading in to Q leaving along the next road's edge, so the paths that
+				// follow the lanes stay inside the curb.
 				TArray<FRMSplinePoint> Curve;
-				MakeQuadratic(P, Cur.Inward, Q, -Next.Inward, Curve);
-				const int32 Pieces = Curve.Num() - 1;
-				for (int32 Piece = 0; Piece < Pieces; ++Piece)
+				MakeFixedEnds(P, Cur.Inward, Q, -Next.Inward, Curve);
+				const float Step = FMath::Min(FilletSegments <= 3 ? 1600.f : 400.f,
+					FMath::Max(FVector::Dist2D(P, Q) / FilletSegments, 25.f));
+				TArray<FRMFrame> CurbFrames;
+				SampleSpline(Curve, Step, CurbFrames);
+				for (int32 K = 1; K + 1 < CurbFrames.Num(); ++K)
 				{
-					const FVector A = Curve[Piece].Location;
-					const FVector B = Curve[Piece + 1].Location;
-					const FVector C = A + Curve[Piece].Tangent * 0.5f; // the quadratic's control point
-					const float PieceLength = FVector::Dist2D(A, C) + FVector::Dist2D(C, B);
-					const int32 Segments = FMath::Clamp(FMath::Max(FMath::Max(FilletSegments / Pieces, 1),
-						FMath::CeilToInt(PieceLength / (FilletSegments <= 3 ? 1600.f : 400.f))), 1, 64);
-					const bool bLastPiece = Piece == Pieces - 1;
-					for (int32 K = 1; K < (bLastPiece ? Segments : Segments + 1); ++K)
-					{
-						const float T = static_cast<float>(K) / Segments;
-						Ring.Add(A * ((1.f - T) * (1.f - T)) + C * (2.f * (1.f - T) * T) + B * (T * T));
-						EdgeIsMouth.Add(false);
-					}
+					Ring.Add(CurbFrames[K].Pos);
+					EdgeIsMouth.Add(false);
 				}
 				continue;
 			}
