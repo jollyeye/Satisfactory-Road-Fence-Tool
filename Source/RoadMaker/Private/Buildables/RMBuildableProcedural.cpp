@@ -61,6 +61,10 @@ void ARMBuildableProcedural::BeginPlay()
 	if (bJustBuilt)
 	{
 		StartRiseAnimation();
+		// The game plays the construct sound as part of its build effect, which Road Maker pieces skip
+		// (see the constructor): play it ourselves (cosmetic, does nothing on a dedicated server).
+		PlayConstructSound();
+		UE_LOG(LogRoadMaker, Display, TEXT("RMSound: construct sound requested for %s"), *GetName());
 	}
 }
 
