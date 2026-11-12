@@ -45,10 +45,6 @@ namespace RMMapLayer
 		constexpr double MapBuildBudget = 0.003; // s
 		constexpr double MapPaintBudget = 0.004; // s
 		constexpr double MapScanInterval = 0.25; // s between looks for new / changed / removed pieces
-		// Bridges: a surface at least this much above what is painted under it shades it, in a band
-		// MapShadowWidth wide around it (both sides).
-		constexpr float MapBridgeHeight = 400.f; // cm
-		constexpr float MapShadowWidth = 300.f; // cm
 
 		/**
 		 * A piece of surface at one height: a road quad (4 m long) or a whole intersection. Painted in
@@ -58,7 +54,6 @@ namespace RMMapLayer
 		{
 			float Z = 0.f;
 			TArray<FVector2D> Fill;               // polygon
-			TArray<FVector2D> Shadow;             // the same, widened by MapShadowWidth
 			TArray<TArray<FVector2D>> Lines;      // side lines on it
 		};
 
@@ -66,7 +61,7 @@ namespace RMMapLayer
 		struct FRMMapPiece
 		{
 			uint32 Key = 0;
-			FBox2D Bounds = FBox2D(ForceInit);    // includes the shadow
+			FBox2D Bounds = FBox2D(ForceInit);
 			TArray<FRMMapSeg> Segs;
 			FColor Fill;
 			FColor Edge;
@@ -210,7 +205,6 @@ namespace RMMapLayer
 			}
 			const float Half = Road->GetRoadWidth() * 0.5f;
 			const float LineHalf = Half - MapEdgeInset;
-			const float ShadowHalf = Half + MapShadowWidth;
 			const bool bLines = Road->GetMarkings().bEdgeLines;
 			for (int32 I = 0; I + 1 < Frames.Num(); ++I)
 			{
@@ -220,14 +214,12 @@ namespace RMMapLayer
 				Seg.Z = (A.Pos.Z + B.Pos.Z) * 0.5f;
 				Seg.Fill = { MapUnits(A.Pos - A.Right * Half), MapUnits(A.Pos + A.Right * Half),
 					MapUnits(B.Pos + B.Right * Half), MapUnits(B.Pos - B.Right * Half) };
-				Seg.Shadow = { MapUnits(A.Pos - A.Right * ShadowHalf), MapUnits(A.Pos + A.Right * ShadowHalf),
-					MapUnits(B.Pos + B.Right * ShadowHalf), MapUnits(B.Pos - B.Right * ShadowHalf) };
 				if (bLines)
 				{
 					Seg.Lines.Add({ MapUnits(A.Pos - A.Right * LineHalf), MapUnits(B.Pos - B.Right * LineHalf) });
 					Seg.Lines.Add({ MapUnits(A.Pos + A.Right * LineHalf), MapUnits(B.Pos + B.Right * LineHalf) });
 				}
-				for (const FVector2D& P : Seg.Shadow) { Out.Bounds += P; }
+				for (const FVector2D& P : Seg.Fill) { Out.Bounds += P; }
 			}
 			MapPieceColours(Road, Out.Fill, Out.Edge);
 		}
@@ -254,8 +246,7 @@ namespace RMMapLayer
 				const FVector In = (Centre - P).GetSafeNormal2D();
 				Seg.Fill.Add(MapUnits(P));
 				Inset.Add(MapUnits(P + In * MapEdgeInset));
-				Seg.Shadow.Add(MapUnits(P - In * MapShadowWidth));
-				Out.Bounds += Seg.Shadow.Last();
+				Out.Bounds += Seg.Fill.Last();
 				ZSum += P.Z;
 			}
 			// Side lines along the curbs (not the mouths, where roads continue), if switched on.
@@ -580,39 +571,13 @@ namespace RMMapLayer
 			auto ToPx = [&](const FVector2D& M) { return (M - TileMin) * Scale; };
 			TArray<FColor> Pixels;
 			Pixels.Init(FColor(0, 0, 0, 0), Big * Big);
-			// Height of what is painted in each pixel, and which piece last shaded it (a piece shades once).
-			TArray<float> Height;
-			Height.Init(-1e30f, Big * Big);
-			TArray<int32> ShadedBy;
-			ShadedBy.Init(-1, Big * Big);
 			TArray<FVector2D> Poly;
 			for (const FRMMapDraw& D : Draws)
 			{
-				const float Z = D.Seg->Z;
-				// Shadow: darkens what is painted at least MapBridgeHeight below (not the road it joins).
-				Poly.Reset();
-				for (const FVector2D& M : D.Seg->Shadow) { Poly.Add(ToPx(M)); }
-				MapScanPolygon(Big, Poly, [&](int32 X, int32 Y)
-				{
-					const int32 I = Y * Big + X;
-					FColor& C = Pixels[I];
-					if (C.A != 0 && Height[I] < Z - MapBridgeHeight && ShadedBy[I] != D.PieceIndex)
-					{
-						ShadedBy[I] = D.PieceIndex;
-						C.R = uint8(C.R * 45 / 100);
-						C.G = uint8(C.G * 45 / 100);
-						C.B = uint8(C.B * 45 / 100);
-					}
-				});
 				Poly.Reset();
 				for (const FVector2D& M : D.Seg->Fill) { Poly.Add(ToPx(M)); }
 				const FColor Fill = D.Piece->Fill;
-				MapScanPolygon(Big, Poly, [&](int32 X, int32 Y)
-				{
-					const int32 I = Y * Big + X;
-					Pixels[I] = Fill;
-					Height[I] = Z;
-				});
+				MapScanPolygon(Big, Poly, [&](int32 X, int32 Y) { Pixels[Y * Big + X] = Fill; });
 				for (const TArray<FVector2D>& Line : D.Seg->Lines)
 				{
 					for (int32 I = 0; I + 1 < Line.Num(); ++I)
