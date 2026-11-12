@@ -701,17 +701,19 @@ namespace
 			{
 				continue;
 			}
-			UUserWidget* Owner = Image->GetTypedOuter<UUserWidget>();
-			FString OwnerName = Owner ? Owner->GetClass()->GetName() : FString();
-			// Big pictures only (the info panel's), anywhere in the UI, except the option tiles.
+			// Anything inside the customizer menu (any parent widget named Customi...), except the option tiles.
 			UObject* Res = Image->GetBrush().GetResourceObject();
-			if (!Res || OwnerName.Contains(TEXT("CustomiserIcon")) || Image->GetBrush().GetImageSize().X < 64.f)
+			FString OwnerName;
+			bool bInCustomizer = false;
+			for (UUserWidget* W = Image->GetTypedOuter<UUserWidget>(); W; W = W->GetTypedOuter<UUserWidget>())
+			{
+				const FString N = W->GetClass()->GetName();
+				OwnerName = OwnerName.IsEmpty() ? N : N + TEXT(">") + OwnerName;
+				bInCustomizer |= N.Contains(TEXT("Customi")) && !N.Contains(TEXT("CustomiserIcon")) && !N.Contains(TEXT("SettingsButton"));
+			}
+			if (!Res || !bInCustomizer || OwnerName.Contains(TEXT("CustomiserIcon")) || OwnerName.Contains(TEXT("SpotLight")))
 			{
 				continue;
-			}
-			if (UUserWidget* Outer2 = Owner ? Owner->GetTypedOuter<UUserWidget>() : nullptr)
-			{
-				OwnerName = Outer2->GetClass()->GetName() + TEXT(">") + OwnerName;
 			}
 			FString Detail = FString::Printf(TEXT("%s.%s size=%s res=%s"), *OwnerName, *Image->GetName(),
 				*Image->GetBrush().GetImageSize().ToString(), Res ? *Res->GetName() : TEXT("none"));
