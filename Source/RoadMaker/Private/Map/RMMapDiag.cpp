@@ -18,6 +18,7 @@
 #include "Components/PanelWidget.h"
 #include "Materials/MaterialInstance.h"
 #include "FGMapFunctionLibrary.h"
+#include "FGMinimapCaptureActor.h"
 #include "UObject/UObjectIterator.h"
 
 namespace RMMapDiag
