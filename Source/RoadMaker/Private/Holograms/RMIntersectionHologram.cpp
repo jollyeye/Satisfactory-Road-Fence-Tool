@@ -45,6 +45,69 @@ namespace
 	{
 		return A.Road == B.Road && A.Intersection == B.Intersection && A.EndIndex == B.EndIndex;
 	}
+
+	/**
+	 * Ends lying side by side as one wider road (e.g. strips made by Split Road): facing the same way,
+	 * on the same line across, at the same height, edge touching edge.
+	 */
+	bool IsectEndsSideBySide(const FRMRoadEndRef& A, const FRMRoadEndRef& B)
+	{
+		const FVector DirA = FVector(A.Outward.X, A.Outward.Y, 0.f).GetSafeNormal();
+		const FVector DirB = FVector(B.Outward.X, B.Outward.Y, 0.f).GetSafeNormal();
+		if (FVector::DotProduct(DirA, DirB) < 0.9994f) // within 2 degrees
+		{
+			return false;
+		}
+		const FVector Delta = B.Location - A.Location;
+		const FVector Across = FVector::CrossProduct(FVector::UpVector, DirA);
+		const float Tolerance = 50.f;
+		return FMath::Abs(FVector::DotProduct(Delta, DirA)) < Tolerance
+			&& FMath::Abs(Delta.Z) < Tolerance
+			&& FMath::Abs(FMath::Abs(FVector::DotProduct(Delta, Across)) - (A.Width + B.Width) * 0.5f) < Tolerance;
+	}
+
+	/**
+	 * How many of the intersection's road slots these ends use: ends side by side count as one road
+	 * per 4 foundations of their total width (a road split in three still counts as one).
+	 */
+	int32 IsectCountRoadSlots(const TArray<FRMRoadEndRef>& Ends)
+	{
+		TArray<int32> Group;
+		for (int32 I = 0; I < Ends.Num(); ++I)
+		{
+			Group.Add(I);
+		}
+		auto Root = [&Group](int32 I)
+		{
+			while (Group[I] != I)
+			{
+				I = Group[I];
+			}
+			return I;
+		};
+		for (int32 I = 0; I < Ends.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < Ends.Num(); ++J)
+			{
+				if (IsectEndsSideBySide(Ends[I], Ends[J]))
+				{
+					Group[Root(J)] = Root(I);
+				}
+			}
+		}
+		TMap<int32, float> Widths;
+		for (int32 I = 0; I < Ends.Num(); ++I)
+		{
+			Widths.FindOrAdd(Root(I)) += Ends[I].Width;
+		}
+		int32 Slots = 0;
+		const float MaxWidth = 4.f * RM::FoundationSize;
+		for (const TPair<int32, float>& W : Widths)
+		{
+			Slots += FMath::Max(1, FMath::CeilToInt(W.Value / MaxWidth - 0.01f));
+		}
+		return Slots;
+	}
 }
 
 void ARMIntersectionHologram::RefreshPicks()
@@ -108,10 +171,16 @@ bool ARMIntersectionHologram::DoMultiStepPlacement(bool isInputFromARelease)
 			{
 				mPicked.RemoveAt(Index);
 			}
-			else if (mPicked.Num() < mMaxRoads
-				&& !mPicked.ContainsByPredicate([this](const FRMRoadEndRef& R) { return FVector::Dist(R.Location, mHover.Location) > mPickMaxSpan; }))
+			else
 			{
-				mPicked.Add(mHover);
+				// Ends side by side (a split road) use one road slot per 4 foundations of width.
+				TArray<FRMRoadEndRef> WithHover = mPicked;
+				WithHover.Add(mHover);
+				if (IsectCountRoadSlots(WithHover) <= mMaxRoads
+					&& !mPicked.ContainsByPredicate([this](const FRMRoadEndRef& R) { return FVector::Dist(R.Location, mHover.Location) > mPickMaxSpan; }))
+				{
+					mPicked.Add(mHover);
+				}
 			}
 			mPickKey = 0; // redraw
 		}

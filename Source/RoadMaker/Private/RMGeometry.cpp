@@ -1551,6 +1551,10 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 
 			const FVector P = Cur.Second;
 			const FVector Q = Next.First;
+			if (bRoadCurves && FVector::Dist2D(P, Q) < 10.f)
+			{
+				continue; // ends side by side (e.g. a split road): no curb between them
+			}
 			if (bRoadCurves)
 			{
 				// The same curve as vehicle paths and rails through the junction (MakeFixedEnds: tangents of a
