@@ -702,12 +702,17 @@ namespace
 				continue;
 			}
 			UUserWidget* Owner = Image->GetTypedOuter<UUserWidget>();
-			const FString OwnerName = Owner ? Owner->GetClass()->GetName() : FString();
-			if (!OwnerName.Contains(TEXT("Custom")) || OwnerName.Contains(TEXT("CustomiserIcon")))
+			FString OwnerName = Owner ? Owner->GetClass()->GetName() : FString();
+			// Big pictures only (the info panel's), anywhere in the UI, except the option tiles.
+			UObject* Res = Image->GetBrush().GetResourceObject();
+			if (!Res || OwnerName.Contains(TEXT("CustomiserIcon")) || Image->GetBrush().GetImageSize().X < 64.f)
 			{
 				continue;
 			}
-			UObject* Res = Image->GetBrush().GetResourceObject();
+			if (UUserWidget* Outer2 = Owner ? Owner->GetTypedOuter<UUserWidget>() : nullptr)
+			{
+				OwnerName = Outer2->GetClass()->GetName() + TEXT(">") + OwnerName;
+			}
 			FString Detail = FString::Printf(TEXT("%s.%s size=%s res=%s"), *OwnerName, *Image->GetName(),
 				*Image->GetBrush().GetImageSize().ToString(), Res ? *Res->GetName() : TEXT("none"));
 			if (UMaterialInstance* MI = Cast<UMaterialInstance>(Res))
