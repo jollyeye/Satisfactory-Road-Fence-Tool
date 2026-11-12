@@ -230,7 +230,8 @@ namespace RMGeometry
 	 * OutOutline receives the top outline, useful for fences or debugging.
 	 */
 	ROADMAKER_API bool BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr, TArray<bool>* OutEdgeIsMouth = nullptr);
+		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr, TArray<bool>* OutEdgeIsMouth = nullptr,
+		float GridSpacing = 250.f);
 
 	/**
 	 * The curved curbs of an intersection: each is the outline run between two neighbouring road

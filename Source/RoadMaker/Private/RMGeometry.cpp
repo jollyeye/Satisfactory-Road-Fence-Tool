@@ -237,6 +237,249 @@ namespace
 		}
 		return OutTris.Num() >= 3;
 	}
+
+	// --- Intersection top surface: points inside the outline, smooth heights ("soap film") -------
+
+	bool IsectInside2D(const TArray<FVector>& Ring, const FVector& P)
+	{
+		bool bIn = false;
+		for (int32 I = 0, J = Ring.Num() - 1; I < Ring.Num(); J = I++)
+		{
+			const FVector& A = Ring[I];
+			const FVector& B = Ring[J];
+			if ((A.Y > P.Y) != (B.Y > P.Y) && P.X < (B.X - A.X) * (P.Y - A.Y) / (B.Y - A.Y) + A.X)
+			{
+				bIn = !bIn;
+			}
+		}
+		return bIn;
+	}
+
+	float IsectDistToRing2D(const TArray<FVector>& Ring, const FVector& P)
+	{
+		float Best = TNumericLimits<float>::Max();
+		for (int32 I = 0; I < Ring.Num(); ++I)
+		{
+			const FVector2D A(Ring[I]), B(Ring[(I + 1) % Ring.Num()]), Q(P);
+			const FVector2D AB = B - A;
+			const float T = FMath::Clamp(FVector2D::DotProduct(Q - A, AB) / FMath::Max(AB.SizeSquared(), 1.f), 0.f, 1.f);
+			Best = FMath::Min(Best, FVector2D::Distance(Q, A + AB * T));
+		}
+		return Best;
+	}
+
+	/** Delaunay triangulation (Bowyer-Watson) of points seen from above; a few hundred points at most. */
+	void IsectDelaunay2D(const TArray<FVector>& P, TArray<int32>& OutTris)
+	{
+		OutTris.Reset();
+		const int32 N = P.Num();
+		// Doubles, around the middle of the piece: world coordinates are large for float circumcircles.
+		FVector2d Mid(0.0, 0.0);
+		for (const FVector& V : P)
+		{
+			Mid += FVector2d(V.X, V.Y) / N;
+		}
+		double Extent = 100.0;
+		TArray<FVector2d> Pts;
+		for (const FVector& V : P)
+		{
+			Pts.Add(FVector2d(V.X, V.Y) - Mid);
+			Extent = FMath::Max(Extent, Pts.Last().GetAbsMax());
+		}
+		const double Span = Extent * 20.0;
+		Pts.Add(FVector2d(-Span, -Span));
+		Pts.Add(FVector2d(Span, -Span));
+		Pts.Add(FVector2d(0.0, Span));
+		struct FTri { int32 A, B, C; FVector2d Center; double R2; };
+		auto Make = [&Pts](int32 A, int32 B, int32 C) -> FTri
+		{
+			const FVector2d& a = Pts[A]; const FVector2d& b = Pts[B]; const FVector2d& c = Pts[C];
+			const double D = 2.0 * (a.X * (b.Y - c.Y) + b.X * (c.Y - a.Y) + c.X * (a.Y - b.Y));
+			FTri T{ A, B, C, FVector2d(0.0, 0.0), TNumericLimits<double>::Max() };
+			if (FMath::Abs(D) > 1e-9)
+			{
+				const double A2 = a.SizeSquared(), B2 = b.SizeSquared(), C2 = c.SizeSquared();
+				T.Center = FVector2d((A2 * (b.Y - c.Y) + B2 * (c.Y - a.Y) + C2 * (a.Y - b.Y)) / D,
+					(A2 * (c.X - b.X) + B2 * (a.X - c.X) + C2 * (b.X - a.X)) / D);
+				T.R2 = FVector2d::DistSquared(T.Center, a);
+			}
+			return T;
+		};
+		TArray<FTri> Tris;
+		Tris.Add(Make(N, N + 1, N + 2));
+		for (int32 I = 0; I < N; ++I)
+		{
+			TArray<TPair<int32, int32>> Edges;
+			for (int32 T = Tris.Num() - 1; T >= 0; --T)
+			{
+				if (FVector2d::DistSquared(Tris[T].Center, Pts[I]) < Tris[T].R2)
+				{
+					Edges.Add({ Tris[T].A, Tris[T].B });
+					Edges.Add({ Tris[T].B, Tris[T].C });
+					Edges.Add({ Tris[T].C, Tris[T].A });
+					Tris.RemoveAtSwap(T);
+				}
+			}
+			for (int32 E = 0; E < Edges.Num(); ++E)
+			{
+				bool bShared = false;
+				for (int32 F = 0; F < Edges.Num(); ++F)
+				{
+					if (E != F && ((Edges[E].Key == Edges[F].Value && Edges[E].Value == Edges[F].Key)
+						|| (Edges[E].Key == Edges[F].Key && Edges[E].Value == Edges[F].Value)))
+					{
+						bShared = true;
+						break;
+					}
+				}
+				if (!bShared)
+				{
+					Tris.Add(Make(Edges[E].Key, Edges[E].Value, I));
+				}
+			}
+		}
+		for (const FTri& T : Tris)
+		{
+			if (T.A < N && T.B < N && T.C < N)
+			{
+				OutTris.Add(T.A);
+				OutTris.Add(T.B);
+				OutTris.Add(T.C);
+			}
+		}
+	}
+
+	/**
+	 * The intersection's top: the outline (Ring) plus points every GridSpacing inside it, triangulated, and
+	 * the inside points' heights smoothed between the outline's (each the average of its neighbours, the
+	 * smoothest surface that meets every road end). False if the triangulation does not fill the outline
+	 * exactly (then the caller keeps the plain outline triangulation).
+	 */
+	bool IsectSmoothTop(const TArray<FVector>& Ring, float GridSpacing, TArray<FVector>& OutPoints, TArray<int32>& OutTris)
+	{
+		const int32 N = Ring.Num();
+		OutPoints = Ring;
+		FBox2D Box(ForceInit);
+		for (const FVector& V : Ring)
+		{
+			Box += FVector2D(V);
+		}
+		float MeanZ = 0.f;
+		for (const FVector& V : Ring)
+		{
+			MeanZ += V.Z / N;
+		}
+		const float G = FMath::Max(GridSpacing, 50.f);
+		for (float X = Box.Min.X + G * 0.5f; X < Box.Max.X; X += G)
+		{
+			for (float Y = Box.Min.Y + G * 0.5f; Y < Box.Max.Y; Y += G)
+			{
+				const FVector P(X, Y, MeanZ);
+				if (IsectInside2D(Ring, P) && IsectDistToRing2D(Ring, P) > G * 0.6f)
+				{
+					OutPoints.Add(P);
+				}
+				if (OutPoints.Num() > 600)
+				{
+					return false; // a huge piece: keep it simple
+				}
+			}
+		}
+		if (OutPoints.Num() == N)
+		{
+			return false; // nothing inside (small piece): the outline is enough
+		}
+		TArray<int32> All;
+		IsectDelaunay2D(OutPoints, All);
+		// Keep the triangles inside the outline; they must cover it exactly.
+		float RingArea = 0.f;
+		for (int32 K = 0; K < N; ++K)
+		{
+			RingArea += Cross2D(Ring[K], Ring[(K + 1) % N]) * 0.5f;
+		}
+		const float WantSign = RingArea >= 0.f ? 1.f : -1.f;
+		float Covered = 0.f;
+		OutTris.Reset();
+		for (int32 T = 0; T + 2 < All.Num(); T += 3)
+		{
+			const FVector& A = OutPoints[All[T]];
+			const FVector& B = OutPoints[All[T + 1]];
+			const FVector& C = OutPoints[All[T + 2]];
+			// Inside the outline: its middle, and each side's middle (nudged a hair toward the middle, since
+			// sides along the outline lie exactly on it).
+			const FVector Centroid = (A + B + C) / 3.f;
+			auto SideInside = [&Ring, &Centroid](const FVector& U, const FVector& V)
+			{
+				const FVector M = (U + V) * 0.5f;
+				return IsectInside2D(Ring, M + (Centroid - M) * 0.02f);
+			};
+			if (!IsectInside2D(Ring, Centroid) || !SideInside(A, B) || !SideInside(B, C) || !SideInside(C, A))
+			{
+				continue;
+			}
+			const float Area = Cross2D(B - A, C - A) * 0.5f;
+			Covered += FMath::Abs(Area);
+			if (Area * WantSign >= 0.f)
+			{
+				OutTris.Append({ All[T], All[T + 1], All[T + 2] });
+			}
+			else
+			{
+				OutTris.Append({ All[T], All[T + 2], All[T + 1] });
+			}
+		}
+		if (FMath::Abs(Covered - FMath::Abs(RingArea)) > FMath::Abs(RingArea) * 0.002f + 100.f)
+		{
+			return false; // gaps or overhangs: not safe
+		}
+		// Every outline side must be a triangle side, so the surface meets the curbs exactly.
+		TSet<uint64> Sides;
+		for (int32 T = 0; T + 2 < OutTris.Num(); T += 3)
+		{
+			for (int32 E = 0; E < 3; ++E)
+			{
+				const uint32 U = OutTris[T + E], V = OutTris[T + (E + 1) % 3];
+				Sides.Add((uint64(FMath::Min(U, V)) << 32) | FMath::Max(U, V));
+			}
+		}
+		for (int32 K = 0; K < N; ++K)
+		{
+			const uint32 U = K, V = (K + 1) % N;
+			if (!Sides.Contains((uint64(FMath::Min(U, V)) << 32) | FMath::Max(U, V)))
+			{
+				return false;
+			}
+		}
+		// Heights: the outline stays; the inside settles to the average of its neighbours.
+		TArray<TSet<int32>> Near;
+		Near.SetNum(OutPoints.Num());
+		for (int32 T = 0; T + 2 < OutTris.Num(); T += 3)
+		{
+			for (int32 E = 0; E < 3; ++E)
+			{
+				const int32 I = OutTris[T + E];
+				Near[I].Add(OutTris[T + (E + 1) % 3]);
+				Near[I].Add(OutTris[T + (E + 2) % 3]);
+			}
+		}
+		for (int32 Pass = 0; Pass < 300; ++Pass)
+		{
+			for (int32 I = N; I < OutPoints.Num(); ++I)
+			{
+				if (Near[I].Num() == 0)
+				{
+					continue;
+				}
+				float Sum = 0.f;
+				for (int32 J : Near[I])
+				{
+					Sum += OutPoints[J].Z;
+				}
+				OutPoints[I].Z = Sum / Near[I].Num();
+			}
+		}
+		return true;
+	}
 }
 
 void RMGeometry::SampleSpline(const TArray<FRMSplinePoint>& Points, float Step, TArray<FRMFrame>& OutFrames)
@@ -1240,7 +1483,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 // ---------------------------------------------------------------------------------------------
 
 bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth)
+	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth, float GridSpacing)
 {
 	if (Ends.Num() < 2)
 	{
@@ -1369,14 +1612,42 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		return false;
 	}
 	{
-		const int32 Base = Top.Vertices.Num();
-		for (const FVector& P : Ring)
+		// The top: points inside too, with smooth heights between the road ends, so an uneven intersection
+		// is one even surface (no folds along long thin triangles). Small pieces keep the plain outline.
+		TArray<FVector> TopPoints;
+		TArray<int32> TopTris;
+		if (!IsectSmoothTop(Ring, GridSpacing, TopPoints, TopTris))
 		{
-			Top.AddVertex(P, FVector::UpVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
+			TopPoints = Ring;
+			TopTris = Tris;
 		}
-		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
+		// Normals from the surface (slopes are lit right), pointing up.
+		TArray<FVector> Normals;
+		Normals.Init(FVector::ZeroVector, TopPoints.Num());
+		for (int32 T = 0; T + 2 < TopTris.Num(); T += 3)
 		{
-			Top.AddTriangle(Base + Tris[T], Base + Tris[T + 1], Base + Tris[T + 2], FVector::UpVector);
+			const FVector& A = TopPoints[TopTris[T]];
+			const FVector& B = TopPoints[TopTris[T + 1]];
+			const FVector& C = TopPoints[TopTris[T + 2]];
+			FVector FaceN = FVector::CrossProduct(B - A, C - A);
+			if (FaceN.Z < 0.f)
+			{
+				FaceN = -FaceN;
+			}
+			for (int32 E = 0; E < 3; ++E)
+			{
+				Normals[TopTris[T + E]] += FaceN;
+			}
+		}
+		const int32 Base = Top.Vertices.Num();
+		for (int32 I = 0; I < TopPoints.Num(); ++I)
+		{
+			const FVector N = Normals[I].IsNearlyZero() ? FVector::UpVector : Normals[I].GetSafeNormal();
+			Top.AddVertex(TopPoints[I], N, FVector2D(TopPoints[I].X, TopPoints[I].Y) * S, FVector::ForwardVector);
+		}
+		for (int32 T = 0; T + 2 < TopTris.Num(); T += 3)
+		{
+			Top.AddTriangle(Base + TopTris[T], Base + TopTris[T + 1], Base + TopTris[T + 2], FVector::UpVector);
 		}
 	}
 	{

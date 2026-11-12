@@ -70,7 +70,7 @@ void ARMBuildableIntersection::RebuildMesh()
 	FRMMesh FarTop, FarBody;
 	TArray<FVector> FarOutline;
 	TArray<bool> FarIsMouth;
-	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth))
+	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth, 500.f))
 	{
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
