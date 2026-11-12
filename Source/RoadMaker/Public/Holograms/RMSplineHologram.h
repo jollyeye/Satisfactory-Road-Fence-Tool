@@ -44,7 +44,9 @@ public:
 
 	// Game hologram material + valid/invalid colour on the procedural preview.
 	virtual void SetMaterialState(EHologramMaterialState state) override;
-	void UpdateHologramLook();
+	virtual void UpdateHologramLook();
+	/** Length of the preview shown before the first click (cm). */
+	virtual float GetStubLength() const { return RM::FoundationSize * 0.5f; }
 
 protected:
 	/** Height added above the aimed surface (roads sit on top of what they are placed on). */

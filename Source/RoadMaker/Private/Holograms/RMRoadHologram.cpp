@@ -1,5 +1,6 @@
 #include "Holograms/RMRoadHologram.h"
 #include "Holograms/RMDisqualifiers.h"
+#include "Holograms/RMHologramLook.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "RMRoadUtils.h"
@@ -270,9 +271,54 @@ void ARMRoadHologram::RebuildPreview()
 	}
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, mMarkings, Road->mEdgeLineInset, Top, Body);
-	Top.ApplyToSection(mPreviewMesh, 0, false);
-	Body.ApplyToSection(mPreviewMesh, 1, false);
+	if (IsFadingStub())
+	{
+		// Vertex alpha: 1 at the start point, 0 at the far end of the stub (the hologram materials
+		// dither it away). The stub runs along the hologram's X (its rotation is the start direction).
+		const float Length = FMath::Max(GetStubLength(), 1.f);
+		auto Fade = [Length](const FRMMesh& M)
+		{
+			TArray<FLinearColor> C;
+			C.Reserve(M.Vertices.Num());
+			for (const FVector& V : M.Vertices)
+			{
+				C.Add(FLinearColor(1.f, 1.f, 1.f, 1.f - FMath::Clamp(V.X / Length, 0.f, 1.f)));
+			}
+			return C;
+		};
+		const TArray<FLinearColor> TopFade = Fade(Top);
+		const TArray<FLinearColor> BodyFade = Fade(Body);
+		Top.ApplyToSection(mPreviewMesh, 0, false, &TopFade);
+		Body.ApplyToSection(mPreviewMesh, 1, false, &BodyFade);
+	}
+	else
+	{
+		Top.ApplyToSection(mPreviewMesh, 0, false);
+		Body.ApplyToSection(mPreviewMesh, 1, false);
+	}
 	RebuildDirectionArrow(Frames);
+}
+
+void ARMRoadHologram::UpdateHologramLook()
+{
+	const ARMBuildableRoad* Road = GetRoadDefaults();
+	if (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR || !Road || mPreviewMesh->GetNumSections() == 0)
+	{
+		Super::UpdateHologramLook(); // the game's red hologram
+		return;
+	}
+	// The real surface in its look (copied from the road it snaps to), in the hologram version of the
+	// material (fades with the vertex alpha); the game's outline still shows valid / warning.
+	FLinearColor Primary, Secondary;
+	Road->GetPaintColours(Primary, Secondary);
+	mPreviewMesh->SetMaterial(0, RMHologramLook::HoloVersion(Road->GetLookMaterialFor(mLook, true, Road->mTopMaterial)));
+	if (mPreviewMesh->GetNumSections() > 1)
+	{
+		mPreviewMesh->SetMaterial(1, RMHologramLook::HoloVersion(Road->GetLookMaterialFor(mLook, false, Road->mBodyMaterial)));
+	}
+	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(Primary.R, Primary.G, Primary.B, 1.0));
+	mPreviewMesh->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(Secondary.R, Secondary.G, Secondary.B, 1.0));
+	RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
 }
 
 void ARMRoadHologram::CheckValidPlacement()

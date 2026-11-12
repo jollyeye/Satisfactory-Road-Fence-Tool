@@ -83,7 +83,7 @@ void FRMMesh::AddBox(const FVector& Center, const FVector& AxisX, const FVector&
 	Face(Center - Z, X, Y, -AxisZ);
 }
 
-void FRMMesh::ApplyToSection(UProceduralMeshComponent* Comp, int32 Section, bool bCollision) const
+void FRMMesh::ApplyToSection(UProceduralMeshComponent* Comp, int32 Section, bool bCollision, const TArray<FLinearColor>* Colors) const
 {
 	if (!Comp)
 	{
@@ -106,7 +106,7 @@ void FRMMesh::ApplyToSection(UProceduralMeshComponent* Comp, int32 Section, bool
 		return Zeros;
 	};
 	Comp->CreateMeshSection_LinearColor(Section, Vertices, Triangles, Normals, UVs, Channel(MarkUV1), Channel(MarkUV2), Channel(MarkUV3),
-		NoColors, Tangents, bCollision);
+		Colors && Colors->Num() == Vertices.Num() ? *Colors : NoColors, Tangents, bCollision);
 }
 
 // ---------------------------------------------------------------------------------------------

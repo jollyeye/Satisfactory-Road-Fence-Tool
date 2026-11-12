@@ -130,7 +130,7 @@ void ARMSplineHologram::UpdateCurve()
 	if (mStep == 0)
 	{
 		// Short stub so the player sees width and direction before the first click.
-		const FVector StubEnd = mStart + mStartDir * (RM::FoundationSize * 0.5f);
+		const FVector StubEnd = mStart + mStartDir * GetStubLength();
 		RMGeometry::MakeFixedEnds(mStart, mStartDir, StubEnd, mStartDir, World);
 	}
 	else if (mEndSnapped)

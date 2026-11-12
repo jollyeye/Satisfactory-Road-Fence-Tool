@@ -233,6 +233,44 @@ def finish(mat):
     eal.save_loaded_asset(mat, only_if_is_dirty=False)
 
 
+# --- Hologram fade (road surfaces) -------------------------------------------------------------
+# Opacity mask = vertex alpha against a per-pixel dither pattern (interleaved gradient noise, moving
+# every frame so the game's anti-aliasing smooths it into transparency). Ignored by the opaque
+# materials themselves; their MI_*_Holo instances switch the blend mode to masked, so holograms show
+# the real surface, fading where the mesh's vertex alpha drops. Built pieces have no vertex colours
+# (alpha 1): unchanged.
+HOLO_DITHER_HLSL = r"""
+float2 p = Parameters.SvPosition.xy + 5.588238 * float(View.StateFrameIndexMod8);
+float n = frac(52.9829189 * frac(dot(p, float2(0.06711056, 0.00583715))));
+return A > n ? 1.0 : 0.0;
+"""
+
+
+def holo_fade(mat):
+    vc = node(mat, unreal.MaterialExpressionVertexColor, -900, 1400)
+    d = custom(mat, HOLO_DITHER_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["A"], -600, 1400, "HoloDither")
+    link(vc, "A", d, "A")
+    MEL.connect_material_property(d, "", MP.MP_OPACITY_MASK)
+
+
+def holo_instance(mat):
+    """MI_<name>_Holo: the same material, masked (the fade above takes effect)."""
+    name = "MI_" + mat.get_name()[2:] + "_Holo" if mat.get_name().startswith("M_") else "MI_" + mat.get_name() + "_Holo"
+    path = ROOT + "/" + name
+    if eal.does_asset_exist(path):
+        mi = eal.load_asset(path)
+    else:
+        mi = asset_tools.create_asset(name, ROOT, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, mat)
+    ov = mi.get_editor_property("base_property_overrides")
+    ov.set_editor_property("override_blend_mode", True)
+    ov.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    mi.set_editor_property("base_property_overrides", ov)
+    MEL.update_material_instance(mi)
+    eal.save_loaded_asset(mi, only_if_is_dirty=False)
+    log("Hologram instance " + path)
+
+
 # --- Asphalt: dark, rough, fine grain ------------------------------------------------------
 # Lane markings come from the mesh: UV1 = (metres across, metres along), UV2 = (road width m,
 # side line inset m), UV3 = (lanes, side lines 0/1). Lanes 0 (intersections) = no markings.
@@ -335,7 +373,9 @@ MEL.connect_material_property(rough, "", MP.MP_ROUGHNESS)
 if tex_bc and tex_n:
     # Flat where lines are painted.
     world_normal(asphalt, tex_n, RECT_TOP_LEFT, False, any_line, -250, 1300, road_uv)
+holo_fade(asphalt)
 finish(asphalt)
+holo_instance(asphalt)
 log("Asphalt with lane markings")
 
 # --- Concrete: light grey, slightly mottled --------------------------------------------------
@@ -350,7 +390,9 @@ else:
     base = noise_blend(concrete, (0.32, 0.31, 0.29), (0.45, 0.44, 0.42), 0.02, 0)
 MEL.connect_material_property(base, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(concrete, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
+holo_fade(concrete)
 finish(concrete)
+holo_instance(concrete)
 
 # --- Concrete fence wall: the game's concrete wall texture, painted with the customizer colour -----
 # The wall mesh carries UV1 = (metres along, metres up from its base), so the texture follows the
@@ -804,7 +846,9 @@ def bump_normal(mat, height, strength, flat, x, y):
 p_height = node(pavers, unreal.MaterialExpressionComponentMask, -550, 850, r=False, g=False, b=True, a=False)
 link(pv, "", p_height, "")
 bump_normal(pavers, p_height, 1.0, p_any, 300, 900)
+holo_fade(pavers)
 finish(pavers)
+holo_instance(pavers)
 log("Concrete pavers")
 
 # Cyberpunk top: matte plastic in the primary colour, circuit grooves, glowing secondary lane lines.
@@ -856,7 +900,9 @@ link(c_any, "", c_rough, "Alpha")
 MEL.connect_material_property(c_rough, "", MP.MP_ROUGHNESS)
 # The circuit is carved into the normal map (0.6 cm); flat under the lane lines.
 bump_normal(cyber, cc, -0.6, c_any, 300, 1100)
+holo_fade(cyber)
 finish(cyber)
+holo_instance(cyber)
 log("Cyberpunk road")
 
 # Cyberpunk slab sides: dark plastic in the primary colour.
@@ -867,7 +913,9 @@ link(cb_primary, "", cb_col, "A")
 link(const(cyber_body, 0.3, -500, 80), "", cb_col, "B")
 MEL.connect_material_property(cb_col, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(cyber_body, 0.2, -300, 200), "", MP.MP_ROUGHNESS)
+holo_fade(cyber_body)
 finish(cyber_body)
+holo_instance(cyber_body)
 log("Cyberpunk road body")
 
 # --- Lane markings (arrows, numbers): flat paint in the road's line colour -----------------------

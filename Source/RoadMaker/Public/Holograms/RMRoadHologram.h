@@ -31,6 +31,11 @@ protected:
 	virtual float GetSurfaceOffset() const override;
 	virtual int32 GetCostWidthFactor() const override;
 	virtual void RebuildPreview() override;
+	/** The real surface (look and paint) in the hologram, fading out along the stub before the first click. */
+	virtual void UpdateHologramLook() override;
+	virtual float GetStubLength() const override { return RM::FoundationSize; }
+	/** Before the first click: the short stub that fades out (not a road beside another one). */
+	bool IsFadingStub() const { return mStep == 0 && !mBesideRoad; }
 
 	const ARMBuildableRoad* GetRoadDefaults() const;
 

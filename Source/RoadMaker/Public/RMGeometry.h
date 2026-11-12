@@ -130,7 +130,7 @@ struct ROADMAKER_API FRMMesh
 		const FVector& HalfExtents, float UVScale);
 
 	/** Writes this buffer into a section of a procedural mesh component. */
-	void ApplyToSection(class UProceduralMeshComponent* Comp, int32 Section, bool bCollision) const;
+	void ApplyToSection(class UProceduralMeshComponent* Comp, int32 Section, bool bCollision, const TArray<FLinearColor>* Colors = nullptr) const;
 };
 
 /** Results of checking a spline against placement rules. */
