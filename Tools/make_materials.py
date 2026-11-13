@@ -944,12 +944,58 @@ MEL.connect_material_property(const(marking_cyber, 0.1, -300, 260), "", MP.MP_RO
 finish(marking_cyber)
 log("Cyberpunk lane marking")
 
+# Vehicle markings: the same paint on one quad, cut out by the vehicle's map icon. The game's icon is set on the
+# texture parameter "Icon" at run time (ARMBuildableMarking::GetPaintMaterial); the default is a white square.
+# Mask = red x alpha, so it works for a white glyph on transparency and for a white glyph on black.
+def icon_mask(mat):
+    tp = node(mat, unreal.MaterialExpressionTextureSampleParameter2D, -900, 400)
+    tp.set_editor_property("parameter_name", "Icon")
+    try:
+        white = unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture")
+        if white:
+            tp.set_editor_property("texture", white)
+            tp.set_editor_property("sampler_type", sampler_for(white))
+    except Exception as e:
+        log("  ! icon default texture: %s" % e)
+    try:
+        tp.set_editor_property("sampler_source", unreal.SamplerSourceMode.SSM_CLAMP_WORLD_GROUP_SETTINGS)
+    except Exception as e:
+        log("  ! icon sampler source: %s" % e)
+    mul = node(mat, unreal.MaterialExpressionMultiply, -600, 400)
+    link(tp, "R", mul, "A")
+    link(tp, "A", mul, "B")
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    mat.set_editor_property("opacity_mask_clip_value", 0.4)
+    MEL.connect_material_property(mul, "", MP.MP_OPACITY_MASK)
+
+
+marking_icon = new_material("M_RoadMarkingIcon")
+mi_primary = cpd_param(marking_icon, "MiddleLineColor", 24, unreal.LinearColor(0.8, 0.8, 0.76, 1.0), -600, 0)
+MEL.connect_material_property(mi_primary, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(marking_icon, 0.75, -300, 120), "", MP.MP_ROUGHNESS)
+icon_mask(marking_icon)
+finish(marking_icon)
+log("Vehicle icon marking paint")
+
+marking_icon_cyber = new_material("M_RoadMarkingIconCyber")
+mic_secondary = cpd_param(marking_icon_cyber, "SideLineColor", 28, unreal.LinearColor(0.0, 0.85, 1.0, 1.0), -600, 0)
+MEL.connect_material_property(mic_secondary, "", MP.MP_BASE_COLOR)
+mic_glow = node(marking_icon_cyber, unreal.MaterialExpressionMultiply, -300, 100)
+link(mic_secondary, "", mic_glow, "A")
+link(const(marking_icon_cyber, 4.0, -450, 160), "", mic_glow, "B")
+MEL.connect_material_property(mic_glow, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(const(marking_icon_cyber, 0.1, -300, 260), "", MP.MP_ROUGHNESS)
+icon_mask(marking_icon_cyber)
+finish(marking_icon_cyber)
+log("Cyberpunk vehicle icon marking")
+
 # --- Assign ----------------------------------------------------------------------------------
 # Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
               "m_look_top_materials": [pavers, cyber],
               "m_look_body_materials": [concrete, cyber_body]}
 MARKING_LOOKS = {"m_marking_material": marking, "m_look_top_materials": [marking, marking_cyber]}
+VEHICLE_MARKING_LOOKS = {"m_marking_material": marking_icon, "m_look_top_materials": [marking_icon, marking_icon_cyber]}
 ASSIGN = {
     "Build_Road_1x": ROAD_LOOKS,
     "Build_Road_2x": ROAD_LOOKS,
@@ -959,6 +1005,7 @@ ASSIGN = {
     "Build_SignGantry": {"m_main_material": steel},
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
+    "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,
     "Build_Fence_GuardRail": {"m_main_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},

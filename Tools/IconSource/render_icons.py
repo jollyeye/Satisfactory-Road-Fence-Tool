@@ -535,6 +535,18 @@ def marking_icon(sc, kind):
         sc.quad((cx + x0 * k, y0 * k, Z), (cx + x1 * k, y0 * k, Z), (cx + x1 * k, y1 * k, Z), (cx + x0 * k, y1 * k, Z), WHITE, layer=2, two=True, shade=False)
     def tri(a, b, c):
         sc.face([(cx + a[0] * k, a[1] * k, Z), (cx + b[0] * k, b[1] * k, Z), (cx + c[0] * k, c[1] * k, Z)], WHITE, layer=2, two=True, shade=False)
+    if kind == "vehicle":
+        # A generic truck seen from above (not the game's art): cab at the front, a long box behind, wheels.
+        DARK = np.array([40, 44, 52.0])
+        def drect(x0, x1, y0, y1, col):
+            sc.quad((cx + x0 * k, y0 * k, Z + 0.01), (cx + x1 * k, y0 * k, Z + 0.01), (cx + x1 * k, y1 * k, Z + 0.01), (cx + x0 * k, y1 * k, Z + 0.01), col, layer=3, two=True, shade=False)
+        for x in (-0.75, -0.45, 0.62):
+            rect(x - 0.11, x + 0.11, -0.5, 0.5)            # axles: wheels stick out on both sides
+        rect(-1.0, 0.38, -0.4, 0.4)                         # box
+        rect(0.44, 1.0, -0.36, 0.36)                        # cab
+        drect(0.72, 0.9, -0.28, 0.28, DARK)                 # windscreen
+        drect(0.38, 0.44, -0.2, 0.2, DARK)                  # gap between cab and box
+        return
     if kind == "arrow":
         rect(-1.1, 0.55, -0.14, 0.14)
         tri((0.55, -0.5), (1.1, 0.0), (0.55, 0.5))
@@ -575,6 +587,7 @@ elif what == "cross": intersection(sc)
 elif what == "gantry": sign_gantry(sc)
 elif what == "lanearrow": marking_icon(sc, "arrow")
 elif what == "lanenumber": marking_icon(sc, "digit")
+elif what == "lanevehicle": marking_icon(sc, "vehicle")
 elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")

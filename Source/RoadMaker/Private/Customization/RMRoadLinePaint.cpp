@@ -61,6 +61,10 @@ namespace
 		{
 			return FString::FromInt(V);
 		}
+		if (D && D->mMarkingKind == ERMMarkingKind::Vehicle)
+		{
+			return ARMBuildableMarking::VehicleName(V);
+		}
 		return ArrowNames[FMath::Clamp(V, 0, 5)];
 	}
 }
@@ -244,7 +248,7 @@ namespace
 		FRMMesh Paint;
 		ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint, &Drape);
 		Paint.ApplyToSection(M, 0, false);
-		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex));
+		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex, static_cast<uint8>(Variant)));
 	}
 }
 

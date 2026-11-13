@@ -158,7 +158,7 @@ void ARMMarkingHologram::UpdateHologramLook()
 	const ARMBuildableMarking* Default = GetDefaultBuildable<ARMBuildableMarking>();
 	if (Default && mPreviewMesh->GetNumSections() > 0)
 	{
-		if (UMaterialInterface* Paint = Default->GetPaintMaterial(mRoadLook))
+		if (UMaterialInterface* Paint = Default->GetPaintMaterial(mRoadLook, static_cast<uint8>(mVariant)))
 		{
 			mPreviewMesh->SetMaterial(0, Paint);
 			Default->ApplyMarkingColorsTo(mPreviewMesh, mCustomizationData);

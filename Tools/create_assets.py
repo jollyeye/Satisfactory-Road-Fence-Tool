@@ -454,7 +454,7 @@ if VehiclePathSubCat:
     edit_fence_subcat = efc.generated_class()
     lane_marking_subcat = None
 # Road Tools entries and their section.
-MARKING_TOOLS = ("LaneArrow", "LaneNumber")  # painted from the customizer (Road Lines), not in the build menu
+MARKING_TOOLS = ("LaneArrow", "LaneNumber", "LaneVehicle")  # painted from the customizer (Road Lines), not in the build menu
 ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "FenceCut": "fence", "FenceJoin": "fence"}
 
 base_building = None
@@ -516,13 +516,15 @@ TOOLS = [
      {"m_kind": "ARROW"}, [], road_icons, {}),
     ("LaneNumber", RMBuildableMarking, holo_marking, "Lane Number", "Paints a single digit (0 to 9) on a lane of a road, for speed limits and lane numbers. Aim at a road: it snaps to the middle of the lane you aim at and reads upright for traffic driving the way you are looking along the road. The mouse wheel picks the digit. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
      {"m_kind": "DIGIT"}, [], road_icons, {}),
+    ("LaneVehicle", RMBuildableMarking, holo_marking, "Lane Vehicle", "Paints a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon) on a lane of a road, to mark lanes for one kind of vehicle. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the vehicle. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
+     {"m_kind": "VEHICLE"}, [], road_icons, {}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
-              "LaneArrow": 1, "LaneNumber": 2, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
+              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
 MarkingKindEnum = getattr(unreal, "RMMarkingKind", None)
@@ -807,14 +809,16 @@ MARKING_OPTIONS = [
     # key, icon, display, tool entry (the buildable), kind, size
     ("MarkArrow", "MarkArrow", "Lane Arrow", "LaneArrow", "ARROW", 1.0, 9130),
     ("MarkNumber", "MarkNumber", "Lane Number", "LaneNumber", "DIGIT", 1.0, 9131),
+    ("MarkVehicle", "MarkVehicle", "Lane Vehicle", "LaneVehicle", "VEHICLE", 1.0, 9132),
 ]
 for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_OPTIONS):
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)
     c = cdo(d)
     setp(c, text(display), "m_display_name", "mDisplayName")
-    what = "arrow" if kind == "ARROW" else "single digit (0 to 9)"
+    what = {"ARROW": "arrow", "DIGIT": "single digit (0 to 9)", "VEHICLE": "vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon)"}[kind]
+    pick = {"ARROW": "arrow", "DIGIT": "digit", "VEHICLE": "vehicle"}[kind]
     big = ""
-    setp(c, text("Paints a " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + ("arrow" if kind == "ARROW" else "digit") + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."), "m_description", "mDescription")
+    setp(c, text("Paints a " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + pick + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."), "m_description", "mDescription")
     setp(c, cat.generated_class(), "m_category", "mCategory")
     setp(c, [subcats["Markings"]], "m_sub_categories", "mSubCategories")
     setp(c, float(i), "m_menu_priority", "mMenuPriority")

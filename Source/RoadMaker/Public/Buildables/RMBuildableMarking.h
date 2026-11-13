@@ -1,4 +1,5 @@
-// Lane marking painted on a road: an arrow or a single digit, flat geometry (no textures or decals)
+// Lane marking painted on a road: an arrow or a single digit (flat geometry, no textures or decals), or a
+// vehicle's map icon (one quad masked by the icon the game draws on the map for that vehicle, read from the game at run time)
 // lying on the surface (cut into slices that follow the road, see FRMMarkingDrape; a flat copy far away), with the top of the arrow / digit pointing the way the piece faces. Saved:
 // the variant (which arrow / which digit) and the lane width it was sized for; the mesh is rebuilt.
 // The colour is the road's line colour at the time it was built (a copy of the road's paint, so it
@@ -18,6 +19,7 @@ enum class ERMMarkingKind : uint8
 {
 	Arrow,
 	Digit,
+	Vehicle,
 };
 
 /**
@@ -57,8 +59,20 @@ public:
 	uint8 GetVariant() const { return mVariant; }
 	float GetLaneWidth() const { return mLaneWidth; }
 
-	/** Arrow: 0 straight, 1 left, 2 right, 3 straight or left, 4 straight or right, 5 left or right. Digit: 0 to 9. */
-	static int32 VariantCount(ERMMarkingKind Kind) { return Kind == ERMMarkingKind::Arrow ? 6 : 10; }
+	/**
+	 * Arrow: 0 straight, 1 left, 2 right, 3 straight or left, 4 straight or right, 5 left or right. Digit: 0 to 9.
+	 * Vehicle: 0 Tractor, 1 Truck, 2 Explorer, 3 Factory Cart, 4 Cyberwagon.
+	 */
+	static int32 VariantCount(ERMMarkingKind Kind) { return Kind == ERMMarkingKind::Arrow ? 6 : Kind == ERMMarkingKind::Digit ? 10 : 5; }
+
+	/** The name of a vehicle variant ("Tractor", ...). */
+	static const TCHAR* VehicleName(int32 Variant);
+
+	/**
+	 * The vehicle's map icon (AFGVehicle::mActorRepresentationTexture on its class default object), loaded from the
+	 * game the first time it is asked for and kept. Null if the vehicle class was not found (logged once).
+	 */
+	static class UTexture2D* VehicleIcon(int32 Variant);
 
 	/**
 	 * Builds the mesh (top face only, a hair above the road) in the marking's local space: flat, or with
@@ -106,8 +120,11 @@ public:
 	 */
 	static bool FindPlacement(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, FTransform& OutTransform, float& OutLaneWidth);
 
-	/** The marking material for a look (0 asphalt, 1 concrete, 2 cyberpunk). */
-	UMaterialInterface* GetPaintMaterial(uint8 Look) const;
+	/**
+	 * The marking material for a look (0 asphalt, 1 concrete, 2 cyberpunk). Vehicle markings: an instance of it
+	 * with the variant's icon (one shared instance per material and variant).
+	 */
+	UMaterialInterface* GetPaintMaterial(uint8 Look, uint8 Variant = 0) const;
 
 	/** The paint of Data on one mesh, as markings show it (also used by the hologram). */
 	void ApplyMarkingColorsTo(class UPrimitiveComponent* Mesh, const FFactoryCustomizationData& Data) const;

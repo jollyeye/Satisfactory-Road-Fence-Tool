@@ -12,6 +12,11 @@
 #include "RoadMakerModule.h"
 #include "EngineUtils.h"
 #include "FGDismantleInterface.h"
+#include "FGVehicle.h"
+#include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "UObject/UObjectIterator.h"
+#include "UObject/StrongObjectPtr.h"
 
 ARMBuildableMarking::ARMBuildableMarking(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -67,7 +72,7 @@ void ARMBuildableMarking::RebuildMesh()
 	Drape.Right = mDrapeRight;
 	Drape.Up = mDrapeUp;
 	// The cyberpunk look is the second entry (index look - 1); asphalt and concrete share the plain paint.
-	UMaterialInterface* Material = LookMaterial(mLookTopMaterials, mMarkingMaterial);
+	UMaterialInterface* Material = GetPaintMaterial(GetShownLook(), mVariant);
 	FRMMesh Paint;
 	BuildMarkingMesh(mKind, mVariant, mLaneWidth, Paint, Drape.IsValid() ? &Drape : nullptr);
 	Paint.ApplyToSection(mMesh, 0, true);
@@ -208,9 +213,12 @@ namespace
 		return Out;
 	}
 
-	/** Fan of a convex polygon, each corner placed by Place (position and normal). */
+	/**
+	 * Fan of a convex polygon, each corner placed by Place (position and normal). UVs are metres, or with IconHalf
+	 * (half the icon's length along, half its width across) 0..1 over the icon: U to the right, V down from its top (forward).
+	 */
 	template <typename TPlace>
-	void EmitPolygon(const TArray<FVector2D>& Poly, FRMMesh& Out, TPlace Place)
+	void EmitPolygon(const TArray<FVector2D>& Poly, FRMMesh& Out, TPlace Place, const FVector2D* IconHalf = nullptr)
 	{
 		if (Poly.Num() < 3)
 		{
@@ -223,7 +231,10 @@ namespace
 			FVector N;
 			const FVector Pos = Place(V, N);
 			Normal = N;
-			Ids.Add(Out.AddVertex(Pos, N, FVector2D(V.X / 100.f, V.Y / 100.f), FVector::ForwardVector));
+			const FVector2D UV = IconHalf
+			? FVector2D(0.5f + 0.5f * V.Y / IconHalf->Y, 0.5f - 0.5f * V.X / IconHalf->X)
+			: FVector2D(V.X / 100.f, V.Y / 100.f);
+		Ids.Add(Out.AddVertex(Pos, N, UV, FVector::ForwardVector));
 		}
 		for (int32 I = 1; I + 1 < Ids.Num(); ++I)
 		{
@@ -343,9 +354,27 @@ namespace
 	}
 }
 
+namespace
+{
+	// A vehicle icon: a square texture drawn IconWidth of the width given across, stretched IconStretch times along
+	// (like the digits: seen from a driving car a square would look squashed).
+	constexpr float IconWidth = 0.6f;
+	constexpr float IconStretch = 1.6f;
+
+	FVector2D IconHalfSize(float LaneWidth)
+	{
+		const float HalfAcross = LaneWidth * IconWidth * 0.5f;
+		return FVector2D(HalfAcross * IconStretch, HalfAcross);
+	}
+}
+
 float ARMBuildableMarking::HalfLength(ERMMarkingKind Kind, float LaneWidth)
 {
 	const float Scale = LaneWidth * 0.5f;
+	if (Kind == ERMMarkingKind::Vehicle)
+	{
+		return IconHalfSize(LaneWidth).X;
+	}
 	return Kind == ERMMarkingKind::Arrow ? ArrowTop * Scale : 0.9f * FShapeBuilder::Stretch * Scale;
 }
 
@@ -355,20 +384,28 @@ void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, f
 	// One size for every shape, so the turn arrows match the straight one: its head is half the width given.
 	TArray<TArray<FVector2D>> Polys;
 	FShapeBuilder B{ Polys, LaneWidth * 0.5f };
+	const FVector2D IconHalf = IconHalfSize(LaneWidth);
+	const FVector2D* UVIcon = nullptr;
 	if (Kind == ERMMarkingKind::Arrow)
 	{
 		BuildArrow(B, Variant);
 	}
-	else
+	else if (Kind == ERMMarkingKind::Digit)
 	{
 		BuildDigit(B, Variant);
+	}
+	else
+	{
+		// One quad; the material cuts the icon out of it.
+		Polys.Add({ FVector2D(-IconHalf.X, -IconHalf.Y), FVector2D(IconHalf.X, -IconHalf.Y), FVector2D(IconHalf.X, IconHalf.Y), FVector2D(-IconHalf.X, IconHalf.Y) });
+		UVIcon = &IconHalf;
 	}
 
 	if (!Drape || !Drape->IsValid())
 	{
 		for (const TArray<FVector2D>& Poly : Polys)
 		{
-			EmitPolygon(Poly, Out, [](const FVector2D& V, FVector& N) { N = FVector::UpVector; return FVector(V.X, V.Y, Lift); });
+			EmitPolygon(Poly, Out, [](const FVector2D& V, FVector& N) { N = FVector::UpVector; return FVector(V.X, V.Y, Lift); }, UVIcon);
 		}
 		return;
 	}
@@ -388,7 +425,7 @@ void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, f
 		{
 			const float X0 = Drape->Start + K * Drape->Step;
 			const float X1 = X0 + Drape->Step;
-			EmitPolygon(ClipX(ClipX(Poly, X0, 1.f), X1, -1.f), Out, Place);
+			EmitPolygon(ClipX(ClipX(Poly, X0, 1.f), X1, -1.f), Out, Place, UVIcon);
 		}
 	}
 }
@@ -563,9 +600,104 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 	return true;
 }
 
-UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look) const
+UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look, uint8 Variant) const
 {
-	return Look > 0 && mLookTopMaterials.IsValidIndex(Look - 1) && mLookTopMaterials[Look - 1] ? mLookTopMaterials[Look - 1] : mMarkingMaterial;
+	UMaterialInterface* Base = Look > 0 && mLookTopMaterials.IsValidIndex(Look - 1) && mLookTopMaterials[Look - 1] ? mLookTopMaterials[Look - 1] : mMarkingMaterial;
+	if (mKind != ERMMarkingKind::Vehicle || !Base)
+	{
+		return Base;
+	}
+	// One instance per paint material and vehicle, kept for the session (the colours come from the mesh's custom data).
+	static TMap<TPair<TWeakObjectPtr<UMaterialInterface>, int32>, TStrongObjectPtr<UMaterialInstanceDynamic>> Instances;
+	const TPair<TWeakObjectPtr<UMaterialInterface>, int32> Key(Base, Variant);
+	if (const TStrongObjectPtr<UMaterialInstanceDynamic>* Found = Instances.Find(Key))
+	{
+		if (Found->IsValid())
+		{
+			return Found->Get();
+		}
+	}
+	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, GetTransientPackage());
+	if (!MID)
+	{
+		return Base;
+	}
+	if (UTexture2D* Icon = VehicleIcon(Variant))
+	{
+		MID->SetTextureParameterValue(TEXT("Icon"), Icon);
+	}
+	Instances.Add(Key, TStrongObjectPtr<UMaterialInstanceDynamic>(MID));
+	return MID;
+}
+
+const TCHAR* ARMBuildableMarking::VehicleName(int32 Variant)
+{
+	static const TCHAR* Names[] = { TEXT("Tractor"), TEXT("Truck"), TEXT("Explorer"), TEXT("Factory Cart"), TEXT("Cyberwagon") };
+	return Names[FMath::Clamp(Variant, 0, 4)];
+}
+
+UTexture2D* ARMBuildableMarking::VehicleIcon(int32 Variant)
+{
+	Variant = FMath::Clamp(Variant, 0, 4);
+	// The game's vehicle classes (the golden Factory Cart has the same icon as the plain one). Their map icon is set on
+	// the class default object. If a path moves in an update, the vehicle classes the game has loaded are searched by name.
+	struct FVehicleClass
+	{
+		const TCHAR* Path;
+		const TCHAR* ClassName;
+	};
+	static const FVehicleClass Classes[] = {
+		{ TEXT("/Game/FactoryGame/Buildable/Vehicle/Tractor/BP_Tractor.BP_Tractor_C"), TEXT("BP_Tractor_C") },
+		{ TEXT("/Game/FactoryGame/Buildable/Vehicle/Truck/BP_Truck.BP_Truck_C"), TEXT("BP_Truck_C") },
+		{ TEXT("/Game/FactoryGame/Buildable/Vehicle/Explorer/BP_Explorer.BP_Explorer_C"), TEXT("BP_Explorer_C") },
+		{ TEXT("/Game/FactoryGame/Buildable/Vehicle/Golfcart/BP_Golfcart.BP_Golfcart_C"), TEXT("BP_Golfcart_C") },
+		{ TEXT("/Game/FactoryGame/Buildable/Vehicle/Cyberwagon/Testa_BP_WB.Testa_BP_WB_C"), TEXT("Testa_BP_WB_C") },
+	};
+	static TStrongObjectPtr<UTexture2D> Icons[5];
+	static bool bTried[5] = {};
+	if (bTried[Variant])
+	{
+		return Icons[Variant].Get();
+	}
+	bTried[Variant] = true;
+
+	UClass* Class = LoadObject<UClass>(nullptr, Classes[Variant].Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (!Class || !Class->IsChildOf(AFGVehicle::StaticClass()))
+	{
+		Class = nullptr;
+		for (TObjectIterator<UClass> It; It; ++It)
+		{
+			if (It->IsChildOf(AFGVehicle::StaticClass()) && It->GetName() == Classes[Variant].ClassName)
+			{
+				Class = *It;
+				break;
+			}
+		}
+	}
+	const AFGVehicle* Vehicle = Class ? Class->GetDefaultObject<AFGVehicle>() : nullptr;
+	UTexture2D* Icon = Vehicle ? Vehicle->mActorRepresentationTexture.Get() : nullptr;
+	if (Icon)
+	{
+		Icons[Variant].Reset(Icon);
+		UE_LOG(LogRoadMaker, Display, TEXT("Vehicle marking %s: icon %s (%dx%d) from %s"), VehicleName(Variant), *Icon->GetPathName(),
+			Icon->GetSizeX(), Icon->GetSizeY(), *Class->GetPathName());
+	}
+	else
+	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("Vehicle marking %s: no icon (class %s %s)"), VehicleName(Variant), Classes[Variant].Path,
+			Class ? TEXT("found, no texture") : TEXT("not found"));
+		if (!Class)
+		{
+			for (TObjectIterator<UClass> It; It; ++It)
+			{
+				if (It->IsChildOf(AFGVehicle::StaticClass()))
+				{
+					UE_LOG(LogRoadMaker, Warning, TEXT("  loaded vehicle class: %s"), *It->GetPathName());
+				}
+			}
+		}
+	}
+	return Icon;
 }
 
 ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarking> Class, TSubclassOf<UFGRecipe> Recipe, ARMBuildableRoad* Road,
