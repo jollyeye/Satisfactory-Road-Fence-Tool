@@ -997,7 +997,7 @@ finish(marking_icon_cyber)
 log("Cyberpunk vehicle icon marking")
 
 # --- Sign icons: Road Maker's own icons in the game's sign icon picker ---------------------------
-# Chevrons for curves, still and scrolling. The game tints icons with the sign's colour; for a material icon the
+# Chevrons for curves, still and scrolling, in the sign editor's backgrounds (square tiles). The game tints icons with the sign's colour; for a material icon the
 # tint arrives as the vertex colour (UI material). The library's order is the icons' IDs: only ever append.
 SIGN_ICON_ROOT = "/RoadMaker/Icons"
 
@@ -1053,7 +1053,7 @@ if chev_r and chev_l:
         # ID = position: never reorder or remove, only append.
         icons = [(chev_l, "Chevrons Left", False), (chev_r, "Chevrons Right", False),
                  (anim_l, "Chevrons Left (Animated)", True), (anim_r, "Chevrons Right (Animated)", True)]
-        unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons])
+        unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons], True)  # True: the Backgrounds category
         eal.save_loaded_asset(lib, only_if_is_dirty=False)
         log("Sign icon library: %d icons" % len(icons))
     else:

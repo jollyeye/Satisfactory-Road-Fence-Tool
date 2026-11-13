@@ -22,8 +22,18 @@ public:
 	 * An icon is a texture, or a UI material for an animated one.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Road Maker")
-	static void SetIcons(UFGIconLibrary* Library, const TArray<UObject*>& Icons, const TArray<FString>& Names, const TArray<bool>& Animated);
+	static void SetIcons(UFGIconLibrary* Library, const TArray<UObject*>& Icons, const TArray<FString>& Names, const TArray<bool>& Animated,
+		bool bBackgrounds);
 
-	/** Game: logs once whether the game's icon database took our icons. */
-	static void LogOurIcons(UWorld* World);
+	/** Game start: tells the asset manager about our library (the game looks for icon libraries there). */
+	static void RegisterLibrary();
+
+	/**
+	 * Game, every second: makes sure the world's icon database has our icons. If the game did not find the library by
+	 * itself, it is added to the database's list of libraries and the database rebuilt. Logs once what happened, and
+	 * once how many icons each category has (with a few names), to see where the game's own categories are.
+	 */
+	static void EnsureOurIcons(UWorld* World);
+
+	static constexpr const TCHAR* LibraryPath = TEXT("/RoadMaker/Icons/IL_RoadMaker.IL_RoadMaker");
 };

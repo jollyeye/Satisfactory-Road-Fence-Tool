@@ -1,4 +1,5 @@
 #include "RoadMakerModule.h"
+#include "Signs/RMIconLibraryTools.h"
 #include "RMSound.h"
 #include "LanePaint/RMLanePaint.h"
 #include "Snapping/RMVanillaSnapping.h"
@@ -89,6 +90,20 @@ void FRoadMakerModule::StartupModule()
 
 	// Road layer on the game map (1.3.0).
 	RMMapLayer::InstallHooks();
+
+	// Our sign icons (chevrons...) in the game's icon database.
+	URMIconLibraryTools::RegisterLibrary();
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+	{
+		for (const FWorldContext& Context : GEngine ? GEngine->GetWorldContexts() : TIndirectArray<FWorldContext>())
+		{
+			if (Context.World() && (Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE))
+			{
+				URMIconLibraryTools::EnsureOurIcons(Context.World());
+			}
+		}
+		return true;
+	}), 1.0f);
 
 	// Detailed / far meshes of roads, intersections and fences, four times a second.
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)

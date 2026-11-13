@@ -1,4 +1,4 @@
-# Sign icons: chevrons pointing left / right (curve warning), white on transparency (the sign tints them).
+# Sign backgrounds: chevrons pointing left / right (curve warning), white on transparency, filling the whole square.
 # Seamless left to right (4 chevrons per 256 px), so the animated icons can scroll them.
 # python sign_chevrons.py <out dir>
 import sys
@@ -9,7 +9,7 @@ SS = 4
 PERIOD = 64      # one chevron every 64 px
 STROKE = 26      # horizontal thickness of a chevron arm
 DEPTH = 44       # how far the point sticks out
-TOP, BOTTOM = 24, 232
+TOP, BOTTOM = 0, 256    # the whole height: a square background tile
 
 
 def chevrons(right):
