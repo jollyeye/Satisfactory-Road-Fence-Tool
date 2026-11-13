@@ -232,15 +232,12 @@ setp(cdo(bm_smooth), text("Smooth (quadratic Bezier)"), "m_display_name", "mDisp
 setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
 finish(bm_smooth)
 
-bm_long = make_bp("Holograms", "BM_LongCurve", BuildModeDescriptor)
-setp(cdo(bm_long), text("Long Curve"), "m_display_name", "mDisplayName")
-setp(cdo(bm_long), text("For big sweeping curves: up to 1 km long, the build gun reaches 1 km, and no turn or slope limits, only refused if the road would fold over itself. Snap-key paths and tracks go on it in sections."), "m_description", "mDescription")
-finish(bm_long)
+# Long Curve is no longer a build mode: the road limits toggle (Alt) does it in every mode.
 
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
 setp(cdo(holo_road), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
 setp(cdo(holo_road), bm_smooth.generated_class(), "m_build_mode_smooth", "mBuildModeSmooth")
-setp(cdo(holo_road), bm_long.generated_class(), "m_build_mode_long", "mBuildModeLong")
+setp(cdo(holo_road), None, "m_build_mode_long", "mBuildModeLong")
 finish(holo_road)
 
 holo_fence = make_bp("Holograms", "Holo_Fence", RMFenceHologram)
@@ -396,13 +393,13 @@ fence_wall_recipes = {}
 
 # name, parent, hologram, display, description, props, recipe ingredients, icons, materials
 TOOLS = [
-    ("Road_1x", RMBuildableRoad, holo_road, "Road (1 wide)", "A road one foundation wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Lines are set in the customizer (Road Lines). Free to build.",
+    ("Road_1x", RMBuildableRoad, holo_road, "Road (1 wide)", "A road one foundation wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 1}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("Road_2x", RMBuildableRoad, holo_road, "Road (2 wide)", "A road two foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Lines are set in the customizer (Road Lines). Free to build.",
+    ("Road_2x", RMBuildableRoad, holo_road, "Road (2 wide)", "A road two foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 2}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("Road_3x", RMBuildableRoad, holo_road, "Road (3 wide)", "A road three foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Lines are set in the customizer (Road Lines). Free to build.",
+    ("Road_3x", RMBuildableRoad, holo_road, "Road (3 wide)", "A road three foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 3}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
-    ("Road_4x", RMBuildableRoad, holo_road, "Road (4 wide)", "A road four foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Lines are set in the customizer (Road Lines). Free to build.",
+    ("Road_4x", RMBuildableRoad, holo_road, "Road (4 wide)", "A road four foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build.",
      {"m_width_in_foundations": 4}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadCut", RMBuildableRoadTool, holo_cut, "Cut Road", "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint; train tracks and vehicle paths on it are cut too. Build mode \"Cut also fences\" also cuts the road's own fences at the same place (white outlines). Free.",
      {}, [], road_icons, {}),

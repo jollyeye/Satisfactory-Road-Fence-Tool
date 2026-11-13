@@ -27,21 +27,31 @@ public:
 	virtual void OnHologramLockStateChanged() override;
 
 	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const override;
-	/** Long Curve mode: the build gun reaches 1 km, to place the end of a big curve far away. */
+	/** Road limits off: the build gun reaches 1 km, to place the end of a big curve far away. */
 	virtual float GetBuildGunRangeOverride_Implementation() const override;
+
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 protected:
 	/**
-	 * "Long Curve" build mode: the default curve up to 1 km long, with no turn or grade limits, only
-	 * refused when the road would fold over itself (a bend tighter than half its width). For big
-	 * sweeping curves; snap-key paths / tracks go on in sections.
+	 * Road limits off (Alt, see RMRoadLimits; in any build mode): up to 1 km long, no turn or grade
+	 * limits, only refused when the road would fold over itself (a bend tighter than half its width).
+	 * For big sweeping curves; snap-key paths / tracks go on in sections. Sent with the click.
 	 */
-	bool IsLongMode() const;
+	bool IsUnlimited() const { return mNoLimits; }
 
-	/** Longest Long Curve road (cm): longer ones made placing paths and tracks on them lag. */
+	UPROPERTY(CustomSerialization)
+	bool mNoLimits = false;
+
+	/** Longest road with the limits off (cm): longer ones made placing paths and tracks on them lag. */
 	static constexpr float LongCurveMaxLength = 100000.f;
 
-	/** Build mode asset (a UFGHologramBuildModeDescriptor Blueprint) for Long Curve. */
+	/** The player holding this hologram, if it is this machine's player. */
+	APlayerController* GetLocalHolder() const;
+
+	/** Old Long Curve build mode asset: no longer offered (the limits toggle replaced it). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeLong;
 

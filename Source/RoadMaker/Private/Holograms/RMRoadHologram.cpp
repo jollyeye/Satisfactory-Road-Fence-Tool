@@ -1,4 +1,7 @@
 #include "Holograms/RMRoadHologram.h"
+#include "RMRoadLimits.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Holograms/RMHologramLook.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
@@ -41,6 +44,8 @@ void ARMRoadHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 
 ARMRoadHologram::ARMRoadHologram()
 {
+	// Ticks for the player holding it: the road limits key (Alt).
+	PrimaryActorTick.bCanEverTick = true;
 	mDirectionArrow = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("DirectionArrow"));
 	mDirectionArrow->SetupAttachment(mPreviewMesh);
 	mDirectionArrow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -372,21 +377,53 @@ void ARMRoadHologram::UpdateHologramLook()
 
 void ARMRoadHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
 {
+	// Long Curve is no longer a build mode: the limits toggle (Alt) does it in every mode.
 	Super::GetSupportedBuildModes_Implementation(out_buildmodes);
-	if (mBuildModeLong)
-	{
-		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeLong.Get()));
-	}
-}
-
-bool ARMRoadHologram::IsLongMode() const
-{
-	return mBuildModeLong && IsCurrentBuildMode(mBuildModeLong);
 }
 
 float ARMRoadHologram::GetBuildGunRangeOverride_Implementation() const
 {
-	return IsLongMode() ? 100000.f : Super::GetBuildGunRangeOverride_Implementation();
+	return IsUnlimited() ? 100000.f : Super::GetBuildGunRangeOverride_Implementation();
+}
+
+APlayerController* ARMRoadHologram::GetLocalHolder() const
+{
+	APawn* Pawn = GetConstructionInstigator();
+	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	return PC && PC->IsLocalController() ? PC : nullptr;
+}
+
+void ARMRoadHologram::BeginPlay()
+{
+	Super::BeginPlay();
+	if (APlayerController* PC = GetLocalHolder())
+	{
+		mNoLimits = RMRoadLimits::AreOff();
+		RMRoadLimits::ShowHint(PC);
+		SetActorTickEnabled(true);
+	}
+}
+
+void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (GetLocalHolder())
+	{
+		RMRoadLimits::HideHint();
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void ARMRoadHologram::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	APlayerController* PC = GetLocalHolder();
+	if (!PC)
+	{
+		return;
+	}
+	RMRoadLimits::HandleInput(PC);
+	const bool bOff = RMRoadLimits::AreOff();
+	mNoLimits = bOff; // checked by the next placement check (every frame)
 }
 
 void ARMRoadHologram::CheckValidPlacement()
@@ -422,7 +459,7 @@ void ARMRoadHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 	}
-	if (IsLongMode())
+	if (IsUnlimited())
 	{
 		// Up to 1 km, any turn or slope: only that and a bend tighter than half the width (the inner
 		// edge folding over itself) are refused.
