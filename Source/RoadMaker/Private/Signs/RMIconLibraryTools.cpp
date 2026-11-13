@@ -3,6 +3,9 @@
 #include "FGIconDatabaseSubsystem.h"
 #include "RoadMakerModule.h"
 #include "Engine/World.h"
+#include "Engine/Texture2D.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstance.h"
 #include "Engine/AssetManager.h"
 #include "Misc/CoreDelegates.h"
 #include "UObject/UnrealType.h"
@@ -84,6 +87,43 @@ namespace
 		{
 			TArray<FString>& Names = ByType.FindOrAdd(static_cast<int32>(D.IconType));
 			Names.Add(D.IconName.ToString() + (D.Hidden ? TEXT(" [hidden]") : TEXT("")));
+		}
+		// The backgrounds (category 4): what the game's ones are made of, to make ours the same way.
+		for (const FIconData& D : Db->GetAllIconData())
+		{
+			if (D.IconType != EIconType::ESIT_Material)
+			{
+				continue;
+			}
+			UObject* Obj = D.Texture.LoadSynchronous();
+			FString Detail = Obj ? Obj->GetClass()->GetName() : FString(TEXT("not loaded"));
+			if (UMaterialInterface* M = Cast<UMaterialInterface>(Obj))
+			{
+				UMaterial* Base = M->GetMaterial();
+				Detail += FString::Printf(TEXT(", base %s, domain %d, blend %d"), Base ? *Base->GetPathName() : TEXT("-"),
+					Base ? static_cast<int32>(Base->MaterialDomain) : -1, static_cast<int32>(M->GetBlendMode()));
+				if (UMaterialInstance* MI = Cast<UMaterialInstance>(M))
+				{
+					Detail += FString::Printf(TEXT(", parent %s"), MI->Parent ? *MI->Parent->GetPathName() : TEXT("-"));
+				}
+				TArray<FMaterialParameterInfo> Infos;
+				TArray<FGuid> Ids;
+				TArray<FString> Params;
+				M->GetAllTextureParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& I : Infos) { Params.Add(TEXT("tex ") + I.Name.ToString()); }
+				Infos.Reset(); Ids.Reset();
+				M->GetAllScalarParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& I : Infos) { Params.Add(TEXT("scalar ") + I.Name.ToString()); }
+				Infos.Reset(); Ids.Reset();
+				M->GetAllVectorParameterInfo(Infos, Ids);
+				for (const FMaterialParameterInfo& I : Infos) { Params.Add(TEXT("vector ") + I.Name.ToString()); }
+				Detail += TEXT(", params: ") + FString::Join(Params, TEXT(" / "));
+			}
+			else if (UTexture2D* T = Cast<UTexture2D>(Obj))
+			{
+				Detail += FString::Printf(TEXT(" %dx%d"), T->GetSizeX(), T->GetSizeY());
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Sign background \"%s\": %s (%s)"), *D.IconName.ToString(), *D.Texture.ToSoftObjectPath().ToString(), *Detail);
 		}
 		for (const auto& Pair : ByType)
 		{
