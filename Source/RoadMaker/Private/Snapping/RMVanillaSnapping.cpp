@@ -1894,8 +1894,9 @@ namespace
 	}
 
 	/**
-	 * Snap key + vehicle path or railway track aiming at a lane of a long road (over 125 m): a path /
-	 * track for every section of the lane at once (the road's sections of at most 100 m, at most 32 per
+	 * Snap key + vehicle path or railway track aiming at a lane of a long road (over 125 m): tracks for
+	 * every section of the lane at once, vehicle paths one section per click (the next one in the travel
+	 * direction, joined to the last); details below. Tracks: every section (the road's sections of at most 100 m, at most 32 per
 	 * click), each ending where the next starts; sections that already have one are left out. One
 	 * click builds them all. Laid out once per road / lane / direction (refreshed every half second).
 	 */
@@ -2019,10 +2020,14 @@ namespace
 			bForward = !bForward;
 		}
 
-		// The sections still to lay (at most MaxLaneSections, from the start of the road).
+		// The sections still to lay. Tracks: all of them (at most MaxLaneSections, from the start of the
+		// road; the game connects tracks built together). Vehicle paths: only the next one in the travel
+		// direction, because paths built in the same click are not joined to each other by the game
+		// (tested 2026-11-13); each click lays the next section, joined to the one built before.
 		TArray<int32> Todo;
-		for (int32 K = 0; K < Count && Todo.Num() < MaxLaneSections; ++K)
+		for (int32 I = 0; I < Count && Todo.Num() < (PathParent ? 1 : MaxLaneSections); ++I)
 		{
+			const int32 K = PathParent && !bForward ? Count - 1 - I : I;
 			if (!Built[K])
 			{
 				Todo.Add(K);

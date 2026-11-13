@@ -123,16 +123,10 @@ namespace RMSound
 			}
 			const FBox Bounds = Piece->GetComponentsBoundingBox();
 			const FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
-			UAkComponent* Comp = UAkGameplayStatics::SpawnAkComponentAtLocation(Piece, Event, Where, Piece->GetActorRotation(), false, true);
-			if (!Comp)
-			{
-				UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
-				return;
-			}
-			// The build effect's game parameters (BuildEffect_Size_RTPC, RTPC_BoxVector) are left at their
-			// defaults: setting them did not lengthen the sound, and values that sounded right in one test
-			// gave the end sound of a big building in the next (2026-11-12). Unset = the normal sounds.
-			Comp->PostAkEvent(Event, 0, FOnAkPostEventCallback());
+			// Posted at the location (no component of our own: a spawned one is owned by the world settings,
+			// and auto-destroying it logged "May not destroy component" errors). The build effect's game
+			// parameters are left at their defaults (a size value picked a big building's end sound).
+			UAkGameplayStatics::PostAkEventAtLocation(Piece, Event, Where, Piece->GetActorRotation());
 		}
 	}
 
