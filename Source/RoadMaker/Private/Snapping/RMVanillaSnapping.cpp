@@ -2132,7 +2132,8 @@ namespace
 	/**
 	 * Railway tracks built in one click (lane sections): the game only connects a track to tracks that
 	 * existed before it, so the joints between sections built together stayed open, and trains derailed
-	 * there although the rails looked joined. Free track ends within 30 cm of each other, facing
+	 * there although the rails looked joined. Free ends of the new tracks are connected to free ends
+	 * (new, or of tracks already there) within 30 cm, facing
 	 * opposite ways, are connected; the joined tracks are then given to the railroad again so its
 	 * track network sees them as one.
 	 */
@@ -2153,13 +2154,44 @@ namespace
 				}
 			}
 		}
+		// Free ends of tracks that were already there, near the new ones (the external track at a road
+		// end: the hologram's snapped connection did not always connect it).
+		const int32 NumBuilt = Free.Num();
+		TSet<const AActor*> BuiltOwners;
+		for (const UFGRailroadTrackConnectionComponent* C : Free)
+		{
+			BuiltOwners.Add(C->GetOwner());
+		}
+		for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
+		{
+			if (BuiltOwners.Contains(*It))
+			{
+				continue;
+			}
+			for (int32 K = 0; K < 2; ++K)
+			{
+				UFGRailroadTrackConnectionComponent* C = It->GetConnection(K);
+				if (!C || C->IsConnected())
+				{
+					continue;
+				}
+				for (int32 B = 0; B < NumBuilt; ++B)
+				{
+					if (FVector::DistSquared(C->GetConnectorLocation(), Free[B]->GetConnectorLocation()) < 300.f * 300.f)
+					{
+						Free.Add(C);
+						break;
+					}
+				}
+			}
+		}
 		struct FTrackPair { UFGRailroadTrackConnectionComponent* A; UFGRailroadTrackConnectionComponent* B; float Dist; };
 		TArray<FTrackPair> Pairs;
-		for (int32 I = 0; I < Free.Num(); ++I)
+		for (int32 I = 0; I < NumBuilt; ++I)
 		{
 			for (int32 J = I + 1; J < Free.Num(); ++J)
 			{
-				UFGRailroadTrackConnectionComponent* A = Free[I];
+				UFGRailroadTrackConnectionComponent* A = Free[I]; // always a new track
 				UFGRailroadTrackConnectionComponent* B = Free[J];
 				if (A->GetOwner() == B->GetOwner())
 				{
@@ -2190,7 +2222,7 @@ namespace
 			Used.Add(P.B);
 			P.A->AddConnection(P.B);
 			UE_LOG(LogRoadMaker, Log, TEXT("Railway: joining track ends %.1f cm apart"), P.Dist);
-			Touched.AddUnique(Cast<AFGBuildableRailroadTrack>(P.B->GetOwner()));
+			Touched.AddUnique(Cast<AFGBuildableRailroadTrack>(P.A->GetOwner()));
 		}
 		if (Touched.Num() == 0)
 		{
@@ -3307,7 +3339,7 @@ void RMVanillaSnapping::InstallHooks()
 				{
 					MergeSectionNodes(W, Built);
 				}
-				if (W && Tracks.Num() >= 2)
+				if (W && Tracks.Num() >= 1)
 				{
 					JoinSectionTracks(W, Tracks);
 				}
