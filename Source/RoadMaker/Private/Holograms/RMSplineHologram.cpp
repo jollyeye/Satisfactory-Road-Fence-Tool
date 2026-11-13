@@ -81,6 +81,13 @@ namespace
 
 bool ARMSplineHologram::IsValidHitResult(const FHitResult& hitResult) const
 {
+	// Straight (keep angle), placing the end: the end follows the aim along the road's own line, so
+	// any aim counts, even at the sky (the game would hide the hologram), like moving along a road
+	// with the cut tool.
+	if (mStep == 1 && IsKeepAngleMode() && !(hitResult.TraceEnd - hitResult.TraceStart).IsNearlyZero())
+	{
+		return true;
+	}
 	// Our own pieces are always valid to aim at (roads on roads, fences on roads, snapping to ends).
 	if (Cast<ARMBuildableProcedural>(hitResult.GetActor()))
 	{
@@ -109,7 +116,7 @@ void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 	{
 		// Straight (keep angle): end snaps are ignored; the length comes from the aim (UpdateCurve).
 		mEndSnapped = false;
-		mEnd = hitResult.Location;
+		mEnd = hitResult.bBlockingHit ? hitResult.Location : hitResult.TraceEnd;
 		UpdateCurve();
 		return;
 	}
