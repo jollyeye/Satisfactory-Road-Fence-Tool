@@ -40,7 +40,7 @@ public:
 
 	/**
 	 * Lane centres across the road (cm from the middle, left to right) and the width of one lane.
-	 * Follows the markings: with side lines the lanes sit inside them, with 1 lane every 2 m.
+	 * For lane markings. With side lines the lanes sit inside them; 1 lane = one spot in the middle.
 	 */
 	void GetLaneCentres(TArray<float>& OutOffsets, float& OutLaneWidth) const;
 
