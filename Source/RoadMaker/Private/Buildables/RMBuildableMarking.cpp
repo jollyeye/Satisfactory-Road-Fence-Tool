@@ -362,7 +362,7 @@ namespace
 	// A vehicle icon: a square texture drawn IconWidth of the width given across, stretched IconStretch times along
 	// (like the digits: seen from a driving car a square would look squashed).
 	constexpr float IconWidth = 0.6f;
-	constexpr float IconStretch = 1.6f;
+	constexpr float IconStretch = 2.4f; // 1.6 x 1.5 (tested 2026-11-13: longer reads better)
 
 	FVector2D IconHalfSize(float LaneWidth)
 	{
