@@ -303,7 +303,10 @@ void URMMapRoadsRow::CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick)
 	}
 	if (mText && Text)
 	{
-		mText->SetFont(Text->GetFont());
+		// A little bigger than the game's row (asked 2026-11-13).
+		FSlateFontInfo Font = Text->GetFont();
+		Font.Size += 2;
+		mText->SetFont(Font);
 		mText->SetColorAndOpacity(Text->GetColorAndOpacity());
 		mText->SetShadowOffset(Text->GetShadowOffset());
 		mText->SetShadowColorAndOpacity(Text->GetShadowColorAndOpacity());
@@ -385,6 +388,19 @@ void URMMapRoadsRow::Refresh()
 
 void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
 {
+	// The thin grey line the game draws on top of its row (2 px, sRGB 102 102 103): on top of ours too.
+	if (mRoot && WidgetTree)
+	{
+		UImage* Line = WidgetTree->ConstructWidget<UImage>();
+		Line->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(102, 102, 103)));
+		Line->SetDesiredSizeOverride(FVector2D(1.f, 2.f));
+		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UOverlaySlot* LineSlot = mRoot->AddChildToOverlay(Line))
+		{
+			LineSlot->SetHorizontalAlignment(HAlign_Fill);
+			LineSlot->SetVerticalAlignment(VAlign_Top);
+		}
+	}
 	UPanelWidget* GamePanel = Cast<UPanelWidget>(GameRow);
 	if (!GamePanel || !mRoot || !WidgetTree)
 	{
