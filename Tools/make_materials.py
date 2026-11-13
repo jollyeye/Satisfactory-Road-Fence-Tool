@@ -1014,10 +1014,10 @@ def sign_tex(name):
 
 
 # Sign backgrounds are instances of the game's MM_UI_SignBG (a UI material: Texture tiled over the sign, TileWidth /
-# TileHeight, FillMode, FitScale, Animate, BackgroundType). Ours copy the settings of the game's "Diagonal Lines" and
+# TileHeight, FillMode, FitScale, Animate, BackgroundType). Ours copy the settings of the game's "FICSIT" logo background and
 # put our texture in; the animated ones also set Animate.
 SIGN_BG_PARENT = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG"
-SIGN_BG_LIKE = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG_DiagonalLines"
+SIGN_BG_LIKE = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG_Ficsit"  # a picture tiled as it is (Diagonal Lines, type 4, slants and moves it)
 
 
 def sign_background(name, tex, animate):
@@ -1037,10 +1037,10 @@ def sign_background(name, tex, animate):
     if like:
         for p in scalars:
             v = MEL.get_material_instance_scalar_parameter_value(like, p)
-            log("    Diagonal Lines %s = %s" % (p, v))
+            log("    Like %s = %s" % (p, v))
             MEL.set_material_instance_scalar_parameter_value(mi, p, v)
         for p in textures:
-            log("    Diagonal Lines %s = %s" % (p, MEL.get_material_instance_texture_parameter_value(like, p)))
+            log("    Like %s = %s" % (p, MEL.get_material_instance_texture_parameter_value(like, p)))
     MEL.set_material_instance_texture_parameter_value(mi, "Texture", tex)
     if "Animate" in [str(x) for x in scalars]:
         MEL.set_material_instance_scalar_parameter_value(mi, "Animate", 1.0 if animate else 0.0)
