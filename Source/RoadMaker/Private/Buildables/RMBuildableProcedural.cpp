@@ -58,7 +58,12 @@ void ARMBuildableProcedural::BeginPlay()
 	const bool bJustBuilt = !mLoadedFromSave && World && World->GetTimeSeconds() > 20.0;
 	Super::BeginPlay();
 	UpdateLODDistances();
+	// Collision is worked out in the background (no hitch when a long road or fence is built, replaced or
+	// rebuilt; the old collision stays until the new one is ready), except for pieces arriving with the
+	// world: someone may be standing on them as the save loads.
+	mMesh->bUseAsyncCooking = bJustBuilt;
 	RebuildMesh();
+	mMesh->bUseAsyncCooking = true;
 	if (bJustBuilt)
 	{
 		StartRiseAnimation();
