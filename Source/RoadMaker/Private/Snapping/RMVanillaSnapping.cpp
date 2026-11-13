@@ -2128,8 +2128,8 @@ namespace
 	/**
 	 * Vehicle paths built in one click (lane sections, junction links): each gets its own end nodes, so
 	 * where one ends and the next starts there are two nodes on the same spot and vehicles cannot pass.
-	 * The next tick (once the segments have made their nodes) the nodes within 20 cm of each other are
-	 * merged into one, which joins the paths.
+	 * The next tick (once the segments have made their nodes) each loose path end is merged with the
+	 * nearest loose path start within 1.5 m, which joins the paths.
 	 */
 	void MergeSectionNodes(UWorld* World, const TArray<TWeakObjectPtr<AFGVehiclePathSegment>>& Built)
 	{
@@ -2147,24 +2147,47 @@ namespace
 				}
 			}
 		}
-		int32 Merged = 0;
-		for (int32 I = 0; I < Nodes.Num(); ++I)
+		// Pair every node where a path only arrives with the nearest node where a path only leaves
+		// (within 1.5 m; the game itself snaps to nodes within 3 m), nearest pairs first.
+		struct FPair { AFGVehiclePathNode* End; AFGVehiclePathNode* Start; float Dist; };
+		TArray<FPair> Pairs;
+		for (AFGVehiclePathNode* E : Nodes)
 		{
-			AFGVehiclePathNode* Keep = Nodes[I];
-			if (!IsValid(Keep))
+			if (E->GetArrivingConnections().Num() == 0 || E->GetLeavingConnections().Num() > 0)
 			{
 				continue;
 			}
-			for (int32 J = I + 1; J < Nodes.Num(); ++J)
+			for (AFGVehiclePathNode* S : Nodes)
 			{
-				AFGVehiclePathNode* Other = Nodes[J];
-				if (IsValid(Other) && Other != Keep && FVector::DistSquared(Other->GetActorLocation(), Keep->GetActorLocation()) < 20.f * 20.f)
+				if (S == E || S->GetLeavingConnections().Num() == 0 || S->GetArrivingConnections().Num() > 0)
 				{
-					Other->MoveConnectionsToNode(Keep); // removes Other
-					Nodes[J] = nullptr;
-					++Merged;
+					continue;
+				}
+				const float D = FVector::Dist(E->GetActorLocation(), S->GetActorLocation());
+				if (D < 150.f)
+				{
+					Pairs.Add({ E, S, D });
+				}
+				else if (D < 1000.f)
+				{
+					UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: nodes %.0f cm apart, too far to join"), D);
 				}
 			}
+		}
+		Pairs.Sort([](const FPair& A, const FPair& B) { return A.Dist < B.Dist; });
+		TSet<AFGVehiclePathNode*> Used;
+		int32 Merged = 0;
+		for (const FPair& P : Pairs)
+		{
+			if (Used.Contains(P.End) || Used.Contains(P.Start) || !IsValid(P.End) || !IsValid(P.Start))
+			{
+				continue;
+			}
+			Used.Add(P.End);
+			Used.Add(P.Start);
+			UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joining nodes %.1f cm apart"), P.Dist);
+			P.Start->MoveConnectionsToNode(P.End); // removes P.Start
+			++Merged;
 		}
 		if (Merged > 0)
 		{
