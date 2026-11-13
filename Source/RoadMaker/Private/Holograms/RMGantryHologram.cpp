@@ -175,6 +175,11 @@ void ARMGantryHologram::RebuildPreview()
 	if (mParts.Num() == 0)
 	{
 		ARMBuildableGantry::CreateParts(this, mPreviewMesh, mParts);
+		// The sampled / chosen paint (middle click copies it) was applied before the parts existed.
+		if (mParts.Num() > 0)
+		{
+			ApplyCustomizationData();
+		}
 	}
 	if (mParts.Num() > 0)
 	{

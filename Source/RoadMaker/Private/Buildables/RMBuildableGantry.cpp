@@ -82,6 +82,11 @@ void ARMBuildableGantry::RebuildMesh()
 	if (mParts.Num() == 0)
 	{
 		CreateParts(this, GetRootComponent(), mParts);
+		// The paint was applied (in BeginPlay) before the parts existed: apply it to them now.
+		if (mParts.Num() > 0 && (HasActorBegunPlay() || IsActorBeginningPlay()))
+		{
+			ApplyMeshPrimitiveData(mCustomizationData);
+		}
 	}
 	if (!mAnimating)
 	{
