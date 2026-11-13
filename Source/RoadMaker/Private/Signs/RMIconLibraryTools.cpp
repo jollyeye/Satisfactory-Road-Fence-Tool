@@ -3,6 +3,11 @@
 #include "FGIconDatabaseSubsystem.h"
 #include "RoadMakerModule.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Buildables/FGBuildableWidgetSign.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/Texture2D.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstance.h"
@@ -137,8 +142,61 @@ namespace
 	}
 }
 
+namespace
+{
+	/**
+	 * Investigation: what a placed sign's own material gets (the sign in the world showed the game's "Diagonal Lines"
+	 * instead of our background). Signs within 20 m of the player, logged again when something changes.
+	 */
+	void LogNearbySignMaterials(UWorld* World)
+	{
+		static TMap<TWeakObjectPtr<AActor>, FString> GSeen;
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (!Pawn)
+		{
+			return;
+		}
+		FObjectPropertyBase* PlaneProp = FindFProperty<FObjectPropertyBase>(AFGBuildableWidgetSign::StaticClass(), TEXT("mSignProxyPlane"));
+		for (TActorIterator<AFGBuildableWidgetSign> It(World); It; ++It)
+		{
+			AFGBuildableWidgetSign* Sign = *It;
+			if (FVector::Dist(Sign->GetActorLocation(), Pawn->GetActorLocation()) > 2000.f)
+			{
+				continue;
+			}
+			UPrimitiveComponent* Plane = PlaneProp ? Cast<UPrimitiveComponent>(PlaneProp->GetObjectPropertyValue_InContainer(Sign)) : nullptr;
+			UMaterialInterface* M = Plane ? Plane->GetMaterial(0) : nullptr;
+			FString Text = FString::Printf(TEXT("%s material %s"), *Sign->GetName(), M ? *M->GetPathName() : TEXT("none"));
+			if (UMaterialInstance* MI = Cast<UMaterialInstance>(M))
+			{
+				Text += FString::Printf(TEXT(" (parent %s)"), MI->Parent ? *MI->Parent->GetPathName() : TEXT("-"));
+				for (const FTextureParameterValue& V : MI->TextureParameterValues)
+				{
+					Text += FString::Printf(TEXT(" | tex %s = %s"), *V.ParameterInfo.Name.ToString(), V.ParameterValue ? *V.ParameterValue->GetPathName() : TEXT("null"));
+				}
+				for (const FScalarParameterValue& V : MI->ScalarParameterValues)
+				{
+					Text += FString::Printf(TEXT(" | %s = %g"), *V.ParameterInfo.Name.ToString(), V.ParameterValue);
+				}
+				for (const FVectorParameterValue& V : MI->VectorParameterValues)
+				{
+					Text += FString::Printf(TEXT(" | %s = %s"), *V.ParameterInfo.Name.ToString(), *V.ParameterValue.ToString());
+				}
+			}
+			FString& Last = GSeen.FindOrAdd(Sign);
+			if (Last != Text)
+			{
+				Last = Text;
+				UE_LOG(LogRoadMaker, Display, TEXT("Sign look: %s"), *Text);
+			}
+		}
+	}
+}
+
 void URMIconLibraryTools::EnsureOurIcons(UWorld* World)
 {
+	LogNearbySignMaterials(World);
 	static TWeakObjectPtr<AFGIconDatabaseSubsystem> GDone;
 	static TWeakObjectPtr<AFGIconDatabaseSubsystem> GInjected;
 	static bool bLoggedCategories = false;
