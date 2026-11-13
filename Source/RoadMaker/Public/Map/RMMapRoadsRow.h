@@ -40,6 +40,9 @@ public:
 	 */
 	void CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick);
 
+	/** The pictures / borders around the game's button in its row (its background), copied behind ours. */
+	void CopyBackground(UWidget* GameRow, UButton* GameButton);
+
 protected:
 	UFUNCTION()
 	void OnClicked();
@@ -61,4 +64,11 @@ protected:
 
 	UPROPERTY(Transient)
 	UCheckBox* mCheck = nullptr;
+
+	/** A copy of the game's own options check box (BPW_OptionsCheckbox), driven through reflection. */
+	UPROPERTY(Transient)
+	UUserWidget* mGameCheck = nullptr;
+
+	UPROPERTY(Transient)
+	class UOverlay* mRoot = nullptr;
 };

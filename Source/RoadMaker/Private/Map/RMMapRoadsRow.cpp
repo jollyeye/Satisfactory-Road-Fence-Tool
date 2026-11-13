@@ -9,6 +9,8 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Engine/World.h"
@@ -22,6 +24,62 @@ namespace
 	bool GMapRoadsShown = true;
 	TWeakObjectPtr<URMMapRoadsRow> GMapRoadsRow;
 	double GNextMapRowSearch = 0.0;
+
+	/**
+	 * Sets the game's options check box (a Blueprint widget) on or off: calls its one-bool "Set...Check..."
+	 * function if it has one, else sets its bool property with "Check" in the name. Logs its functions and
+	 * bool properties once, to know what it offers.
+	 */
+	void SetGameCheck(UUserWidget* Box, bool bOn)
+	{
+		if (!Box)
+		{
+			return;
+		}
+		static bool bLogged = false;
+		UFunction* Setter = nullptr;
+		for (TFieldIterator<UFunction> It(Box->GetClass(), EFieldIteratorFlags::IncludeSuper); It; ++It)
+		{
+			UFunction* F = *It;
+			if (!bLogged && F->GetOuter() == Box->GetClass())
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Map: check box function %s (%d params)"), *F->GetName(), F->NumParms);
+			}
+			const FString Name = F->GetName();
+			if (!Setter && F->NumParms == 1 && Name.StartsWith(TEXT("Set")) && Name.Contains(TEXT("Check")))
+			{
+				if (CastField<FBoolProperty>(F->PropertyLink))
+				{
+					Setter = F;
+				}
+			}
+		}
+		FBoolProperty* Flag = nullptr;
+		for (TFieldIterator<FBoolProperty> It(Box->GetClass()); It; ++It)
+		{
+			if (!bLogged)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Map: check box bool %s"), *It->GetName());
+			}
+			if (!Flag && It->GetName().Contains(TEXT("Check")))
+			{
+				Flag = *It;
+			}
+		}
+		bLogged = true;
+		if (Setter)
+		{
+			TArray<uint8> Params;
+			Params.SetNumZeroed(FMath::Max<int32>(Setter->ParmsSize, 16));
+			CastField<FBoolProperty>(Setter->PropertyLink)->SetPropertyValue_InContainer(Params.GetData(), bOn);
+			Box->ProcessEvent(Setter, Params.GetData());
+		}
+		else if (Flag)
+		{
+			Flag->SetPropertyValue_InContainer(Box, bOn);
+			Box->Invalidate(EInvalidateWidgetReason::Paint);
+		}
+	}
 
 	/** The next widget up: the parent, or at the top of a user widget's tree the user widget itself. */
 	UWidget* MapUp(UWidget* W)
@@ -157,9 +215,39 @@ void RMMapRoads::EnsureRow(UWorld* World)
 	{
 		Layout.Offsets.Top -= Height;
 	}
+	// Room for it: whatever in the menu reaches down to the game's row (the list) ends one row higher.
+	const FGeometry CanvasGeo = Canvas->GetCachedGeometry();
+	const float RowTop = CanvasGeo.AbsoluteToLocal(StampsRow->GetCachedGeometry().GetAbsolutePosition()).Y;
+	for (UWidget* Other : Canvas->GetAllChildren())
+	{
+		UCanvasPanelSlot* OtherSlot = Other ? Cast<UCanvasPanelSlot>(Other->Slot) : nullptr;
+		if (!OtherSlot || Other == StampsRow || !Other->IsVisible())
+		{
+			continue;
+		}
+		const FGeometry& Geo = Other->GetCachedGeometry();
+		const float Top = CanvasGeo.AbsoluteToLocal(Geo.GetAbsolutePosition()).Y;
+		const float Bottom = CanvasGeo.AbsoluteToLocal(Geo.GetAbsolutePosition() + Geo.GetAbsoluteSize()).Y;
+		if (Top < RowTop - Height && Bottom > RowTop - Height + 1.f && Bottom <= RowTop + 2.f)
+		{
+			FAnchorData OtherLayout = OtherSlot->GetLayout();
+			const bool bOtherStretchY = !FMath::IsNearlyEqual(OtherLayout.Anchors.Minimum.Y, OtherLayout.Anchors.Maximum.Y);
+			if (bOtherStretchY)
+			{
+				OtherLayout.Offsets.Bottom += Height; // margin from the bottom
+			}
+			else if (!OtherSlot->GetAutoSize())
+			{
+				OtherLayout.Offsets.Bottom -= Height; // its height
+			}
+			OtherSlot->SetLayout(OtherLayout);
+			UE_LOG(LogRoadMaker, Display, TEXT("Map: %s (%s) made %.0f shorter for the roads row"), *Other->GetName(), *Other->GetClass()->GetName(), Height);
+		}
+	}
 	To->SetLayout(Layout);
 	To->SetAutoSize(From->GetAutoSize());
 	To->SetZOrder(From->GetZOrder() + 1);
+	Row->CopyBackground(StampsRow, StampsButton);
 	Row->CopyLook(StampsButton, StampsText, Tick);
 	GMapRoadsRow = Row;
 	UE_LOG(LogRoadMaker, Display, TEXT("Map: \"Show Roads on Map\" row added above %s in %s (height %.0f, tick %s)"),
@@ -170,8 +258,14 @@ TSharedRef<SWidget> URMMapRoadsRow::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
 	{
+		mRoot = WidgetTree->ConstructWidget<UOverlay>();
+		WidgetTree->RootWidget = mRoot;
 		mButton = WidgetTree->ConstructWidget<UButton>();
-		WidgetTree->RootWidget = mButton;
+		if (UOverlaySlot* ButtonSlot = mRoot->AddChildToOverlay(mButton))
+		{
+			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
+			ButtonSlot->SetVerticalAlignment(VAlign_Fill);
+		}
 		mButton->OnClicked.AddDynamic(this, &URMMapRoadsRow::OnClicked);
 		UHorizontalBox* Box = WidgetTree->ConstructWidget<UHorizontalBox>();
 		if (UButtonSlot* BoxSlot = Cast<UButtonSlot>(mButton->AddChild(Box)))
@@ -227,7 +321,23 @@ void URMMapRoadsRow::CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick)
 	if (Box && WidgetTree)
 	{
 		UWidget* Added = nullptr;
-		if (UImage* GameTick = Cast<UImage>(Tick))
+		UUserWidget* GameBox = Cast<UUserWidget>(Tick);
+		if (GameBox && GetOwningPlayer())
+		{
+			// The game's own check box widget (BPW_OptionsCheckbox): the same look; we only set its state.
+			mGameCheck = CreateWidget<UUserWidget>(GetOwningPlayer(), GameBox->GetClass());
+			if (mGameCheck)
+			{
+				mGameCheck->SetVisibility(ESlateVisibility::HitTestInvisible); // clicks go to our button
+			}
+			Added = mGameCheck;
+		}
+		UImage* GameTick = Added ? nullptr : Cast<UImage>(Tick);
+		if (Added)
+		{
+			// (the game's check box)
+		}
+		else if (GameTick)
 		{
 			// The game's tick picture: full when on, faint when off.
 			mTick = WidgetTree->ConstructWidget<UImage>();
@@ -240,6 +350,11 @@ void URMMapRoadsRow::CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick)
 			mCheck = WidgetTree->ConstructWidget<UCheckBox>();
 			mCheck->OnCheckStateChanged.AddDynamic(this, &URMMapRoadsRow::OnCheckChanged);
 			Added = mCheck;
+		}
+		if (!Added)
+		{
+			Refresh();
+			return;
 		}
 		UHorizontalBoxSlot* TickSlot = Box->AddChildToHorizontalBox(Added);
 		TickSlot->SetVerticalAlignment(VAlign_Center);
@@ -264,6 +379,50 @@ void URMMapRoadsRow::Refresh()
 	if (mCheck)
 	{
 		mCheck->SetIsChecked(bShown);
+	}
+	SetGameCheck(mGameCheck, bShown);
+}
+
+void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
+{
+	UPanelWidget* GamePanel = Cast<UPanelWidget>(GameRow);
+	if (!GamePanel || !mRoot || !WidgetTree)
+	{
+		return;
+	}
+	int32 Index = 0;
+	for (UWidget* Child : GamePanel->GetAllChildren())
+	{
+		if (!Child || Child == GameButton)
+		{
+			continue;
+		}
+		UWidget* Copy = nullptr;
+		if (UImage* Image = Cast<UImage>(Child))
+		{
+			UImage* NewImage = WidgetTree->ConstructWidget<UImage>();
+			NewImage->SetBrush(Image->GetBrush());
+			NewImage->SetColorAndOpacity(Image->GetColorAndOpacity());
+			Copy = NewImage;
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Map: stamps row part %s (%s)%s"), *Child->GetName(), *Child->GetClass()->GetName(), Copy ? TEXT(" copied") : TEXT(""));
+		if (Copy)
+		{
+			Copy->SetRenderOpacity(Child->GetRenderOpacity());
+			Copy->SetVisibility(ESlateVisibility::HitTestInvisible);
+			mRoot->InsertChildAt(Index++, Copy);
+			if (UOverlaySlot* ToSlot = Cast<UOverlaySlot>(Copy->Slot))
+			{
+				ToSlot->SetHorizontalAlignment(HAlign_Fill);
+				ToSlot->SetVerticalAlignment(VAlign_Fill);
+				if (UOverlaySlot* FromSlot = Cast<UOverlaySlot>(Child->Slot))
+				{
+					ToSlot->SetPadding(FromSlot->GetPadding());
+					ToSlot->SetHorizontalAlignment(FromSlot->GetHorizontalAlignment());
+					ToSlot->SetVerticalAlignment(FromSlot->GetVerticalAlignment());
+				}
+			}
+		}
 	}
 }
 
