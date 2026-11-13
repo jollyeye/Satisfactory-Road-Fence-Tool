@@ -997,9 +997,12 @@ finish(marking_icon_cyber)
 log("Cyberpunk vehicle icon marking")
 
 # --- Sign icons: Road Maker's own icons in the game's sign icon picker ---------------------------
-# Chevrons for curves, still and scrolling, in the sign editor's backgrounds (square tiles). The game tints icons with the sign's colour; for a material icon the
-# tint arrives as the vertex colour (UI material). The library's order is the icons' IDs: only ever append.
+# Chevrons for curves, still and scrolling, in the sign editor's backgrounds (square tiles).
+# The library's order is the icons' IDs: only ever append.
 SIGN_ICON_ROOT = "/RoadMaker/Icons"
+for old in ("/RoadMaker/Materials/MUI_RM_Sign_ChevronsLeft", "/RoadMaker/Materials/MUI_RM_Sign_ChevronsRight"):  # first try, replaced
+    if eal.does_asset_exist(old):
+        eal.delete_asset(old)
 
 
 def sign_tex(name):
@@ -1010,54 +1013,65 @@ def sign_tex(name):
         return None
 
 
-def scrolling_icon(name, tex, speed):
-    """UI material: the texture scrolling left / right (speed in icon widths per second), tinted like a sign icon."""
-    m = new_material(name)
-    m.set_editor_property("material_domain", unreal.MaterialDomain.MD_UI)
-    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
-    uv = node(m, unreal.MaterialExpressionTextureCoordinate, -900, 0)
-    pan = node(m, unreal.MaterialExpressionPanner, -700, 0)
-    pan.set_editor_property("speed_x", speed)
-    pan.set_editor_property("speed_y", 0.0)
-    link(uv, "", pan, "Coordinate")
-    ts = node(m, unreal.MaterialExpressionTextureSample, -450, 0)
-    ts.set_editor_property("texture", tex)
-    ts.set_editor_property("sampler_type", sampler_for(tex))
-    ts.set_editor_property("sampler_source", unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
-    link(pan, "", ts, "UVs")
-    vc = node(m, unreal.MaterialExpressionVertexColor, -450, 300)
-    col = node(m, unreal.MaterialExpressionMultiply, -200, 0)
-    link(ts, "RGB", col, "A")
-    link(vc, "", col, "B")
-    op = node(m, unreal.MaterialExpressionMultiply, -200, 200)
-    link(ts, "A", op, "A")
-    link(vc, "A", op, "B")
-    MEL.connect_material_property(col, "", MP.MP_EMISSIVE_COLOR)
-    MEL.connect_material_property(op, "", MP.MP_OPACITY)
-    finish(m)
-    return m
+# Sign backgrounds are instances of the game's MM_UI_SignBG (a UI material: Texture tiled over the sign, TileWidth /
+# TileHeight, FillMode, FitScale, Animate, BackgroundType). Ours copy the settings of the game's "Diagonal Lines" and
+# put our texture in; the animated ones also set Animate.
+SIGN_BG_PARENT = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG"
+SIGN_BG_LIKE = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG_DiagonalLines"
+
+
+def sign_background(name, tex, animate):
+    parent = eal.load_asset(SIGN_BG_PARENT) if eal.does_asset_exist(SIGN_BG_PARENT) else None
+    like = eal.load_asset(SIGN_BG_LIKE) if eal.does_asset_exist(SIGN_BG_LIKE) else None
+    if not parent:
+        log("  ! %s not in the project" % SIGN_BG_PARENT)
+        return None
+    path = SIGN_ICON_ROOT + "/" + name
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else None
+    if not mi:
+        mi = asset_tools.create_asset(name, SIGN_ICON_ROOT, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(mi, parent)
+    scalars = MEL.get_scalar_parameter_names(parent)
+    textures = MEL.get_texture_parameter_names(parent)
+    log("  MM_UI_SignBG params: scalars %s, textures %s" % (list(scalars), list(textures)))
+    if like:
+        for p in scalars:
+            v = MEL.get_material_instance_scalar_parameter_value(like, p)
+            log("    Diagonal Lines %s = %s" % (p, v))
+            MEL.set_material_instance_scalar_parameter_value(mi, p, v)
+        for p in textures:
+            log("    Diagonal Lines %s = %s" % (p, MEL.get_material_instance_texture_parameter_value(like, p)))
+    MEL.set_material_instance_texture_parameter_value(mi, "Texture", tex)
+    if "Animate" in [str(x) for x in scalars]:
+        MEL.set_material_instance_scalar_parameter_value(mi, "Animate", 1.0 if animate else 0.0)
+    MEL.update_material_instance(mi)
+    eal.save_loaded_asset(mi, only_if_is_dirty=False)
+    log("Sign background " + name)
+    return mi
 
 
 chev_r = sign_tex("T_RM_Sign_ChevronsRight")
 chev_l = sign_tex("T_RM_Sign_ChevronsLeft")
 if chev_r and chev_l:
-    anim_r = scrolling_icon("MUI_RM_Sign_ChevronsRight", chev_r, 0.5)
-    anim_l = scrolling_icon("MUI_RM_Sign_ChevronsLeft", chev_l, -0.5)
+    bg_l = sign_background("MI_RM_SignBG_ChevronsLeft", chev_l, False)
+    bg_r = sign_background("MI_RM_SignBG_ChevronsRight", chev_r, False)
+    bg_la = sign_background("MI_RM_SignBG_ChevronsLeftAnim", chev_l, True)
+    bg_ra = sign_background("MI_RM_SignBG_ChevronsRightAnim", chev_r, True)
     lib_path = SIGN_ICON_ROOT + "/IL_RoadMaker"
     lib = eal.load_asset(lib_path) if eal.does_asset_exist(lib_path) else None
     if not lib:
         factory = unreal.DataAssetFactory()
         factory.set_editor_property("data_asset_class", unreal.FGIconLibrary)
         lib = asset_tools.create_asset("IL_RoadMaker", SIGN_ICON_ROOT, unreal.FGIconLibrary, factory)
-    if lib:
+    if lib and bg_l and bg_r and bg_la and bg_ra:
         # ID = position: never reorder or remove, only append.
-        icons = [(chev_l, "Chevrons Left", False), (chev_r, "Chevrons Right", False),
-                 (anim_l, "Chevrons Left (Animated)", True), (anim_r, "Chevrons Right (Animated)", True)]
-        unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons], True)  # True: the Backgrounds category
+        icons = [(bg_l, "Chevrons Left", False), (bg_r, "Chevrons Right", False),
+                 (bg_la, "Chevrons Left (Animated)", True), (bg_ra, "Chevrons Right (Animated)", True)]
+        unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons], True)  # True: Backgrounds
         eal.save_loaded_asset(lib, only_if_is_dirty=False)
-        log("Sign icon library: %d icons" % len(icons))
+        log("Sign icon library: %d backgrounds" % len(icons))
     else:
-        log("  ! could not create the sign icon library")
+        log("  ! sign icon library not made (library or backgrounds missing)")
 else:
     log("  ! sign icon textures missing (run create_assets.py first)")
 
