@@ -96,6 +96,28 @@ protected:
 	virtual float RevealDistance(const FVector& LocalPos) const override;
 	virtual float GetBuildAnimDuration() const override;
 
+	/**
+	 * Long pieces (over 125 m, Long Curve roads) are drawn in equal sections of at most 100 m (see
+	 * ARMBuildableProcedural chunks). UpdateChunkLayout() at the start of RebuildMesh.
+	 */
+	virtual int32 GetChunkCount() const override { return FMath::Max(1, mChunkCount); }
+	virtual int32 GetChunkOf(const FVector& LocalPos) const override;
+	void UpdateChunkLayout();
+	int32 mChunkCount = 1;
+	float mChunkLength = 0.f;
+	TArray<FRMFrame> mChunkFrames; // actor space, every 10 m: which chunk a point belongs to
+
+public:
+	/** Sections of the piece along its length (cm, from its start): what the mesh is drawn in, and what
+	 *  snap-key lane paths and tracks are laid in on long roads. One section for normal pieces. */
+	int32 GetSectionCount() const;
+	void GetSectionRange(int32 Section, float& OutFrom, float& OutTo) const;
+
+	/** Longest piece drawn as one section (cm); longer ones use sections of at most SectionLength. */
+	static constexpr float SingleSectionMax = 12500.f;
+	static constexpr float SectionLength = 10000.f;
+
+protected:
 	UPROPERTY(Replicated)
 	ERMRevealFrom mRevealFrom = ERMRevealFrom::Start;
 	UPROPERTY(Replicated)

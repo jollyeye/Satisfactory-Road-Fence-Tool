@@ -117,17 +117,173 @@ void ARMBuildableProcedural::SetShownLOD(int32 Level)
 		return;
 	}
 	mShownLOD = Level;
-	// Checked every time: the game's own build/dismantle effects may change visibility too.
-	auto Show = [](UProceduralMeshComponent* M, bool bVisible)
+	for (int32 Chunk = 0; Chunk < GetBuiltChunkCount(); ++Chunk)
 	{
-		if (M->IsVisible() != bVisible)
+		SetChunkShownLOD(Chunk, Level);
+	}
+}
+
+void ARMBuildableProcedural::SetChunkShownLOD(int32 Chunk, int32 Level)
+{
+	if (mChunkShownLOD.Num() != GetBuiltChunkCount())
+	{
+		mChunkShownLOD.Init(0, GetBuiltChunkCount());
+	}
+	mChunkShownLOD[Chunk] = Level;
+	// Checked every time: the game's own build/dismantle effects may change visibility too.
+	for (int32 L = 0; L < 3; ++L)
+	{
+		UProceduralMeshComponent* M = GetChunkMesh(Chunk, L);
+		if (M && M->IsVisible() != (Level == L))
 		{
-			M->SetVisibility(bVisible); // collision (on mMesh) is unaffected by visibility
+			M->SetVisibility(Level == L); // collision (on the detailed meshes) is unaffected by visibility
 		}
-	};
-	Show(mMesh, Level == 0);
-	Show(mFarMesh, Level == 1);
-	Show(mFar2Mesh, Level == 2);
+	}
+}
+
+UProceduralMeshComponent* ARMBuildableProcedural::GetChunkMesh(int32 Chunk, int32 Level) const
+{
+	if (Chunk == 0)
+	{
+		return Level == 0 ? mMesh : Level == 1 ? mFarMesh : mFar2Mesh;
+	}
+	const int32 Index = (Chunk - 1) * 3 + Level;
+	return mChunkMeshes.IsValidIndex(Index) ? mChunkMeshes[Index] : nullptr;
+}
+
+void ARMBuildableProcedural::ForEachMeshComponent(TFunctionRef<void(UProceduralMeshComponent*)> Fn) const
+{
+	for (UProceduralMeshComponent* M : { mMesh, mFarMesh, mFar2Mesh })
+	{
+		if (M)
+		{
+			Fn(M);
+		}
+	}
+	for (UProceduralMeshComponent* M : mChunkMeshes)
+	{
+		if (M)
+		{
+			Fn(M);
+		}
+	}
+}
+
+void ARMBuildableProcedural::PrepareChunks()
+{
+	const int32 Wanted = FMath::Max(1, GetChunkCount());
+	const int32 WantedExtra = (Wanted - 1) * 3;
+	// Fewer chunks than before: the extra components go.
+	while (mChunkMeshes.Num() > WantedExtra)
+	{
+		if (UProceduralMeshComponent* M = mChunkMeshes.Pop())
+		{
+			M->DestroyComponent();
+		}
+	}
+	for (UProceduralMeshComponent* M : mChunkMeshes)
+	{
+		M->ClearAllMeshSections();
+	}
+	// More: copies of the detailed / far / second far setup, attached to the main mesh.
+	while (mChunkMeshes.Num() < WantedExtra)
+	{
+		const int32 Level = mChunkMeshes.Num() % 3;
+		UProceduralMeshComponent* M = NewObject<UProceduralMeshComponent>(this, NAME_None, RF_Transient);
+		M->SetupAttachment(mMesh);
+		if (Level == 0)
+		{
+			M->bUseComplexAsSimpleCollision = true;
+			M->bUseAsyncCooking = mMesh->bUseAsyncCooking;
+			M->SetCollisionProfileName(mMesh->GetCollisionProfileName());
+			M->SetCastShadow(mMesh->CastShadow);
+		}
+		else
+		{
+			M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			M->SetCanEverAffectNavigation(false);
+			M->SetCastShadow(Level == 1 ? mFarMesh->CastShadow : mFar2Mesh->CastShadow);
+		}
+		M->RegisterComponent();
+		mChunkMeshes.Add(M);
+	}
+	for (UProceduralMeshComponent* M : mChunkMeshes)
+	{
+		if (M && M->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+		{
+			M->bUseAsyncCooking = mMesh->bUseAsyncCooking;
+		}
+	}
+	mChunkShownLOD.Init(mShownLOD, GetBuiltChunkCount());
+}
+
+namespace
+{
+	/** Splits a mesh into chunks by the chunk of each triangle's centre. */
+	void ChunkSplitMesh(const FRMMesh& In, int32 Count, TFunctionRef<int32(const FVector&)> ChunkOf, TArray<FRMMesh>& Out)
+	{
+		Out.SetNum(Count);
+		for (FRMMesh& M : Out)
+		{
+			M.Reset();
+		}
+		TArray<TArray<int32>> Remap;
+		Remap.SetNum(Count);
+		for (TArray<int32>& R : Remap)
+		{
+			R.Init(INDEX_NONE, In.Vertices.Num());
+		}
+		const bool bN = In.Normals.Num() == In.Vertices.Num();
+		const bool bUV = In.UVs.Num() == In.Vertices.Num();
+		const bool bT = In.Tangents.Num() == In.Vertices.Num();
+		const bool bM1 = In.MarkUV1.Num() == In.Vertices.Num();
+		const bool bM2 = In.MarkUV2.Num() == In.Vertices.Num();
+		const bool bM3 = In.MarkUV3.Num() == In.Vertices.Num();
+		for (int32 K = 0; K + 2 < In.Triangles.Num(); K += 3)
+		{
+			const FVector Centre = (In.Vertices[In.Triangles[K]] + In.Vertices[In.Triangles[K + 1]] + In.Vertices[In.Triangles[K + 2]]) / 3.f;
+			const int32 C = FMath::Clamp(ChunkOf(Centre), 0, Count - 1);
+			FRMMesh& M = Out[C];
+			for (int32 J = 0; J < 3; ++J)
+			{
+				const int32 V = In.Triangles[K + J];
+				int32& Mapped = Remap[C][V];
+				if (Mapped == INDEX_NONE)
+				{
+					Mapped = M.Vertices.Add(In.Vertices[V]);
+					if (bN) { M.Normals.Add(In.Normals[V]); }
+					if (bUV) { M.UVs.Add(In.UVs[V]); }
+					if (bT) { M.Tangents.Add(In.Tangents[V]); }
+					if (bM1) { M.MarkUV1.Add(In.MarkUV1[V]); }
+					if (bM2) { M.MarkUV2.Add(In.MarkUV2[V]); }
+					if (bM3) { M.MarkUV3.Add(In.MarkUV3[V]); }
+				}
+				M.Triangles.Add(Mapped);
+			}
+		}
+	}
+}
+
+void ARMBuildableProcedural::ApplyNearSection(const FRMMesh& Data, int32 Section, bool bCollision, UMaterialInterface* Material)
+{
+	UMaterialInterface* Mat = Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface);
+	const int32 Count = GetBuiltChunkCount();
+	if (Count <= 1)
+	{
+		Data.ApplyToSection(mMesh, Section, bCollision);
+		mMesh->SetMaterial(Section, Mat);
+		return;
+	}
+	TArray<FRMMesh> Parts;
+	ChunkSplitMesh(Data, Count, [this](const FVector& P) { return GetChunkOf(P); }, Parts);
+	for (int32 C = 0; C < Count; ++C)
+	{
+		if (UProceduralMeshComponent* M = GetChunkMesh(C, 0))
+		{
+			Parts[C].ApplyToSection(M, Section, bCollision);
+			M->SetMaterial(Section, Mat);
+		}
+	}
 }
 
 void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& Camera)
@@ -147,28 +303,74 @@ void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& C
 			}
 			continue;
 		}
-		const float Dist = FMath::Sqrt(Piece->mMesh->Bounds.GetBox().ComputeSquaredDistanceToPoint(Camera));
-		// A little hysteresis so standing at a switch distance does not flicker.
-		auto Beyond = [Dist](float Switch, bool bBeyondNow) { return Dist > (bBeyondNow ? Switch * 0.9f : Switch); };
-		int32 Level = Beyond(Piece->mLODDistance, Piece->mShownLOD >= 1) ? 1 : 0;
-		if (Level == 1 && Piece->mLOD2Distance > Piece->mLODDistance && Piece->mFar2Mesh->GetNumSections() > 0
-			&& Beyond(Piece->mLOD2Distance, Piece->mShownLOD >= 2))
+		// Each chunk (long pieces) switches on its own, by the distance to its own bounds.
+		const int32 Chunks = Piece->GetBuiltChunkCount();
+		if (Piece->mChunkShownLOD.Num() != Chunks)
 		{
-			Level = 2;
+			Piece->mChunkShownLOD.Init(Piece->mShownLOD, Chunks);
 		}
-		Piece->SetShownLOD(Level);
+		for (int32 Chunk = 0; Chunk < Chunks; ++Chunk)
+		{
+			UProceduralMeshComponent* Near = Piece->GetChunkMesh(Chunk, 0);
+			if (!Near)
+			{
+				continue;
+			}
+			const float Dist = FMath::Sqrt(Near->Bounds.GetBox().ComputeSquaredDistanceToPoint(Camera));
+			const int32 Shown = Piece->mChunkShownLOD[Chunk];
+			// A little hysteresis so standing at a switch distance does not flicker.
+			auto Beyond = [Dist](float Switch, bool bBeyondNow) { return Dist > (bBeyondNow ? Switch * 0.9f : Switch); };
+			int32 Level = Beyond(Piece->mLODDistance, Shown >= 1) ? 1 : 0;
+			UProceduralMeshComponent* Far2 = Piece->GetChunkMesh(Chunk, 2);
+			if (Level == 1 && Piece->mLOD2Distance > Piece->mLODDistance && Far2 && Far2->GetNumSections() > 0
+				&& Beyond(Piece->mLOD2Distance, Shown >= 2))
+			{
+				Level = 2;
+			}
+			Piece->SetChunkShownLOD(Chunk, Level);
+		}
+		Piece->mShownLOD = Piece->mChunkShownLOD.Num() > 0 ? Piece->mChunkShownLOD[0] : 0;
 	}
 }
 
 void ARMBuildableProcedural::ClearFarMesh()
 {
-	if (mFarMesh)
+	for (int32 Chunk = 0; Chunk < GetBuiltChunkCount(); ++Chunk)
 	{
-		mFarMesh->ClearAllMeshSections();
+		for (int32 Level = 1; Level < 3; ++Level)
+		{
+			if (UProceduralMeshComponent* M = GetChunkMesh(Chunk, Level))
+			{
+				M->ClearAllMeshSections();
+			}
+		}
 	}
-	if (mFar2Mesh)
+}
+
+namespace
+{
+	void ApplyLevelSection(const FRMMesh& Data, int32 Section, UMaterialInterface* Material, int32 Count, TFunctionRef<UProceduralMeshComponent*(int32)> MeshOf, TFunctionRef<int32(const FVector&)> ChunkOf)
 	{
-		mFar2Mesh->ClearAllMeshSections();
+		UMaterialInterface* Mat = Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface);
+		if (Count <= 1)
+		{
+			if (UProceduralMeshComponent* M = MeshOf(0))
+			{
+				Data.ApplyToSection(M, Section, false);
+				M->SetMaterial(Section, Mat);
+			}
+			return;
+		}
+		TArray<FRMMesh> Parts;
+		ChunkSplitMesh(Data, Count, ChunkOf, Parts);
+		for (int32 C = 0; C < Count; ++C)
+		{
+			if (UProceduralMeshComponent* M = MeshOf(C))
+			{
+				Parts[C].ApplyToSection(M, Section, false);
+				M->SetMaterial(Section, Mat);
+			}
+		}
 	}
 }
 
@@ -178,8 +380,8 @@ void ARMBuildableProcedural::ApplyFarSection(const FRMMesh& Data, int32 Section,
 	{
 		return;
 	}
-	Data.ApplyToSection(mFarMesh, Section, false);
-	mFarMesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
+	ApplyLevelSection(Data, Section, Material, GetBuiltChunkCount(),
+		[this](int32 C) { return GetChunkMesh(C, 1); }, [this](const FVector& P) { return GetChunkOf(P); });
 }
 
 void ARMBuildableProcedural::ApplyFar2Section(const FRMMesh& Data, int32 Section, UMaterialInterface* Material)
@@ -188,8 +390,8 @@ void ARMBuildableProcedural::ApplyFar2Section(const FRMMesh& Data, int32 Section
 	{
 		return;
 	}
-	Data.ApplyToSection(mFar2Mesh, Section, false);
-	mFar2Mesh->SetMaterial(Section, Material ? Material : UMaterial::GetDefaultMaterial(MD_Surface));
+	ApplyLevelSection(Data, Section, Material, GetBuiltChunkCount(),
+		[this](int32 C) { return GetChunkMesh(C, 2); }, [this](const FVector& P) { return GetChunkOf(P); });
 }
 
 void ARMBuildableProcedural::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -240,14 +442,23 @@ void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActo
 	{
 		mRiderCacheTime = Now;
 		mRiderCache.Reset();
-		const FBox Box = mMesh->Bounds.GetBox().ExpandBy(FVector(200.f, 200.f, 500.f));
+		const FBox Box = GetComponentsBoundingBox().ExpandBy(FVector(200.f, 200.f, 500.f)); // every section of long pieces
 
 		// On this piece = right above its surface (a short trace down hits this piece's mesh).
 		auto IsOnThis = [this](const FVector& P)
 		{
 			FHitResult Hit;
 			FCollisionQueryParams Params(SCENE_QUERY_STAT(RMRiders), true);
-			return mMesh->LineTraceComponent(Hit, P + FVector(0.f, 0.f, 150.f), P - FVector(0.f, 0.f, 250.f), Params);
+			// Every section's detailed mesh (long pieces are drawn in sections).
+			for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
+			{
+				UProceduralMeshComponent* M = GetChunkMesh(C, 0);
+				if (M && M->LineTraceComponent(Hit, P + FVector(0.f, 0.f, 150.f), P - FVector(0.f, 0.f, 250.f), Params))
+				{
+					return true;
+				}
+			}
+			return false;
 		};
 		// Most of the spline (at least 4 of 7 samples) must lie on this piece, so a path or track that
 		// only touches it at one end stays with the road or intersection it really runs on.

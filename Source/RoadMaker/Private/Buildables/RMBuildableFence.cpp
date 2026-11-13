@@ -32,6 +32,9 @@ void ARMBuildableFence::RebuildMesh()
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
 	mMesh->ClearAllMeshSections();
+	// Long fences are drawn in sections (each switches detail on its own).
+	UpdateChunkLayout();
+	PrepareChunks();
 	ClearFarMesh();
 	if (Frames.Num() < 2)
 	{
@@ -43,10 +46,8 @@ void ARMBuildableFence::RebuildMesh()
 	UMaterialInterface* MainMaterial = GetEffectiveMainMaterial();
 	BuildFenceMesh(Type, Frames, mUVScale, mInwardSign, Main, Panel, GetWallLayout());
 
-	Main.ApplyToSection(mMesh, 0, true);
-	Panel.ApplyToSection(mMesh, 1, true);
-	ApplyMaterial(0, MainMaterial);
-	ApplyMaterial(1, mPanelMaterial);
+	ApplyNearSection(Main, 0, true, MainMaterial);
+	ApplyNearSection(Panel, 1, true, mPanelMaterial);
 
 	// Distance levels, like the game's walls (detailed, simpler, simplest): fence walls are big and
 	// seen from further away, so they switch later than the road fences.
@@ -111,17 +112,14 @@ void ARMBuildableFence::ApplyPaintColors(const FFactoryCustomizationData& Data)
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	for (UProceduralMeshComponent* M : { mMesh, mFarMesh, mFar2Mesh })
+	ForEachMeshComponent([&Resolved, &P, &S](UProceduralMeshComponent* M)
 	{
-		if (M)
-		{
-			// The game's own way of passing paint (colours, finish, pattern) to its materials: used by
-			// the game's wall material on the fence wall. Road Maker's materials read 24 / 28 below.
-			Resolved.ApplyToMeshComponent(M);
-			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
-		}
-	}
+		// The game's own way of passing paint (colours, finish, pattern) to its materials: used by
+		// the game's wall material on the fence wall. Road Maker's materials read 24 / 28 below.
+		Resolved.ApplyToMeshComponent(M);
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	});
 }
 
 namespace

@@ -118,7 +118,7 @@ namespace
 void ARMBuildableProcedural::StartReveal()
 {
 	UWorld* World = GetWorld();
-	if (!World || IsRunningDedicatedServer() || !mMesh || mMesh->GetNumSections() == 0)
+	if (!World || IsRunningDedicatedServer() || !mMesh)
 	{
 		return;
 	}
@@ -126,15 +126,22 @@ void ARMBuildableProcedural::StartReveal()
 	mRevealSections.Reset();
 	mRevealDist.Reset();
 	mRevealMaxDist = 0.f;
-	for (int32 S = 0; S < mMesh->GetNumSections(); ++S)
+	mRevealSources.Reset();
+	// Every section of every chunk's detailed mesh (long pieces are drawn in chunks).
+	for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
 	{
-		const FProcMeshSection* Section = mMesh->GetProcMeshSection(S);
-		mRevealSections.Add(Section ? *Section : FProcMeshSection());
-		TArray<float>& D = mRevealDist.AddDefaulted_GetRef();
-		for (const FProcMeshVertex& V : mRevealSections.Last().ProcVertexBuffer)
+		UProceduralMeshComponent* Source = GetChunkMesh(C, 0);
+		for (int32 S = 0; Source && S < Source->GetNumSections(); ++S)
 		{
-			D.Add(RevealDistance(V.Position));
-			mRevealMaxDist = FMath::Max(mRevealMaxDist, D.Last());
+			const FProcMeshSection* Section = Source->GetProcMeshSection(S);
+			mRevealSections.Add(Section ? *Section : FProcMeshSection());
+			mRevealSources.Add(TPair<UProceduralMeshComponent*, int32>(Source, S));
+			TArray<float>& D = mRevealDist.AddDefaulted_GetRef();
+			for (const FProcMeshVertex& V : mRevealSections.Last().ProcVertexBuffer)
+			{
+				D.Add(RevealDistance(V.Position));
+				mRevealMaxDist = FMath::Max(mRevealMaxDist, D.Last());
+			}
 		}
 	}
 	mRevealing = true;
@@ -170,9 +177,15 @@ void ARMBuildableProcedural::StepReveal()
 		return;
 	}
 	// The real mesh stays hidden (also if it was rebuilt meanwhile).
-	for (int32 S = 0; S < mMesh->GetNumSections(); ++S)
+	for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
 	{
-		mMesh->SetMeshSectionVisible(S, false);
+		if (UProceduralMeshComponent* Source = GetChunkMesh(C, 0))
+		{
+			for (int32 S = 0; S < Source->GetNumSections(); ++S)
+			{
+				Source->SetMeshSectionVisible(S, false);
+			}
+		}
 	}
 	const float Eased = T * T * (3.f - 2.f * T);
 	const float Front = Eased * (mRevealMaxDist + RevealGlowWidth);
@@ -190,17 +203,19 @@ void ARMBuildableProcedural::StepReveal()
 		mRevealMesh->CreateMeshSection_LinearColor(Index, O.V, O.Tri, O.N, O.UV0, O.UV1, O.UV2, O.UV3, O.C, O.T, false);
 		mRevealMesh->SetMaterial(Index, Material);
 	};
+	FRMRevealOut Glow;
 	for (int32 S = 0; S < mRevealSections.Num(); ++S)
 	{
 		FRMRevealOut Out;
 		RevealCut(mRevealSections[S], mRevealDist[S], -1.f, Front, Out);
-		Apply(S, Out, mMesh->GetMaterial(S));
-	}
-	// The glowing band just behind the front, on the top (section 0).
-	FRMRevealOut Glow;
-	if (mRevealSections.Num() > 0)
-	{
-		RevealCut(mRevealSections[0], mRevealDist[0], Front - RevealGlowWidth, Front, Glow, FVector(0.f, 0.f, 4.f), &GlowColor);
+		UProceduralMeshComponent* Source = mRevealSources.IsValidIndex(S) ? mRevealSources[S].Key : nullptr;
+		const int32 SourceSection = mRevealSources.IsValidIndex(S) ? mRevealSources[S].Value : S;
+		Apply(S, Out, Source ? Source->GetMaterial(SourceSection) : mMesh->GetMaterial(0));
+		// The glowing band just behind the front, on the top (section 0 of each chunk).
+		if (SourceSection == 0)
+		{
+			RevealCut(mRevealSections[S], mRevealDist[S], Front - RevealGlowWidth, Front, Glow, FVector(0.f, 0.f, 4.f), &GlowColor);
+		}
 	}
 	Apply(mRevealSections.Num(), Glow, GlowMaterial ? GlowMaterial : mMesh->GetMaterial(0));
 }
@@ -219,11 +234,15 @@ void ARMBuildableProcedural::EndReveal()
 	}
 	mRevealSections.Reset();
 	mRevealDist.Reset();
-	if (mMesh)
+	mRevealSources.Reset();
+	for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
 	{
-		for (int32 S = 0; S < mMesh->GetNumSections(); ++S)
+		if (UProceduralMeshComponent* Source = GetChunkMesh(C, 0))
 		{
-			mMesh->SetMeshSectionVisible(S, true);
+			for (int32 S = 0; S < Source->GetNumSections(); ++S)
+			{
+				Source->SetMeshSectionVisible(S, true);
+			}
 		}
 	}
 }

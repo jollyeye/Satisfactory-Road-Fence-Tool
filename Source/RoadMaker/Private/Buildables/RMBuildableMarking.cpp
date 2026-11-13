@@ -618,7 +618,7 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 		}
 		// On this road = over its surface: across within its width, just above it, along within its ends.
 		const FVector P = M->GetActorLocation();
-		if (!FromMesh->Bounds.GetBox().ExpandBy(100.f).IsInside(P))
+		if (!From->GetComponentsBoundingBox().ExpandBy(100.f).IsInside(P)) // all of the road (long roads: every section)
 		{
 			continue;
 		}

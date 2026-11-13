@@ -99,6 +99,53 @@ namespace
 	}
 }
 
+void ARMBuildableSpline::UpdateChunkLayout()
+{
+	mChunkFrames.Reset();
+	GetLocalFrames(mChunkFrames, 1000.f);
+	const float Length = mChunkFrames.Num() >= 2 ? mChunkFrames.Last().Dist : 0.f;
+	mChunkCount = Length > SingleSectionMax ? FMath::CeilToInt(Length / SectionLength) : 1;
+	mChunkLength = mChunkCount > 0 ? Length / mChunkCount : Length;
+}
+
+int32 ARMBuildableSpline::GetChunkOf(const FVector& LocalPos) const
+{
+	if (mChunkCount <= 1 || mChunkFrames.Num() < 2 || mChunkLength <= 0.f)
+	{
+		return 0;
+	}
+	// The nearest 10 m frame, then the exact spot along the segment to its neighbour.
+	int32 Best = 0;
+	float BestSq = TNumericLimits<float>::Max();
+	for (int32 I = 0; I < mChunkFrames.Num(); ++I)
+	{
+		const float Sq = FVector::DistSquared(LocalPos, mChunkFrames[I].Pos);
+		if (Sq < BestSq)
+		{
+			BestSq = Sq;
+			Best = I;
+		}
+	}
+	const FRMFrame& F = mChunkFrames[Best];
+	const float Along = F.Dist + FVector::DotProduct(LocalPos - F.Pos, F.Fwd);
+	return FMath::Clamp(FMath::FloorToInt(Along / mChunkLength), 0, mChunkCount - 1);
+}
+
+int32 ARMBuildableSpline::GetSectionCount() const
+{
+	const float Length = GetLength();
+	return Length > SingleSectionMax ? FMath::CeilToInt(Length / SectionLength) : 1;
+}
+
+void ARMBuildableSpline::GetSectionRange(int32 Section, float& OutFrom, float& OutTo) const
+{
+	const float Length = GetLength();
+	const int32 Count = GetSectionCount();
+	const float Each = Length / Count;
+	OutFrom = FMath::Clamp(Section, 0, Count - 1) * Each;
+	OutTo = Section >= Count - 1 ? Length : OutFrom + Each;
+}
+
 void ARMBuildableSpline::PrepareReveal()
 {
 	GetLocalFrames(mRevealFrames, 100.f);

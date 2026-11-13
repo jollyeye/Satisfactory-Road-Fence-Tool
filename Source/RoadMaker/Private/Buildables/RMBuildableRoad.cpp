@@ -43,14 +43,15 @@ void ARMBuildableRoad::RebuildMesh()
 		return;
 	}
 
+	// Long roads are drawn in sections (each switches detail on its own).
+	UpdateChunkLayout();
+	PrepareChunks();
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, Top, Body);
-	Top.ApplyToSection(mMesh, 0, true);
-	Body.ApplyToSection(mMesh, 1, true);
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
-	ApplyMaterial(0, TopMat);
-	ApplyMaterial(1, BodyMat);
+	ApplyNearSection(Top, 0, true, TopMat);
+	ApplyNearSection(Body, 1, true, BodyMat);
 
 	// Far version: the same road sampled every 4 m instead of every 1 m.
 	ClearFarMesh();
@@ -171,14 +172,11 @@ void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 	FLinearColor P = Resolved.PrimaryColor;
 	FLinearColor S = Resolved.SecondaryColor;
 	AdjustColorsForLook(Data, P, S);
-	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
+	ForEachMeshComponent([&P, &S](UProceduralMeshComponent* M)
 	{
-		if (M)
-		{
-			M->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-			M->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
-		}
-	}
+		M->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+		M->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	});
 }
 
 void ARMBuildableRoad::ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData)

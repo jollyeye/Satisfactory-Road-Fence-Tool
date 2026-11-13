@@ -85,6 +85,8 @@ protected:
 	void EndReveal();
 	bool mRevealing = false;
 	TArray<FProcMeshSection> mRevealSections;
+	/** Where each revealed section comes from (chunk's detailed mesh, section). */
+	TArray<TPair<UProceduralMeshComponent*, int32>> mRevealSources;
 	TArray<TArray<float>> mRevealDist;
 	float mRevealMaxDist = 0.f;
 	float mRevealDuration = 1.f;
@@ -135,6 +137,29 @@ protected:
 	void ApplyFar2Section(const FRMMesh& Data, int32 Section, UMaterialInterface* Material);
 	void UpdateLODDistances();
 
+	/**
+	 * Long pieces are drawn in sections ("chunks") of about 100 m, each with its own detailed / far /
+	 * second far mesh, so each section switches detail and is hidden out of view on its own, like a
+	 * chain of normal pieces. It stays one piece. Chunk 0 is mMesh / mFarMesh / mFar2Mesh; the others
+	 * are made here. Subclasses say how many chunks and which chunk a point (actor space) belongs to,
+	 * call PrepareChunks() at the start of RebuildMesh and ApplyNearSection for the detailed sections.
+	 */
+	virtual int32 GetChunkCount() const { return 1; }
+	virtual int32 GetChunkOf(const FVector& LocalPos) const { return 0; }
+	void PrepareChunks();
+	/** A detailed section (with collision if asked), split into the chunks. */
+	void ApplyNearSection(const FRMMesh& Data, int32 Section, bool bCollision, UMaterialInterface* Material);
+	/** Mesh component of a chunk: Level 0 detailed, 1 far, 2 second far. */
+	UProceduralMeshComponent* GetChunkMesh(int32 Chunk, int32 Level) const;
+	int32 GetBuiltChunkCount() const { return 1 + mChunkMeshes.Num() / 3; }
+	/** Every mesh component of the piece (all chunks and levels): paint, colours. */
+	void ForEachMeshComponent(TFunctionRef<void(UProceduralMeshComponent*)> Fn) const;
+
+	/** The chunks after the first: [(chunk - 1) * 3 + level]. */
+	UPROPERTY(Transient)
+	TArray<UProceduralMeshComponent*> mChunkMeshes;
+	TArray<int32> mChunkShownLOD;
+
 public:
 	/**
 	 * Shows the detailed or the far mesh of every Road Maker piece in the world for this camera.
@@ -144,8 +169,9 @@ public:
 	static void UpdateLODsForCamera(UWorld* World, const FVector& Camera);
 
 protected:
-	/** 0 = detailed, 1 = far mesh, 2 = second far mesh. */
+	/** 0 = detailed, 1 = far mesh, 2 = second far mesh (every chunk). */
 	void SetShownLOD(int32 Level);
+	void SetChunkShownLOD(int32 Chunk, int32 Level);
 	int32 mShownLOD = 0;
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
