@@ -1016,10 +1016,11 @@ def sign_tex(name):
 # Sign backgrounds are instances of the game's MM_UI_SignBG (a UI material for the editor) with the same settings the
 # placed sign's own material (MM_SignRT) reads: BackgroundType 0 = our texture (1 to 6 are the game's drawn patterns:
 # gradients, diagonal lines, checker, wave), FillMode 0 = tiled over the whole sign (1 fit, 2 stretched), one tile =
-# TileWidth x TileHeight sign units. Placed signs scroll every texture background slowly whatever "Animate" says
-# (MM_SignRT has no Animate parameter, only Time): ours scroll like the game's own (tested 2026-11-13).
+# TileWidth x TileHeight sign units. Tiled backgrounds scroll on placed signs whatever "Animate" says (MM_SignRT has no
+# Animate parameter, only Time); fitted / stretched ones (FICSIT logo, checkmark, gradients) stand still. Ours are
+# stretched over the whole sign (FillMode 2), like the gradients.
 SIGN_BG_PARENT = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG"
-SIGN_BG_SETTINGS = {"BackgroundType": 0.0, "FillMode": 0.0, "TileWidth": 200.0, "TileHeight": 200.0, "FitScale": 1.0,
+SIGN_BG_SETTINGS = {"BackgroundType": 0.0, "FillMode": 2.0, "TileWidth": 200.0, "TileHeight": 200.0, "FitScale": 1.0,
                     "Animate": 0.0, "SignWidth": 200.0, "SignHeight": 200.0}
 
 
