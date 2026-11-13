@@ -25,6 +25,7 @@
 #include "FGCharacterPlayer.h"
 #include "FGConstructDisqualifier.h"
 #include "FGRailroadTrackConnectionComponent.h"
+#include "FGRailroadSubsystem.h"
 #include "Buildables/FGBuildableRailroadTrack.h"
 #include "Algo/Reverse.h"
 #include "UObject/UnrealType.h"
@@ -2125,6 +2126,89 @@ namespace
 		return true;
 	}
 
+	/** Railway tracks built this frame, joined the next tick. */
+	TArray<TWeakObjectPtr<AFGBuildableRailroadTrack>> GPendingTrackJoin;
+
+	/**
+	 * Railway tracks built in one click (lane sections): the game only connects a track to tracks that
+	 * existed before it, so the joints between sections built together stayed open, and trains derailed
+	 * there although the rails looked joined. Free track ends within 30 cm of each other, facing
+	 * opposite ways, are connected; the joined tracks are then given to the railroad again so its
+	 * track network sees them as one.
+	 */
+	void JoinSectionTracks(UWorld* World, const TArray<TWeakObjectPtr<AFGBuildableRailroadTrack>>& Built)
+	{
+		TArray<UFGRailroadTrackConnectionComponent*> Free;
+		for (const TWeakObjectPtr<AFGBuildableRailroadTrack>& Weak : Built)
+		{
+			if (AFGBuildableRailroadTrack* Track = Weak.Get())
+			{
+				for (int32 I = 0; I < 2; ++I)
+				{
+					UFGRailroadTrackConnectionComponent* C = Track->GetConnection(I);
+					if (C && !C->IsConnected())
+					{
+						Free.Add(C);
+					}
+				}
+			}
+		}
+		struct FTrackPair { UFGRailroadTrackConnectionComponent* A; UFGRailroadTrackConnectionComponent* B; float Dist; };
+		TArray<FTrackPair> Pairs;
+		for (int32 I = 0; I < Free.Num(); ++I)
+		{
+			for (int32 J = I + 1; J < Free.Num(); ++J)
+			{
+				UFGRailroadTrackConnectionComponent* A = Free[I];
+				UFGRailroadTrackConnectionComponent* B = Free[J];
+				if (A->GetOwner() == B->GetOwner())
+				{
+					continue;
+				}
+				const float D = FVector::Dist(A->GetConnectorLocation(), B->GetConnectorLocation());
+				const float Facing = FVector::DotProduct(A->GetConnectorNormal(), B->GetConnectorNormal());
+				if (D < 30.f && Facing < -0.9f)
+				{
+					Pairs.Add({ A, B, D });
+				}
+				else if (D < 300.f)
+				{
+					UE_LOG(LogRoadMaker, Log, TEXT("Railway: track ends %.0f cm apart (facing %.2f), not joined"), D, Facing);
+				}
+			}
+		}
+		Pairs.Sort([](const FTrackPair& X, const FTrackPair& Y) { return X.Dist < Y.Dist; });
+		TSet<UFGRailroadTrackConnectionComponent*> Used;
+		TArray<AFGBuildableRailroadTrack*> Touched;
+		for (const FTrackPair& P : Pairs)
+		{
+			if (Used.Contains(P.A) || Used.Contains(P.B))
+			{
+				continue;
+			}
+			Used.Add(P.A);
+			Used.Add(P.B);
+			P.A->AddConnection(P.B);
+			UE_LOG(LogRoadMaker, Log, TEXT("Railway: joining track ends %.1f cm apart"), P.Dist);
+			Touched.AddUnique(Cast<AFGBuildableRailroadTrack>(P.B->GetOwner()));
+		}
+		if (Touched.Num() == 0)
+		{
+			return;
+		}
+		if (AFGRailroadSubsystem* Railroad = AFGRailroadSubsystem::Get(World))
+		{
+			for (AFGBuildableRailroadTrack* Track : Touched)
+			{
+				if (Track)
+				{
+					Railroad->RemoveTrack(Track);
+					Railroad->AddTrack(Track);
+				}
+			}
+		}
+	}
+
 	/** Vehicle paths built this frame, joined the next tick. */
 	TArray<TWeakObjectPtr<AFGVehiclePathSegment>> GPendingPathMerge;
 	bool GPathMergeScheduled = false;
@@ -2151,6 +2235,61 @@ namespace
 				}
 			}
 		}
+		// Nodes on the same spot (within 30 cm), built now or already there (an intersection's links
+		// meet the roads' lane paths and each other at the mouths): all made one, an existing node kept.
+		int32 Merged = 0;
+		{
+			TArray<AFGVehiclePathNode*> Near;
+			for (TActorIterator<AFGVehiclePathNode> It(World); It; ++It)
+			{
+				for (AFGVehiclePathNode* N : Nodes)
+				{
+					if (*It != N && FVector::DistSquared(It->GetActorLocation(), N->GetActorLocation()) < 30.f * 30.f)
+					{
+						Near.AddUnique(*It);
+						break;
+					}
+				}
+			}
+			for (int32 I = 0; I < Nodes.Num(); ++I)
+			{
+				AFGVehiclePathNode* N = Nodes[I];
+				if (!IsValid(N))
+				{
+					continue;
+				}
+				// Another node on this spot: an existing one first, else a newer built one.
+				AFGVehiclePathNode* Keep = nullptr;
+				for (AFGVehiclePathNode* M : Near)
+				{
+					if (IsValid(M) && !Nodes.Contains(M) && FVector::DistSquared(M->GetActorLocation(), N->GetActorLocation()) < 30.f * 30.f)
+					{
+						Keep = M;
+						break;
+					}
+				}
+				if (!Keep)
+				{
+					for (AFGVehiclePathNode* M : Nodes)
+					{
+						if (M != N && IsValid(M) && FVector::DistSquared(M->GetActorLocation(), N->GetActorLocation()) < 30.f * 30.f)
+						{
+							Keep = M;
+							break;
+						}
+					}
+				}
+				if (Keep)
+				{
+					UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joining nodes %.1f cm apart"), FVector::Dist(Keep->GetActorLocation(), N->GetActorLocation()));
+					N->MoveConnectionsToNode(Keep); // removes N
+					Nodes[I] = nullptr;
+					++Merged;
+				}
+			}
+			Nodes.RemoveAll([](AFGVehiclePathNode* N) { return !IsValid(N) || N->IsActorBeingDestroyed(); });
+		}
+
 		// Pair every node where a path only arrives with the nearest node where a path only leaves
 		// (within 1.5 m; the game itself snaps to nodes within 3 m), nearest pairs first.
 		struct FPair { AFGVehiclePathNode* End; AFGVehiclePathNode* Start; float Dist; };
@@ -2181,7 +2320,6 @@ namespace
 		}
 		Pairs.Sort([](const FPair& A, const FPair& B) { return A.Dist < B.Dist; });
 		TSet<AFGVehiclePathNode*> Used;
-		int32 Merged = 0;
 		for (const FPair& P : Pairs)
 		{
 			if (Used.Contains(P.End) || Used.Contains(P.Start) || !IsValid(P.End) || !IsValid(P.Start))
@@ -3117,16 +3255,28 @@ void RMVanillaSnapping::InstallHooks()
 			}
 		});
 
-	// Vehicle paths built together (lane sections, junction links): join their touching ends.
+	// Vehicle paths and railway tracks built together (lane sections, junction links): join their touching ends.
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::Construct, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
 		[](AActor* Result, AFGBuildableHologram* Hologram, TArray<AActor*>& OutChildren, FNetConstructionID ConstructionID)
 		{
 			// Called for the main hologram and again for children, each time with part of the list: everything
 			// built this frame is collected and joined once, the next tick.
 			UWorld* World = Hologram ? Hologram->GetWorld() : nullptr;
-			if (!World || !Hologram->IsA<AFGVehiclePathSegmentHologram>())
+			const bool bRail = Hologram && Hologram->IsA<AFGRailroadTrackHologram>();
+			if (!World || (!bRail && !Hologram->IsA<AFGVehiclePathSegmentHologram>()))
 			{
 				return;
+			}
+			if (AFGBuildableRailroadTrack* MainTrack = Cast<AFGBuildableRailroadTrack>(Result))
+			{
+				GPendingTrackJoin.AddUnique(MainTrack);
+			}
+			for (AActor* Child : OutChildren)
+			{
+				if (AFGBuildableRailroadTrack* ChildTrack = Cast<AFGBuildableRailroadTrack>(Child))
+				{
+					GPendingTrackJoin.AddUnique(ChildTrack);
+				}
 			}
 			if (AFGVehiclePathSegment* Main = Cast<AFGVehiclePathSegment>(Result))
 			{
@@ -3151,9 +3301,15 @@ void RMVanillaSnapping::InstallHooks()
 				TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Built = MoveTemp(GPendingPathMerge);
 				GPendingPathMerge.Reset();
 				UWorld* W = WeakWorld.Get();
-				if (W && Built.Num() >= 2)
+				TArray<TWeakObjectPtr<AFGBuildableRailroadTrack>> Tracks = MoveTemp(GPendingTrackJoin);
+				GPendingTrackJoin.Reset();
+				if (W && Built.Num() >= 1)
 				{
 					MergeSectionNodes(W, Built);
+				}
+				if (W && Tracks.Num() >= 2)
+				{
+					JoinSectionTracks(W, Tracks);
 				}
 			});
 		});
