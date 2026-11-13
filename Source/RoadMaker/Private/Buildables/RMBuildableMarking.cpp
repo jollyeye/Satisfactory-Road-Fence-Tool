@@ -13,6 +13,9 @@
 #include "EngineUtils.h"
 #include "FGDismantleInterface.h"
 #include "FGVehicle.h"
+#include "FGIconLibrary.h"
+#include "FGIconDatabaseSubsystem.h"
+#include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectIterator.h"
@@ -617,15 +620,13 @@ UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look, uint8 Vari
 			return Found->Get();
 		}
 	}
-	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, GetTransientPackage());
+	UTexture2D* Icon = VehicleIcon(Variant);
+	UMaterialInstanceDynamic* MID = Icon ? UMaterialInstanceDynamic::Create(Base, GetTransientPackage()) : nullptr;
 	if (!MID)
 	{
-		return Base;
+		return Base; // no icon (yet): the plain square
 	}
-	if (UTexture2D* Icon = VehicleIcon(Variant))
-	{
-		MID->SetTextureParameterValue(TEXT("Icon"), Icon);
-	}
+	MID->SetTextureParameterValue(TEXT("Icon"), Icon);
 	Instances.Add(Key, TStrongObjectPtr<UMaterialInstanceDynamic>(MID));
 	return MID;
 }
@@ -634,6 +635,73 @@ const TCHAR* ARMBuildableMarking::VehicleName(int32 Variant)
 {
 	static const TCHAR* Names[] = { TEXT("Tractor"), TEXT("Truck"), TEXT("Explorer"), TEXT("Factory Cart"), TEXT("Cyberwagon") };
 	return Names[FMath::Clamp(Variant, 0, 4)];
+}
+
+namespace
+{
+	/** The game world (the icon database lives there). */
+	UWorld* MarkingGameWorld()
+	{
+		for (const FWorldContext& Context : GEngine ? GEngine->GetWorldContexts() : TIndirectArray<FWorldContext>())
+		{
+			if (Context.WorldType == EWorldType::Game && Context.World())
+			{
+				return Context.World();
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * The vehicle's sign icon ("Tractor Icon", "Factory Cart™ Icon"...: the monochrome icons the signs and map stamps
+	 * offer), the largest one with that name. Sharper than the map icons (64 px).
+	 */
+	UTexture2D* SignIconFor(UWorld* World, const FString& Name, bool& bOutDatabaseFound)
+	{
+		AFGIconDatabaseSubsystem* Db = World ? AFGIconDatabaseSubsystem::Get(World) : nullptr;
+		bOutDatabaseFound = Db != nullptr && Db->GetAllIconData().Num() > 0;
+		if (!bOutDatabaseFound)
+		{
+			return nullptr;
+		}
+		TArray<FIconData> Icons;
+		Db->GetAllIconDataForType(EIconType::ESIT_Monochrome, true, Icons);
+		static bool bListed = false;
+		if (!bListed)
+		{
+			bListed = true;
+			TArray<FString> Names;
+			for (const FIconData& D : Icons)
+			{
+				const FString N = D.IconName.ToString();
+				for (const TCHAR* Word : { TEXT("tractor"), TEXT("truck"), TEXT("explorer"), TEXT("cart"), TEXT("cyber"), TEXT("wagon") })
+				{
+					if (N.Contains(Word))
+					{
+						Names.Add(N);
+						break;
+					}
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Vehicle markings: sign icons with vehicle names: %s"), *FString::Join(Names, TEXT(", ")));
+		}
+		UTexture2D* Best = nullptr;
+		for (const FIconData& D : Icons)
+		{
+			FString IconName = D.IconName.ToString().Replace(TEXT("\u2122"), TEXT("")).Replace(TEXT("(TM)"), TEXT("")).TrimStartAndEnd();
+			IconName.RemoveFromEnd(TEXT(" Icon"), ESearchCase::IgnoreCase);
+			if (!IconName.TrimStartAndEnd().Equals(Name, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			UTexture2D* T = Cast<UTexture2D>(D.Texture.LoadSynchronous());
+			if (T && (!Best || T->GetSizeX() > Best->GetSizeX()))
+			{
+				Best = T;
+			}
+		}
+		return Best;
+	}
 }
 
 UTexture2D* ARMBuildableMarking::VehicleIcon(int32 Variant)
@@ -659,43 +727,47 @@ UTexture2D* ARMBuildableMarking::VehicleIcon(int32 Variant)
 	{
 		return Icons[Variant].Get();
 	}
-	bTried[Variant] = true;
 
-	UClass* Class = LoadObject<UClass>(nullptr, Classes[Variant].Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
-	if (!Class || !Class->IsChildOf(AFGVehicle::StaticClass()))
+	// First choice: the sign icon of that vehicle (the icon database exists once a game is loaded; until then, nothing is kept).
+	bool bDatabase = false;
+	UTexture2D* Icon = SignIconFor(MarkingGameWorld(), VehicleName(Variant), bDatabase);
+	if (!bDatabase)
 	{
-		Class = nullptr;
-		for (TObjectIterator<UClass> It; It; ++It)
+		return nullptr;
+	}
+	bTried[Variant] = true;
+	const TCHAR* From = TEXT("sign icons");
+	UClass* Class = nullptr;
+	if (!Icon)
+	{
+		// Then the map icon on the vehicle class.
+		Class = LoadObject<UClass>(nullptr, Classes[Variant].Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Class || !Class->IsChildOf(AFGVehicle::StaticClass()))
 		{
-			if (It->IsChildOf(AFGVehicle::StaticClass()) && It->GetName() == Classes[Variant].ClassName)
+			Class = nullptr;
+			for (TObjectIterator<UClass> It; It; ++It)
 			{
-				Class = *It;
-				break;
+				if (It->IsChildOf(AFGVehicle::StaticClass()) && It->GetName() == Classes[Variant].ClassName)
+				{
+					Class = *It;
+					break;
+				}
 			}
 		}
+		const AFGVehicle* Vehicle = Class ? Class->GetDefaultObject<AFGVehicle>() : nullptr;
+		Icon = Vehicle ? Vehicle->mActorRepresentationTexture.Get() : nullptr;
+		From = Class ? Classes[Variant].Path : TEXT("-");
 	}
-	const AFGVehicle* Vehicle = Class ? Class->GetDefaultObject<AFGVehicle>() : nullptr;
-	UTexture2D* Icon = Vehicle ? Vehicle->mActorRepresentationTexture.Get() : nullptr;
 	if (Icon)
 	{
 		Icons[Variant].Reset(Icon);
 		UE_LOG(LogRoadMaker, Display, TEXT("Vehicle marking %s: icon %s (%dx%d) from %s"), VehicleName(Variant), *Icon->GetPathName(),
-			Icon->GetSizeX(), Icon->GetSizeY(), *Class->GetPathName());
+			Icon->GetSizeX(), Icon->GetSizeY(), From);
 	}
 	else
 	{
-		UE_LOG(LogRoadMaker, Warning, TEXT("Vehicle marking %s: no icon (class %s %s)"), VehicleName(Variant), Classes[Variant].Path,
+		UE_LOG(LogRoadMaker, Warning, TEXT("Vehicle marking %s: no icon (no sign icon of that name; class %s %s)"), VehicleName(Variant), Classes[Variant].Path,
 			Class ? TEXT("found, no texture") : TEXT("not found"));
-		if (!Class)
-		{
-			for (TObjectIterator<UClass> It; It; ++It)
-			{
-				if (It->IsChildOf(AFGVehicle::StaticClass()))
-				{
-					UE_LOG(LogRoadMaker, Warning, TEXT("  loaded vehicle class: %s"), *It->GetPathName());
-				}
-			}
-		}
 	}
 	return Icon;
 }

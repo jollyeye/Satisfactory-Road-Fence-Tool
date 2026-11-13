@@ -40,6 +40,9 @@ namespace
 	/** A lane marking option (arrow / digit) picked in the customizer, and the variant the mouse wheel chose. */
 	TSubclassOf<URMRoadLineDescriptor> GActiveMarking;
 	int32 GMarkingVariant = 0;
+	/** Middle click on a marking: its option and variant, taken over when the customizer picks that option. */
+	TSubclassOf<URMRoadLineDescriptor> GSampledMarking;
+	int32 GSampledVariant = 0;
 
 	const URMRoadLineDescriptor* MarkingOption()
 	{
@@ -418,6 +421,11 @@ namespace
 				{
 					GMarkingVariant = 0;
 				}
+				if (GSampledMarking == Option)
+				{
+					GMarkingVariant = GSampledVariant;
+					GSampledMarking = nullptr;
+				}
 				GActiveMarking = Option;
 				GActiveSides = nullptr;
 				GActiveLanes = nullptr;
@@ -479,6 +487,33 @@ namespace
 	}
 	bool GLoggedTileLayout = false;
 
+	/** The Lane Vehicle option shows the game's own Factory Cart icon (read from the game, so not shipped with the mod). */
+	bool UseFactoryCartIcon(URMRoadLineDescriptor* D)
+	{
+		if (!D || !D->mIsMarking || D->mMarkingKind != ERMMarkingKind::Vehicle)
+		{
+			return false;
+		}
+		UTexture2D* Cart = ARMBuildableMarking::VehicleIcon(3);
+		if (!Cart)
+		{
+			return false;
+		}
+		bool bChanged = false;
+		for (const TCHAR* Name : { TEXT("mIcon"), TEXT("mSmallIcon"), TEXT("mPersistentBigIcon") })
+		{
+			if (FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(D->GetClass(), Name))
+			{
+				if (Prop->GetObjectPropertyValue_InContainer(D) != Cart)
+				{
+					Prop->SetObjectPropertyValue_InContainer(D, Cart);
+					bChanged = true;
+				}
+			}
+		}
+		return bChanged;
+	}
+
 	void BuildIconTable()
 	{
 		// Built once; again if a class went away (another save loaded).
@@ -486,6 +521,19 @@ namespace
 		for (const auto& Pair : GIconsByName)
 		{
 			bStale |= !Pair.Value.IsValid();
+		}
+		// The Lane Vehicle icon comes from the game once a save is loaded: swap it in then.
+		static bool bCartIcon = false;
+		if (!bCartIcon)
+		{
+			for (const auto& Pair : GIconsByName)
+			{
+				UClass* C = Pair.Value.Get();
+				if (C && UseFactoryCartIcon(C->GetDefaultObject<URMRoadLineDescriptor>()))
+				{
+					bCartIcon = true;
+				}
+			}
 		}
 		if (!bStale)
 		{
@@ -498,6 +546,7 @@ namespace
 				&& *It != URMRoadLineDescriptor::StaticClass())
 			{
 				URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+				UseFactoryCartIcon(D);
 				if (D && D->GetIcon())
 				{
 					GIconsByName.Add(UFGItemDescriptor::GetItemName(*It).ToString(), *It);
@@ -1065,6 +1114,68 @@ void RMRoadLinePaint::InstallHooks()
 				GActiveMarking = nullptr;
 			}
 		});
+
+	// Middle click on a lane marking: pick that marking (same arrow / digit / vehicle) in the customizer, ready to paint
+	// another, like middle click on a building picks it in the build gun.
+	SUBSCRIBE_METHOD(AFGBuildGun::OnBuildSamplePressed, [](auto& Scope, AFGBuildGun* Gun)
+	{
+		APawn* Pawn = Gun ? Cast<APawn>(Gun->GetOwner()) : nullptr;
+		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+		if (!PC || !PC->IsLocalController())
+		{
+			return;
+		}
+		FVector Eye;
+		FRotator View;
+		PC->GetPlayerViewPoint(Eye, View);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMMarkingSample), true, Pawn);
+		FHitResult Hit;
+		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * Gun->GetBuildGunRange(), ECC_Visibility, Params))
+		{
+			return;
+		}
+		const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(Hit.GetActor());
+		if (!Marking)
+		{
+			return;
+		}
+		// The customizer option that paints this kind of marking, and its recipe.
+		TSubclassOf<URMRoadLineDescriptor> Option;
+		for (TObjectIterator<UClass> It; It && !Option; ++It)
+		{
+			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			{
+				const URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+				if (D && D->mIsMarking && D->mMarkingClass && Marking->IsA(D->mMarkingClass))
+				{
+					Option = *It;
+				}
+			}
+		}
+		TSubclassOf<UFGCustomizationRecipe> Recipe;
+		for (TObjectIterator<UClass> It; Option && It && !Recipe; ++It)
+		{
+			if (It->IsChildOf(UFGCustomizationRecipe::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract)
+				&& UFGCustomizationRecipe::GetCustomizationDescriptor(TSubclassOf<UFGCustomizationRecipe>(*It)) == Option.Get())
+			{
+				Recipe = *It;
+			}
+		}
+		if (!Recipe)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s"), *Marking->GetClass()->GetName());
+			return;
+		}
+		Scope.Cancel();
+		GSampledMarking = Option;
+		GSampledVariant = Marking->GetVariant();
+		if (GActiveMarking == Option)
+		{
+			GMarkingVariant = GSampledVariant;
+		}
+		Gun->GotoPaintState(Recipe);
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s variant %d"), *Option->GetName(), GSampledVariant);
+	});
 
 	// Fire with a Road Lines option selected: apply it to the aimed road instead of painting.
 	SUBSCRIBE_METHOD(AFGBuildGun::OnPrimaryFirePressed, [](auto& Scope, AFGBuildGun* Gun)

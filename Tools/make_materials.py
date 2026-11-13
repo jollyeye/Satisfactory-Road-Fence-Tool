@@ -946,7 +946,7 @@ log("Cyberpunk lane marking")
 
 # Vehicle markings: the same paint on one quad, cut out by the vehicle's map icon. The game's icon is set on the
 # texture parameter "Icon" at run time (ARMBuildableMarking::GetPaintMaterial); the default is a white square.
-# Mask = red x alpha, so it works for a white glyph on transparency and for a white glyph on black.
+# Mask from red x alpha, so it works for a white glyph on transparency and for a white glyph on black.
 def icon_mask(mat):
     tp = node(mat, unreal.MaterialExpressionTextureSampleParameter2D, -900, 400)
     tp.set_editor_property("parameter_name", "Icon")
@@ -961,12 +961,19 @@ def icon_mask(mat):
         tp.set_editor_property("sampler_source", unreal.SamplerSourceMode.SSM_CLAMP_WORLD_GROUP_SETTINGS)
     except Exception as e:
         log("  ! icon sampler source: %s" % e)
-    mul = node(mat, unreal.MaterialExpressionMultiply, -600, 400)
-    link(tp, "R", mul, "A")
-    link(tp, "A", mul, "B")
+    # Sharp but smooth edge: a ramp one screen pixel wide around half the icon's value (the icons are small,
+    # magnified a lot), then the engine's dither softens what is left.
+    edge = custom(mat, "float m = R * A; float w = max(fwidth(m), 0.0001); return saturate((m - 0.5) / w + 0.5);",
+                  unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["R", "A"], -600, 400, "IconEdge")
+    link(tp, "R", edge, "R")
+    link(tp, "A", edge, "A")
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
-    mat.set_editor_property("opacity_mask_clip_value", 0.4)
-    MEL.connect_material_property(mul, "", MP.MP_OPACITY_MASK)
+    mat.set_editor_property("opacity_mask_clip_value", 0.5)
+    try:
+        mat.set_editor_property("dither_opacity_mask", True)
+    except Exception as e:
+        log("  ! dither_opacity_mask: %s" % e)
+    MEL.connect_material_property(edge, "", MP.MP_OPACITY_MASK)
 
 
 marking_icon = new_material("M_RoadMarkingIcon")
