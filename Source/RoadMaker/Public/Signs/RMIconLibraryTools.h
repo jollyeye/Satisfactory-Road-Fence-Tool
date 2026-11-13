@@ -30,8 +30,7 @@ public:
 
 	/**
 	 * Game, every second: makes sure the world's icon database has our icons. If the game did not find the library by
-	 * itself, it is added to the database's list of libraries and the database rebuilt. Logs once what happened, and
-	 * once how many icons each category has (with a few names), to see where the game's own categories are.
+	 * itself, it is added to the database's list of libraries and the database rebuilt. Logs once what happened.
 	 */
 	static void EnsureOurIcons(UWorld* World);
 
