@@ -487,33 +487,6 @@ namespace
 	}
 	bool GLoggedTileLayout = false;
 
-	/** The Lane Vehicle option shows the game's own Factory Cart icon (read from the game, so not shipped with the mod). */
-	bool UseFactoryCartIcon(URMRoadLineDescriptor* D)
-	{
-		if (!D || !D->mIsMarking || D->mMarkingKind != ERMMarkingKind::Vehicle)
-		{
-			return false;
-		}
-		UTexture2D* Cart = ARMBuildableMarking::VehicleIcon(3);
-		if (!Cart)
-		{
-			return false;
-		}
-		bool bChanged = false;
-		for (const TCHAR* Name : { TEXT("mIcon"), TEXT("mSmallIcon"), TEXT("mPersistentBigIcon") })
-		{
-			if (FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(D->GetClass(), Name))
-			{
-				if (Prop->GetObjectPropertyValue_InContainer(D) != Cart)
-				{
-					Prop->SetObjectPropertyValue_InContainer(D, Cart);
-					bChanged = true;
-				}
-			}
-		}
-		return bChanged;
-	}
-
 	void BuildIconTable()
 	{
 		// Built once; again if a class went away (another save loaded).
@@ -521,19 +494,6 @@ namespace
 		for (const auto& Pair : GIconsByName)
 		{
 			bStale |= !Pair.Value.IsValid();
-		}
-		// The Lane Vehicle icon comes from the game once a save is loaded: swap it in then.
-		static bool bCartIcon = false;
-		if (!bCartIcon)
-		{
-			for (const auto& Pair : GIconsByName)
-			{
-				UClass* C = Pair.Value.Get();
-				if (C && UseFactoryCartIcon(C->GetDefaultObject<URMRoadLineDescriptor>()))
-				{
-					bCartIcon = true;
-				}
-			}
 		}
 		if (!bStale)
 		{
@@ -546,7 +506,6 @@ namespace
 				&& *It != URMRoadLineDescriptor::StaticClass())
 			{
 				URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
-				UseFactoryCartIcon(D);
 				if (D && D->GetIcon())
 				{
 					GIconsByName.Add(UFGItemDescriptor::GetItemName(*It).ToString(), *It);

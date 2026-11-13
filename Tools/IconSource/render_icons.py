@@ -536,16 +536,17 @@ def marking_icon(sc, kind):
     def tri(a, b, c):
         sc.face([(cx + a[0] * k, a[1] * k, Z), (cx + b[0] * k, b[1] * k, Z), (cx + c[0] * k, c[1] * k, Z)], WHITE, layer=2, two=True, shade=False)
     if kind == "vehicle":
-        # A generic truck seen from above (not the game's art): cab at the front, a long box behind, wheels.
-        DARK = np.array([40, 44, 52.0])
-        def drect(x0, x1, y0, y1, col):
-            sc.quad((cx + x0 * k, y0 * k, Z + 0.01), (cx + x1 * k, y0 * k, Z + 0.01), (cx + x1 * k, y1 * k, Z + 0.01), (cx + x0 * k, y1 * k, Z + 0.01), col, layer=3, two=True, shade=False)
-        for x in (-0.75, -0.45, 0.62):
-            rect(x - 0.11, x + 0.11, -0.5, 0.5)            # axles: wheels stick out on both sides
-        rect(-1.0, 0.38, -0.4, 0.4)                         # box
-        rect(0.44, 1.0, -0.36, 0.36)                        # cab
-        drect(0.72, 0.9, -0.28, 0.28, DARK)                 # windscreen
-        drect(0.38, 0.44, -0.2, 0.2, DARK)                  # gap between cab and box
+        # A generic utility cart, side view (its top points forward along the lane), not the game's art.
+        def g(u0, u1, v0, v1):  # u across the lane (front of the cart at +u), v up the picture = forward
+            rect(v0, v1, u0, u1)
+        g(-0.6, 0.6, -0.5, -0.3)      # chassis
+        g(-0.58, -0.1, -0.3, 0.1)     # cargo box
+        g(-0.05, 0.58, -0.3, -0.12)   # seat / front body
+        g(0.0, 0.06, -0.12, 0.62)     # rear post
+        g(0.5, 0.56, -0.12, 0.62)     # front pillar
+        g(-0.05, 0.6, 0.56, 0.68)     # roof
+        g(-0.5, -0.22, -0.72, -0.5)   # rear wheel
+        g(0.22, 0.5, -0.72, -0.5)     # front wheel
         return
     if kind == "arrow":
         rect(-1.1, 0.55, -0.14, 0.14)
