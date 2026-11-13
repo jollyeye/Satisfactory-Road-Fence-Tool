@@ -182,7 +182,45 @@ namespace
 		bool bEndOffsetLearned = false;
 		int32 EndTrim = 0;                      // learned: whole degrees the game's heading is off
 		bool bLaneMode = false;                 // one-click lane path: we put the hologram in its end step
+		// One-click lane path / track last laid out (road section, flip, when): unchanged = nothing to redo.
+		int32 LaneSection = -1;
+		bool bLaneFlipDone = false;
+		double LaneTime = 0.0;
 	};
+
+	/**
+	 * The section of a road a distance along it falls in (long roads: equal sections of at most 100 m,
+	 * the same as ARMBuildableSpline::GetSectionRange). Length: the road's length from its frames.
+	 */
+	int32 LaneSectionAt(float Length, float Along, float& OutFrom, float& OutTo)
+	{
+		const int32 Sections = Length > ARMBuildableSpline::SingleSectionMax ? FMath::CeilToInt(Length / ARMBuildableSpline::SectionLength) : 1;
+		const float Each = Length / Sections;
+		const int32 Section = FMath::Clamp(FMath::FloorToInt(Along / FMath::Max(Each, 1.f)), 0, Sections - 1);
+		OutFrom = Section * Each;
+		OutTo = Section == Sections - 1 ? Length : OutFrom + Each;
+		return Section;
+	}
+
+	/** A road frame at a distance along it (interpolated between the sampled frames). */
+	FRMFrame LaneFrameAt(const TArray<FRMFrame>& Frames, float D)
+	{
+		int32 Seg = 0;
+		while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
+		{
+			++Seg;
+		}
+		const FRMFrame& Fa = Frames[Seg];
+		const FRMFrame& Fb = Frames[Seg + 1];
+		const float T = Fb.Dist > Fa.Dist ? FMath::Clamp((D - Fa.Dist) / (Fb.Dist - Fa.Dist), 0.f, 1.f) : 0.f;
+		FRMFrame F = Fa;
+		F.Pos = FMath::Lerp(Fa.Pos, Fb.Pos, T);
+		F.Fwd = FMath::Lerp(Fa.Fwd, Fb.Fwd, T).GetSafeNormal();
+		F.Right = FMath::Lerp(Fa.Right, Fb.Right, T).GetSafeNormal();
+		F.Up = FMath::Lerp(Fa.Up, Fb.Up, T).GetSafeNormal();
+		F.Dist = D;
+		return F;
+	}
 
 	/** Set while we place the hologram again ourselves, so our hook lets the game's code run. */
 	bool GInPathReplace = false;
@@ -724,10 +762,28 @@ namespace
 			}
 		}
 		const float Off = Offsets[Lane];
-		const FRMFrame& F0 = Frames[0];
-		const FRMFrame& FN = Frames.Last();
-		FVector A = F0.Pos + F0.Right * Off;   // at road end 0
-		FVector B = FN.Pos + FN.Right * Off;   // at road end 1
+
+		// Long roads: only the section under the aim (sections of at most 100 m, the same as the mesh);
+		// each section's path ends where the next one starts, so they join section by section.
+		float From = 0.f, To = Frames.Last().Dist;
+		const int32 Section = LaneSectionAt(Frames.Last().Dist, Frames[NearIdx].Dist, From, To);
+		To = FMath::Min(To, Frames.Last().Dist);
+
+		// Laid out recently for this road, lane, section and direction: leave it (no work per frame).
+		{
+			const FPathState* Done = GPathStates.Find(Hologram);
+			if (Done && Done->bLaneMode && Done->Owner.Get() == Road && Done->EndIndex == Lane && Done->LaneSection == Section
+				&& Done->bLaneFlipDone == Done->bFlipped && FPlatformTime::Seconds() - Done->LaneTime < 0.5)
+			{
+				Scope.Cancel();
+				return true;
+			}
+		}
+
+		const FRMFrame F0 = LaneFrameAt(Frames, From);
+		const FRMFrame FN = LaneFrameAt(Frames, To);
+		FVector A = F0.Pos + F0.Right * Off;   // at the section start (road end 0 for the first)
+		FVector B = FN.Pos + FN.Right * Off;   // at the section end (road end 1 for the last)
 		bool bJoinedA = false, bJoinedB = false;
 
 		// Existing paths at the lane points: continue their flow and use their nodes.
@@ -772,17 +828,22 @@ namespace
 
 		// The lane as road distance range: ends without a road or path joined and nothing to drive
 		// on beyond them start 5 m onto the road (the game needs floor under the whole vehicle).
-		const float Total = FN.Dist;
-		const bool bInset0 = !bJoinedA && !RMRoadUtils::IsEndOccupied(World, Road, 0) && !HasFloorBeyond(World, A, -F0.Fwd);
-		const bool bInset1 = !bJoinedB && !RMRoadUtils::IsEndOccupied(World, Road, 1) && !HasFloorBeyond(World, B, FN.Fwd);
-		const float S0 = bInset0 ? FMath::Min(PathEndInset, Total * 0.3f) : 0.f;
-		const float S1 = bInset1 ? Total - FMath::Min(PathEndInset, Total * 0.3f) : Total;
+		const float Total = To - From;
+		const bool bInset0 = From <= 1.f && !bJoinedA && !RMRoadUtils::IsEndOccupied(World, Road, 0) && !HasFloorBeyond(World, A, -F0.Fwd);
+		const bool bInset1 = To >= Frames.Last().Dist - 1.f && !bJoinedB && !RMRoadUtils::IsEndOccupied(World, Road, 1) && !HasFloorBeyond(World, B, FN.Fwd);
+		const float S0 = From + (bInset0 ? FMath::Min(PathEndInset, Total * 0.3f) : 0.f);
+		const float S1 = To - (bInset1 ? FMath::Min(PathEndInset, Total * 0.3f) : 0.f);
 
 		// Lane points every ~4 m along the road, following its curve exactly (the game's own path
 		// would be a single curve between the ends and leave the lane on bends).
-		auto LaneAt = [&Frames, Off](float D, FVector& OutPos, FVector& OutDir)
+		int32 LaneSeg = 0; // the points go forward along the road: the search carries on from the last one
+		auto LaneAt = [&Frames, Off, &LaneSeg](float D, FVector& OutPos, FVector& OutDir)
 		{
-			int32 Seg = 0;
+			if (LaneSeg >= Frames.Num() - 1 || Frames[LaneSeg].Dist > D)
+			{
+				LaneSeg = 0;
+			}
+			int32& Seg = LaneSeg;
 			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
 			{
 				++Seg;
@@ -863,6 +924,12 @@ namespace
 			FRMPathAccess::SnapToNode(Path, EndNode); // joins the existing path there
 		}
 		SetPathSplineWorld(Hologram, Points, Tangents);
+		if (FPathState* Done = GPathStates.Find(Hologram))
+		{
+			Done->LaneSection = Section;
+			Done->bLaneFlipDone = Done->bFlipped;
+			Done->LaneTime = FPlatformTime::Seconds();
+		}
 		return true;
 	}
 
@@ -994,6 +1061,20 @@ namespace
 		}
 		const float Off = Offsets[Lane];
 
+		// Long roads: only the section under the aim (see PlaceLanePath).
+		float From = 0.f, To = Frames.Last().Dist;
+		const int32 Section = LaneSectionAt(Frames.Last().Dist, Frames[NearIdx].Dist, From, To);
+		To = FMath::Min(To, Frames.Last().Dist);
+		{
+			const FPathState* Done = GPathStates.Find(Hologram);
+			if (Done && Done->bLaneMode && Done->Owner.Get() == Road && Done->EndIndex == Lane && Done->LaneSection == Section
+				&& Done->bLaneFlipDone == Done->bFlipped && FPlatformTime::Seconds() - Done->LaneTime < 0.5)
+			{
+				Scope.Cancel();
+				return true;
+			}
+		}
+
 		FPathState& State = GPathStates.FindOrAdd(Hologram);
 		if (!State.bLaneMode || State.Owner.Get() != Road || State.EndIndex != Lane)
 		{
@@ -1010,13 +1091,13 @@ namespace
 		State.bStartStep = false;
 
 		// Lane points every ~4 m, right on the asphalt.
-		const float Total = Frames.Last().Dist;
+		const float Total = To - From;
 		const int32 Keys = FMath::Max(1, FMath::CeilToInt(Total / 400.f));
 		TArray<FVector> Points, Tangents;
+		int32 Seg = 0; // the points go forward along the road: the search carries on from the last one
 		for (int32 K = 0; K <= Keys; ++K)
 		{
-			const float D = Total * K / Keys;
-			int32 Seg = 0;
+			const float D = From + Total * K / Keys;
 			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
 			{
 				++Seg;
@@ -1057,6 +1138,9 @@ namespace
 		}
 		Scope.Cancel(); // the rail tool's own placement is not run (see SetupRailDirect)
 		SetupRailDirect(Rail, Points, Tangents, StartConn, EndConn);
+		State.LaneSection = Section;
+		State.bLaneFlipDone = State.bFlipped;
+		State.LaneTime = FPlatformTime::Seconds();
 		return true;
 	}
 
