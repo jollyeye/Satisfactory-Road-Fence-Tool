@@ -7,6 +7,12 @@
 #include "Equipment/FGBuildGun.h"
 #include "FGCharacterPlayer.h"
 #include "HAL/PlatformTime.h"
+#include "FGPlayerController.h"
+#include "Input/FGBoundMappingContextHandle.h"
+#include "EnhancedInputSubsystems.h"
+#include "EnhancedPlayerInput.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
 
 namespace
 {
@@ -19,6 +25,47 @@ namespace
 	/** Alt press being watched: when it went down, and whether another key (Tab...) came with it. */
 	double GAltDownTime = -1.0;
 	bool GAltWithOtherKey = false;
+
+	/** Road Maker's input context while a road is held (see BindRoadInput). */
+	FBoundMappingContextHandle GRoadInputHandle;
+
+	UInputAction* LimitsAction()
+	{
+		static UInputAction* Action = [] { UInputAction* A = LoadObject<UInputAction>(nullptr, TEXT("/RoadMaker/Input/IA_RM_ToggleLimits.IA_RM_ToggleLimits")); if (A) { A->AddToRoot(); } return A; }();
+		return Action;
+	}
+
+	UInputMappingContext* RoadInputContext()
+	{
+		static UInputMappingContext* Context = [] { UInputMappingContext* C = LoadObject<UInputMappingContext>(nullptr, TEXT("/RoadMaker/Input/MC_RM_RoadTools.MC_RM_RoadTools")); if (C) { C->AddToRoot(); } return C; }();
+		return Context;
+	}
+
+	/** The keys the limits action is bound to right now (the player's choice), else Alt. */
+	TArray<FKey> LimitsKeys(APlayerController* PC)
+	{
+		TArray<FKey> Keys;
+		ULocalPlayer* LocalPlayer = PC ? PC->GetLocalPlayer() : nullptr;
+		UEnhancedInputLocalPlayerSubsystem* Input = LocalPlayer ? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+		UEnhancedPlayerInput* PlayerInput = Input ? Input->GetPlayerInput() : nullptr;
+		UInputAction* Action = LimitsAction();
+		if (PlayerInput && Action)
+		{
+			for (const FEnhancedActionKeyMapping& Mapping : PlayerInput->GetEnhancedActionMappings())
+			{
+				if (Mapping.Action == Action && Mapping.Key.IsValid())
+				{
+					Keys.AddUnique(Mapping.Key);
+				}
+			}
+		}
+		if (Keys.Num() == 0)
+		{
+			Keys.Add(EKeys::LeftAlt);
+			Keys.Add(EKeys::RightAlt);
+		}
+		return Keys;
+	}
 
 	/** The build modes' own names (before the state was added). */
 	TMap<FName, FText> GModeNames;
@@ -58,7 +105,11 @@ bool RMRoadLimits::HandleInput(APlayerController* PC)
 		return false;
 	}
 	LoadLimits();
-	const bool bAltDown = PC->IsInputKeyDown(EKeys::LeftAlt) || PC->IsInputKeyDown(EKeys::RightAlt);
+	bool bAltDown = false;
+	for (const FKey& Key : LimitsKeys(PC))
+	{
+		bAltDown |= PC->IsInputKeyDown(Key);
+	}
 	const double Now = FPlatformTime::Seconds();
 	if (bAltDown)
 	{
@@ -89,6 +140,20 @@ bool RMRoadLimits::HandleInput(APlayerController* PC)
 	SaveLimits();
 	UE_LOG(LogRoadMaker, Display, TEXT("Road limits %s"), GLimitsOff ? TEXT("off") : TEXT("on"));
 	return true;
+}
+
+void RMRoadLimits::BindRoadInput(APlayerController* PC, bool bBind)
+{
+	AFGPlayerController* FGPC = Cast<AFGPlayerController>(PC);
+	UInputMappingContext* Context = RoadInputContext();
+	if (!FGPC || !FGPC->IsLocalController() || !Context)
+	{
+		return;
+	}
+	// Counted: switching between road recipes makes the new hologram before the old one goes.
+	static int32 Holders = 0;
+	Holders = FMath::Max(0, Holders + (bBind ? 1 : -1));
+	FGPC->SetMappingContextBoundWithHandle(GRoadInputHandle, Context, Holders > 0, 10);
 }
 
 void RMRoadLimits::LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC)

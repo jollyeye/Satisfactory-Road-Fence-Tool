@@ -222,6 +222,70 @@ GameWorldModule = native_class("GameWorldModule")
 # ---------------------------------------------------------------------------------------------
 # Assets
 # ---------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------
+# Input: the road limits key (default Left Alt), rebindable in Options > Controls ("Road Maker"),
+# shown in the build gun's button hint bar while a road is held (the C++ binds the context then).
+# ---------------------------------------------------------------------------------------------
+log("== Input ==")
+
+
+def make_data_asset(folder, name, cls):
+    path = "%s/%s/%s" % (ROOT, folder, name)
+    try:
+        asset = unreal.load_asset("%s.%s" % (path, name))
+    except Exception:
+        asset = None
+    if asset:
+        log("Updating " + path)
+        return asset
+    factory = unreal.DataAssetFactory()
+    factory.set_editor_property("data_asset_class", cls)
+    asset = asset_tools.create_asset(name, path.rsplit("/", 1)[0], cls, factory)
+    log("Created " + path if asset else "  ! could not create " + path)
+    return asset
+
+
+def make_key(name):
+    k = unreal.Key()
+    setp(k, name, "key_name", "KeyName")
+    return k
+
+
+ia_limits = None
+try:
+    ia_limits = make_data_asset("Input", "IA_RM_ToggleLimits", unreal.InputAction)
+    if ia_limits:
+        setp(ia_limits, unreal.InputActionValueType.BOOLEAN, "value_type", "ValueType")
+        setp(ia_limits, False, "consume_input", "bConsumeInput")
+        setp(ia_limits, text("Toggle Road Limits"), "action_description", "ActionDescription")
+        try:
+            settings = unreal.new_object(unreal.PlayerMappableKeySettings, outer=ia_limits)
+            setp(settings, "RoadMaker_ToggleLimits", "name", "Name")
+            setp(settings, text("Toggle Road Limits"), "display_name", "DisplayName")
+            setp(settings, text("Road Maker"), "display_category", "DisplayCategory")
+            setp(ia_limits, settings, "player_mappable_key_settings", "PlayerMappableKeySettings")
+        except Exception as e:
+            log("  ! player mappable settings: %s" % e)
+        eal.save_loaded_asset(ia_limits, only_if_is_dirty=False)
+except Exception as e:
+    log("  ! input action failed: %s" % e)
+
+try:
+    mc_cls = getattr(unreal, "FGInputMappingContext", None) or unreal.InputMappingContext
+    mc_road = make_data_asset("Input", "MC_RM_RoadTools", mc_cls)
+    if mc_road and ia_limits:
+        try:
+            mc_road.unmap_all()
+        except Exception as e:
+            log("  ! unmap_all: %s" % e)
+        mc_road.map_key(ia_limits, make_key("LeftAlt"))
+        setp(mc_road, text("Road Maker"), "m_display_name", "mDisplayName")
+        setp(mc_road, 10.0, "m_menu_priority", "mMenuPriority")
+        log("  mappings: %d" % len(mc_road.get_editor_property("mappings")))
+        eal.save_loaded_asset(mc_road, only_if_is_dirty=False)
+except Exception as e:
+    log("  ! mapping context failed: %s" % e)
+
 log("== Holograms ==")
 bm = make_bp("Holograms", "BM_Straight", BuildModeDescriptor)
 setp(cdo(bm), text("Straight"), "m_display_name", "mDisplayName")

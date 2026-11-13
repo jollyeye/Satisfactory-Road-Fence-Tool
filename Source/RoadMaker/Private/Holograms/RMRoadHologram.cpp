@@ -414,6 +414,7 @@ void ARMRoadHologram::BeginPlay()
 	if (APlayerController* PC = GetLocalHolder())
 	{
 		mNoLimits = RMRoadLimits::AreOff();
+		RMRoadLimits::BindRoadInput(PC, true);
 		LabelBuildModes(PC);
 		SetActorTickEnabled(true);
 	}
@@ -421,6 +422,10 @@ void ARMRoadHologram::BeginPlay()
 
 void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (APlayerController* PC = GetLocalHolder())
+	{
+		RMRoadLimits::BindRoadInput(PC, false);
+	}
 	Super::EndPlay(EndPlayReason);
 }
 

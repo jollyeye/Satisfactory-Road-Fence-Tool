@@ -1,4 +1,4 @@
-// Road limits toggle (Alt while holding a road): in any road build mode, off = no turn or slope
+// Road limits toggle (Alt by default, rebindable, while holding a road): in any road build mode, off = no turn or slope
 // limits, up to 1 km long, the build gun reaching 1 km. The choice is per player, remembered between
 // sessions (GameUserSettings.ini). The state shows after the build mode's name: "Zoop (Limits: ON)".
 #pragma once
@@ -23,5 +23,11 @@ namespace RMRoadLimits
 	 * Writes the state after the names of these build modes ("Default (Limits: ON)") and makes the
 	 * build gun show the new name. Only for Road Maker's own road modes (they are not shared).
 	 */
+	/**
+	 * While a road hologram is held: Road Maker's input context on (the limits key, rebindable in
+	 * Options > Controls under "Road Maker", shown in the build gun's button hint bar), off after.
+	 */
+	ROADMAKER_API void BindRoadInput(APlayerController* PC, bool bBind);
+
 	ROADMAKER_API void LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC);
 }
