@@ -61,11 +61,6 @@ namespace
 		{
 			return FString::FromInt(V);
 		}
-		if (D && D->mMarkingKind == ERMMarkingKind::Crossing)
-		{
-			static const TCHAR* CrossingNames[] = { TEXT("zebra crossing"), TEXT("stop line"), TEXT("give-way line"), TEXT("give-way triangles") };
-			return CrossingNames[FMath::Clamp(V, 0, 3)];
-		}
 		return ArrowNames[FMath::Clamp(V, 0, 5)];
 	}
 }

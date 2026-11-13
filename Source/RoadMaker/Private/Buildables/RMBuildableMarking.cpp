@@ -343,59 +343,8 @@ namespace
 	}
 }
 
-namespace
-{
-	/**
-	 * Crossing markings, in cm (X along the road, the way traffic drives; Y across), Width = the lanes'
-	 * total width. 0 zebra crossing (3 m deep, 50 cm stripes and gaps), 1 stop line (40 cm), 2 give-way
-	 * line (dashes 60 cm, gaps 40 cm), 3 give-way triangles (pointing at oncoming traffic).
-	 */
-	void BuildCrossing(TArray<TArray<FVector2D>>& Polys, uint8 Variant, float Width)
-	{
-		auto Rect = [&Polys](float X0, float X1, float Y0, float Y1)
-		{
-			Polys.Add({ FVector2D(X0, Y0), FVector2D(X1, Y0), FVector2D(X1, Y1), FVector2D(X0, Y1) });
-		};
-		const float Half = Width * 0.5f;
-		// Pieces of Size with Gap between them, centred across the road.
-		auto Across = [Half](float Size, float Gap, TFunctionRef<void(float, float)> Piece)
-		{
-			const int32 Count = FMath::Max(1, FMath::FloorToInt((2.f * Half + Gap) / (Size + Gap)));
-			const float Used = Count * Size + (Count - 1) * Gap;
-			for (int32 K = 0; K < Count; ++K)
-			{
-				const float Y0 = -Used * 0.5f + K * (Size + Gap);
-				Piece(Y0, Y0 + Size);
-			}
-		};
-		switch (Variant)
-		{
-		case 0:
-			Across(50.f, 50.f, [&Rect](float Y0, float Y1) { Rect(-150.f, 150.f, Y0, Y1); });
-			break;
-		case 1:
-			Rect(-20.f, 20.f, -Half, Half);
-			break;
-		case 2:
-			Across(60.f, 40.f, [&Rect](float Y0, float Y1) { Rect(-15.f, 15.f, Y0, Y1); });
-			break;
-		default:
-			// Base towards the junction, point towards the traffic coming up to it.
-			Across(60.f, 30.f, [&Polys](float Y0, float Y1)
-			{
-				Polys.Add({ FVector2D(40.f, Y0), FVector2D(40.f, Y1), FVector2D(-40.f, (Y0 + Y1) * 0.5f) });
-			});
-			break;
-		}
-	}
-}
-
 float ARMBuildableMarking::HalfLength(ERMMarkingKind Kind, float LaneWidth)
 {
-	if (Kind == ERMMarkingKind::Crossing)
-	{
-		return 150.f;
-	}
 	const float Scale = LaneWidth * 0.5f;
 	return Kind == ERMMarkingKind::Arrow ? ArrowTop * Scale : 0.9f * FShapeBuilder::Stretch * Scale;
 }
@@ -409,10 +358,6 @@ void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, f
 	if (Kind == ERMMarkingKind::Arrow)
 	{
 		BuildArrow(B, Variant);
-	}
-	else if (Kind == ERMMarkingKind::Crossing)
-	{
-		BuildCrossing(Polys, Variant, LaneWidth); // LaneWidth: here the lanes' total width
 	}
 	else
 	{
@@ -598,34 +543,8 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 	{
 		return false;
 	}
-	if (Kind == ERMMarkingKind::Crossing)
-	{
-		// Across all the lanes (inside the side lines), centred on them.
-		TArray<float> Offsets;
-		float LaneWidth = 200.f;
-		Road->GetLaneCentres(Offsets, LaneWidth);
-		if (Offsets.Num() > 0)
-		{
-			float Lo = Offsets[0], Hi = Offsets[0];
-			for (float O : Offsets)
-			{
-				Lo = FMath::Min(Lo, O);
-				Hi = FMath::Max(Hi, O);
-			}
-			const float Centre = (Lo + Hi) * 0.5f;
-			const FRMFrame At = MarkingFrameAtDist(Frames, Spot.Dist);
-			Spot.Transform.AddToTranslation(At.Right * (Centre - Spot.Offset));
-			Spot.Offset = Centre;
-			Spot.LaneWidth = Hi - Lo + LaneWidth;
-		}
-		OutTransform = Spot.Transform;
-		OutWidth = Spot.LaneWidth;
-	}
-	else
-	{
-		OutTransform = Spot.Transform;
-		OutWidth = FMath::Min(Spot.LaneWidth, MaxLaneWidth) * SizeMultiplier;
-	}
+	OutTransform = Spot.Transform;
+	OutWidth = FMath::Min(Spot.LaneWidth, MaxLaneWidth) * SizeMultiplier;
 
 	// The road surface along the lane, every 50 cm over the marking's length (plus a little), in its local space.
 	const float Half = HalfLength(Kind, OutWidth) + 25.f;
