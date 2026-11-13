@@ -450,6 +450,42 @@ def fence_cut_glyph(path):
     img.save(path)
 
 
+def fence_join_glyph(path):
+    """Join Fence icon: white flat glyph, two brick wall pieces end to end with a thin straight seam,
+    pushed together by two arrows along the wall (Cut Fence has a cut line through a gap instead)."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    seam, mortar, brick = 14, 20, 150
+    inner, outer = 512, 314           # each half runs from the seam out to 512 +- 314 (two bricks)
+    rows = [(290, 400), (400, 510), (510, 620), (620, 730)]
+    for r, (y0, y1) in enumerate(rows):
+        for side in (-1, 1):
+            # Bricks laid from the seam outwards, every other row starting with a half brick.
+            pos = seam
+            first = brick // 2 if r % 2 else brick
+            length = first
+            while pos < outer:
+                end = min(pos + length, outer)
+                a, b = inner + side * pos, inner + side * end
+                lo, hi = min(a, b), max(a, b)
+                if hi - lo > 40:
+                    d.rounded_rectangle([lo + mortar / 2, y0 + mortar / 2, hi - mortar / 2, y1 - mortar / 2], radius=10, fill=W)
+                pos = end
+                length = brick
+    # Arrows beyond the wall ends, pointing in along the wall.
+    cy = 510
+    for side in (-1, 1):
+        tip = 512 + side * 340           # just beyond the wall end
+        back = 512 + side * 505
+        d.rounded_rectangle([min(back, tip + side * 70), cy - 24, max(back, tip + side * 70), cy + 24], radius=14, fill=W)
+        d.polygon([(tip, cy), (tip + side * 100, cy - 88), (tip + side * 100, cy + 88)], fill=W)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def tab_glyph(path):
     """Road Tools tab icon: white glyph of a road in perspective, like /┆\\ ."""
     from PIL import Image as _I, ImageDraw as _D
@@ -521,6 +557,8 @@ if what == "adjustglyph":
     adjust_glyph(out); sys.exit(0)
 if what == "fencecutglyph":
     fence_cut_glyph(out); sys.exit(0)
+if what == "fencejoinglyph":
+    fence_join_glyph(out); sys.exit(0)
 if what == "tabglyph":
     tab_glyph(out); sys.exit(0)
 sc = Scene()

@@ -207,6 +207,7 @@ RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
 RMRoadMergeHologram = native_class("RMRoadMergeHologram")
 RMRoadJoinHologram = native_class("RMRoadJoinHologram")
+RMFenceJoinHologram = native_class("RMFenceJoinHologram")
 RMGantryHologram = native_class("RMGantryHologram")
 RMBuildableGantry = native_class("RMBuildableGantry")
 RMBuildableMarking = native_class("RMBuildableMarking")
@@ -280,6 +281,9 @@ finish(holo_marking)
 holo_fence_cut = make_bp("Holograms", "Holo_FenceCut", RMRoadCutHologram)
 setp(cdo(holo_fence_cut), True, "m_fence_tool", "mFenceTool")
 finish(holo_fence_cut)
+
+holo_fence_join = make_bp("Holograms", "Holo_FenceJoin", RMFenceJoinHologram)
+finish(holo_fence_join)
 
 # Lane Paint moved to the customizer (Road Lines tab): remove its build-menu assets.
 for old in ("Unlocks/Recipe_LanePaint", "Buildables/Desc_LanePaint", "Buildables/Build_LanePaint",
@@ -373,7 +377,7 @@ if VehiclePathSubCat:
     lane_marking_subcat = None
 # Road Tools entries and their section.
 MARKING_TOOLS = ("LaneArrow", "LaneNumber")  # painted from the customizer (Road Lines), not in the build menu
-ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "FenceCut": "fence"}
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "FenceCut": "fence", "FenceJoin": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -412,6 +416,8 @@ TOOLS = [
      {}, [], road_icons, {}),
     ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
      {}, [], fence_icons, {}),
+    ("FenceJoin", RMBuildableRoadTool, holo_fence_join, "Join Fence", "The opposite of Cut Fence. Aim near where two road fences or fence walls meet end to end: the green outline shows the joined fence; click to replace the two with one fence along both, with the aimed fence's side, material and paint. They must be the same kind (and look), have the road on the same side, continue smoothly into each other and follow the one curve a single fence would have (two pieces of a cut fence always do; a straight piece and a curved one cannot be joined). Any length up to 1 km. Free.",
+     {}, [], fence_icons, {}),
     ("Fence_GuardRail", RMBuildableFence, holo_fence, "Guard Rail", "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
      {"m_fence_type": "GUARD_RAIL"}, [(Desc_IronPlate, 1), (Desc_IronRod, 1)], fence_icons, {"m_main_material": mat_metal}),
     ("Fence_Jersey", RMBuildableFence, holo_fence, "Cement Blocks", "Concrete road barrier. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m.",
@@ -436,7 +442,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "LaneArrow": 1, "LaneNumber": 2, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 

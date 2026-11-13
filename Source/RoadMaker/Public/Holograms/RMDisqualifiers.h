@@ -190,3 +190,51 @@ class ROADMAKER_API URMCD_AimAtRoadEnd : public UFGConstructDisqualifier
 public:
 	URMCD_AimAtRoadEnd() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "AimAtRoadEnd", "Aim at an orange circle on a road end"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinAimAtJoint : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinAimAtJoint() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinAimAtJoint", "Aim near where two fences meet end to end"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinType : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinType() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinType", "The fences are not the same kind (or not the same look)"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinSide : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinSide() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinSide", "The fences face opposite sides of the road"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinKink : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinKink() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinKink", "The fences do not continue smoothly into each other"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinCurve : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinCurve() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinCurve", "One fence would not follow both curves (e.g. a straight and a curved piece)"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FenceJoinTooLong : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FenceJoinTooLong() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinTooLong", "The joined fence would be longer than 1 km"); }
+};

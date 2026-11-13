@@ -584,3 +584,74 @@ void ARMBuildableFence::CopyCutSettingsTo(ARMBuildableSpline* New) const
 		Fence->mWallLook = mWallLook;
 	}
 }
+
+ARMBuildableFence::EJoinCheck ARMBuildableFence::CheckJoin(const ARMBuildableFence* Other, int32 MyEnd, int32 OtherEnd, TArray<FRMFrame>* OutFrames) const
+{
+	if (!Other || Other == this)
+	{
+		return EJoinCheck::NotJoined;
+	}
+	const ERMJoinCourse Course = JoinCourse(Other, MyEnd, OtherEnd, MaxJoinLength, OutFrames);
+	if (Course == ERMJoinCourse::NotJoined)
+	{
+		return EJoinCheck::NotJoined;
+	}
+	if (GetEffectiveType() != Other->GetEffectiveType() || GetShownLook() != Other->GetShownLook())
+	{
+		return EJoinCheck::Type;
+	}
+	// The road side, seen along the joined course: a fence met head-on (end 0 to end 0, or 1 to 1)
+	// runs the other way, so its side flips.
+	const float OtherSide = (MyEnd == OtherEnd ? -1.f : 1.f) * Other->GetInwardSign();
+	if (OtherSide != GetInwardSign())
+	{
+		return EJoinCheck::Side;
+	}
+	switch (Course)
+	{
+	case ERMJoinCourse::Ok: return EJoinCheck::Ok;
+	case ERMJoinCourse::Kink: return EJoinCheck::Kink;
+	case ERMJoinCourse::Curve: return EJoinCheck::Curve;
+	case ERMJoinCourse::TooLong: return EJoinCheck::TooLong;
+	default: return EJoinCheck::NotJoined;
+	}
+}
+
+ARMBuildableFence* ARMBuildableFence::JoinWith(ARMBuildableFence* Other, int32 MyEnd, int32 OtherEnd)
+{
+	if (!HasAuthority() || !Other || GetIsDismantled() || Other->GetIsDismantled() || IsActorBeingDestroyed() || Other->IsActorBeingDestroyed())
+	{
+		return nullptr;
+	}
+	TArray<FRMFrame> Path;
+	if (CheckJoin(Other, MyEnd, OtherEnd, &Path) != EJoinCheck::Ok || Path.Num() < 2)
+	{
+		return nullptr;
+	}
+	// Refitted through both courses (keys every 2 m, exact ends and end directions), heights as they
+	// are. The course runs the way this fence runs, so its side carries over as it is.
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::OffsetCurve(Path, 0.f, 200.f, Points);
+	FVector JointLoc = GetActorLocation();
+	{
+		TArray<FRMFrame> Mine;
+		GetWorldFrames(Mine, 100.f);
+		if (Mine.Num() >= 2)
+		{
+			JointLoc = MyEnd == 0 ? Mine[0].Pos : Mine.Last().Pos;
+		}
+	}
+	ARMBuildableFence* Joined = Cast<ARMBuildableFence>(SpawnLike(GetClass(), GetBuiltWithRecipe(), Points,
+		FMath::Max(1, GetCostMultiplier() + Other->GetCostMultiplier()), ERMRevealFrom::FromPoint, JointLoc));
+	if (!Joined)
+	{
+		return nullptr;
+	}
+	for (ARMBuildableFence* Old : { this, Other })
+	{
+		Old->SetActorEnableCollision(false);
+		Old->SetActorHiddenInGame(true);
+		IFGDismantleInterface::Execute_Dismantle(Old);
+	}
+	return Joined;
+}

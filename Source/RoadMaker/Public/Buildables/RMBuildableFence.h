@@ -107,6 +107,24 @@ public:
 		return Type != ERMFenceType::GuardRail && Type != ERMFenceType::JerseyBarrier;
 	}
 
+	/** Join Fence: can Other be joined to this fence end to end (this fence's end MyEnd meets Other's OtherEnd)? */
+	enum class EJoinCheck : uint8 { Ok, NotJoined, Type, Side, Kink, Curve, TooLong };
+	/**
+	 * Same kind of fence (and the same wall look), the road on the same side of both, and the course
+	 * rules of ARMBuildableSpline::JoinCourse (smooth, one curve) with a 1 km length limit.
+	 * OutFrames: the joined course (world), running the way this fence runs.
+	 */
+	EJoinCheck CheckJoin(const ARMBuildableFence* Other, int32 MyEnd, int32 OtherEnd, TArray<FRMFrame>* OutFrames = nullptr) const;
+
+	/**
+	 * Join Fence (server): replaces this fence and Other with one fence along both, with this fence's
+	 * side, look and paint. Null if not possible.
+	 */
+	ARMBuildableFence* JoinWith(ARMBuildableFence* Other, int32 MyEnd, int32 OtherEnd);
+
+	/** Longest fence the join makes (1 km; long fences are drawn in sections). */
+	static constexpr float MaxJoinLength = 100000.f;
+
 	/** Spline points in world space (for stacking). */
 	void GetWorldSplinePoints(TArray<FRMSplinePoint>& Out) const;
 

@@ -16,6 +16,9 @@ enum class ERMRevealFrom : uint8
 	FromPoint,     // outwards both ways from mRevealPoint (Join Road: the joint)
 };
 
+/** Join tools: can two spline pieces become one along both (see ARMBuildableSpline::JoinCourse)? */
+enum class ERMJoinCourse : uint8 { Ok, NotJoined, Kink, Curve, TooLong };
+
 UCLASS(Abstract)
 class ROADMAKER_API ARMBuildableSpline : public ARMBuildableProcedural
 {
@@ -58,6 +61,16 @@ public:
 
 	/** Where the build animation starts (server, before the piece finishes spawning). */
 	void SetRevealFrom(ERMRevealFrom From, const FVector& Point = FVector::ZeroVector) { mRevealFrom = From; mRevealPoint = Point; }
+
+	/**
+	 * Join tools: this piece's end MyEnd meets Other's end OtherEnd. The ends must meet (within 50 cm,
+	 * same height) and continue smoothly (< 3.5 degrees); the joined length at most MaxLength; and the
+	 * two must lie on the one curve a single piece would have between the outer ends (the quadratic
+	 * the build tools make, or the straight-mode curve; within 50 cm seen from above): a straight
+	 * piece and a curved one, or a curve and an S, cannot become one. OutFrames: the joined course
+	 * (world), running the way this piece runs.
+	 */
+	ERMJoinCourse JoinCourse(const ARMBuildableSpline* Other, int32 MyEnd, int32 OtherEnd, float MaxLength, TArray<FRMFrame>* OutFrames = nullptr) const;
 
 	/** Used while spawning cut pieces (CopyCutSettingsTo is protected). */
 	void CopyCutSettingsForSpawn(ARMBuildableSpline* New) const { CopyCutSettingsTo(New); }
