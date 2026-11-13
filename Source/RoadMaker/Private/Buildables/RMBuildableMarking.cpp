@@ -232,9 +232,9 @@ namespace
 			const FVector Pos = Place(V, N);
 			Normal = N;
 			const FVector2D UV = IconHalf
-			? FVector2D(0.5f + 0.5f * V.Y / IconHalf->Y, 0.5f - 0.5f * V.X / IconHalf->X)
-			: FVector2D(V.X / 100.f, V.Y / 100.f);
-		Ids.Add(Out.AddVertex(Pos, N, UV, FVector::ForwardVector));
+				? FVector2D(0.5f + 0.5f * V.Y / IconHalf->Y, 0.5f - 0.5f * V.X / IconHalf->X)
+				: FVector2D(V.X / 100.f, V.Y / 100.f);
+			Ids.Add(Out.AddVertex(Pos, N, UV, FVector::ForwardVector));
 		}
 		for (int32 I = 1; I + 1 < Ids.Num(); ++I)
 		{
