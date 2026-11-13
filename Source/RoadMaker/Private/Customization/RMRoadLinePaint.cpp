@@ -535,6 +535,21 @@ namespace
 		{
 			return;
 		}
+		// Textures stream in: until shown, only a small mip of the tile (and maybe the cart) is loaded, and drawing then
+		// gives a blurry road. Ask for every mip and come back once they are all in.
+		bool bReady = true;
+		for (UTexture2D* T : { Tile, Cart })
+		{
+			T->SetForceMipLevelsToBeResident(30.f);
+			if (T->IsStreamable() && T->GetNumResidentMips() < T->GetNumMips())
+			{
+				bReady = false;
+			}
+		}
+		if (!bReady)
+		{
+			return; // asked again on the next tick
+		}
 		++GTries;
 		constexpr int32 Size = 256;
 		UTextureRenderTarget2D* RT = UKismetRenderingLibrary::CreateRenderTarget2D(World, Size, Size, RTF_RGBA8_SRGB, FLinearColor::Transparent);
@@ -583,7 +598,8 @@ namespace
 				Prop->SetObjectPropertyValue_InContainer(Option, Icon);
 			}
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Lane Vehicle icon: road tile + %s (%s)"), *Cart->GetName(), GPixelFormats[Cart->GetPixelFormat()].Name);
+		UE_LOG(LogRoadMaker, Display, TEXT("Lane Vehicle icon: road tile %dx%d (%d of %d mips) + %s %dx%d (%s)"), Tile->GetSizeX(), Tile->GetSizeY(),
+			Tile->GetNumResidentMips(), Tile->GetNumMips(), *Cart->GetName(), Cart->GetSizeX(), Cart->GetSizeY(), GPixelFormats[Cart->GetPixelFormat()].Name);
 	}
 
 	void BuildIconTable()

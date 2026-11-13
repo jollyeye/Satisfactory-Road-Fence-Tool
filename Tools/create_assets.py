@@ -552,6 +552,19 @@ for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
 if tasks:
     asset_tools.import_asset_tasks(tasks)
     log("  imported %d icons" % len(tasks))
+# The Lane Vehicle tile is drawn into a new icon in game (with the game's cart on top): keep it whole and sharp,
+# always loaded at full size (no streaming, no mips, no compression).
+try:
+    tile = unreal.load_asset(ROOT + "/Icons/T_RoadLines_MarkVehicle")
+    if tile:
+        tile.set_editor_property("never_stream", True)
+        tile.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+        tile.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+        tile.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+        eal.save_loaded_asset(tile, only_if_is_dirty=False)
+        log("  Lane Vehicle tile: full size, never streamed")
+except Exception as e:
+    log("  ! Lane Vehicle tile settings: %s" % e)
 
 # Road Tools tab icon: the game's Vehicles tab brush (same size / look) with our glyph.
 if road_tools_cat:
