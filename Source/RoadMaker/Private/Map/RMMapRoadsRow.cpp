@@ -392,8 +392,13 @@ void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
 	if (mRoot && WidgetTree)
 	{
 		UImage* Line = WidgetTree->ConstructWidget<UImage>();
+		// A brush 2 px tall (an image is as tall as its brush's size; the default is 32 px).
+		FSlateBrush LineBrush;
+		LineBrush.DrawAs = ESlateBrushDrawType::Image;
+		LineBrush.ImageSize = FVector2D(2.f, 2.f);
+		LineBrush.TintColor = FSlateColor(FLinearColor::White);
+		Line->SetBrush(LineBrush);
 		Line->SetColorAndOpacity(FLinearColor::FromSRGBColor(FColor(102, 102, 103)));
-		Line->SetDesiredSizeOverride(FVector2D(1.f, 2.f));
 		Line->SetVisibility(ESlateVisibility::HitTestInvisible);
 		if (UOverlaySlot* LineSlot = mRoot->AddChildToOverlay(Line))
 		{
