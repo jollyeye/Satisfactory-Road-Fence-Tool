@@ -227,9 +227,61 @@ namespace
 		return Found;
 	}
 
+	/**
+	 * Diagnostic (once per session, the first time the bar is looked for): the player's widgets on
+	 * screen whose class mentions Build or Hint, with the user widgets and texts inside them.
+	 */
+	void LogHintWidgets(APlayerController* PC)
+	{
+		static bool bLogged = false;
+		if (bLogged)
+		{
+			return;
+		}
+		bLogged = true;
+		int32 Lines = 0;
+		for (TObjectIterator<UUserWidget> It; It && Lines < 400; ++It)
+		{
+			UUserWidget* Screen = *It;
+			if (!Screen || Screen->HasAnyFlags(RF_ClassDefaultObject) || Screen->GetOwningPlayer() != PC || !Screen->WidgetTree)
+			{
+				continue;
+			}
+			const FString ClassName = Screen->GetClass()->GetName();
+			if (!ClassName.Contains(TEXT("Build")) && !ClassName.Contains(TEXT("Hint")) && !ClassName.Contains(TEXT("Keybind")))
+			{
+				continue;
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("HintBar: widget %s (%s) parent=%s visible=%d"), *Screen->GetName(), *ClassName,
+				Screen->GetParent() ? *Screen->GetParent()->GetName() : TEXT("-"), Screen->IsVisible() ? 1 : 0);
+			++Lines;
+			Screen->WidgetTree->ForEachWidget([&Lines](UWidget* Child)
+			{
+				if (Lines >= 400 || !Child)
+				{
+					return;
+				}
+				if (UTextBlock* Text = Cast<UTextBlock>(Child))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("HintBar:    text %s = \"%s\" (in %s)"), *Text->GetName(), *Text->GetText().ToString(),
+						Text->GetParent() ? *Text->GetParent()->GetName() : TEXT("-"));
+					++Lines;
+				}
+				else if (Cast<UUserWidget>(Child) || Cast<UPanelWidget>(Child))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("HintBar:    %s %s (%s) in %s"), Cast<UUserWidget>(Child) ? TEXT("widget") : TEXT("panel"),
+						*Child->GetName(), *Child->GetClass()->GetName(), Child->GetParent() ? *Child->GetParent()->GetName() : TEXT("-"));
+					++Lines;
+				}
+			});
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("HintBar: %d line(s)"), Lines);
+	}
+
 	/** The build mode widget's hint panel and one of the game's hints in it, for this player. */
 	UPanelWidget* FindHintPanel(APlayerController* PC, UUserWidget*& OutSample)
 	{
+		LogHintWidgets(PC);
 		OutSample = nullptr;
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
@@ -283,6 +335,12 @@ void RMRoadLimits::UpdateHintBar(APlayerController* PC, bool bShow)
 		UUserWidget* Sample = nullptr;
 		Panel = FindHintPanel(PC, Sample);
 		GHintPanel = Panel;
+		static int32 SearchLogs = 0;
+		if (SearchLogs++ < 5)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("HintBar: panel %s, sample %s"), Panel ? *Panel->GetName() : TEXT("none"),
+				Sample ? *Sample->GetClass()->GetName() : TEXT("none"));
+		}
 		if (!Panel || !Sample)
 		{
 			return;
