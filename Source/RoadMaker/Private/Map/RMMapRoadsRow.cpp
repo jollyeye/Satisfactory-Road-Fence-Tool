@@ -1,12 +1,16 @@
 #include "Map/RMMapRoadsRow.h"
 #include "RoadMakerModule.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "Components/ButtonSlot.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/CheckBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/ConfigCacheIni.h"
@@ -19,60 +23,19 @@ namespace
 	TWeakObjectPtr<URMMapRoadsRow> GMapRoadsRow;
 	double GNextMapRowSearch = 0.0;
 
-	/** The smallest widget around Text that also holds a check box (the game's row), and that box. */
-	UWidget* FindRow(UTextBlock* Text, UCheckBox*& OutCheck)
+	/** The next widget up: the parent, or at the top of a user widget's tree the user widget itself. */
+	UWidget* MapUp(UWidget* W)
 	{
-		OutCheck = nullptr;
-		for (UWidget* W = Text; W; )
+		if (!W)
 		{
-			if (UPanelWidget* Panel = Cast<UPanelWidget>(W))
-			{
-				TArray<UWidget*> Stack(Panel->GetAllChildren());
-				while (Stack.Num() > 0 && !OutCheck)
-				{
-					UWidget* Child = Stack.Pop();
-					OutCheck = Cast<UCheckBox>(Child);
-					if (UPanelWidget* Sub = Cast<UPanelWidget>(Child))
-					{
-						Stack.Append(Sub->GetAllChildren());
-					}
-					else if (UUserWidget* SubUser = Cast<UUserWidget>(Child); SubUser && SubUser->WidgetTree && SubUser->WidgetTree->RootWidget)
-					{
-						Stack.Add(SubUser->WidgetTree->RootWidget);
-					}
-				}
-				if (OutCheck)
-				{
-					return W;
-				}
-			}
-			else if (UUserWidget* User = Cast<UUserWidget>(W); User && User->WidgetTree && W != Text)
-			{
-				User->WidgetTree->ForEachWidget([&OutCheck](UWidget* Child)
-				{
-					if (!OutCheck)
-					{
-						OutCheck = Cast<UCheckBox>(Child);
-					}
-				});
-				if (OutCheck)
-				{
-					return W;
-				}
-			}
-			UWidget* Parent = W->GetParent();
-			if (!Parent)
-			{
-				// The top of a user widget's own tree: carry on from the user widget itself.
-				Parent = W->GetTypedOuter<UUserWidget>();
-				if (Parent == W)
-				{
-					break;
-				}
-			}
-			W = Parent;
+			return nullptr;
 		}
-		return nullptr;
+		if (UWidget* Parent = W->GetParent())
+		{
+			return Parent;
+		}
+		UUserWidget* Owner = W->GetTypedOuter<UUserWidget>();
+		return Owner != W ? Owner : nullptr;
 	}
 }
 
@@ -125,46 +88,54 @@ void RMMapRoads::EnsureRow(UWorld* World)
 			break;
 		}
 	}
-	UCheckBox* StampsCheck = nullptr;
-	UWidget* StampsRow = StampsText ? FindRow(StampsText, StampsCheck) : nullptr;
-	if (StampsText && !StampsRow)
+	// Its button (mShowStampsButton) and the row around it that sits in the map menu's canvas (2026-11-13:
+	// TextBlock in HorizontalBox_0 in mShowStampsButton in Overlay_2 in CanvasPanel_0 of BPW_MapMenu).
+	UButton* StampsButton = nullptr;
+	UWidget* StampsRow = nullptr;
+	UCanvasPanel* Canvas = nullptr;
+	for (UWidget* W = StampsText; W; W = MapUp(W))
 	{
-		// No UCheckBox around the text (the game's box is its own widget): the row is the text's
-		// nearest ancestor that sits in a vertical list (a vertical box or scroll box).
-		static bool bChainLogged = false;
-		for (UWidget* W = StampsText; W; )
+		if (!StampsButton)
 		{
-			UWidget* Parent = W->GetParent();
-			UWidget* Up = Parent ? Parent : W->GetTypedOuter<UUserWidget>();
-			if (!bChainLogged)
-			{
-				UPanelWidget* P = Cast<UPanelWidget>(Parent);
-				UE_LOG(LogRoadMaker, Display, TEXT("Map: row search: %s (%s) in %s (%s), %d children"), *W->GetName(), *W->GetClass()->GetName(),
-					Up ? *Up->GetName() : TEXT("-"), Up ? *Up->GetClass()->GetName() : TEXT("-"), P ? P->GetChildrenCount() : -1);
-			}
-			if (Parent && (Parent->GetClass()->GetName().Contains(TEXT("VerticalBox")) || Parent->GetClass()->GetName().Contains(TEXT("ScrollBox"))))
+			StampsButton = Cast<UButton>(W);
+		}
+		if (StampsButton)
+		{
+			if (UCanvasPanel* Panel = Cast<UCanvasPanel>(W->GetParent()))
 			{
 				StampsRow = W;
+				Canvas = Panel;
 				break;
 			}
-			if (Up == W)
-			{
-				break;
-			}
-			W = Up;
 		}
-		bChainLogged = true;
 	}
-	UPanelWidget* List = StampsRow ? StampsRow->GetParent() : nullptr;
-	if (!List)
+	if (!StampsRow || !Canvas)
 	{
 		static int32 Misses = 0;
 		if (Misses++ < 3)
 		{
-			UE_LOG(LogRoadMaker, Warning, TEXT("Map: \"Show Stamps on Map\" row not found (text %s, row %s)"),
-				StampsText ? TEXT("found") : TEXT("missing"), StampsRow ? *StampsRow->GetName() : TEXT("-"));
+			UE_LOG(LogRoadMaker, Warning, TEXT("Map: \"Show Stamps on Map\" row not found (text %s, button %s)"),
+				StampsText ? TEXT("found") : TEXT("missing"), StampsButton ? TEXT("found") : TEXT("missing"));
 		}
 		return;
+	}
+	UCanvasPanelSlot* From = Cast<UCanvasPanelSlot>(StampsRow->Slot);
+	if (!From)
+	{
+		return;
+	}
+	// The widget beside the text in the button (the tick).
+	UWidget* Tick = nullptr;
+	if (UPanelWidget* TextBox = StampsText->GetParent())
+	{
+		for (UWidget* Child : TextBox->GetAllChildren())
+		{
+			if (Child != StampsText)
+			{
+				Tick = Child;
+				break;
+			}
+		}
 	}
 	APlayerController* PC = StampsText->GetOwningPlayer();
 	Row = PC ? CreateWidget<URMMapRoadsRow>(PC, URMMapRoadsRow::StaticClass()) : CreateWidget<URMMapRoadsRow>(World, URMMapRoadsRow::StaticClass());
@@ -172,83 +143,135 @@ void RMMapRoads::EnsureRow(UWorld* World)
 	{
 		return;
 	}
-	const int32 Index = List->GetChildIndex(StampsRow);
-	UPanelSlot* NewSlot = List->InsertChildAt(Index + 1, Row);
-	// Same spacing as the game's row.
-	if (UVerticalBoxSlot* To = Cast<UVerticalBoxSlot>(NewSlot))
+	UCanvasPanelSlot* To = Canvas->AddChildToCanvas(Row);
+	// Same place and size as the game's row, one row higher (the bottom of the menu list is above it).
+	FAnchorData Layout = From->GetLayout();
+	const bool bStretchY = !FMath::IsNearlyEqual(Layout.Anchors.Minimum.Y, Layout.Anchors.Maximum.Y);
+	const float Height = From->GetAutoSize() || bStretchY ? StampsRow->GetDesiredSize().Y : Layout.Offsets.Bottom;
+	if (bStretchY)
 	{
-		if (UVerticalBoxSlot* From = Cast<UVerticalBoxSlot>(StampsRow->Slot))
-		{
-			To->SetPadding(From->GetPadding());
-			To->SetHorizontalAlignment(From->GetHorizontalAlignment());
-			To->SetVerticalAlignment(From->GetVerticalAlignment());
-			To->SetSize(From->GetSize());
-		}
+		Layout.Offsets.Top -= Height;
+		Layout.Offsets.Bottom += Height;
 	}
-	Row->CopyLook(StampsText, StampsCheck);
+	else
+	{
+		Layout.Offsets.Top -= Height;
+	}
+	To->SetLayout(Layout);
+	To->SetAutoSize(From->GetAutoSize());
+	To->SetZOrder(From->GetZOrder() + 1);
+	Row->CopyLook(StampsButton, StampsText, Tick);
 	GMapRoadsRow = Row;
-	UE_LOG(LogRoadMaker, Display, TEXT("Map: \"Show Roads on Map\" row added to %s (%s) at %d"), *List->GetName(), *List->GetClass()->GetName(), Index + 1);
+	UE_LOG(LogRoadMaker, Display, TEXT("Map: \"Show Roads on Map\" row added above %s in %s (height %.0f, tick %s)"),
+		*StampsRow->GetName(), *Canvas->GetName(), Height, Tick ? *Tick->GetClass()->GetName() : TEXT("none"));
 }
 
 TSharedRef<SWidget> URMMapRoadsRow::RebuildWidget()
 {
 	if (WidgetTree && !WidgetTree->RootWidget)
 	{
+		mButton = WidgetTree->ConstructWidget<UButton>();
+		WidgetTree->RootWidget = mButton;
+		mButton->OnClicked.AddDynamic(this, &URMMapRoadsRow::OnClicked);
 		UHorizontalBox* Box = WidgetTree->ConstructWidget<UHorizontalBox>();
-		WidgetTree->RootWidget = Box;
+		if (UButtonSlot* BoxSlot = Cast<UButtonSlot>(mButton->AddChild(Box)))
+		{
+			BoxSlot->SetHorizontalAlignment(HAlign_Fill);
+			BoxSlot->SetVerticalAlignment(VAlign_Fill);
+		}
 		mText = WidgetTree->ConstructWidget<UTextBlock>();
 		mText->SetText(NSLOCTEXT("RoadMaker", "MapShowRoads", "Show Roads on Map"));
 		UHorizontalBoxSlot* TextSlot = Box->AddChildToHorizontalBox(mText);
 		TextSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		TextSlot->SetVerticalAlignment(VAlign_Center);
-		mCheck = WidgetTree->ConstructWidget<UCheckBox>();
-		mCheck->SetIsChecked(RMMapRoads::IsShown());
-		mCheck->OnCheckStateChanged.AddDynamic(this, &URMMapRoadsRow::OnCheckChanged);
-		UHorizontalBoxSlot* CheckSlot = Box->AddChildToHorizontalBox(mCheck);
-		CheckSlot->SetVerticalAlignment(VAlign_Center);
 	}
 	return Super::RebuildWidget();
 }
 
-void URMMapRoadsRow::CopyLook(UTextBlock* Text, UCheckBox* Check)
+void URMMapRoadsRow::CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick)
 {
-	TakeWidget(); // builds mText / mCheck
+	TakeWidget(); // builds the button and text
+	UHorizontalBox* Box = mText ? Cast<UHorizontalBox>(mText->GetParent()) : nullptr;
+	if (mButton && Button)
+	{
+		mButton->SetStyle(Button->GetStyle());
+		mButton->SetColorAndOpacity(Button->GetColorAndOpacity());
+		mButton->SetBackgroundColor(Button->GetBackgroundColor());
+		if (UButtonSlot* ToSlot = Box ? Cast<UButtonSlot>(Box->Slot) : nullptr)
+		{
+			if (UButtonSlot* FromSlot = Text && Text->GetParent() ? Cast<UButtonSlot>(Text->GetParent()->Slot) : nullptr)
+			{
+				ToSlot->SetPadding(FromSlot->GetPadding());
+				ToSlot->SetHorizontalAlignment(FromSlot->GetHorizontalAlignment());
+				ToSlot->SetVerticalAlignment(FromSlot->GetVerticalAlignment());
+			}
+		}
+	}
 	if (mText && Text)
 	{
 		mText->SetFont(Text->GetFont());
 		mText->SetColorAndOpacity(Text->GetColorAndOpacity());
 		mText->SetShadowOffset(Text->GetShadowOffset());
 		mText->SetShadowColorAndOpacity(Text->GetShadowColorAndOpacity());
-		if (UHorizontalBoxSlot* TextSlot = Cast<UHorizontalBoxSlot>(mText->Slot))
+		if (UHorizontalBoxSlot* ToSlot = Cast<UHorizontalBoxSlot>(mText->Slot))
 		{
-			// The game's text sits in its row with some padding: the same here (when it is in a slot that has it).
-			if (UHorizontalBoxSlot* From = Cast<UHorizontalBoxSlot>(Text->Slot))
+			if (UHorizontalBoxSlot* FromSlot = Cast<UHorizontalBoxSlot>(Text->Slot))
 			{
-				TextSlot->SetPadding(From->GetPadding());
+				ToSlot->SetPadding(FromSlot->GetPadding());
+				ToSlot->SetSize(FromSlot->GetSize());
+				ToSlot->SetHorizontalAlignment(FromSlot->GetHorizontalAlignment());
+				ToSlot->SetVerticalAlignment(FromSlot->GetVerticalAlignment());
 			}
 		}
 	}
-	if (mCheck && !Check)
+	if (Box && WidgetTree)
 	{
-		// No game check box to copy: a plain box drawn as a white square with a tick.
-		FCheckBoxStyle Style = mCheck->GetWidgetStyle();
-		mCheck->SetWidgetStyle(Style);
-	}
-	if (mCheck && Check)
-	{
-		mCheck->SetWidgetStyle(Check->GetWidgetStyle());
-		if (UHorizontalBoxSlot* CheckSlot = Cast<UHorizontalBoxSlot>(mCheck->Slot))
+		UWidget* Added = nullptr;
+		if (UImage* GameTick = Cast<UImage>(Tick))
 		{
-			if (UHorizontalBoxSlot* From = Cast<UHorizontalBoxSlot>(Check->Slot))
-			{
-				CheckSlot->SetPadding(From->GetPadding());
-			}
+			// The game's tick picture: full when on, faint when off.
+			mTick = WidgetTree->ConstructWidget<UImage>();
+			mTick->SetBrush(GameTick->GetBrush());
+			mTick->SetColorAndOpacity(GameTick->GetColorAndOpacity());
+			Added = mTick;
 		}
+		else
+		{
+			mCheck = WidgetTree->ConstructWidget<UCheckBox>();
+			mCheck->OnCheckStateChanged.AddDynamic(this, &URMMapRoadsRow::OnCheckChanged);
+			Added = mCheck;
+		}
+		UHorizontalBoxSlot* TickSlot = Box->AddChildToHorizontalBox(Added);
+		TickSlot->SetVerticalAlignment(VAlign_Center);
+		if (UHorizontalBoxSlot* FromSlot = Tick ? Cast<UHorizontalBoxSlot>(Tick->Slot) : nullptr)
+		{
+			TickSlot->SetPadding(FromSlot->GetPadding());
+			TickSlot->SetSize(FromSlot->GetSize());
+			TickSlot->SetHorizontalAlignment(FromSlot->GetHorizontalAlignment());
+			TickSlot->SetVerticalAlignment(FromSlot->GetVerticalAlignment());
+		}
+	}
+	Refresh();
+}
+
+void URMMapRoadsRow::Refresh()
+{
+	const bool bShown = RMMapRoads::IsShown();
+	if (mTick)
+	{
+		mTick->SetRenderOpacity(bShown ? 1.f : 0.2f);
 	}
 	if (mCheck)
 	{
-		mCheck->SetIsChecked(RMMapRoads::IsShown());
+		mCheck->SetIsChecked(bShown);
 	}
+}
+
+void URMMapRoadsRow::OnClicked()
+{
+	RMMapRoads::SetShown(!RMMapRoads::IsShown());
+	UE_LOG(LogRoadMaker, Display, TEXT("Map: roads %s"), RMMapRoads::IsShown() ? TEXT("shown") : TEXT("hidden"));
+	Refresh();
 }
 
 void URMMapRoadsRow::OnCheckChanged(bool bIsChecked)
