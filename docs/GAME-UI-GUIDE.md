@@ -1,7 +1,7 @@
 # Adding to the game's own UI: what worked (Satisfactory 1.x, SML 3.12)
 
 Everything Road Maker does to put its own entries into the game's menus (customizer, build menu,
-item lists) and its own feedback into the game view (outlines, hints, hologram overlays), with
+item lists) and its own feedback into the game view (outlines, hints, hologram overlays, the key hint bar, the map), with
 the problems we hit and how they were fixed. Written so a future developer or AI can reuse it
 without repeating the trial and error.
 
@@ -242,7 +242,125 @@ Mistakes made on the way:
 
 ---
 
-## 6. Build pitfalls
+## 6. Our key in the build gun's key hint bar (bottom of the screen)
+
+Goal: the road limits key ("Toggle Limits [Left Alt]") in the bar at the bottom while a road is
+held, next to Build / Rotate Hologram / Snap Mode, and rebindable in Options > Controls.
+*Tested 2026-11-13.* Code: `Private/RMRoadLimits.cpp`, `Private/Holograms/RMRoadHologram.cpp`.
+
+### A real, rebindable key binding
+| Piece | What | Where |
+|---|---|---|
+| Input action | `IA_RM_ToggleLimits` (`UInputAction`, bool, not consuming input), Player Mappable Key Settings: Name `RoadMaker_ToggleLimits`, Display Name "Toggle Road Limits" | `create_assets.py` ("Input"): `DataAssetFactory` with `data_asset_class` = the class, `unreal.new_object(unreal.PlayerMappableKeySettings, outer=action)` |
+| Mapping context | `MC_RM_RoadTools` (`UFGInputMappingContext`, `mDisplayName` "Road Maker"), `map_key(action, LeftAlt)` | same |
+| Bound while a road is held | `AFGPlayerController::SetMappingContextBoundWithHandle(Handle, Context, bBind, 10)`, counted (switching road widths makes the new hologram before the old one goes) | `RMRoadLimits::BindRoadInput` |
+| Reading the key | the key the action is mapped to right now: `UEnhancedInputLocalPlayerSubsystem` > `GetPlayerInput()` > `GetEnhancedActionMappings()`, entries whose `Action` is ours; polled with `IsInputKeyDown` (lets us ignore Alt+Tab / Alt+Enter) | `LimitsKeys` |
+
+Result: the "Road Maker" section shows up in Options > Controls by itself and rebinding works.
+**But the hint bar did not show the key** with this alone.
+
+### The hint bar is filled by the build mode widget, not by the bindings
+Tries that did **not** put our key in the bar:
+1. The mapping context bound (above).
+2. The road hologram listening to the action on its own input component (`EnableInput` +
+   `UEnhancedInputComponent::BindAction`, empty handler). `UFGButtonHintBar` in its "Enhanced Input"
+   mode is not what the build gun uses.
+
+What InfiniteNudge does (github.com/mklierman/SatisfactoryMods, `InfiniteNudge`): a Blueprint hook on
+`Widget_BuildMode` > `SetKeybindingHints` that edits an existing hint's text. We cannot make hook
+assets from our script, so we do the same from C++ every frame. Logged layout (*tested 2026-11-13*):
+
+| Thing | Value |
+|---|---|
+| Hint widget | `Widget_Hint_C`, made **at run time** (not in the build mode widget's designed tree, so `WidgetTree->ForEachWidget` from `Widget_BuildMode_C` does not find it) |
+| Its panel | parent named `mHintContainer` |
+| Texts in a hint | `mHintDescription` ("Rotate") and `mHintKey` ("R"; for unbound actions `UNKNOWN_KEY(<action>)`) |
+| Stale copies | many old `Widget_Hint_C` with no parent / hidden: skip them |
+
+Our hint (`RMRoadLimits::UpdateHintBar`, called every frame from the road hologram's `Tick`):
+- find a **visible** `Widget_Hint_C` whose parent is named `mHintContainer` (`TObjectIterator<UUserWidget>`);
+  `CreateWidget` of the same class, `AddChild` to that panel (it lands after "Hide HUD");
+- set `mHintDescription` = "Toggle Limits", `mHintKey` = `UFGInputLibrary::GetAbbreviatedKeyName(key)`
+  every frame; description orange (sRGB 250 149 73) while the key is held, like the game's hints;
+- the game clears and refills the panel (mode change...): if our hint is no longer in it, add it again;
+- removed in the hologram's `EndPlay`.
+
+### The build mode's name carries the state
+"Zoop (Limits: ON)": `mDisplayName` of the build mode descriptor's CDO changed by reflection
+(`FindFProperty<FTextProperty>(UFGBuildGunModeDescriptor::StaticClass(), "mDisplayName")`), the original
+name kept per class. Only our own descriptors (path under `/RoadMaker/`): the game's
+`BuildMode_Default` is shared by every building, so roads got their own Default / Straight descriptors
+(`mDefaultBuildMode` set to ours before `Super::BeginPlay`). The label refreshes with
+`AFGBuildGun::mOnBuildGunModeChanged.Broadcast(GetCurrentBuildGunMode())`.
+
+Dropped on the way: an on-screen hint box of our own (bottom centre) covered the game's HUD.
+
+---
+
+## 7. The map: road layer and a row in the side menu
+
+Code: `Private/Map/RMMapLayer.cpp` (layer), `Private/Map/RMMapRoadsRow.cpp` (row).
+*Tested 2026-11-12 / 13.*
+
+### The road layer
+- The map widget nests the picture in `Overlay_0` (1024 x 1024 "map units") inside
+  `mMapScrollContainer` (render translation = pan) inside `mMapZoomContainer` (render scale = zoom).
+  `Overlay_0` holds `mMap`, `BPW_MapAreaPainter` (fog / areas) and `mMapObjectPanel` (icons).
+- We find the area painter (class name contains `MapAreaPainter`), take its parent's **live slate**
+  `SOverlay` (`GetCachedWidget()`) and add our own `SCanvas` in a slot with the painter's ZOrder, so the
+  game pans and zooms it and the icons stay on top. World to map: `UFGMapFunctionLibrary::GetNormalizedPosition(capture actor, location) * 1024`.
+- 512 m tiles (512 px, painted at 2x and averaged, with mips), only while the map is open, dirty
+  tiles only, time budgets per frame. Details in the code header and `ROADMAP-1.3.0.md`.
+
+### "Show Roads on Map" in the side menu
+Logged layout of the game's "Show Stamps on Map" row (*tested 2026-11-13*):
+
+```
+BPW_MapMenu_C
+  CanvasPanel_0 (6 children)
+    Widget_Scrollbox_C        <- the list (Truck Stations ... Drones)
+    Overlay_2                 <- the stamps row, placed by its canvas slot
+      ScaleBox_0
+      mShowStampsButton (UButton)
+        HorizontalBox_0
+          TextBlock ("Show Stamps on Map")
+          BPW_OptionsCheckbox_C   <- the tick (a Blueprint widget, not a UCheckBox)
+```
+
+How our row is made (`RMMapRoads::EnsureRow`, from the map layer's tick, at most once a second):
+- find the stamps text by `GetText().BuildSourceString()` == "Show Stamps on Map" (the English
+  source works in every game language), walk up to the `UButton`, then to the widget whose parent is
+  a `UCanvasPanel` (= `Overlay_2`);
+- our row (`URMMapRoadsRow`, a C++ `UUserWidget`: overlay > button > horizontal box [text, tick]) is added
+  to that canvas with the stamps row's slot layout **one row higher** (height = the row's desired size,
+  40);
+- whatever in the canvas reaches down to the stamps row (the `Widget_Scrollbox_C` list) is made one
+  row shorter (stretched slot: `Offsets.Bottom += height`), so nothing overlaps;
+- look: the stamps button's `FButtonStyle`, the text's font (+1 pt), colour and slot padding, a
+  2 px grey line on top (sRGB 102 102 103, measured from a screenshot), and a `CreateWidget` copy of
+  `BPW_OptionsCheckbox_C` (`HitTestInvisible`, clicks go to our button). Its state is set through its
+  Blueprint function **`SetChecked_NoNotify(bool)`** with `ProcessEvent` (found by logging its
+  functions; it also has `mIsChecked`);
+- state per player, remembered (`GameUserSettings.ini`, `[RoadMaker] bMapShowRoads`, on by default);
+  off = our canvas `Collapsed` and nothing painted.
+
+Mistakes made on the way:
+1. Required a `UCheckBox` around the text: there is none (the tick is the Blueprint widget), so the
+   row was never found.
+2. Fallback "nearest vertical box up the chain" climbed out of the menu to the window's
+   `mMainContainer`: the whole map got shorter. Walk up only to the first canvas.
+3. Placed one row above without shortening the list: the list's bottom entries showed through.
+4. A `UImage` with no brush size is drawn 32 px tall (the default): the "2 px line" covered the row.
+   Give the brush an explicit `ImageSize`.
+5. A clicked `UButton` keeps focus and stays highlighted. `InitIsFocusable` is protected: set the
+   `IsFocusable` property by reflection before the button is built.
+
+The game's own map filters (eye buttons) did not work in our tests (1.2, 2026-11); no report found on
+questions.satisfactorygame.com for 1.2 (older compass filter reports from 1.0 exist).
+
+---
+
+## 8. Build pitfalls
 
 - **Unity builds** merge `.cpp` files: helpers in anonymous namespaces must have file-specific names
   (`FenceWallTrace`, not `Trace`), or the build fails with "already has a body".
@@ -252,3 +370,8 @@ Mistakes made on the way:
   `ParmsSize` (log it first), `ProcessEvent`.
 - Protected C++ members: a struct deriving from the game class with static accessors. UPROPERTY
   members: `FindFProperty` reflection.
+- `UUserWidget::Invalidate` and `UButton::InitIsFocusable` are protected (compile error C2248): use
+  `InvalidateLayoutAndVolatility()` and reflection.
+- Logging a widget layout once (names, classes, parents, texts) and reading `FactoryGame.log` beats
+  guessing: every UI fix in sections 6 and 7 came from one such log.
+
