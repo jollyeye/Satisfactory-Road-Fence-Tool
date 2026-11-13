@@ -26,7 +26,22 @@ public:
 	virtual void SetHologramNudgeLocation() override;
 	virtual void OnHologramLockStateChanged() override;
 
+	virtual void GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const override;
+	/** Long Curve mode: the build gun reaches 1 km, to place the end of a big curve far away. */
+	virtual float GetBuildGunRangeOverride_Implementation() const override;
+
 protected:
+	/**
+	 * "Long Curve" build mode: the default curve with no length limit and no turn or grade limits,
+	 * only refused when the road would fold over itself (a bend tighter than half its width). For big
+	 * sweeping curves; paths are added after with Cut Road (pieces of normal length).
+	 */
+	bool IsLongMode() const;
+
+	/** Build mode asset (a UFGHologramBuildModeDescriptor Blueprint) for Long Curve. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeLong;
+
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
 	virtual float GetSurfaceOffset() const override;
 	virtual int32 GetCostWidthFactor() const override;

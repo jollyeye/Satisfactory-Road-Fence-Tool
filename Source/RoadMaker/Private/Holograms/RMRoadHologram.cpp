@@ -1,6 +1,7 @@
 #include "Holograms/RMRoadHologram.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Holograms/RMHologramLook.h"
+#include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "RMRoadUtils.h"
@@ -369,6 +370,25 @@ void ARMRoadHologram::UpdateHologramLook()
 	RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
 }
 
+void ARMRoadHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& out_buildmodes) const
+{
+	Super::GetSupportedBuildModes_Implementation(out_buildmodes);
+	if (mBuildModeLong)
+	{
+		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeLong.Get()));
+	}
+}
+
+bool ARMRoadHologram::IsLongMode() const
+{
+	return mBuildModeLong && IsCurrentBuildMode(mBuildModeLong);
+}
+
+float ARMRoadHologram::GetBuildGunRangeOverride_Implementation() const
+{
+	return IsLongMode() ? 100000.f : Super::GetBuildGunRangeOverride_Implementation();
+}
+
 void ARMRoadHologram::CheckValidPlacement()
 {
 	// No Super call on purpose: the vanilla floor check ("Surface is too uneven") is meant for
@@ -401,6 +421,16 @@ void ARMRoadHologram::CheckValidPlacement()
 	if (Stats.Length < Road->mMinLength)
 	{
 		AddConstructDisqualifier(URMCD_TooShort::StaticClass());
+	}
+	if (IsLongMode())
+	{
+		// Any length, turn or slope: only a bend tighter than half the width (the inner edge folding
+		// over itself) is refused.
+		if (Stats.MinTurnRadius < Road->GetRoadWidth() * 0.5f * 1.02f)
+		{
+			AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());
+		}
+		return;
 	}
 	if (Stats.Length > Road->mMaxLength)
 	{

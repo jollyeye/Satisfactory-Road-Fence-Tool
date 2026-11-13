@@ -231,9 +231,15 @@ setp(cdo(bm_smooth), text("Smooth (quadratic Bezier)"), "m_display_name", "mDisp
 setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
 finish(bm_smooth)
 
+bm_long = make_bp("Holograms", "BM_LongCurve", BuildModeDescriptor)
+setp(cdo(bm_long), text("Long Curve"), "m_display_name", "mDisplayName")
+setp(cdo(bm_long), text("For big sweeping curves: any length, the build gun reaches 1 km, and no turn or slope limits, only refused if the road would fold over itself. To add paths on it, cut it into normal lengths with Cut Road."), "m_description", "mDescription")
+finish(bm_long)
+
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
 setp(cdo(holo_road), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
 setp(cdo(holo_road), bm_smooth.generated_class(), "m_build_mode_smooth", "mBuildModeSmooth")
+setp(cdo(holo_road), bm_long.generated_class(), "m_build_mode_long", "mBuildModeLong")
 finish(holo_road)
 
 holo_fence = make_bp("Holograms", "Holo_Fence", RMFenceHologram)
