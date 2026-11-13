@@ -47,7 +47,7 @@ public:
 	virtual void UpdateHologramLook();
 	/** Length of the preview shown before the first click (cm). */
 	virtual float GetStubLength() const { return RM::FoundationSize * 0.5f; }
-	/** Longest piece allowed right now (cm), 0 = no limit: Straight (keep angle) stops exactly there. */
+	/** Longest piece allowed right now (cm), 0 = no limit: Zoop stops exactly there. */
 	virtual float GetMaxPlaceLength() const { return 0.f; }
 
 protected:
@@ -82,7 +82,7 @@ protected:
 	bool IsStraightMode() const;
 
 	/**
-	 * "Straight (keep angle)" build mode: the road goes straight on out of its start, in the start's
+	 * "Zoop" build mode: the road goes straight on out of its start, in the start's
 	 * direction and at its slope (level from a foundation or a free start, the road's own slope from
 	 * a road end); the aim only sets the length. End snaps are ignored.
 	 */
@@ -128,7 +128,7 @@ protected:
 	bool mStartSnapped = false;
 
 	FVector mEnd = FVector::ZeroVector;
-	/** The aim ray of the last update (Straight (keep angle): the length follows the aim along a slope). */
+	/** The aim ray of the last update (Zoop: the length follows the aim along a slope). */
 	FVector mAimOrigin = FVector::ZeroVector;
 	FVector mAimDir = FVector::ZeroVector;
 	FVector mEndDir = FVector::ForwardVector;

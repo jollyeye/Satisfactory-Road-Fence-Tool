@@ -3,12 +3,9 @@
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
 #include "Misc/ConfigCacheIni.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
-#include "Components/Spacer.h"
+#include "FGBuildGunModeDescriptor.h"
+#include "Equipment/FGBuildGun.h"
+#include "FGCharacterPlayer.h"
 #include "HAL/PlatformTime.h"
 
 namespace
@@ -23,7 +20,8 @@ namespace
 	double GAltDownTime = -1.0;
 	bool GAltWithOtherKey = false;
 
-	TWeakObjectPtr<URMRoadLimitsHint> GLimitsHint;
+	/** The build modes' own names (before the state was added). */
+	TMap<FName, FText> GModeNames;
 
 	void LoadLimits()
 	{
@@ -90,113 +88,34 @@ bool RMRoadLimits::HandleInput(APlayerController* PC)
 	GLimitsOff = !GLimitsOff;
 	SaveLimits();
 	UE_LOG(LogRoadMaker, Display, TEXT("Road limits %s"), GLimitsOff ? TEXT("off") : TEXT("on"));
-	if (URMRoadLimitsHint* Hint = GLimitsHint.Get())
-	{
-		Hint->Refresh(true);
-	}
 	return true;
 }
 
-void RMRoadLimits::ShowHint(APlayerController* PC)
+void RMRoadLimits::LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC)
 {
-	if (!PC || !PC->IsLocalController())
+	static FTextProperty* NameProperty = FindFProperty<FTextProperty>(UFGBuildGunModeDescriptor::StaticClass(), TEXT("mDisplayName"));
+	if (!NameProperty)
 	{
 		return;
 	}
-	URMRoadLimitsHint* Hint = GLimitsHint.Get();
-	if (!Hint)
+	const FText State = AreOff() ? NSLOCTEXT("RoadMaker", "LimitsOff", "Limits: OFF") : NSLOCTEXT("RoadMaker", "LimitsOn", "Limits: ON");
+	for (const TSubclassOf<UFGBuildGunModeDescriptor>& Mode : Modes)
 	{
-		Hint = CreateWidget<URMRoadLimitsHint>(PC, URMRoadLimitsHint::StaticClass());
-		if (!Hint)
+		// Only Road Maker's own modes (the game's are shared by every building).
+		UFGBuildGunModeDescriptor* Cdo = Mode && Mode->GetPathName().StartsWith(TEXT("/RoadMaker/")) ? Mode->GetDefaultObject<UFGBuildGunModeDescriptor>() : nullptr;
+		if (!Cdo)
 		{
-			return;
+			continue;
 		}
-		Hint->SetVisibility(ESlateVisibility::HitTestInvisible);
-		Hint->AddToViewport(500);
-		GLimitsHint = Hint;
+		const FName Key = Mode->GetFName();
+		const FText* Known = GModeNames.Find(Key);
+		const FText Base = Known ? *Known : GModeNames.Add(Key, Cdo->GetDisplayNameInternal());
+		NameProperty->SetPropertyValue_InContainer(Cdo, FText::Format(NSLOCTEXT("RoadMaker", "ModeWithLimits", "{0} ({1})"), Base, State));
 	}
-	Hint->Refresh(false);
-}
-
-void RMRoadLimits::HideHint()
-{
-	if (URMRoadLimitsHint* Hint = GLimitsHint.Get())
+	// The build gun's mode label updates when the mode changes: announce the current one again.
+	AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
+	if (AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr)
 	{
-		Hint->RemoveFromParent();
-	}
-	GLimitsHint.Reset();
-	GAltDownTime = -1.0;
-}
-
-TSharedRef<SWidget> URMRoadLimitsHint::RebuildWidget()
-{
-	if (WidgetTree && !WidgetTree->RootWidget)
-	{
-		// Bottom centre, under the crosshair area, like the game's own build hints.
-		UVerticalBox* Screen = WidgetTree->ConstructWidget<UVerticalBox>();
-		WidgetTree->RootWidget = Screen;
-		UVerticalBoxSlot* Fill = Screen->AddChildToVerticalBox(WidgetTree->ConstructWidget<USpacer>());
-		Fill->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-
-		mNotice = WidgetTree->ConstructWidget<UTextBlock>();
-		FSlateFontInfo NoticeFont = mNotice->GetFont();
-		NoticeFont.Size = 22;
-		mNotice->SetFont(NoticeFont);
-		mNotice->SetShadowOffset(FVector2D(1.f, 1.f));
-		mNotice->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.8f));
-		UVerticalBoxSlot* NoticeSlot = Screen->AddChildToVerticalBox(mNotice);
-		NoticeSlot->SetHorizontalAlignment(HAlign_Center);
-		NoticeSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-
-		UBorder* Box = WidgetTree->ConstructWidget<UBorder>();
-		Box->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.025f, 0.75f));
-		Box->SetPadding(FMargin(12.f, 6.f));
-		UVerticalBoxSlot* BoxSlot = Screen->AddChildToVerticalBox(Box);
-		BoxSlot->SetHorizontalAlignment(HAlign_Center);
-		BoxSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 140.f));
-
-		mText = WidgetTree->ConstructWidget<UTextBlock>();
-		FSlateFontInfo Font = mText->GetFont();
-		Font.Size = 16;
-		mText->SetFont(Font);
-		Box->SetContent(mText);
-		Refresh(false);
-	}
-	return Super::RebuildWidget();
-}
-
-void URMRoadLimitsHint::Refresh(bool bNotice)
-{
-	const bool bOff = RMRoadLimits::AreOff();
-	const FLinearColor Orange(1.f, 0.55f, 0.12f);
-	if (mText)
-	{
-		mText->SetText(bOff
-			? NSLOCTEXT("RoadMaker", "LimitsHintOff", "[Alt]  Road limits: OFF  (up to 1 km, any turn or slope)")
-			: NSLOCTEXT("RoadMaker", "LimitsHintOn", "[Alt]  Road limits: on"));
-		mText->SetColorAndOpacity(FSlateColor(bOff ? Orange : FLinearColor::White));
-	}
-	if (bNotice)
-	{
-		mNoticeLeft = 2.f;
-	}
-	if (mNotice)
-	{
-		mNotice->SetText(bOff ? NSLOCTEXT("RoadMaker", "LimitsNoticeOff", "Road limits OFF") : NSLOCTEXT("RoadMaker", "LimitsNoticeOn", "Road limits ON"));
-		mNotice->SetColorAndOpacity(FSlateColor(bOff ? Orange : FLinearColor::White));
-		mNotice->SetVisibility(mNoticeLeft > 0.f ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
-	}
-}
-
-void URMRoadLimitsHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	if (mNoticeLeft > 0.f)
-	{
-		mNoticeLeft -= InDeltaTime;
-		if (mNoticeLeft <= 0.f && mNotice)
-		{
-			mNotice->SetVisibility(ESlateVisibility::Hidden);
-		}
+		Gun->mOnBuildGunModeChanged.Broadcast(Gun->GetCurrentBuildGunMode());
 	}
 }

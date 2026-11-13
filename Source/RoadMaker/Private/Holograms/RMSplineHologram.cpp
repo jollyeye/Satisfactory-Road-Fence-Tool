@@ -81,7 +81,7 @@ namespace
 
 bool ARMSplineHologram::IsValidHitResult(const FHitResult& hitResult) const
 {
-	// Straight (keep angle), placing the end: the end follows the aim along the road's own line, so
+	// Zoop, placing the end: the end follows the aim along the road's own line, so
 	// any aim counts, even at the sky (the game would hide the hologram), like moving along a road
 	// with the cut tool.
 	if (mStep == 1 && IsKeepAngleMode() && !(hitResult.TraceEnd - hitResult.TraceStart).IsNearlyZero())
@@ -114,7 +114,7 @@ void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 	mAimDir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
 	if (mStep == 1 && IsKeepAngleMode())
 	{
-		// Straight (keep angle): end snaps are ignored; the length comes from the aim (UpdateCurve).
+		// Zoop: end snaps are ignored; the length comes from the aim (UpdateCurve).
 		mEndSnapped = false;
 		mEnd = hitResult.bBlockingHit ? hitResult.Location : hitResult.TraceEnd;
 		UpdateCurve();
@@ -184,12 +184,13 @@ void ARMSplineHologram::UpdateCurve()
 			}
 		}
 		Along = FMath::Max(100.f, Along);
-		// Not past the longest road allowed, and stopping exactly on it within 50 cm (to get the most).
+		// Stops exactly on the longest road allowed within 50 cm of it (to get the most); further out it
+		// goes on past it and turns red, so it is clear the limit was crossed.
 		const float MaxLength = GetMaxPlaceLength();
 		if (MaxLength > 0.f)
 		{
 			const float MaxAlong = MaxLength / FMath::Sqrt(1.f + Slope * Slope);
-			if (Along > MaxAlong - 50.f)
+			if (FMath::Abs(Along - MaxAlong) < 50.f)
 			{
 				Along = MaxAlong - 1.f; // a hair under, so rounding never makes it "too long"
 			}

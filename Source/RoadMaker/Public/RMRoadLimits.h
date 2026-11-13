@@ -1,15 +1,12 @@
 // Road limits toggle (Alt while holding a road): in any road build mode, off = no turn or slope
-// limits, up to 1 km long, the build gun reaching 1 km (what the Long Curve build mode used to be).
-// The choice is per player, remembered between sessions (GameUserSettings.ini). While a road
-// hologram is held a hint shows the key and the state; toggling shows a short notice.
+// limits, up to 1 km long, the build gun reaching 1 km. The choice is per player, remembered between
+// sessions (GameUserSettings.ini). The state shows after the build mode's name: "Zoop (Limits: ON)".
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
-#include "RMRoadLimits.generated.h"
 
 class APlayerController;
-class UTextBlock;
+class UFGBuildGunModeDescriptor;
 
 namespace RMRoadLimits
 {
@@ -22,30 +19,9 @@ namespace RMRoadLimits
 	 */
 	ROADMAKER_API bool HandleInput(APlayerController* PC);
 
-	/** The "[Alt] Road limits" hint, while a road hologram is held. */
-	ROADMAKER_API void ShowHint(APlayerController* PC);
-	ROADMAKER_API void HideHint();
+	/**
+	 * Writes the state after the names of these build modes ("Default (Limits: ON)") and makes the
+	 * build gun show the new name. Only for Road Maker's own road modes (they are not shared).
+	 */
+	ROADMAKER_API void LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC);
 }
-
-/** Bottom-centre hint: "[Alt]  Road limits: on / off", and a short notice after toggling. */
-UCLASS()
-class ROADMAKER_API URMRoadLimitsHint : public UUserWidget
-{
-	GENERATED_BODY()
-
-public:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-
-	/** Updates the text to the current state; bNotice shows the bigger notice line for a moment. */
-	void Refresh(bool bNotice);
-
-protected:
-	UPROPERTY(Transient)
-	UTextBlock* mText = nullptr;
-
-	UPROPERTY(Transient)
-	UTextBlock* mNotice = nullptr;
-
-	float mNoticeLeft = 0.f;
-};

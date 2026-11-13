@@ -405,22 +405,30 @@ APlayerController* ARMRoadHologram::GetLocalHolder() const
 
 void ARMRoadHologram::BeginPlay()
 {
+	// Our own Default mode (its name carries the limits state; the game's is shared by all buildings).
+	if (mBuildModeRoadDefault)
+	{
+		mDefaultBuildMode = mBuildModeRoadDefault;
+	}
 	Super::BeginPlay();
 	if (APlayerController* PC = GetLocalHolder())
 	{
 		mNoLimits = RMRoadLimits::AreOff();
-		RMRoadLimits::ShowHint(PC);
+		LabelBuildModes(PC);
 		SetActorTickEnabled(true);
 	}
 }
 
 void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (GetLocalHolder())
-	{
-		RMRoadLimits::HideHint();
-	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void ARMRoadHologram::LabelBuildModes(APlayerController* PC)
+{
+	TArray<TSubclassOf<UFGBuildGunModeDescriptor>> Modes;
+	GetSupportedBuildModes_Implementation(Modes);
+	RMRoadLimits::LabelModes(Modes, PC);
 }
 
 void ARMRoadHologram::Tick(float DeltaSeconds)
@@ -431,9 +439,11 @@ void ARMRoadHologram::Tick(float DeltaSeconds)
 	{
 		return;
 	}
-	RMRoadLimits::HandleInput(PC);
-	const bool bOff = RMRoadLimits::AreOff();
-	mNoLimits = bOff; // checked by the next placement check (every frame)
+	if (RMRoadLimits::HandleInput(PC))
+	{
+		LabelBuildModes(PC); // "(Limits: ON / OFF)" after the mode's name
+	}
+	mNoLimits = RMRoadLimits::AreOff(); // checked by the next placement check (every frame)
 }
 
 void ARMRoadHologram::CheckValidPlacement()

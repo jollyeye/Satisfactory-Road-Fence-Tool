@@ -227,20 +227,31 @@ bm = make_bp("Holograms", "BM_Straight", BuildModeDescriptor)
 setp(cdo(bm), text("Straight"), "m_display_name", "mDisplayName")
 finish(bm)
 
+# Road-only copies of Default and Straight: their names get "(Limits: ON / OFF)" added in game.
+bm_road_default = make_bp("Holograms", "BM_RoadDefault", BuildModeDescriptor)
+setp(cdo(bm_road_default), text("Default"), "m_display_name", "mDisplayName")
+setp(cdo(bm_road_default), text("Quadratic Bezier curve: the end heads along the line from the start, the mouse wheel turns it."), "m_description", "mDescription")
+finish(bm_road_default)
+
+bm_road_straight = make_bp("Holograms", "BM_RoadStraight", BuildModeDescriptor)
+setp(cdo(bm_road_straight), text("Straight"), "m_display_name", "mDisplayName")
+finish(bm_road_straight)
+
 bm_keep = make_bp("Holograms", "BM_KeepAngle", BuildModeDescriptor)
-setp(cdo(bm_keep), text("Straight (keep angle)"), "m_display_name", "mDisplayName")
-setp(cdo(bm_keep), text("Straight on out of the start, keeping its direction and slope: level from a foundation edge or a free start, the road's own slope from a road end. Aim only sets the length."), "m_description", "mDescription")
+setp(cdo(bm_keep), text("Zoop"), "m_display_name", "mDisplayName")
+setp(cdo(bm_keep), text("Straight on out of the start, keeping its direction and slope: level from a foundation edge or a free start, the road's own slope from a road end. Move the aim along the road to set the length; it stops on the longest road allowed."), "m_description", "mDescription")
 finish(bm_keep)
 
 bm_smooth = make_bp("Holograms", "BM_Smooth", BuildModeDescriptor)
-setp(cdo(bm_smooth), text("Smooth (quadratic Bezier)"), "m_display_name", "mDisplayName")
+setp(cdo(bm_smooth), text("Smooth quadratic Bezier"), "m_display_name", "mDisplayName")
 setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
 finish(bm_smooth)
 
 # Long Curve is no longer a build mode: the road limits toggle (Alt) does it in every mode.
 
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
-setp(cdo(holo_road), bm.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
+setp(cdo(holo_road), bm_road_straight.generated_class(), "m_build_mode_straight", "mBuildModeStraight")
+setp(cdo(holo_road), bm_road_default.generated_class(), "m_build_mode_road_default", "mBuildModeRoadDefault")
 setp(cdo(holo_road), bm_smooth.generated_class(), "m_build_mode_smooth", "mBuildModeSmooth")
 setp(cdo(holo_road), bm_keep.generated_class(), "m_build_mode_keep_angle", "mBuildModeKeepAngle")
 setp(cdo(holo_road), None, "m_build_mode_long", "mBuildModeLong")

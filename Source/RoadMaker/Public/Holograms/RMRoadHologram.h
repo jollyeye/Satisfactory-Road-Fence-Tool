@@ -51,6 +51,13 @@ protected:
 	/** The player holding this hologram, if it is this machine's player. */
 	APlayerController* GetLocalHolder() const;
 
+	/** Shows the limits state after the names of the road's build modes. */
+	void LabelBuildModes(APlayerController* PC);
+
+	/** Road Maker's own "Default" mode for roads (so its name can carry the limits state). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeRoadDefault;
+
 	/** Old Long Curve build mode asset: no longer offered (the limits toggle replaced it). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeLong;
