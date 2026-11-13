@@ -51,6 +51,9 @@ protected:
 	/** The player holding this hologram, if it is this machine's player. */
 	APlayerController* GetLocalHolder() const;
 
+	/** The limits action's handler (empty: it makes the button hint bar show the key). */
+	void OnLimitsAction(const struct FInputActionValue& Value);
+
 	/** Shows the limits state after the names of the road's build modes. */
 	void LabelBuildModes(APlayerController* PC);
 

@@ -142,6 +142,11 @@ bool RMRoadLimits::HandleInput(APlayerController* PC)
 	return true;
 }
 
+UInputAction* RMRoadLimits::GetLimitsAction()
+{
+	return LimitsAction();
+}
+
 void RMRoadLimits::BindRoadInput(APlayerController* PC, bool bBind)
 {
 	AFGPlayerController* FGPC = Cast<AFGPlayerController>(PC);

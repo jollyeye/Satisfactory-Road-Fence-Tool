@@ -1,5 +1,8 @@
 #include "Holograms/RMRoadHologram.h"
 #include "RMRoadLimits.h"
+#include "EnhancedInputComponent.h"
+#include "InputAction.h"
+#include "InputActionValue.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Holograms/RMDisqualifiers.h"
@@ -415,6 +418,17 @@ void ARMRoadHologram::BeginPlay()
 	{
 		mNoLimits = RMRoadLimits::AreOff();
 		RMRoadLimits::BindRoadInput(PC, true);
+		// The limits action bound on this hologram's own input component: the build gun's button hint
+		// bar lists the actions something is listening to, so it shows "Toggle Road Limits [key]".
+		// (The toggle itself is read in Tick, to skip Alt+Tab.)
+		EnableInput(PC);
+		if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent))
+		{
+			if (UInputAction* Action = RMRoadLimits::GetLimitsAction())
+			{
+				Input->BindAction(Action, ETriggerEvent::Triggered, this, &ARMRoadHologram::OnLimitsAction);
+			}
+		}
 		LabelBuildModes(PC);
 		SetActorTickEnabled(true);
 	}
@@ -424,9 +438,15 @@ void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (APlayerController* PC = GetLocalHolder())
 	{
+		DisableInput(PC);
 		RMRoadLimits::BindRoadInput(PC, false);
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void ARMRoadHologram::OnLimitsAction(const FInputActionValue& Value)
+{
+	// Only here so the hint bar shows the key (see BeginPlay).
 }
 
 void ARMRoadHologram::LabelBuildModes(APlayerController* PC)

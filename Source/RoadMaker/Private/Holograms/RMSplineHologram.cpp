@@ -183,13 +183,15 @@ void ARMSplineHologram::UpdateCurve()
 				Along = T * FVector::DotProduct(Line, Flat); // horizontal part of the distance along the line
 			}
 		}
-		Along = FMath::Max(100.f, Along);
+		// Whole metres along the road (slope included).
+		const float SlopeScale = FMath::Sqrt(1.f + Slope * Slope);
+		Along = FMath::Max(100.f, FMath::RoundToFloat(Along * SlopeScale / 100.f) * 100.f) / SlopeScale;
 		// Stops exactly on the longest road allowed within 50 cm of it (to get the most); further out it
 		// goes on past it and turns red, so it is clear the limit was crossed.
 		const float MaxLength = GetMaxPlaceLength();
 		if (MaxLength > 0.f)
 		{
-			const float MaxAlong = MaxLength / FMath::Sqrt(1.f + Slope * Slope);
+			const float MaxAlong = MaxLength / SlopeScale;
 			if (FMath::Abs(Along - MaxAlong) < 50.f)
 			{
 				Along = MaxAlong - 1.f; // a hair under, so rounding never makes it "too long"

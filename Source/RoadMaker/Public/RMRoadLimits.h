@@ -29,5 +29,8 @@ namespace RMRoadLimits
 	 */
 	ROADMAKER_API void BindRoadInput(APlayerController* PC, bool bBind);
 
+	/** The limits input action (IA_RM_ToggleLimits), or null. */
+	ROADMAKER_API class UInputAction* GetLimitsAction();
+
 	ROADMAKER_API void LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC);
 }
