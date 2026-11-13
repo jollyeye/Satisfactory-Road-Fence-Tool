@@ -212,8 +212,8 @@ namespace
 	/** The other text of a hint widget (the key). */
 	UTextBlock* HintKeyText(UUserWidget* Widget)
 	{
-		UTextBlock* Found = nullptr;
-		if (Widget && Widget->WidgetTree)
+		UTextBlock* Found = Widget && Widget->WidgetTree ? Widget->WidgetTree->FindWidget<UTextBlock>(FName(TEXT("mHintKey"))) : nullptr;
+		if (!Found && Widget && Widget->WidgetTree)
 		{
 			Widget->WidgetTree->ForEachWidget([&Found](UWidget* Child)
 			{
@@ -228,83 +228,28 @@ namespace
 	}
 
 	/**
-	 * Diagnostic (once per session, the first time the bar is looked for): the player's widgets on
-	 * screen whose class mentions Build or Hint, with the user widgets and texts inside them.
+	 * The build gun's hint bar: the game's hint widgets (Widget_Hint_C) are made at run time into a
+	 * panel named mHintContainer (inside the build mode widget). One that is showing gives the panel.
 	 */
-	void LogHintWidgets(APlayerController* PC)
-	{
-		static bool bLogged = false;
-		if (bLogged)
-		{
-			return;
-		}
-		bLogged = true;
-		int32 Lines = 0;
-		for (TObjectIterator<UUserWidget> It; It && Lines < 400; ++It)
-		{
-			UUserWidget* Screen = *It;
-			if (!Screen || Screen->HasAnyFlags(RF_ClassDefaultObject) || Screen->GetOwningPlayer() != PC || !Screen->WidgetTree)
-			{
-				continue;
-			}
-			const FString ClassName = Screen->GetClass()->GetName();
-			if (!ClassName.Contains(TEXT("Build")) && !ClassName.Contains(TEXT("Hint")) && !ClassName.Contains(TEXT("Keybind")))
-			{
-				continue;
-			}
-			UE_LOG(LogRoadMaker, Display, TEXT("HintBar: widget %s (%s) parent=%s visible=%d"), *Screen->GetName(), *ClassName,
-				Screen->GetParent() ? *Screen->GetParent()->GetName() : TEXT("-"), Screen->IsVisible() ? 1 : 0);
-			++Lines;
-			Screen->WidgetTree->ForEachWidget([&Lines](UWidget* Child)
-			{
-				if (Lines >= 400 || !Child)
-				{
-					return;
-				}
-				if (UTextBlock* Text = Cast<UTextBlock>(Child))
-				{
-					UE_LOG(LogRoadMaker, Display, TEXT("HintBar:    text %s = \"%s\" (in %s)"), *Text->GetName(), *Text->GetText().ToString(),
-						Text->GetParent() ? *Text->GetParent()->GetName() : TEXT("-"));
-					++Lines;
-				}
-				else if (Cast<UUserWidget>(Child) || Cast<UPanelWidget>(Child))
-				{
-					UE_LOG(LogRoadMaker, Display, TEXT("HintBar:    %s %s (%s) in %s"), Cast<UUserWidget>(Child) ? TEXT("widget") : TEXT("panel"),
-						*Child->GetName(), *Child->GetClass()->GetName(), Child->GetParent() ? *Child->GetParent()->GetName() : TEXT("-"));
-					++Lines;
-				}
-			});
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("HintBar: %d line(s)"), Lines);
-	}
-
-	/** The build mode widget's hint panel and one of the game's hints in it, for this player. */
 	UPanelWidget* FindHintPanel(APlayerController* PC, UUserWidget*& OutSample)
 	{
-		LogHintWidgets(PC);
 		OutSample = nullptr;
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
-			UUserWidget* Screen = *It;
-			if (!Screen || Screen->HasAnyFlags(RF_ClassDefaultObject) || Screen->GetOwningPlayer() != PC
-				|| !Screen->GetClass()->GetName().StartsWith(TEXT("Widget_BuildMode")) || !Screen->WidgetTree)
+			UUserWidget* Hint = *It;
+			if (!Hint || Hint->HasAnyFlags(RF_ClassDefaultObject) || Hint == GLimitsHintWidget.Get()
+				|| !Hint->GetClass()->GetName().StartsWith(TEXT("Widget_Hint")))
 			{
 				continue;
 			}
-			UPanelWidget* Panel = nullptr;
-			Screen->WidgetTree->ForEachWidget([&Panel, &OutSample](UWidget* Child)
+			UPanelWidget* Parent = Hint->GetParent();
+			if (!Parent || Parent->GetFName() != FName(TEXT("mHintContainer")) || !Hint->IsVisible() || !Parent->IsVisible()
+				|| (Hint->GetOwningPlayer() && Hint->GetOwningPlayer() != PC) || !HintDescription(Hint))
 			{
-				UUserWidget* Hint = Cast<UUserWidget>(Child);
-				if (!Panel && Hint && HintDescription(Hint) && Hint->GetParent())
-				{
-					Panel = Hint->GetParent();
-					OutSample = Hint;
-				}
-			});
-			if (Panel)
-			{
-				return Panel;
+				continue;
 			}
+			OutSample = Hint;
+			return Parent;
 		}
 		return nullptr;
 	}
@@ -362,6 +307,21 @@ void RMRoadLimits::UpdateHintBar(APlayerController* PC, bool bShow)
 	if (UTextBlock* Description = HintDescription(Hint))
 	{
 		Description->SetText(NSLOCTEXT("RoadMaker", "LimitsHint", "Toggle Limits"));
+		// Like the game's hints: the text turns orange while the key is held.
+		bool bHeld = false;
+		for (const FKey& Key : Keys)
+		{
+			bHeld |= PC->IsInputKeyDown(Key);
+		}
+		static const FSlateColor Orange(FLinearColor::FromSRGBColor(FColor(250, 149, 73)));
+		static FSlateColor Normal = FSlateColor(FLinearColor::White);
+		static bool bNormalRead = false;
+		if (!bNormalRead)
+		{
+			Normal = Description->GetColorAndOpacity();
+			bNormalRead = true;
+		}
+		Description->SetColorAndOpacity(bHeld ? Orange : Normal);
 	}
 	if (UTextBlock* KeyText = HintKeyText(Hint))
 	{
