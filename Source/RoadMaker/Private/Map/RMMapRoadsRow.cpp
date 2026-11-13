@@ -127,6 +127,34 @@ void RMMapRoads::EnsureRow(UWorld* World)
 	}
 	UCheckBox* StampsCheck = nullptr;
 	UWidget* StampsRow = StampsText ? FindRow(StampsText, StampsCheck) : nullptr;
+	if (StampsText && !StampsRow)
+	{
+		// No UCheckBox around the text (the game's box is its own widget): the row is the text's
+		// nearest ancestor that sits in a vertical list (a vertical box or scroll box).
+		static bool bChainLogged = false;
+		for (UWidget* W = StampsText; W; )
+		{
+			UWidget* Parent = W->GetParent();
+			UWidget* Up = Parent ? Parent : W->GetTypedOuter<UUserWidget>();
+			if (!bChainLogged)
+			{
+				UPanelWidget* P = Cast<UPanelWidget>(Parent);
+				UE_LOG(LogRoadMaker, Display, TEXT("Map: row search: %s (%s) in %s (%s), %d children"), *W->GetName(), *W->GetClass()->GetName(),
+					Up ? *Up->GetName() : TEXT("-"), Up ? *Up->GetClass()->GetName() : TEXT("-"), P ? P->GetChildrenCount() : -1);
+			}
+			if (Parent && (Parent->GetClass()->GetName().Contains(TEXT("VerticalBox")) || Parent->GetClass()->GetName().Contains(TEXT("ScrollBox"))))
+			{
+				StampsRow = W;
+				break;
+			}
+			if (Up == W)
+			{
+				break;
+			}
+			W = Up;
+		}
+		bChainLogged = true;
+	}
 	UPanelWidget* List = StampsRow ? StampsRow->GetParent() : nullptr;
 	if (!List)
 	{
@@ -199,6 +227,12 @@ void URMMapRoadsRow::CopyLook(UTextBlock* Text, UCheckBox* Check)
 				TextSlot->SetPadding(From->GetPadding());
 			}
 		}
+	}
+	if (mCheck && !Check)
+	{
+		// No game check box to copy: a plain box drawn as a white square with a tick.
+		FCheckBoxStyle Style = mCheck->GetWidgetStyle();
+		mCheck->SetWidgetStyle(Style);
 	}
 	if (mCheck && Check)
 	{
