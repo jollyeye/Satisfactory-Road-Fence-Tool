@@ -32,6 +32,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/StrongObjectPtr.h"
+#include "Kismet/KismetRenderingLibrary.h"
+#include "Engine/Canvas.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "TextureResource.h"
 
 namespace
 {
@@ -487,6 +491,101 @@ namespace
 	}
 	bool GLoggedTileLayout = false;
 
+	/**
+	 * The Lane Vehicle option's icon: its road tile (shipped with the mod, an empty lane) with the game's own Factory Cart
+	 * sign icon drawn on top. Made once in the running game (the game's picture is never shipped with the mod): drawn on a
+	 * render target, read back and put in a texture, which then replaces the option's icons.
+	 */
+	void EnsureVehicleOptionIcon()
+	{
+		static TStrongObjectPtr<UTexture2D> GComposite;
+		static int32 GTries = 0;
+		if (GComposite.IsValid() || GTries >= 5)
+		{
+			return;
+		}
+		UWorld* World = nullptr;
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType == EWorldType::Game && Context.World())
+			{
+				World = Context.World();
+				break;
+			}
+		}
+		UTexture2D* Cart = World ? ARMBuildableMarking::VehicleIcon(3) : nullptr;
+		if (!Cart)
+		{
+			return; // no game loaded yet
+		}
+		URMRoadLineDescriptor* Option = nullptr;
+		for (TObjectIterator<UClass> It; It && !Option; ++It)
+		{
+			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			{
+				URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+				if (D && D->mIsMarking && D->mMarkingKind == ERMMarkingKind::Vehicle)
+				{
+					Option = D;
+				}
+			}
+		}
+		UTexture2D* Tile = Option ? Option->GetIcon() : nullptr;
+		if (!Tile)
+		{
+			return;
+		}
+		++GTries;
+		constexpr int32 Size = 256;
+		UTextureRenderTarget2D* RT = UKismetRenderingLibrary::CreateRenderTarget2D(World, Size, Size, RTF_RGBA8_SRGB, FLinearColor::Transparent);
+		if (!RT)
+		{
+			return;
+		}
+		UCanvas* Canvas = nullptr;
+		FVector2D CanvasSize;
+		FDrawToRenderTargetContext Ctx;
+		UKismetRenderingLibrary::BeginDrawCanvasToRenderTarget(World, RT, Canvas, CanvasSize, Ctx);
+		if (Canvas)
+		{
+			Canvas->K2_DrawTexture(Tile, FVector2D::ZeroVector, CanvasSize, FVector2D::ZeroVector, FVector2D::UnitVector,
+				FLinearColor::White, BLEND_Translucent);
+			// The cart in the middle of the lane (the lane is about 120 px wide on the 256 px tile).
+			const FVector2D CartSize = CanvasSize * (112.f / Size);
+			Canvas->K2_DrawTexture(Cart, (CanvasSize - CartSize) * 0.5f, CartSize, FVector2D::ZeroVector, FVector2D::UnitVector,
+				FLinearColor(0.94f, 0.94f, 0.92f, 1.f), BLEND_Translucent);
+		}
+		UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, Ctx);
+		TArray<FColor> Pixels;
+		FTextureRenderTargetResource* Res = RT->GameThread_GetRenderTargetResource();
+		if (!Res || !Res->ReadPixels(Pixels) || Pixels.Num() != Size * Size)
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("Lane Vehicle icon: could not read the drawn icon"));
+			return;
+		}
+		UTexture2D* Icon = UTexture2D::CreateTransient(Size, Size, PF_B8G8R8A8, TEXT("T_RM_LaneVehicleIcon"));
+		if (!Icon || !Icon->GetPlatformData() || Icon->GetPlatformData()->Mips.Num() == 0)
+		{
+			return;
+		}
+		Icon->SRGB = true;
+		Icon->CompressionSettings = TC_EditorIcon;
+		FTexture2DMipMap& Mip = Icon->GetPlatformData()->Mips[0];
+		void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
+		FMemory::Memcpy(Data, Pixels.GetData(), Pixels.Num() * sizeof(FColor));
+		Mip.BulkData.Unlock();
+		Icon->UpdateResource();
+		GComposite.Reset(Icon);
+		for (const TCHAR* Name : { TEXT("mIcon"), TEXT("mSmallIcon"), TEXT("mPersistentBigIcon") })
+		{
+			if (FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(Option->GetClass(), Name))
+			{
+				Prop->SetObjectPropertyValue_InContainer(Option, Icon);
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Lane Vehicle icon: road tile + %s (%s)"), *Cart->GetName(), GPixelFormats[Cart->GetPixelFormat()].Name);
+	}
+
 	void BuildIconTable()
 	{
 		// Built once; again if a class went away (another save loaded).
@@ -812,6 +911,7 @@ namespace
 		{
 			return true;
 		}
+		EnsureVehicleOptionIcon();
 		BuildIconTable();
 		RestoreReusedTiles();
 		FixInfoBoxPicture();
@@ -881,6 +981,7 @@ namespace
 	 */
 	bool FixRoadLinesHotbarIcons(float)
 	{
+		EnsureVehicleOptionIcon();
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
 			UUserWidget* Entry = *It;
