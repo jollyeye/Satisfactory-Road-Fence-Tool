@@ -133,6 +133,9 @@ public:
 	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
 	void ApplyPaintColors(const FFactoryCustomizationData& Data);
 
+	/** The paint of Data on one mesh, as this fence (type) shows it: also used by the hologram. */
+	void ApplyPaintToMesh(class UMeshComponent* Mesh, const FFactoryCustomizationData& Data) const;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")
 	ERMFenceType mFenceType = ERMFenceType::GuardRail;
 

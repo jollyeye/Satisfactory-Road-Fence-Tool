@@ -46,6 +46,10 @@ protected:
 	virtual float GetCostUnitLength() const override { return 400.f; }
 	virtual void RebuildPreview() override;
 
+	/** The real fence: its materials (look) and paint, with the game's valid / invalid tint on top. */
+	virtual void UpdateHologramLook() override;
+	virtual void ApplyCustomizationData() override;
+
 	const ARMBuildableFence* GetFenceDefaults() const;
 
 	/** Aiming at an intersection: follow the curved curb nearest the aim point, facing the centre. */

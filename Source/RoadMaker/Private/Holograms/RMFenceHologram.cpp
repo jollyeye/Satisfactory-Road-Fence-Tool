@@ -1,4 +1,5 @@
 #include "Holograms/RMFenceHologram.h"
+#include "Holograms/RMHologramLook.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
@@ -335,6 +336,33 @@ void ARMFenceHologram::RebuildPreview()
 	ARMBuildableFence::BuildFenceMesh(Fence->mFenceType, Frames, 400.f, mInwardSign, Main, Panel, Fence->GetWallLayout());
 	Main.ApplyToSection(mPreviewMesh, 0, false);
 	Panel.ApplyToSection(mPreviewMesh, 1, false);
+	UpdateHologramLook();
+}
+
+void ARMFenceHologram::UpdateHologramLook()
+{
+	const ARMBuildableFence* Fence = GetFenceDefaults();
+	if (!Fence || mPreviewMesh->GetNumSections() == 0 || !Fence->GetEffectiveMainMaterial())
+	{
+		Super::UpdateHologramLook();
+		return;
+	}
+	// The fence's own materials (wall look of this fence class, grid panel) and its paint (the
+	// hologram's colours: the chosen swatch, or the one sampled with the middle mouse button); the game's
+	// hologram tint and outline (stencil) show valid / warning / invalid on top.
+	mPreviewMesh->SetMaterial(0, Fence->GetEffectiveMainMaterial());
+	if (mPreviewMesh->GetNumSections() > 1 && Fence->mPanelMaterial)
+	{
+		mPreviewMesh->SetMaterial(1, Fence->mPanelMaterial);
+	}
+	Fence->ApplyPaintToMesh(mPreviewMesh, mCustomizationData);
+	RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
+}
+
+void ARMFenceHologram::ApplyCustomizationData()
+{
+	Super::ApplyCustomizationData();
+	UpdateHologramLook();
 }
 
 void ARMFenceHologram::CheckValidPlacement()
