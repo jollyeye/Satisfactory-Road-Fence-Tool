@@ -2669,6 +2669,17 @@ namespace
 	template <typename TScope, typename THologram>
 	bool PlaceSignOnFenceWall(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
+		// Second step of a sign on a leg (the leg is down, the mouse sets the height): never jump onto a wall then,
+		// whatever the aim crosses.
+		if (!IsSignOnWall(Hologram))
+		{
+			const FProperty* StepProp = FindFProperty<FProperty>(AFGStandaloneSignHologram::StaticClass(), TEXT("mBuildStep"));
+			const uint8 Step = StepProp ? *StepProp->ContainerPtrToValuePtr<uint8>(Hologram) : 0;
+			if (Step == static_cast<uint8>(ESignHologramBuildStep::ESHBS_AdjustHeight))
+			{
+				return false;
+			}
+		}
 		// Automatic on fence walls and the gantry; anywhere else the sign places normally (with its leg).
 		FWallFace Face;
 		if (FindWallFace(Hit, Face))
