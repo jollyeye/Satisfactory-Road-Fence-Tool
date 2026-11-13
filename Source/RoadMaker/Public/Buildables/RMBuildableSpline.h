@@ -116,9 +116,18 @@ protected:
 	virtual int32 GetChunkCount() const override { return FMath::Max(1, mChunkCount); }
 	virtual int32 GetChunkOf(const FVector& LocalPos) const override;
 	void UpdateChunkLayout();
+
+	/**
+	 * Adds a frame exactly at each section boundary to Frames (sampled from this piece, any step), so
+	 * every detail level has a ring there and the sections meet without a gap (call after
+	 * UpdateChunkLayout).
+	 */
+	void AddChunkBoundaries(TArray<FRMFrame>& Frames) const;
+
 	int32 mChunkCount = 1;
 	float mChunkLength = 0.f;
 	TArray<FRMFrame> mChunkFrames; // actor space, every 10 m: which chunk a point belongs to
+	TArray<FRMFrame> mChunkBounds; // actor space, the frame at each boundary (between chunk K and K + 1 at K)
 
 public:
 	/** Sections of the piece along its length (cm, from its start): what the mesh is drawn in, and what

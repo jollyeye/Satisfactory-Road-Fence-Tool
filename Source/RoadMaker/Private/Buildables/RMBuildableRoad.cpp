@@ -34,6 +34,9 @@ ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 
 void ARMBuildableRoad::RebuildMesh()
 {
+	// Long roads are drawn in sections (each switches detail on its own); every detail level gets a
+	// ring exactly on each section boundary, so the sections meet without a gap.
+	UpdateChunkLayout();
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
 	if (Frames.Num() < 2)
@@ -42,9 +45,7 @@ void ARMBuildableRoad::RebuildMesh()
 		ClearFarMesh();
 		return;
 	}
-
-	// Long roads are drawn in sections (each switches detail on its own).
-	UpdateChunkLayout();
+	AddChunkBoundaries(Frames);
 	PrepareChunks();
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, Top, Body);
@@ -57,6 +58,7 @@ void ARMBuildableRoad::RebuildMesh()
 	ClearFarMesh();
 	TArray<FRMFrame> FarFrames;
 	GetLocalFrames(FarFrames, 400.f);
+	AddChunkBoundaries(FarFrames);
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarTop, FarBody;

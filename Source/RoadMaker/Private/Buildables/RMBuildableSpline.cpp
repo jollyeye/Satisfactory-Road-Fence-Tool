@@ -100,13 +100,91 @@ namespace
 	}
 }
 
+namespace
+{
+	/** The frame at distance D along Frames (sorted by Dist), interpolated between its neighbours. */
+	FRMFrame RMFrameAtDist(const TArray<FRMFrame>& Frames, float D)
+	{
+		for (int32 I = 1; I < Frames.Num(); ++I)
+		{
+			if (Frames[I].Dist >= D)
+			{
+				const FRMFrame& A = Frames[I - 1];
+				const FRMFrame& B = Frames[I];
+				const float T = B.Dist > A.Dist ? FMath::Clamp((D - A.Dist) / (B.Dist - A.Dist), 0.f, 1.f) : 0.f;
+				FRMFrame F;
+				F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+				F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+				F.Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal();
+				F.Up = FMath::Lerp(A.Up, B.Up, T).GetSafeNormal();
+				F.Dist = D;
+				return F;
+			}
+		}
+		return Frames.Num() > 0 ? Frames.Last() : FRMFrame();
+	}
+
+	/** Which side of a section boundary a point is on (+ = after it): seen from above, across the road. */
+	float RMBoundarySide(const FRMFrame& Bound, const FVector& P)
+	{
+		const FVector Normal = FVector(Bound.Fwd.X, Bound.Fwd.Y, 0.f).GetSafeNormal();
+		return FVector::DotProduct(P - Bound.Pos, Normal);
+	}
+}
+
 void ARMBuildableSpline::UpdateChunkLayout()
 {
 	mChunkFrames.Reset();
+	mChunkBounds.Reset();
 	GetLocalFrames(mChunkFrames, 1000.f);
 	const float Length = mChunkFrames.Num() >= 2 ? mChunkFrames.Last().Dist : 0.f;
 	mChunkCount = Length > SingleSectionMax ? FMath::CeilToInt(Length / SectionLength) : 1;
 	mChunkLength = mChunkCount > 0 ? Length / mChunkCount : Length;
+	if (mChunkCount > 1)
+	{
+		// Boundary frames from a fine sampling (1 m), so they sit on the curve within millimetres.
+		TArray<FRMFrame> Fine;
+		GetLocalFrames(Fine, 100.f);
+		const float Scale = Fine.Num() >= 2 && Fine.Last().Dist > 0.f ? Fine.Last().Dist / Length : 1.f;
+		for (int32 K = 1; K < mChunkCount; ++K)
+		{
+			mChunkBounds.Add(RMFrameAtDist(Fine, K * mChunkLength * Scale));
+		}
+	}
+}
+
+void ARMBuildableSpline::AddChunkBoundaries(TArray<FRMFrame>& Frames) const
+{
+	if (mChunkBounds.Num() == 0 || Frames.Num() < 2)
+	{
+		return;
+	}
+	for (const FRMFrame& Bound : mChunkBounds)
+	{
+		// The ring nearest the boundary is moved onto it when close, else one is added.
+		int32 After = Frames.Num() - 1;
+		for (int32 I = 1; I < Frames.Num(); ++I)
+		{
+			if (Frames[I].Dist >= Bound.Dist)
+			{
+				After = I;
+				break;
+			}
+		}
+		const float Step = FMath::Max(Frames[After].Dist - Frames[After - 1].Dist, 1.f);
+		if (FMath::Abs(Frames[After].Dist - Bound.Dist) < Step * 0.1f && After < Frames.Num() - 1)
+		{
+			Frames[After] = Bound;
+		}
+		else if (FMath::Abs(Frames[After - 1].Dist - Bound.Dist) < Step * 0.1f && After - 1 > 0)
+		{
+			Frames[After - 1] = Bound;
+		}
+		else
+		{
+			Frames.Insert(Bound, After);
+		}
+	}
 }
 
 int32 ARMBuildableSpline::GetChunkOf(const FVector& LocalPos) const
@@ -129,7 +207,21 @@ int32 ARMBuildableSpline::GetChunkOf(const FVector& LocalPos) const
 	}
 	const FRMFrame& F = mChunkFrames[Best];
 	const float Along = F.Dist + FVector::DotProduct(LocalPos - F.Pos, F.Fwd);
-	return FMath::Clamp(FMath::FloorToInt(Along / mChunkLength), 0, mChunkCount - 1);
+	int32 Chunk = FMath::Clamp(FMath::FloorToInt(Along / mChunkLength), 0, mChunkCount - 1);
+	// Near a boundary the estimate can be one off (on the outside of a curve most): the boundary's own
+	// cross plane decides, the same plane every detail level has a ring in (AddChunkBoundaries).
+	if (mChunkBounds.Num() == mChunkCount - 1)
+	{
+		if (Chunk > 0 && RMBoundarySide(mChunkBounds[Chunk - 1], LocalPos) < 0.f)
+		{
+			--Chunk;
+		}
+		else if (Chunk < mChunkCount - 1 && RMBoundarySide(mChunkBounds[Chunk], LocalPos) >= 0.f)
+		{
+			++Chunk;
+		}
+	}
+	return Chunk;
 }
 
 int32 ARMBuildableSpline::GetSectionCount() const

@@ -29,11 +29,13 @@ void ARMBuildableFence::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 void ARMBuildableFence::RebuildMesh()
 {
+	// Long fences are drawn in sections (each switches detail on its own); every detail level gets a
+	// ring exactly on each section boundary, so the sections meet without a gap.
+	UpdateChunkLayout();
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
+	AddChunkBoundaries(Frames);
 	mMesh->ClearAllMeshSections();
-	// Long fences are drawn in sections (each switches detail on its own).
-	UpdateChunkLayout();
 	PrepareChunks();
 	ClearFarMesh();
 	if (Frames.Num() < 2)
@@ -57,6 +59,7 @@ void ARMBuildableFence::RebuildMesh()
 	// Level 1: the same fence sampled every 4 m instead of every 50 cm.
 	TArray<FRMFrame> FarFrames;
 	GetLocalFrames(FarFrames, 400.f);
+	AddChunkBoundaries(FarFrames);
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarMain, FarPanel;
@@ -68,6 +71,7 @@ void ARMBuildableFence::RebuildMesh()
 	// Level 2: the simplest shape, sampled every 8 m.
 	TArray<FRMFrame> Far2Frames;
 	GetLocalFrames(Far2Frames, 800.f);
+	AddChunkBoundaries(Far2Frames);
 	if (Far2Frames.Num() >= 2)
 	{
 		FRMMesh Far2Main, Far2Panel;
