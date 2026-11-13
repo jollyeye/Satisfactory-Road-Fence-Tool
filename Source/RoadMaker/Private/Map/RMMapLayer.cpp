@@ -30,6 +30,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "RMGeometry.h"
+#include "Map/RMMapRoadsRow.h"
 
 namespace RMMapLayer
 {
@@ -727,6 +728,17 @@ namespace RMMapLayer
 				return true;
 			}
 			MapAttach(Painter);
+			// "Show Roads on Map" (map side menu): off = the layer hidden and nothing painted.
+			RMMapRoads::EnsureRow(World);
+			if (GMapCanvas.IsValid())
+			{
+				GMapCanvas->SetVisibility(RMMapRoads::IsShown() ? EVisibility::HitTestInvisible : EVisibility::Collapsed);
+			}
+			if (!RMMapRoads::IsShown())
+			{
+				bPending = false;
+				return true;
+			}
 			const bool bScanned = MapScanPieces(World);
 			// Tiles wait until every piece is known (no half-painted tiles while a big save is first read).
 			if (bScanned)
