@@ -18,6 +18,8 @@ enum class ERMMarkingKind : uint8
 {
 	Arrow,
 	Digit,
+	/** Across the whole road (all its lanes): zebra crossing, stop line, give-way line, give-way triangles. */
+	Crossing,
 };
 
 /**
@@ -58,7 +60,7 @@ public:
 	float GetLaneWidth() const { return mLaneWidth; }
 
 	/** Arrow: 0 straight, 1 left, 2 right, 3 straight or left, 4 straight or right, 5 left or right. Digit: 0 to 9. */
-	static int32 VariantCount(ERMMarkingKind Kind) { return Kind == ERMMarkingKind::Arrow ? 6 : 10; }
+	static int32 VariantCount(ERMMarkingKind Kind) { return Kind == ERMMarkingKind::Arrow ? 6 : Kind == ERMMarkingKind::Crossing ? 4 : 10; }
 
 	/**
 	 * Builds the mesh (top face only, a hair above the road) in the marking's local space: flat, or with
