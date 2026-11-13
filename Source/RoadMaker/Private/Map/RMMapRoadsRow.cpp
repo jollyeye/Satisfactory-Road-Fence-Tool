@@ -261,6 +261,8 @@ TSharedRef<SWidget> URMMapRoadsRow::RebuildWidget()
 		mRoot = WidgetTree->ConstructWidget<UOverlay>();
 		WidgetTree->RootWidget = mRoot;
 		mButton = WidgetTree->ConstructWidget<UButton>();
+		// Not focusable: a clicked button keeps the focus and stays highlighted after the mouse leaves.
+		mButton->InitIsFocusable(false);
 		if (UOverlaySlot* ButtonSlot = mRoot->AddChildToOverlay(mButton))
 		{
 			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
@@ -303,9 +305,9 @@ void URMMapRoadsRow::CopyLook(UButton* Button, UTextBlock* Text, UWidget* Tick)
 	}
 	if (mText && Text)
 	{
-		// A little bigger than the game's row (asked 2026-11-13).
+		// A little bigger than the game's row (asked 2026-11-13; +2 was too much).
 		FSlateFontInfo Font = Text->GetFont();
-		Font.Size += 2;
+		Font.Size += 1;
 		mText->SetFont(Font);
 		mText->SetColorAndOpacity(Text->GetColorAndOpacity());
 		mText->SetShadowOffset(Text->GetShadowOffset());
