@@ -62,6 +62,7 @@ protected:
 	/** The real surface (look and paint) in the hologram, fading out along the stub before the first click. */
 	virtual void UpdateHologramLook() override;
 	virtual float GetStubLength() const override { return RM::FoundationSize; }
+	virtual float GetMaxPlaceLength() const override;
 	/** Before the first click: the short stub that fades out (not a road beside another one). */
 	bool IsFadingStub() const { return mStep == 0 && !mBesideRoad; }
 

@@ -103,6 +103,16 @@ float ARMSplineHologram::GetStepScrollYaw() const
 void ARMSplineHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
 	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
+	mAimOrigin = hitResult.TraceStart;
+	mAimDir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
+	if (mStep == 1 && IsKeepAngleMode())
+	{
+		// Straight (keep angle): end snaps are ignored; the length comes from the aim (UpdateCurve).
+		mEndSnapped = false;
+		mEnd = hitResult.Location;
+		UpdateCurve();
+		return;
+	}
 	if (TrySnapToRoadEnd(hitResult))
 	{
 		return;
@@ -151,7 +161,32 @@ void ARMSplineHologram::UpdateCurve()
 			Flat = FVector::ForwardVector;
 		}
 		const float Slope = mStartSnapped ? SlopeOf(mStartDir) : 0.f;
-		const float Along = FMath::Max(100.f, FVector::DotProduct(FVector(mEnd.X - mStart.X, mEnd.Y - mStart.Y, 0.f), Flat));
+		const FVector Line = (Flat + FVector(0.f, 0.f, Slope)).GetSafeNormal();
+		// Distance along the road's own line (sloped too): the point of that line nearest the aim
+		// ray, so aiming up along a climbing road lengthens it; else the aim point seen from above.
+		float Along = FVector::DotProduct(FVector(mEnd.X - mStart.X, mEnd.Y - mStart.Y, 0.f), Flat);
+		if (!mAimDir.IsNearlyZero())
+		{
+			const FVector W = mStart - mAimOrigin;
+			const float B = FVector::DotProduct(Line, mAimDir);
+			const float Denom = 1.f - B * B;
+			if (Denom > 1e-4f)
+			{
+				const float T = (B * FVector::DotProduct(mAimDir, W) - FVector::DotProduct(Line, W)) / Denom;
+				Along = T * FVector::DotProduct(Line, Flat); // horizontal part of the distance along the line
+			}
+		}
+		Along = FMath::Max(100.f, Along);
+		// Not past the longest road allowed, and stopping exactly on it within 50 cm (to get the most).
+		const float MaxLength = GetMaxPlaceLength();
+		if (MaxLength > 0.f)
+		{
+			const float MaxAlong = MaxLength / FMath::Sqrt(1.f + Slope * Slope);
+			if (Along > MaxAlong - 50.f)
+			{
+				Along = MaxAlong - 1.f; // a hair under, so rounding never makes it "too long"
+			}
+		}
 		const FVector End = mStart + Flat * Along + FVector(0.f, 0.f, Slope * Along);
 		const FVector Dir = (Flat + FVector(0.f, 0.f, Slope)).GetSafeNormal();
 		RMGeometry::MakeFixedEnds(mStart, Dir, End, Dir, World);

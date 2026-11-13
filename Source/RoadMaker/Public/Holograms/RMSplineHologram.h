@@ -47,6 +47,8 @@ public:
 	virtual void UpdateHologramLook();
 	/** Length of the preview shown before the first click (cm). */
 	virtual float GetStubLength() const { return RM::FoundationSize * 0.5f; }
+	/** Longest piece allowed right now (cm), 0 = no limit: Straight (keep angle) stops exactly there. */
+	virtual float GetMaxPlaceLength() const { return 0.f; }
 
 protected:
 	/** Height added above the aimed surface (roads sit on top of what they are placed on). */
@@ -126,6 +128,9 @@ protected:
 	bool mStartSnapped = false;
 
 	FVector mEnd = FVector::ZeroVector;
+	/** The aim ray of the last update (Straight (keep angle): the length follows the aim along a slope). */
+	FVector mAimOrigin = FVector::ZeroVector;
+	FVector mAimDir = FVector::ZeroVector;
 	FVector mEndDir = FVector::ForwardVector;
 	bool mEndSnapped = false;
 

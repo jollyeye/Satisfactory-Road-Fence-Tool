@@ -386,6 +386,16 @@ float ARMRoadHologram::GetBuildGunRangeOverride_Implementation() const
 	return IsUnlimited() ? 100000.f : Super::GetBuildGunRangeOverride_Implementation();
 }
 
+float ARMRoadHologram::GetMaxPlaceLength() const
+{
+	if (IsUnlimited())
+	{
+		return LongCurveMaxLength;
+	}
+	const ARMBuildableRoad* Road = GetRoadDefaults();
+	return Road ? Road->mMaxLength : 0.f;
+}
+
 APlayerController* ARMRoadHologram::GetLocalHolder() const
 {
 	APawn* Pawn = GetConstructionInstigator();
