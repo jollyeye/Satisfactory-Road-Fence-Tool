@@ -262,7 +262,11 @@ TSharedRef<SWidget> URMMapRoadsRow::RebuildWidget()
 		WidgetTree->RootWidget = mRoot;
 		mButton = WidgetTree->ConstructWidget<UButton>();
 		// Not focusable: a clicked button keeps the focus and stays highlighted after the mouse leaves.
-		mButton->InitIsFocusable(false);
+		// (IsFocusable can only be set before the button is built, and its setter is protected: by reflection.)
+		if (FBoolProperty* Focusable = FindFProperty<FBoolProperty>(UButton::StaticClass(), TEXT("IsFocusable")))
+		{
+			Focusable->SetPropertyValue_InContainer(mButton, false);
+		}
 		if (UOverlaySlot* ButtonSlot = mRoot->AddChildToOverlay(mButton))
 		{
 			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
