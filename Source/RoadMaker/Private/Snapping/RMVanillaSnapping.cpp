@@ -41,6 +41,7 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
 #include "HAL/IConsoleManager.h"
+#include "TimerManager.h"
 
 namespace
 {
@@ -1894,9 +1895,8 @@ namespace
 	}
 
 	/**
-	 * Snap key + vehicle path or railway track aiming at a lane of a long road (over 125 m): tracks for
-	 * every section of the lane at once, vehicle paths one section per click (the next one in the travel
-	 * direction, joined to the last); details below. Tracks: every section (the road's sections of at most 100 m, at most 32 per
+	 * Snap key + vehicle path or railway track aiming at a lane of a long road (over 125 m): a path /
+	 * track for every section (the road's sections of at most 100 m, at most 32 per
 	 * click), each ending where the next starts; sections that already have one are left out. One
 	 * click builds them all. Laid out once per road / lane / direction (refreshed every half second).
 	 */
@@ -2020,14 +2020,11 @@ namespace
 			bForward = !bForward;
 		}
 
-		// The sections still to lay. Tracks: all of them (at most MaxLaneSections, from the start of the
-		// road; the game connects tracks built together). Vehicle paths: only the next one in the travel
-		// direction, because paths built in the same click are not joined to each other by the game
-		// (tested 2026-11-13); each click lays the next section, joined to the one built before.
+		// The sections still to lay (at most MaxLaneSections, from the start of the road). Vehicle paths
+		// built together get their own end nodes; MergeSectionNodes joins them after the build.
 		TArray<int32> Todo;
-		for (int32 I = 0; I < Count && Todo.Num() < (PathParent ? 1 : MaxLaneSections); ++I)
+		for (int32 K = 0; K < Count && Todo.Num() < MaxLaneSections; ++K)
 		{
-			const int32 K = PathParent && !bForward ? Count - 1 - I : I;
 			if (!Built[K])
 			{
 				Todo.Add(K);
@@ -2127,6 +2124,83 @@ namespace
 		}
 		return true;
 	}
+
+	/**
+	 * Vehicle paths built in one click (lane sections, junction links): each gets its own end nodes, so
+	 * where one ends and the next starts there are two nodes on the same spot and vehicles cannot pass.
+	 * The next tick (once the segments have made their nodes) the nodes within 20 cm of each other are
+	 * merged into one, which joins the paths.
+	 */
+	void MergeSectionNodes(UWorld* World, const TArray<TWeakObjectPtr<AFGVehiclePathSegment>>& Built)
+	{
+		TArray<AFGVehiclePathNode*> Nodes;
+		for (const TWeakObjectPtr<AFGVehiclePathSegment>& Seg : Built)
+		{
+			if (AFGVehiclePathSegment* S = Seg.Get())
+			{
+				for (AFGVehiclePathNode* N : { S->GetStartNode(), S->GetEndNode() })
+				{
+					if (IsValid(N))
+					{
+						Nodes.AddUnique(N);
+					}
+				}
+			}
+		}
+		int32 Merged = 0;
+		for (int32 I = 0; I < Nodes.Num(); ++I)
+		{
+			AFGVehiclePathNode* Keep = Nodes[I];
+			if (!IsValid(Keep))
+			{
+				continue;
+			}
+			for (int32 J = I + 1; J < Nodes.Num(); ++J)
+			{
+				AFGVehiclePathNode* Other = Nodes[J];
+				if (IsValid(Other) && Other != Keep && FVector::DistSquared(Other->GetActorLocation(), Keep->GetActorLocation()) < 20.f * 20.f)
+				{
+					Other->MoveConnectionsToNode(Keep); // removes Other
+					Nodes[J] = nullptr;
+					++Merged;
+				}
+			}
+		}
+		if (Merged > 0)
+		{
+			UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joined %d node(s) between paths built together"), Merged);
+		}
+	}
+
+	/**
+	 * Console command RM.ListTrains: logs every train, locomotive and wagon in the world (name, place,
+	 * hidden or not, collision) to find leftovers such as an invisible train that others crash into.
+	 */
+	FAutoConsoleCommandWithWorld GRMListTrains(
+		TEXT("RM.ListTrains"),
+		TEXT("Road Maker: log every train, locomotive and wagon actor (to find invisible leftovers)."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			if (!World)
+			{
+				return;
+			}
+			int32 Found = 0;
+			for (TActorIterator<AActor> It(World); It; ++It)
+			{
+				const FString ClassName = It->GetClass()->GetName();
+				if (!ClassName.Contains(TEXT("Locomotive")) && !ClassName.Contains(TEXT("Wagon")) && !ClassName.Contains(TEXT("Train")))
+				{
+					continue;
+				}
+				++Found;
+				const FVector At = It->GetActorLocation();
+				UE_LOG(LogRoadMaker, Display, TEXT("RM.ListTrains: %s (%s) at %.0f %.0f %.0f hidden=%d collision=%d pendingKill=%d"),
+					*It->GetName(), *ClassName, At.X, At.Y, At.Z, It->IsHidden() ? 1 : 0, It->GetActorEnableCollision() ? 1 : 0,
+					It->IsActorBeingDestroyed() ? 1 : 0);
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("RM.ListTrains: %d actor(s)"), Found);
+		}));
 
 	/** Foundations snapped to a road end: quarter turns set with the scroll wheel (per hologram). */
 	TMap<TWeakObjectPtr<const AFGHologram>, int32> GFoundationQuarter;
@@ -3013,6 +3087,41 @@ void RMVanillaSnapping::InstallHooks()
 			{
 				Scope.Override(1);
 			}
+		});
+
+	// Vehicle paths built together (lane sections, junction links): join their touching ends.
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::Construct, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
+		[](AActor* Result, AFGBuildableHologram* Hologram, TArray<AActor*>& OutChildren, FNetConstructionID ConstructionID)
+		{
+			UWorld* World = Hologram ? Hologram->GetWorld() : nullptr;
+			if (!World || !Hologram->IsA<AFGVehiclePathSegmentHologram>() || OutChildren.Num() == 0)
+			{
+				return;
+			}
+			TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Built;
+			if (AFGVehiclePathSegment* Main = Cast<AFGVehiclePathSegment>(Result))
+			{
+				Built.Add(Main);
+			}
+			for (AActor* Child : OutChildren)
+			{
+				if (AFGVehiclePathSegment* Seg = Cast<AFGVehiclePathSegment>(Child))
+				{
+					Built.Add(Seg);
+				}
+			}
+			if (Built.Num() < 2)
+			{
+				return;
+			}
+			TWeakObjectPtr<UWorld> WeakWorld(World);
+			World->GetTimerManager().SetTimerForNextTick([WeakWorld, Built]()
+			{
+				if (UWorld* W = WeakWorld.Get())
+				{
+					MergeSectionNodes(W, Built);
+				}
+			});
 		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
