@@ -80,6 +80,13 @@ protected:
 	bool IsStraightMode() const;
 
 	/**
+	 * "Straight (keep angle)" build mode: the road goes straight on out of its start, in the start's
+	 * direction and at its slope (level from a foundation or a free start, the road's own slope from
+	 * a road end); the aim only sets the length. End snaps are ignored.
+	 */
+	bool IsKeepAngleMode() const;
+
+	/**
 	 * "Smooth" build mode: the height eases in and out instead of rising at one even slope, so the
 	 * road leaves and arrives with the slope of whatever it snaps to (level for flat roads and
 	 * foundations, the road's own slope for sloped roads). No kinks at joints seen from the side.
@@ -99,6 +106,10 @@ protected:
 	/** Build mode asset (a UFGHologramBuildModeDescriptor Blueprint) for straight placement. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeStraight;
+
+	/** Build mode asset for straight on out of the start, keeping its angle (roads only). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
+	TSubclassOf<UFGHologramBuildModeDescriptor> mBuildModeKeepAngle;
 
 	/** Build mode asset for smooth height transitions (roads only). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")

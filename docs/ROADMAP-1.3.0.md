@@ -28,6 +28,8 @@ Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to 
 
 - **Road limits toggle** (built 2026-11-13, awaiting test; replaces the Long Curve build mode): Alt while holding a road (pressed and released on its own, not Alt+Tab) turns the limits off / on in every road build mode; off = up to 1 km long, no turn or grade limits (only the inner edge folding over itself), build gun reach 1 km. Per player, remembered between sessions (GameUserSettings.ini, `[RoadMaker] bRoadLimitsOff`); a hint "[Alt] Road limits: on / OFF" at the bottom while a road hologram is held, and a short notice on toggling. The key is fixed (not yet in the Controls menu: that needs an FGInputMappingContext asset). Sent with the click (multiplayer). Normal modes keep 100 m. Reason for 1 km: a 1.4 km road made placing paths lag.
 
+- **"Straight (keep angle)" road build mode** (built 2026-11-13, awaiting test): straight on out of the start in its direction and at its slope (level from a foundation edge or a free start; the road's own slope from a road end); the aim only sets the length; end snaps ignored. Roads only (`mBuildModeKeepAngle`, BM_KeepAngle).
+
 ## To do
 - **Traffic lights** (item 11): pole + light heads at intersection corners, lights following the intersection's state (free path detection), emissive material parameter for the lamps.
 - **Boom barrier** (added 2026-11-12): the striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it, snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe opening for vehicles on a path through it (same detection idea as the traffic lights).

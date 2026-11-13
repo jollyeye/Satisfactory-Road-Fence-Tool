@@ -38,10 +38,19 @@ void ARMSplineHologram::GetSupportedBuildModes_Implementation(TArray<TSubclassOf
 	{
 		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeStraight.Get()));
 	}
+	if (mBuildModeKeepAngle)
+	{
+		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeKeepAngle.Get()));
+	}
 	if (mBuildModeSmooth)
 	{
 		out_buildmodes.AddUnique(TSubclassOf<UFGBuildGunModeDescriptor>(mBuildModeSmooth.Get()));
 	}
+}
+
+bool ARMSplineHologram::IsKeepAngleMode() const
+{
+	return mBuildModeKeepAngle && IsCurrentBuildMode(mBuildModeKeepAngle);
 }
 
 bool ARMSplineHologram::IsStraightMode() const
@@ -132,6 +141,20 @@ void ARMSplineHologram::UpdateCurve()
 		// Short stub so the player sees width and direction before the first click.
 		const FVector StubEnd = mStart + mStartDir * GetStubLength();
 		RMGeometry::MakeFixedEnds(mStart, mStartDir, StubEnd, mStartDir, World);
+	}
+	else if (IsKeepAngleMode())
+	{
+		// Straight on out of the start at its slope: the aim (seen from above) only sets the length.
+		FVector Flat = FVector(mStartDir.X, mStartDir.Y, 0.f);
+		if (!Flat.Normalize())
+		{
+			Flat = FVector::ForwardVector;
+		}
+		const float Slope = mStartSnapped ? SlopeOf(mStartDir) : 0.f;
+		const float Along = FMath::Max(100.f, FVector::DotProduct(FVector(mEnd.X - mStart.X, mEnd.Y - mStart.Y, 0.f), Flat));
+		const FVector End = mStart + Flat * Along + FVector(0.f, 0.f, Slope * Along);
+		const FVector Dir = (Flat + FVector(0.f, 0.f, Slope)).GetSafeNormal();
+		RMGeometry::MakeFixedEnds(mStart, Dir, End, Dir, World);
 	}
 	else if (mEndSnapped)
 	{
