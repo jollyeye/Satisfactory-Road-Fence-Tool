@@ -100,17 +100,23 @@ void ARMBuildableMarking::ApplyMarkingColors(const FFactoryCustomizationData& Da
 	}
 	// Like the road's lines: asphalt and concrete paint in the primary colour (the middle lines' colour),
 	// cyberpunk glows in the secondary colour (its lines' glow). A marking starts with a copy of its road's paint.
+	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
+	{
+		ApplyMarkingColorsTo(M, Data);
+	}
+}
+
+void ARMBuildableMarking::ApplyMarkingColorsTo(UPrimitiveComponent* M, const FFactoryCustomizationData& Data) const
+{
+	if (!M)
+	{
+		return;
+	}
 	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
 	const FLinearColor P = Resolved.PrimaryColor;
 	const FLinearColor S = Resolved.SecondaryColor;
-	for (UProceduralMeshComponent* M : { mMesh, mFarMesh })
-	{
-		if (M)
-		{
-			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
-			M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
-		}
-	}
+	M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+	M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
 }
 
 void ARMBuildableMarking::SetDrape(const FRMMarkingDrape& Drape)

@@ -153,6 +153,19 @@ void ARMMarkingHologram::SetMaterialState(EHologramMaterialState state)
 
 void ARMMarkingHologram::UpdateHologramLook()
 {
+	// The marking's own paint material for the road's look, in the road's colours (the marking starts
+	// with the road's paint), with the game's valid / invalid tint and outline on top.
+	const ARMBuildableMarking* Default = GetDefaultBuildable<ARMBuildableMarking>();
+	if (Default && mPreviewMesh->GetNumSections() > 0)
+	{
+		if (UMaterialInterface* Paint = Default->GetPaintMaterial(mRoadLook))
+		{
+			mPreviewMesh->SetMaterial(0, Paint);
+			Default->ApplyMarkingColorsTo(mPreviewMesh, mCustomizationData);
+			RMHologramLook::Apply(mPreviewMesh, nullptr, GetStencilForHologramMaterialState(mPlacementMaterialState));
+			return;
+		}
+	}
 	UMaterialInterface* Material = mPreviewMaterial;
 	if (!Material)
 	{

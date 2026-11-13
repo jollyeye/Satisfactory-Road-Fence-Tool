@@ -109,6 +109,9 @@ public:
 	/** The marking material for a look (0 asphalt, 1 concrete, 2 cyberpunk). */
 	UMaterialInterface* GetPaintMaterial(uint8 Look) const;
 
+	/** The paint of Data on one mesh, as markings show it (also used by the hologram). */
+	void ApplyMarkingColorsTo(class UPrimitiveComponent* Mesh, const FFactoryCustomizationData& Data) const;
+
 	/**
 	 * Server: paints a marking on Road (the customizer's Road Lines options do this). Takes the road's look
 	 * and line colour. Returns null if there is no valid spot.
