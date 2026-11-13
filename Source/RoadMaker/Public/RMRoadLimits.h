@@ -29,6 +29,13 @@ namespace RMRoadLimits
 	 */
 	ROADMAKER_API void BindRoadInput(APlayerController* PC, bool bBind);
 
+	/**
+	 * The build gun's button hint bar (bottom of the screen): while bShow, a "Toggle Limits [key]" hint
+	 * is kept in it (a copy of one of the game's own hint widgets, added again whenever the game
+	 * rebuilds the bar); removed when !bShow. Call every frame while a road is held.
+	 */
+	ROADMAKER_API void UpdateHintBar(APlayerController* PC, bool bShow);
+
 	/** The limits input action (IA_RM_ToggleLimits), or null. */
 	ROADMAKER_API class UInputAction* GetLimitsAction();
 

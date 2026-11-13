@@ -13,6 +13,12 @@
 #include "EnhancedPlayerInput.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "FGInputLibrary.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/PanelWidget.h"
+#include "Components/TextBlock.h"
+#include "UObject/UObjectIterator.h"
 
 namespace
 {
@@ -188,4 +194,121 @@ void RMRoadLimits::LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor
 	{
 		Gun->mOnBuildGunModeChanged.Broadcast(Gun->GetCurrentBuildGunMode());
 	}
+}
+
+namespace
+{
+	/** The bar's panel (the parent of the game's hint widgets) and our hint in it. */
+	TWeakObjectPtr<UPanelWidget> GHintPanel;
+	TWeakObjectPtr<UUserWidget> GLimitsHintWidget;
+	double GNextHintSearch = 0.0;
+
+	/** A game hint widget: a user widget with a text named mHintDescription. */
+	UTextBlock* HintDescription(UUserWidget* Widget)
+	{
+		return Widget && Widget->WidgetTree ? Widget->WidgetTree->FindWidget<UTextBlock>(FName(TEXT("mHintDescription"))) : nullptr;
+	}
+
+	/** The other text of a hint widget (the key). */
+	UTextBlock* HintKeyText(UUserWidget* Widget)
+	{
+		UTextBlock* Found = nullptr;
+		if (Widget && Widget->WidgetTree)
+		{
+			Widget->WidgetTree->ForEachWidget([&Found](UWidget* Child)
+			{
+				UTextBlock* Text = Cast<UTextBlock>(Child);
+				if (!Found && Text && Text->GetFName() != FName(TEXT("mHintDescription")))
+				{
+					Found = Text;
+				}
+			});
+		}
+		return Found;
+	}
+
+	/** The build mode widget's hint panel and one of the game's hints in it, for this player. */
+	UPanelWidget* FindHintPanel(APlayerController* PC, UUserWidget*& OutSample)
+	{
+		OutSample = nullptr;
+		for (TObjectIterator<UUserWidget> It; It; ++It)
+		{
+			UUserWidget* Screen = *It;
+			if (!Screen || Screen->HasAnyFlags(RF_ClassDefaultObject) || Screen->GetOwningPlayer() != PC
+				|| !Screen->GetClass()->GetName().StartsWith(TEXT("Widget_BuildMode")) || !Screen->WidgetTree)
+			{
+				continue;
+			}
+			UPanelWidget* Panel = nullptr;
+			Screen->WidgetTree->ForEachWidget([&Panel, &OutSample](UWidget* Child)
+			{
+				UUserWidget* Hint = Cast<UUserWidget>(Child);
+				if (!Panel && Hint && HintDescription(Hint) && Hint->GetParent())
+				{
+					Panel = Hint->GetParent();
+					OutSample = Hint;
+				}
+			});
+			if (Panel)
+			{
+				return Panel;
+			}
+		}
+		return nullptr;
+	}
+}
+
+void RMRoadLimits::UpdateHintBar(APlayerController* PC, bool bShow)
+{
+	if (!bShow || !PC || !PC->IsLocalController())
+	{
+		if (UUserWidget* Hint = GLimitsHintWidget.Get())
+		{
+			Hint->RemoveFromParent();
+		}
+		GLimitsHintWidget.Reset();
+		return;
+	}
+	UUserWidget* Hint = GLimitsHintWidget.Get();
+	UPanelWidget* Panel = GHintPanel.Get();
+	// Still in the bar (the game clears and refills the bar when it changes its hints).
+	if (!Hint || !Panel || Hint->GetParent() != Panel)
+	{
+		const double Now = FPlatformTime::Seconds();
+		if (Now < GNextHintSearch && !Panel)
+		{
+			return;
+		}
+		GNextHintSearch = Now + 1.0;
+		UUserWidget* Sample = nullptr;
+		Panel = FindHintPanel(PC, Sample);
+		GHintPanel = Panel;
+		if (!Panel || !Sample)
+		{
+			return;
+		}
+		if (!Hint || Hint->GetClass() != Sample->GetClass())
+		{
+			Hint = CreateWidget<UUserWidget>(PC, Sample->GetClass());
+			GLimitsHintWidget = Hint;
+		}
+		if (!Hint)
+		{
+			return;
+		}
+		Hint->RemoveFromParent();
+		Panel->AddChild(Hint);
+	}
+	// The texts every frame (the widget may set its own when built), and the current key.
+	TArray<FKey> Keys = LimitsKeys(PC);
+	if (UTextBlock* Description = HintDescription(Hint))
+	{
+		Description->SetText(NSLOCTEXT("RoadMaker", "LimitsHint", "Toggle Limits"));
+	}
+	if (UTextBlock* KeyText = HintKeyText(Hint))
+	{
+		const FText Name = Keys.Num() > 0 ? UFGInputLibrary::GetAbbreviatedKeyName(Keys[0]) : FText::GetEmpty();
+		KeyText->SetText(Name.IsEmpty() && Keys.Num() > 0 ? Keys[0].GetDisplayName(false) : Name);
+	}
+	Hint->SetVisibility(ESlateVisibility::HitTestInvisible);
 }

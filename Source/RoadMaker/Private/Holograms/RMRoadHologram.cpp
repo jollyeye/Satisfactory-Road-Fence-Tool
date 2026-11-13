@@ -440,6 +440,7 @@ void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		DisableInput(PC);
 		RMRoadLimits::BindRoadInput(PC, false);
+		RMRoadLimits::UpdateHintBar(PC, false);
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -464,6 +465,7 @@ void ARMRoadHologram::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	RMRoadLimits::UpdateHintBar(PC, true);
 	if (RMRoadLimits::HandleInput(PC))
 	{
 		LabelBuildModes(PC); // "(Limits: ON / OFF)" after the mode's name
