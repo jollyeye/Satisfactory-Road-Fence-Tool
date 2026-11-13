@@ -33,6 +33,7 @@
 #include "UObject/UObjectIterator.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Kismet/KismetRenderingLibrary.h"
+#include "Signs/RMIconLibraryTools.h"
 #include "Engine/Canvas.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "TextureResource.h"
@@ -513,6 +514,7 @@ namespace
 				break;
 			}
 		}
+		URMIconLibraryTools::LogOurIcons(World);
 		UTexture2D* Cart = World ? ARMBuildableMarking::VehicleIcon(3) : nullptr;
 		if (!Cart)
 		{

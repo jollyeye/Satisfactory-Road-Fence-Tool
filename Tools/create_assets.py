@@ -565,6 +565,20 @@ try:
         log("  Lane Vehicle tile: full size, never streamed")
 except Exception as e:
     log("  ! Lane Vehicle tile settings: %s" % e)
+# Sign icons (T_RM_Sign_*): sharp UI textures, always loaded; they repeat left to right (the animated ones scroll).
+for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
+    if f.startswith("T_RM_Sign_") and f.lower().endswith(".png"):
+        try:
+            t = unreal.load_asset(ROOT + "/Icons/" + f[:-4])
+            t.set_editor_property("never_stream", True)
+            t.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_FROM_TEXTURE_GROUP)
+            t.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+            t.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_EDITOR_ICON)
+            t.set_editor_property("address_x", unreal.TextureAddress.TA_WRAP)
+            eal.save_loaded_asset(t, only_if_is_dirty=False)
+            log("  sign icon texture " + f[:-4])
+        except Exception as e:
+            log("  ! sign icon %s: %s" % (f, e))
 
 # Road Tools tab icon: the game's Vehicles tab brush (same size / look) with our glyph.
 if road_tools_cat:

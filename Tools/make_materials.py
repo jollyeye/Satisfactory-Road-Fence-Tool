@@ -996,6 +996,71 @@ icon_mask(marking_icon_cyber)
 finish(marking_icon_cyber)
 log("Cyberpunk vehicle icon marking")
 
+# --- Sign icons: Road Maker's own icons in the game's sign icon picker ---------------------------
+# Chevrons for curves, still and scrolling. The game tints icons with the sign's colour; for a material icon the
+# tint arrives as the vertex colour (UI material). The library's order is the icons' IDs: only ever append.
+SIGN_ICON_ROOT = "/RoadMaker/Icons"
+
+
+def sign_tex(name):
+    try:
+        return unreal.load_asset("%s/%s.%s" % (SIGN_ICON_ROOT, name, name))
+    except Exception as e:
+        log("  ! sign icon texture %s: %s" % (name, e))
+        return None
+
+
+def scrolling_icon(name, tex, speed):
+    """UI material: the texture scrolling left / right (speed in icon widths per second), tinted like a sign icon."""
+    m = new_material(name)
+    m.set_editor_property("material_domain", unreal.MaterialDomain.MD_UI)
+    m.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    uv = node(m, unreal.MaterialExpressionTextureCoordinate, -900, 0)
+    pan = node(m, unreal.MaterialExpressionPanner, -700, 0)
+    pan.set_editor_property("speed_x", speed)
+    pan.set_editor_property("speed_y", 0.0)
+    link(uv, "", pan, "Coordinate")
+    ts = node(m, unreal.MaterialExpressionTextureSample, -450, 0)
+    ts.set_editor_property("texture", tex)
+    ts.set_editor_property("sampler_type", sampler_for(tex))
+    ts.set_editor_property("sampler_source", unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
+    link(pan, "", ts, "UVs")
+    vc = node(m, unreal.MaterialExpressionVertexColor, -450, 300)
+    col = node(m, unreal.MaterialExpressionMultiply, -200, 0)
+    link(ts, "RGB", col, "A")
+    link(vc, "", col, "B")
+    op = node(m, unreal.MaterialExpressionMultiply, -200, 200)
+    link(ts, "A", op, "A")
+    link(vc, "A", op, "B")
+    MEL.connect_material_property(col, "", MP.MP_EMISSIVE_COLOR)
+    MEL.connect_material_property(op, "", MP.MP_OPACITY)
+    finish(m)
+    return m
+
+
+chev_r = sign_tex("T_RM_Sign_ChevronsRight")
+chev_l = sign_tex("T_RM_Sign_ChevronsLeft")
+if chev_r and chev_l:
+    anim_r = scrolling_icon("MUI_RM_Sign_ChevronsRight", chev_r, 0.5)
+    anim_l = scrolling_icon("MUI_RM_Sign_ChevronsLeft", chev_l, -0.5)
+    lib_path = SIGN_ICON_ROOT + "/IL_RoadMaker"
+    lib = eal.load_asset(lib_path) if eal.does_asset_exist(lib_path) else None
+    if not lib:
+        factory = unreal.DataAssetFactory()
+        factory.set_editor_property("data_asset_class", unreal.FGIconLibrary)
+        lib = asset_tools.create_asset("IL_RoadMaker", SIGN_ICON_ROOT, unreal.FGIconLibrary, factory)
+    if lib:
+        # ID = position: never reorder or remove, only append.
+        icons = [(chev_l, "Chevrons Left", False), (chev_r, "Chevrons Right", False),
+                 (anim_l, "Chevrons Left (Animated)", True), (anim_r, "Chevrons Right (Animated)", True)]
+        unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons])
+        eal.save_loaded_asset(lib, only_if_is_dirty=False)
+        log("Sign icon library: %d icons" % len(icons))
+    else:
+        log("  ! could not create the sign icon library")
+else:
+    log("  ! sign icon textures missing (run create_assets.py first)")
+
 # --- Assign ----------------------------------------------------------------------------------
 # Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
