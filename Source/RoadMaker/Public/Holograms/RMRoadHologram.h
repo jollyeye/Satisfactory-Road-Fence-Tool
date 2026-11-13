@@ -32,11 +32,14 @@ public:
 
 protected:
 	/**
-	 * "Long Curve" build mode: the default curve with no length limit and no turn or grade limits,
-	 * only refused when the road would fold over itself (a bend tighter than half its width). For big
-	 * sweeping curves; paths are added after with Cut Road (pieces of normal length).
+	 * "Long Curve" build mode: the default curve up to 1 km long, with no turn or grade limits, only
+	 * refused when the road would fold over itself (a bend tighter than half its width). For big
+	 * sweeping curves; snap-key paths / tracks go on in sections.
 	 */
 	bool IsLongMode() const;
+
+	/** Longest Long Curve road (cm): longer ones made placing paths and tracks on them lag. */
+	static constexpr float LongCurveMaxLength = 100000.f;
 
 	/** Build mode asset (a UFGHologramBuildModeDescriptor Blueprint) for Long Curve. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")

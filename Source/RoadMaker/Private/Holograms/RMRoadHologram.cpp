@@ -424,8 +424,12 @@ void ARMRoadHologram::CheckValidPlacement()
 	}
 	if (IsLongMode())
 	{
-		// Any length, turn or slope: only a bend tighter than half the width (the inner edge folding
-		// over itself) is refused.
+		// Up to 1 km, any turn or slope: only that and a bend tighter than half the width (the inner
+		// edge folding over itself) are refused.
+		if (Stats.Length > LongCurveMaxLength)
+		{
+			AddConstructDisqualifier(URMCD_LongCurveTooLong::StaticClass());
+		}
 		if (Stats.MinTurnRadius < Road->GetRoadWidth() * 0.5f * 1.02f)
 		{
 			AddConstructDisqualifier(URMCD_TurnTooTight::StaticClass());

@@ -238,3 +238,11 @@ class ROADMAKER_API URMCD_FenceJoinTooLong : public UFGConstructDisqualifier
 public:
 	URMCD_FenceJoinTooLong() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FenceJoinTooLong", "The joined fence would be longer than 1 km"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_LongCurveTooLong : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_LongCurveTooLong() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "LongCurveTooLong", "Road is longer than 1 km"); }
+};

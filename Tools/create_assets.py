@@ -234,7 +234,7 @@ finish(bm_smooth)
 
 bm_long = make_bp("Holograms", "BM_LongCurve", BuildModeDescriptor)
 setp(cdo(bm_long), text("Long Curve"), "m_display_name", "mDisplayName")
-setp(cdo(bm_long), text("For big sweeping curves: any length, the build gun reaches 1 km, and no turn or slope limits, only refused if the road would fold over itself. To add paths on it, cut it into normal lengths with Cut Road."), "m_description", "mDescription")
+setp(cdo(bm_long), text("For big sweeping curves: up to 1 km long, the build gun reaches 1 km, and no turn or slope limits, only refused if the road would fold over itself. Snap-key paths and tracks go on it in sections."), "m_description", "mDescription")
 finish(bm_long)
 
 holo_road = make_bp("Holograms", "Holo_Road", RMRoadHologram)
