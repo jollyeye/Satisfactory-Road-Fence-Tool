@@ -1016,14 +1016,14 @@ def sign_tex(name):
 # Sign backgrounds are instances of the game's MM_UI_SignBG (a UI material for the editor) with the same settings the
 # placed sign's own material (MM_SignRT) reads: BackgroundType 0 = our texture (1 to 6 are the game's drawn patterns:
 # gradients, diagonal lines, checker, wave), FillMode 0 = tiled over the whole sign (1 fit, 2 stretched), one tile =
-# TileWidth x TileHeight sign units. Animate: the game's own backgrounds all have 0 and scroll slowly; tested
-# 2026-11-13: ours with 0 scroll too, so 1 should hold them still (to confirm).
+# TileWidth x TileHeight sign units. Placed signs scroll every texture background slowly whatever "Animate" says
+# (MM_SignRT has no Animate parameter, only Time): ours scroll like the game's own (tested 2026-11-13).
 SIGN_BG_PARENT = "/Game/FactoryGame/Interface/UI/InGame/Signs/SignBackgrounds/MM_UI_SignBG"
 SIGN_BG_SETTINGS = {"BackgroundType": 0.0, "FillMode": 0.0, "TileWidth": 200.0, "TileHeight": 200.0, "FitScale": 1.0,
-                    "SignWidth": 200.0, "SignHeight": 200.0}
+                    "Animate": 0.0, "SignWidth": 200.0, "SignHeight": 200.0}
 
 
-def sign_background(name, tex, animate):
+def sign_background(name, tex):
     parent = eal.load_asset(SIGN_BG_PARENT) if eal.does_asset_exist(SIGN_BG_PARENT) else None
     if not parent:
         log("  ! %s not in the project" % SIGN_BG_PARENT)
@@ -1035,7 +1035,6 @@ def sign_background(name, tex, animate):
     MEL.set_material_instance_parent(mi, parent)
     for p, v in SIGN_BG_SETTINGS.items():
         MEL.set_material_instance_scalar_parameter_value(mi, p, v)
-    MEL.set_material_instance_scalar_parameter_value(mi, "Animate", 0.0 if animate else 1.0)
     MEL.set_material_instance_texture_parameter_value(mi, "Texture", tex)
     MEL.update_material_instance(mi)
     eal.save_loaded_asset(mi, only_if_is_dirty=False)
@@ -1046,20 +1045,20 @@ def sign_background(name, tex, animate):
 chev_r = sign_tex("T_RM_Sign_ChevronsRight")
 chev_l = sign_tex("T_RM_Sign_ChevronsLeft")
 if chev_r and chev_l:
-    bg_l = sign_background("MI_RM_SignBG_ChevronsLeft", chev_l, False)
-    bg_r = sign_background("MI_RM_SignBG_ChevronsRight", chev_r, False)
-    bg_la = sign_background("MI_RM_SignBG_ChevronsLeftAnim", chev_l, True)
-    bg_ra = sign_background("MI_RM_SignBG_ChevronsRightAnim", chev_r, True)
+    bg_l = sign_background("MI_RM_SignBG_ChevronsLeft", chev_l)
+    bg_r = sign_background("MI_RM_SignBG_ChevronsRight", chev_r)
+    for old in ("MI_RM_SignBG_ChevronsLeftAnim", "MI_RM_SignBG_ChevronsRightAnim"):  # no separate animated ones
+        if eal.does_asset_exist(SIGN_ICON_ROOT + "/" + old):
+            eal.delete_asset(SIGN_ICON_ROOT + "/" + old)
     lib_path = SIGN_ICON_ROOT + "/IL_RoadMaker"
     lib = eal.load_asset(lib_path) if eal.does_asset_exist(lib_path) else None
     if not lib:
         factory = unreal.DataAssetFactory()
         factory.set_editor_property("data_asset_class", unreal.FGIconLibrary)
         lib = asset_tools.create_asset("IL_RoadMaker", SIGN_ICON_ROOT, unreal.FGIconLibrary, factory)
-    if lib and bg_l and bg_r and bg_la and bg_ra:
+    if lib and bg_l and bg_r:
         # ID = position: never reorder or remove, only append (once released).
-        icons = [(bg_l, "Chevrons Left", False), (bg_r, "Chevrons Right", False),
-                 (bg_la, "Chevrons Left (Animated)", True), (bg_ra, "Chevrons Right (Animated)", True)]
+        icons = [(bg_l, "Chevrons Left", False), (bg_r, "Chevrons Right", False)]
         unreal.RMIconLibraryTools.set_icons(lib, [i[0] for i in icons], [i[1] for i in icons], [i[2] for i in icons], True)  # True: Backgrounds
         eal.save_loaded_asset(lib, only_if_is_dirty=False)
         log("Sign icon library: %d backgrounds" % len(icons))
