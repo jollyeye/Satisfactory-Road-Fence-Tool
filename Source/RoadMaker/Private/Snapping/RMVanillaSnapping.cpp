@@ -2125,6 +2125,10 @@ namespace
 		return true;
 	}
 
+	/** Vehicle paths built this frame, joined the next tick. */
+	TArray<TWeakObjectPtr<AFGVehiclePathSegment>> GPendingPathMerge;
+	bool GPathMergeScheduled = false;
+
 	/**
 	 * Vehicle paths built in one click (lane sections, junction links): each gets its own end nodes, so
 	 * where one ends and the next starts there are two nodes on the same spot and vehicles cannot pass.
@@ -2159,9 +2163,10 @@ namespace
 			}
 			for (AFGVehiclePathNode* S : Nodes)
 			{
-				if (S == E || S->GetLeavingConnections().Num() == 0 || S->GetArrivingConnections().Num() > 0)
+				if (S == E || S->GetLeavingConnections().Num() == 0 || S->GetArrivingConnections().Num() > 0
+					|| S->GetLeavingConnections().Contains(E->GetArrivingConnections()[0]))
 				{
-					continue;
+					continue; // not a pair, or both ends of the same path
 				}
 				const float D = FVector::Dist(E->GetActorLocation(), S->GetActorLocation());
 				if (D < 150.f)
@@ -3116,35 +3121,42 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBuildableHologram::Construct, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
 		[](AActor* Result, AFGBuildableHologram* Hologram, TArray<AActor*>& OutChildren, FNetConstructionID ConstructionID)
 		{
+			// Called for the main hologram and again for children, each time with part of the list: everything
+			// built this frame is collected and joined once, the next tick.
 			UWorld* World = Hologram ? Hologram->GetWorld() : nullptr;
-			if (!World || !Hologram->IsA<AFGVehiclePathSegmentHologram>() || OutChildren.Num() == 0)
+			if (!World || !Hologram->IsA<AFGVehiclePathSegmentHologram>())
 			{
 				return;
 			}
-			TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Built;
 			if (AFGVehiclePathSegment* Main = Cast<AFGVehiclePathSegment>(Result))
 			{
-				Built.Add(Main);
+				GPendingPathMerge.AddUnique(Main);
 			}
 			for (AActor* Child : OutChildren)
 			{
 				if (AFGVehiclePathSegment* Seg = Cast<AFGVehiclePathSegment>(Child))
 				{
-					Built.Add(Seg);
+					GPendingPathMerge.AddUnique(Seg);
 				}
 			}
-			if (Built.Num() < 2)
+			if (GPathMergeScheduled)
 			{
 				return;
 			}
+			GPathMergeScheduled = true;
 			TWeakObjectPtr<UWorld> WeakWorld(World);
-			World->GetTimerManager().SetTimerForNextTick([WeakWorld, Built]()
+			World->GetTimerManager().SetTimerForNextTick([WeakWorld]()
 			{
-				if (UWorld* W = WeakWorld.Get())
+				GPathMergeScheduled = false;
+				TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Built = MoveTemp(GPendingPathMerge);
+				GPendingPathMerge.Reset();
+				UWorld* W = WeakWorld.Get();
+				if (W && Built.Num() >= 2)
 				{
 					MergeSectionNodes(W, Built);
 				}
 			});
+		});
 		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
