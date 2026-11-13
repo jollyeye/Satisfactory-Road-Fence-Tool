@@ -222,6 +222,9 @@ namespace
 		return F;
 	}
 
+	/** Forgets the long-road lane sections set up for a hologram (defined with them below). */
+	void LaneSectionsRelease(const AFGHologram* H);
+
 	/** Set while we place the hologram again ourselves, so our hook lets the game's code run. */
 	bool GInPathReplace = false;
 	TMap<TWeakObjectPtr<const AFGHologram>, FPathState> GPathStates;
@@ -1398,6 +1401,7 @@ namespace
 		GJunctionParentLink.Remove(Parent);
 		GJunctionCache.Remove(Parent);
 		GJunctionHolograms.Remove(Parent);
+		LaneSectionsRelease(Parent);
 	}
 
 	/**
@@ -1703,6 +1707,418 @@ namespace
 		for (int32 C = Used; C < Children.Num(); ++C)
 		{
 			RemoveJunctionChild(Parent, Children[C]);
+		}
+		return true;
+	}
+
+	// ---- Long roads: lane paths / tracks for every section at once ----------------------------------
+
+	/** The lane under the aim (same rules as PlaceLanePath): its sideways offset, and the nearest frame. */
+	bool LanePick(const ARMBuildableRoad* Road, const TArray<FRMFrame>& Frames, const FVector& Aim, int32& OutLane, float& OutOff, int32& OutNear)
+	{
+		if (Frames.Num() < 2)
+		{
+			return false;
+		}
+		OutNear = 0;
+		float NearDist = TNumericLimits<float>::Max();
+		for (int32 I = 0; I < Frames.Num(); ++I)
+		{
+			const float D = FVector::DistSquared(Frames[I].Pos, Aim);
+			if (D < NearDist)
+			{
+				NearDist = D;
+				OutNear = I;
+			}
+		}
+		const float U = FVector::DotProduct(Aim - Frames[OutNear].Pos, Frames[OutNear].Right);
+		const float Width = Road->GetRoadWidth();
+		const int32 Lanes = FMath::Clamp<int32>(Road->GetMarkings().Lanes, 1, 4);
+		TArray<float> Offsets;
+		if (Lanes <= 1)
+		{
+			const int32 Count = FMath::FloorToInt(Width * 0.5f / 200.f);
+			for (int32 K = -Count; K <= Count; ++K)
+			{
+				Offsets.Add(K * 200.f);
+			}
+		}
+		else
+		{
+			const float Inset = Road->GetMarkings().bEdgeLines ? Road->mEdgeLineInset : 0.f;
+			const float Inner = FMath::Max(Width - 2.f * Inset, 1.f);
+			for (int32 I = 0; I < Lanes; ++I)
+			{
+				Offsets.Add(-Width * 0.5f + Inset + Inner * (I + 0.5f) / Lanes);
+			}
+		}
+		OutLane = 0;
+		for (int32 I = 1; I < Offsets.Num(); ++I)
+		{
+			if (FMath::Abs(Offsets[I] - U) < FMath::Abs(Offsets[OutLane] - U))
+			{
+				OutLane = I;
+			}
+		}
+		OutOff = Offsets[OutLane];
+		return true;
+	}
+
+	/** Lane points every ~4 m from distance D0 to D1 along the road (any order), with tangents. */
+	void LaneCourse(const TArray<FRMFrame>& Frames, float Off, float D0, float D1, float Lift, TArray<FVector>& OutPoints, TArray<FVector>& OutTangents)
+	{
+		OutPoints.Reset();
+		OutTangents.Reset();
+		const bool bBack = D1 < D0;
+		const float Lo = FMath::Min(D0, D1), Hi = FMath::Max(D0, D1);
+		const int32 Keys = FMath::Max(1, FMath::CeilToInt((Hi - Lo) / 400.f));
+		TArray<FVector> Dirs;
+		int32 Seg = 0;
+		for (int32 K = 0; K <= Keys; ++K)
+		{
+			const float D = Lo + (Hi - Lo) * K / Keys;
+			while (Seg + 2 < Frames.Num() && Frames[Seg + 1].Dist < D)
+			{
+				++Seg;
+			}
+			const FRMFrame& Fa = Frames[Seg];
+			const FRMFrame& Fb = Frames[Seg + 1];
+			const float T = Fb.Dist > Fa.Dist ? FMath::Clamp((D - Fa.Dist) / (Fb.Dist - Fa.Dist), 0.f, 1.f) : 0.f;
+			const FVector Right = FMath::Lerp(Fa.Right, Fb.Right, T).GetSafeNormal();
+			OutPoints.Add(FMath::Lerp(Fa.Pos, Fb.Pos, T) + Right * Off + FVector::UpVector * Lift);
+			Dirs.Add(FMath::Lerp(Fa.Fwd, Fb.Fwd, T).GetSafeNormal());
+		}
+		for (int32 K = 0; K < OutPoints.Num(); ++K)
+		{
+			const FVector& Prev = OutPoints[FMath::Max(K - 1, 0)];
+			const FVector& Next = OutPoints[FMath::Min(K + 1, OutPoints.Num() - 1)];
+			const float Span = FVector::Dist(Prev, Next) / (K == 0 || K == OutPoints.Num() - 1 ? 1.f : 2.f);
+			OutTangents.Add(Dirs[K] * Span);
+		}
+		if (bBack)
+		{
+			Algo::Reverse(OutPoints);
+			Algo::Reverse(OutTangents);
+			for (FVector& T : OutTangents)
+			{
+				T = -T;
+			}
+		}
+	}
+
+	/** Most sections laid at once (main hologram + children). */
+	constexpr int32 MaxLaneSections = 32;
+
+	/** What the section holograms were last set up for, so unchanged frames cost nothing. */
+	struct FLaneSectionsCache
+	{
+		TWeakObjectPtr<const ARMBuildableRoad> Road;
+		int32 Lane = -1;
+		bool bFlipped = false;
+		TArray<int32> Sections;
+		double LastScan = 0.0;
+	};
+	TMap<TWeakObjectPtr<const AFGHologram>, FLaneSectionsCache> GLaneSectionsCache;
+
+	/** One vehicle path section: start and end placed like a road-end snap, the lane points as its course. */
+	void SetupLaneSectionPath(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const TArray<FVector>& Points, const TArray<FVector>& Tangents,
+		AFGVehiclePathNode* StartNode, AFGVehiclePathNode* EndNode)
+	{
+		GJunctionHolograms.Add(H);
+		FPathState& State = GPathStates.FindOrAdd(H);
+		State.bLaneMode = true;
+		State.bStartStep = false;
+		State.StartDir = FVector::ZeroVector;
+		auto PlaceGuarded = [H](const FHitResult& Hit)
+		{
+			TGuardValue<bool> Guard(GInPathReplace, true);
+			H->SetHologramLocationAndRotation(Hit);
+		};
+		const FVector StartDir = Tangents[0].GetSafeNormal();
+		const FVector EndDir = Tangents.Last().GetSafeNormal();
+		SetBuildStep(H, 0);
+		PlaceGuarded(MoveHit(BaseHit, Points[0]));
+		if (StartNode)
+		{
+			FRMPathAccess::SnapToNode(H, StartNode);
+		}
+		if (FVector* Exit = VectorField(H, TEXT("mStartPointExitDirection")))
+		{
+			*Exit = StartDir;
+		}
+		SetBuildStep(H, 1);
+		const FVector AxisB = FVector(EndDir.X, EndDir.Y, 0.f).GetSafeNormal();
+		const bool bWasFlipped = State.bFlipped;
+		State.bFlipped = false;
+		PlacePathEnd(PlaceGuarded, H, MoveHit(BaseHit, Points.Last()), Points.Last() - AxisB * 100.f, AxisB, State);
+		State.bFlipped = bWasFlipped;
+		if (EndNode)
+		{
+			FRMPathAccess::SnapToNode(H, EndNode);
+		}
+		SetPathSplineWorld(H, Points, Tangents);
+	}
+
+	void LaneSectionsRelease(const AFGHologram* H)
+	{
+		GLaneSectionsCache.Remove(H);
+	}
+
+	/** The child hologram for slot Index (made when missing), shown and switched on. */
+	AFGHologram* LaneSectionChild(AFGHologram* Parent, TArray<TWeakObjectPtr<AFGHologram>>& Children, int32 Index, const FVector& At)
+	{
+		if (!Children.IsValidIndex(Index) || !Children[Index].IsValid())
+		{
+			const FName Name(*FString::Printf(TEXT("RMLaneSection%d"), Index));
+			AFGHologram* NewChild = AFGHologram::SpawnChildHologramFromRecipe(Parent, Name, Parent->GetRecipe(), Parent->GetOwner(), At);
+			if (!NewChild)
+			{
+				return nullptr;
+			}
+			if (Children.IsValidIndex(Index))
+			{
+				Children[Index] = NewChild;
+			}
+			else
+			{
+				Children.Add(NewChild);
+			}
+		}
+		AFGHologram* Child = Children[Index].Get();
+		if (Child)
+		{
+			Child->SetDisabled(false);
+			Child->SetActorHiddenInGame(false);
+		}
+		return Child;
+	}
+
+	/**
+	 * Snap key + vehicle path or railway track aiming at a lane of a long road (over 125 m): a path /
+	 * track for every section of the lane at once (the road's sections of at most 100 m, at most 32 per
+	 * click), each ending where the next starts; sections that already have one are left out. One
+	 * click builds them all. Laid out once per road / lane / direction (refreshed every half second).
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceLaneSections(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableRoad* Road)
+	{
+		UWorld* World = Hologram->GetWorld();
+		AFGVehiclePathSegmentHologram* PathParent = Cast<AFGVehiclePathSegmentHologram>(Hologram);
+		AFGRailroadTrackHologram* RailParent = Cast<AFGRailroadTrackHologram>(Hologram);
+		if (!World || !Road || (!PathParent && !RailParent))
+		{
+			return false;
+		}
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 100.f);
+		int32 Lane = 0, NearIdx = 0;
+		float Off = 0.f;
+		if (!LanePick(Road, Frames, Hit.Location, Lane, Off, NearIdx))
+		{
+			return false;
+		}
+		const float Length = Frames.Last().Dist;
+		const int32 Count = Length > ARMBuildableSpline::SingleSectionMax ? FMath::CeilToInt(Length / ARMBuildableSpline::SectionLength) : 1;
+		if (Count <= 1)
+		{
+			return false;
+		}
+		const float Each = Length / Count;
+
+		FPathState& State = GPathStates.FindOrAdd(Hologram);
+		if (!State.bLaneMode || State.Owner.Get() != Road || State.EndIndex != Lane)
+		{
+			State.bFlipped = false;
+		}
+		FLaneSectionsCache& Cache = GLaneSectionsCache.FindOrAdd(Hologram);
+		const double Now = FPlatformTime::Seconds();
+		if (State.bLaneMode && Cache.Road.Get() == Road && Cache.Lane == Lane && Cache.bFlipped == State.bFlipped && Now - Cache.LastScan < 0.5)
+		{
+			Scope.Cancel();
+			return true;
+		}
+
+		// The lane at each section boundary, and what is already built there.
+		TArray<FVector> Bound;
+		for (int32 K = 0; K <= Count; ++K)
+		{
+			const FRMFrame F = LaneFrameAt(Frames, K == Count ? Length : K * Each);
+			Bound.Add(F.Pos + F.Right * Off + FVector::UpVector * (PathParent ? PathSnapLift : 0.f));
+		}
+		TArray<AFGVehiclePathNode*> Nodes;
+		Nodes.Init(nullptr, Count + 1);
+		TArray<UFGRailroadTrackConnectionComponent*> Conns;
+		Conns.Init(nullptr, Count + 1);
+		TArray<bool> Built;
+		Built.Init(false, Count);
+		int32 Suggest = 0; // +1: along the road's build direction, -1: against
+		if (PathParent)
+		{
+			TArray<AFGVehiclePathSegment*> Segments;
+			for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+			{
+				Segments.Add(*It);
+				for (int32 K = 0; K <= Count; ++K)
+				{
+					for (AFGVehiclePathNode* N : { It->GetStartNode(), It->GetEndNode() })
+					{
+						if (N && !Nodes[K] && FVector::Dist(N->GetActorLocation(), Bound[K]) < 150.f)
+						{
+							Nodes[K] = N;
+						}
+					}
+				}
+			}
+			for (AFGVehiclePathSegment* Seg : Segments)
+			{
+				for (int32 K = 0; K < Count; ++K)
+				{
+					const bool bAB = Nodes[K] && Nodes[K + 1] && Seg->GetStartNode() == Nodes[K] && Seg->GetEndNode() == Nodes[K + 1];
+					const bool bBA = Nodes[K] && Nodes[K + 1] && Seg->GetStartNode() == Nodes[K + 1] && Seg->GetEndNode() == Nodes[K];
+					if (bAB || bBA)
+					{
+						Built[K] = true;
+						Suggest = Suggest ? Suggest : (bAB ? 1 : -1); // continue the flow already there
+					}
+				}
+				if (!Suggest && Nodes[0] && Seg->GetEndNode() == Nodes[0]) { Suggest = 1; }
+				if (!Suggest && Nodes[Count] && Seg->GetStartNode() == Nodes[Count]) { Suggest = 1; }
+				if (!Suggest && Nodes[0] && Seg->GetStartNode() == Nodes[0]) { Suggest = -1; }
+				if (!Suggest && Nodes[Count] && Seg->GetEndNode() == Nodes[Count]) { Suggest = -1; }
+			}
+		}
+		else
+		{
+			for (int32 K = 0; K <= Count; ++K)
+			{
+				Conns[K] = FindFreeTrackEnd(World, Bound[K]);
+			}
+			// A section is built if a track runs between its two boundaries already.
+			for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
+			{
+				const UFGRailroadTrackConnectionComponent* C0 = It->GetConnection(0);
+				const UFGRailroadTrackConnectionComponent* C1 = It->GetConnection(1);
+				if (!C0 || !C1)
+				{
+					continue;
+				}
+				for (int32 K = 0; K < Count; ++K)
+				{
+					const FVector P0 = C0->GetConnectorLocation(), P1 = C1->GetConnectorLocation();
+					if ((FVector::Dist(P0, Bound[K]) < 150.f && FVector::Dist(P1, Bound[K + 1]) < 150.f)
+						|| (FVector::Dist(P1, Bound[K]) < 150.f && FVector::Dist(P0, Bound[K + 1]) < 150.f))
+					{
+						Built[K] = true;
+					}
+				}
+			}
+		}
+		bool bForward = Suggest >= 0;
+		if (State.bFlipped)
+		{
+			bForward = !bForward;
+		}
+
+		// The sections still to lay (at most MaxLaneSections, from the start of the road).
+		TArray<int32> Todo;
+		for (int32 K = 0; K < Count && Todo.Num() < MaxLaneSections; ++K)
+		{
+			if (!Built[K])
+			{
+				Todo.Add(K);
+			}
+		}
+		if (Todo.Num() == 0)
+		{
+			return false; // the whole lane has paths already: the game's normal placement
+		}
+
+		Scope.Cancel(); // everything is placed below
+		State.bLaneMode = true;
+		State.Owner = Road;
+		State.EndIndex = Lane;
+		State.bStartStep = false;
+		if (RailParent && !State.bSetCustomEnd)
+		{
+			State.SavedScroll = Hologram->GetScrollRotateValue();
+			State.bSetCustomEnd = true;
+		}
+		Cache.LastScan = Now;
+		if (Cache.Road.Get() == Road && Cache.Lane == Lane && Cache.bFlipped == State.bFlipped && Cache.Sections == Todo)
+		{
+			return true; // the same sections as before: already placed
+		}
+		Cache.Road = Road;
+		Cache.Lane = Lane;
+		Cache.bFlipped = State.bFlipped;
+		Cache.Sections = Todo;
+		GJunctionCache.Remove(Hologram); // the junction mode sets itself up again next time
+
+		// Road ends with nothing beyond: the path starts 5 m onto the road (the game needs floor under
+		// the whole vehicle). Section boundaries inside the road are left exactly where they are.
+		const float InsetLen = FMath::Min(PathEndInset, Each * 0.3f);
+		const bool bInset0 = PathParent && !Nodes[0] && !RMRoadUtils::IsEndOccupied(World, Road, 0) && !HasFloorBeyond(World, Bound[0], -Frames[0].Fwd);
+		const bool bInsetN = PathParent && !Nodes[Count] && !RMRoadUtils::IsEndOccupied(World, Road, 1) && !HasFloorBeyond(World, Bound[Count], Frames.Last().Fwd);
+
+		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Hologram);
+		int32 Used = 0;
+		for (int32 I = 0; I < Todo.Num(); ++I)
+		{
+			const int32 K = Todo[I];
+			float D0 = K * Each;
+			float D1 = K == Count - 1 ? Length : (K + 1) * Each;
+			if (K == 0 && bInset0)
+			{
+				D0 += InsetLen;
+			}
+			if (K == Count - 1 && bInsetN)
+			{
+				D1 -= InsetLen;
+			}
+			TArray<FVector> Points, Tangents;
+			LaneCourse(Frames, Off, bForward ? D0 : D1, bForward ? D1 : D0, PathParent ? PathSnapLift : 0.f, Points, Tangents);
+			if (Points.Num() < 2)
+			{
+				continue;
+			}
+			const int32 StartB = bForward ? K : K + 1;
+			const int32 EndB = bForward ? K + 1 : K;
+			// Exactly on what is built at the boundaries.
+			if (PathParent)
+			{
+				if (Nodes[StartB]) { Points[0] = Nodes[StartB]->GetActorLocation(); }
+				if (Nodes[EndB]) { Points.Last() = Nodes[EndB]->GetActorLocation(); }
+			}
+			else
+			{
+				if (Conns[StartB]) { Points[0] = Conns[StartB]->GetConnectorLocation(); }
+				if (Conns[EndB]) { Points.Last() = Conns[EndB]->GetConnectorLocation(); }
+			}
+			AFGHologram* H = I == 0 ? static_cast<AFGHologram*>(Hologram) : LaneSectionChild(Hologram, Children, I - 1, Points[0]);
+			if (!H)
+			{
+				break;
+			}
+			if (AFGVehiclePathSegmentHologram* Path = Cast<AFGVehiclePathSegmentHologram>(H))
+			{
+				SetupLaneSectionPath(Path, Hit, Points, Tangents, Nodes[StartB], Nodes[EndB]);
+			}
+			else if (AFGRailroadTrackHologram* Rail = Cast<AFGRailroadTrackHologram>(H))
+			{
+				GJunctionHolograms.Add(Rail);
+				FPathState& RailState = GPathStates.FindOrAdd(Rail);
+				RailState.bLaneMode = true; // skips the rail tool's post-placement re-route
+				RailState.bStartStep = false;
+				SetupRailDirect(Rail, Points, Tangents, Conns[StartB], Conns[EndB]);
+			}
+			if (I > 0)
+			{
+				Used = I;
+			}
+		}
+		for (int32 C = Used; C < Children.Num(); ++C)
+		{
+			RemoveJunctionChild(Hologram, Children[C]); // not needed now
 		}
 		return true;
 	}
@@ -2120,7 +2536,13 @@ namespace
 				// Only while the snap key is held, so the normal placement stays available.
 				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
 				{
+					// Long roads: every section at once; otherwise the whole lane in one path.
+					if (PlaceLaneSections(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
+					{
+						return true;
+					}
 					ReleaseJunction(Hologram);
+					GLaneSectionsCache.Remove(Hologram);
 					if (PlaceLanePath(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
 					{
 						return true;
@@ -2150,7 +2572,13 @@ namespace
 				const bool bLaneMode = Lane && Lane->bLaneMode;
 				if (bAimRoad && FRMSnapAccess::IsSnapHeld(Hologram) && (bLaneMode || IsStartStep(Hologram)))
 				{
+					// Long roads: every section at once; otherwise the whole lane in one track.
+					if (PlaceLaneSections(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
+					{
+						return true;
+					}
 					ReleaseJunction(Hologram);
+					GLaneSectionsCache.Remove(Hologram);
 					if (PlaceLaneTrack(Scope, Hologram, Hit, Cast<ARMBuildableRoad>(Aimed)))
 					{
 						return true;
