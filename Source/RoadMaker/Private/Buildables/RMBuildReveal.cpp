@@ -82,15 +82,22 @@ namespace
 		}
 	};
 
-	/** The triangles of Section where Lo <= distance <= Hi, cut smoothly at both limits. */
-	void RevealCut(const FProcMeshSection& Section, const TArray<float>& Dist, float Lo, float Hi, FRMRevealOut& Out,
-		const FVector& Lift = FVector::ZeroVector, const FLinearColor* Color = nullptr)
+	/**
+	 * The triangles of Section (the listed ones: first index of each) where Lo <= distance <= Hi, cut
+	 * smoothly at both limits; bWhole: no cut (all of them lie inside).
+	 */
+	void RevealCut(const FProcMeshSection& Section, const TArray<float>& Dist, const TArray<int32>& Triangles, float Lo, float Hi, FRMRevealOut& Out,
+		bool bWhole = false, const FVector& Lift = FVector::ZeroVector, const FLinearColor* Color = nullptr)
 	{
 		const TArray<FProcMeshVertex>& Verts = Section.ProcVertexBuffer;
 		const TArray<uint32>& Index = Section.ProcIndexBuffer;
 		TArray<FRMRevealVert, TInlineAllocator<8>> Poly;
-		for (int32 K = 0; K + 2 < Index.Num(); K += 3)
+		for (const int32 K : Triangles)
 		{
+			if (K + 2 >= Index.Num())
+			{
+				continue;
+			}
 			const int32 I0 = Index[K], I1 = Index[K + 1], I2 = Index[K + 2];
 			if (!Verts.IsValidIndex(I0) || !Verts.IsValidIndex(I1) || !Verts.IsValidIndex(I2))
 			{
@@ -105,8 +112,11 @@ namespace
 			Poly.Add({ Verts[I0], D0 });
 			Poly.Add({ Verts[I1], D1 });
 			Poly.Add({ Verts[I2], D2 });
-			RevealClip(Poly, Hi, 1.f);
-			RevealClip(Poly, Lo, -1.f);
+			if (!bWhole)
+			{
+				RevealClip(Poly, Hi, 1.f);
+				RevealClip(Poly, Lo, -1.f);
+			}
 			if (Poly.Num() >= 3)
 			{
 				Out.Add(Poly, Lift, Color);
@@ -127,6 +137,9 @@ void ARMBuildableProcedural::StartReveal()
 	mRevealDist.Reset();
 	mRevealMaxDist = 0.f;
 	mRevealSources.Reset();
+	mRevealBins.Reset();
+	mRevealBinMin.Reset();
+	mRevealDoneBins = -1;
 	// Every section of every chunk's detailed mesh (long pieces are drawn in chunks).
 	for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
 	{
@@ -141,6 +154,30 @@ void ARMBuildableProcedural::StartReveal()
 			{
 				D.Add(RevealDistance(V.Position));
 				mRevealMaxDist = FMath::Max(mRevealMaxDist, D.Last());
+			}
+			// Triangles in 10 m bins by their farthest distance.
+			TArray<TArray<int32>>& Bins = mRevealBins.AddDefaulted_GetRef();
+			TArray<float>& BinMin = mRevealBinMin.AddDefaulted_GetRef();
+			const TArray<uint32>& Index = mRevealSections.Last().ProcIndexBuffer;
+			for (int32 K = 0; K + 2 < Index.Num(); K += 3)
+			{
+				if (!D.IsValidIndex(Index[K]) || !D.IsValidIndex(Index[K + 1]) || !D.IsValidIndex(Index[K + 2]))
+				{
+					continue;
+				}
+				const float Lo = FMath::Min3(D[Index[K]], D[Index[K + 1]], D[Index[K + 2]]);
+				const float Hi = FMath::Max3(D[Index[K]], D[Index[K + 1]], D[Index[K + 2]]);
+				const int32 Bin = FMath::Max(0, FMath::FloorToInt(Hi / RevealBin));
+				if (Bins.Num() <= Bin)
+				{
+					Bins.SetNum(Bin + 1);
+					while (BinMin.Num() <= Bin)
+					{
+						BinMin.Add(TNumericLimits<float>::Max());
+					}
+				}
+				Bins[Bin].Add(K);
+				BinMin[Bin] = FMath::Min(BinMin[Bin], Lo);
 			}
 		}
 	}
@@ -203,21 +240,58 @@ void ARMBuildableProcedural::StepReveal()
 		mRevealMesh->CreateMeshSection_LinearColor(Index, O.V, O.Tri, O.N, O.UV0, O.UV1, O.UV2, O.UV3, O.C, O.T, false);
 		mRevealMesh->SetMaterial(Index, Material);
 	};
+	// Reveal mesh sections: [0, N) the bins already passed, whole (re-sent only when another bin is
+	// done); [N, 2N) the triangles at the front, cut (every step, few); 2N the glowing band.
+	const int32 N = mRevealSections.Num();
+	const int32 Done = FMath::Max(0, FMath::FloorToInt(Front / RevealBin));
+	const bool bDoneChanged = Done != mRevealDoneBins;
+	mRevealDoneBins = Done;
 	FRMRevealOut Glow;
-	for (int32 S = 0; S < mRevealSections.Num(); ++S)
+	for (int32 S = 0; S < N; ++S)
 	{
-		FRMRevealOut Out;
-		RevealCut(mRevealSections[S], mRevealDist[S], -1.f, Front, Out);
 		UProceduralMeshComponent* Source = mRevealSources.IsValidIndex(S) ? mRevealSources[S].Key : nullptr;
 		const int32 SourceSection = mRevealSources.IsValidIndex(S) ? mRevealSources[S].Value : S;
-		Apply(S, Out, Source ? Source->GetMaterial(SourceSection) : mMesh->GetMaterial(0));
+		UMaterialInterface* Material = Source ? Source->GetMaterial(SourceSection) : mMesh->GetMaterial(0);
+		const TArray<TArray<int32>>& Bins = mRevealBins[S];
+		const TArray<float>& BinMin = mRevealBinMin[S];
+		if (bDoneChanged)
+		{
+			TArray<int32> Whole;
+			for (int32 B = 0; B < FMath::Min(Done, Bins.Num()); ++B)
+			{
+				Whole.Append(Bins[B]);
+			}
+			FRMRevealOut Out;
+			RevealCut(mRevealSections[S], mRevealDist[S], Whole, -1.f, TNumericLimits<float>::Max(), Out, true);
+			Apply(S, Out, Material);
+		}
+		TArray<int32> AtFront, InBand;
+		const int32 BandFirst = FMath::Max(0, FMath::FloorToInt((Front - RevealGlowWidth) / RevealBin));
+		for (int32 B = FMath::Min(BandFirst, Done); B < Bins.Num(); ++B)
+		{
+			if (BinMin[B] > Front)
+			{
+				continue; // nothing of this bin is built yet
+			}
+			if (B >= Done)
+			{
+				AtFront.Append(Bins[B]);
+			}
+			if (B >= BandFirst)
+			{
+				InBand.Append(Bins[B]);
+			}
+		}
+		FRMRevealOut Out;
+		RevealCut(mRevealSections[S], mRevealDist[S], AtFront, -1.f, Front, Out);
+		Apply(N + S, Out, Material);
 		// The glowing band just behind the front, on the top (section 0 of each chunk).
 		if (SourceSection == 0)
 		{
-			RevealCut(mRevealSections[S], mRevealDist[S], Front - RevealGlowWidth, Front, Glow, FVector(0.f, 0.f, 4.f), &GlowColor);
+			RevealCut(mRevealSections[S], mRevealDist[S], InBand, Front - RevealGlowWidth, Front, Glow, false, FVector(0.f, 0.f, 4.f), &GlowColor);
 		}
 	}
-	Apply(mRevealSections.Num(), Glow, GlowMaterial ? GlowMaterial : mMesh->GetMaterial(0));
+	Apply(2 * N, Glow, GlowMaterial ? GlowMaterial : mMesh->GetMaterial(0));
 }
 
 void ARMBuildableProcedural::EndReveal()
@@ -235,6 +309,9 @@ void ARMBuildableProcedural::EndReveal()
 	mRevealSections.Reset();
 	mRevealDist.Reset();
 	mRevealSources.Reset();
+	mRevealBins.Reset();
+	mRevealBinMin.Reset();
+	mRevealDoneBins = -1;
 	for (int32 C = 0; C < GetBuiltChunkCount(); ++C)
 	{
 		if (UProceduralMeshComponent* Source = GetChunkMesh(C, 0))

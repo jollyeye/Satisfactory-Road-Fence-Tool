@@ -88,6 +88,15 @@ protected:
 	/** Where each revealed section comes from (chunk's detailed mesh, section). */
 	TArray<TPair<UProceduralMeshComponent*, int32>> mRevealSources;
 	TArray<TArray<float>> mRevealDist;
+	/**
+	 * Triangles of each revealed section in 10 m bins by their farthest distance (first index of each
+	 * triangle), and each bin's nearest distance. Bins the front has passed are shown whole and only
+	 * re-sent when another bin is done; only the triangles at the front are cut every step.
+	 */
+	TArray<TArray<TArray<int32>>> mRevealBins;
+	TArray<TArray<float>> mRevealBinMin;
+	int32 mRevealDoneBins = -1;
+	static constexpr float RevealBin = 1000.f; // cm
 	float mRevealMaxDist = 0.f;
 	float mRevealDuration = 1.f;
 	double mRevealStart = 0.0;
