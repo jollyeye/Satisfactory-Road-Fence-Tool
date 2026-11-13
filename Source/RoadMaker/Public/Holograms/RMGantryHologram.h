@@ -41,6 +41,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mPreviewMesh;
 
+	/** The real gantry (the game's beams and cubes, their own materials), as it will be built. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UStaticMeshComponent>> mParts;
+
 	/** 0: placing across a road; 1: setting the beam height. */
 	UPROPERTY(Replicated, CustomSerialization)
 	int32 mStep = 0;

@@ -55,7 +55,15 @@ namespace
 		Part->SetRelativeScale3D(FVector::OneVector);
 	}
 
-	enum EPart { ColumnA, ColumnB, BeamEndA, BeamMid, BeamEndB, BaseA, BaseB, NumParts };
+	enum EPart { ColumnA, ColumnB, BeamEndA, BeamMid, BeamEndB, BaseA, BaseB, BeamMidB, NumParts };
+
+	/** Grows 0 -> 1 over [From, To] of T. */
+	float GantryPhase(float T, float From, float To)
+	{
+		return FMath::Clamp((T - From) / FMath::Max(To - From, KINDA_SMALL_NUMBER), 0.f, 1.f);
+	}
+
+	constexpr float GantryRiseShare = 0.7f; // columns: the first 70% of the animation, the beam the rest
 }
 
 void ARMBuildableGantry::RebuildMesh()
@@ -73,46 +81,185 @@ void ARMBuildableGantry::RebuildMesh()
 
 	if (mParts.Num() == 0)
 	{
-		// H-beam for the columns and the middle of the cross beam, shelf beams for its two ends, connection cubes as feet.
-		UStaticMesh* HBeam = LoadPillarMesh(TEXT("SM_Beam_04"));
-		UStaticMesh* Shelf = LoadPillarMesh(TEXT("SM_Beam_05"));
-		UStaticMesh* Block = LoadPillarMesh(TEXT("SM_ConnectionCube_Wide_01"));
-		UStaticMesh* Meshes[NumParts] = { HBeam, HBeam, Shelf, HBeam, Shelf, Block, Block };
-		for (int32 I = 0; I < NumParts; ++I)
+		CreateParts(this, GetRootComponent(), mParts);
+	}
+	if (!mAnimating)
+	{
+		PlaceParts(mParts, mHalfSpan, mBeamBottom, 1.f);
+	}
+}
+
+void ARMBuildableGantry::CreateParts(AActor* Owner, USceneComponent* Parent, TArray<TObjectPtr<UStaticMeshComponent>>& OutParts)
+{
+	OutParts.Reset();
+	// H-beam for the columns and the middle of the cross beam, shelf beams for its two ends, connection
+	// cubes as feet; the second middle piece only shows during the build animation.
+	UStaticMesh* HBeam = LoadPillarMesh(TEXT("SM_Beam_04"));
+	UStaticMesh* Shelf = LoadPillarMesh(TEXT("SM_Beam_05"));
+	UStaticMesh* Block = LoadPillarMesh(TEXT("SM_ConnectionCube_Wide_01"));
+	UStaticMesh* Meshes[NumParts] = { HBeam, HBeam, Shelf, HBeam, Shelf, Block, Block, HBeam };
+	for (int32 I = 0; I < NumParts; ++I)
+	{
+		if (!Meshes[I])
 		{
-			if (!Meshes[I])
-			{
-				continue;
-			}
-			UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);
-			Part->SetupAttachment(GetRootComponent());
-			Part->SetStaticMesh(Meshes[I]);
-			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			Part->RegisterComponent();
-			mParts.Add(Part);
+			return;
 		}
 	}
-	if (mParts.Num() == NumParts)
+	for (int32 I = 0; I < NumParts; ++I)
 	{
-		// The game's beam mesh starts at its origin and runs along its length (not centred), so beams are
-		// placed by their start point. Columns (along the gantry's Z: pitch 90) stand on an upright
-		// connection cube; the cross beam (along Y: yaw 90) rests on top of the columns so the flanges do
-		// not intersect. It is three pieces: a 1 m shelf beam at each end (the shelf beam repeats its
-		// pattern when stretched) and a stretched H-beam between them.
-		const FQuat Up = FRotator(90.f, 0.f, 0.f).Quaternion();
-		const FQuat Across = FRotator(0.f, 90.f, 0.f).Quaternion();
-		for (int32 Side = 0; Side < 2; ++Side)
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Owner);
+		Part->SetupAttachment(Parent);
+		Part->SetStaticMesh(Meshes[I]);
+		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Part->SetCanEverAffectNavigation(false);
+		Part->RegisterComponent();
+		OutParts.Add(Part);
+	}
+}
+
+void ARMBuildableGantry::PlaceParts(const TArray<TObjectPtr<UStaticMeshComponent>>& Parts, float HalfSpan, float BeamBottom, float Built)
+{
+	if (Parts.Num() != NumParts)
+	{
+		return;
+	}
+	// The game's beam mesh starts at its origin and runs along its length (not centred), so beams are
+	// placed by their start point. Columns (along the gantry's Z: pitch 90) stand on an upright
+	// connection cube; the cross beam (along Y: yaw 90) rests on top of the columns so the flanges do
+	// not intersect. It is three pieces: a 1 m shelf beam at each end (the shelf beam repeats its
+	// pattern when stretched) and a stretched H-beam between them.
+	const FQuat Up = FRotator(90.f, 0.f, 0.f).Quaternion();
+	const FQuat Across = FRotator(0.f, 90.f, 0.f).Quaternion();
+	const FQuat Back = FRotator(0.f, -90.f, 0.f).Quaternion();
+	// The rising front (cm above the road), then the share of the beam grown from each column.
+	const float Rise = GantryPhase(Built, 0.f, GantryRiseShare) * BeamBottom;
+	const float Span = GantryPhase(Built, GantryRiseShare, 1.f);
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		const float Y = (Side == 0 ? -1.f : 1.f) * HalfSpan;
+		// The foot grows up from the road (stood on its long side: its X is up).
+		const float Foot = FMath::Clamp(Rise / FootHeight, 0.f, 1.f);
+		UStaticMeshComponent* Base = Parts[BaseA + Side];
+		Base->SetVisibility(Foot > 0.01f);
+		PlaceBlock(Base, FVector(0.f, Y, FootHeight * Foot * 0.5f));
+		Base->SetRelativeScale3D(FVector(FMath::Max(Foot, 0.01f), 1.f, 1.f));
+		// The column grows from the foot up to the front.
+		const float ColumnFull = BeamBottom - FootHeight + FootOverlap;
+		const float Column = FMath::Clamp(Rise - (FootHeight - FootOverlap), 0.f, ColumnFull);
+		Parts[ColumnA + Side]->SetVisibility(Column > 1.f);
+		PlaceBeam(Parts[ColumnA + Side], FVector(0.f, Y, FootHeight - FootOverlap), Up, FMath::Max(Column, 1.f));
+	}
+	const float BeamZ = BeamBottom + BeamDepth * 0.5f;
+	const float Start = -(HalfSpan + BeamOverhang);
+	const float Total = 2.f * (HalfSpan + BeamOverhang);
+	const float Middle = Total - 2.f * EndPiece;
+	// The end pieces sit on the columns; the middle grows from both of them and meets in the centre.
+	Parts[BeamEndA]->SetVisibility(Span > 0.f);
+	Parts[BeamEndB]->SetVisibility(Span > 0.f);
+	PlaceBeam(Parts[BeamEndA], FVector(0.f, Start, BeamZ), Across, EndPiece);
+	PlaceBeam(Parts[BeamEndB], FVector(0.f, Start + Total - EndPiece, BeamZ), Across, EndPiece);
+	if (Built >= 1.f)
+	{
+		Parts[BeamMid]->SetVisibility(true);
+		Parts[BeamMidB]->SetVisibility(false);
+		PlaceBeam(Parts[BeamMid], FVector(0.f, Start + EndPiece, BeamZ), Across, Middle);
+	}
+	else
+	{
+		const float Half = FMath::Max(Middle * 0.5f * Span, 1.f);
+		Parts[BeamMid]->SetVisibility(Span > 0.01f);
+		Parts[BeamMidB]->SetVisibility(Span > 0.01f);
+		PlaceBeam(Parts[BeamMid], FVector(0.f, Start + EndPiece, BeamZ), Across, Half);
+		PlaceBeam(Parts[BeamMidB], FVector(0.f, -Start - EndPiece, BeamZ), Back, Half);
+	}
+}
+
+void ARMBuildableGantry::BuildGlowMesh(float HalfSpan, float BeamBottom, float Built, FRMMesh& Out)
+{
+	auto AddAxisBox = [&Out](const FVector& Center, const FVector& Half)
+	{
+		Out.AddBox(Center, FVector::ForwardVector, FVector::RightVector, FVector::UpVector, Half, 100.f);
+	};
+	const float Band = 6.f;
+	if (Built < GantryRiseShare)
+	{
+		// A glowing ring around each foot / column at the front.
+		const float Rise = GantryPhase(Built, 0.f, GantryRiseShare) * BeamBottom;
+		const bool bFoot = Rise < FootHeight;
+		const float HX = (bFoot ? FootHalfAlong : ColumnHalfAlong) + 4.f;
+		const float HY = (bFoot ? FootHalfAcross : ColumnHalfAcross) + 4.f;
+		for (float Side : { -1.f, 1.f })
 		{
-			const float Y = (Side == 0 ? -1.f : 1.f) * mHalfSpan;
-			PlaceBlock(mParts[BaseA + Side], FVector(0.f, Y, FootHeight * 0.5f));
-			PlaceBeam(mParts[ColumnA + Side], FVector(0.f, Y, FootHeight - FootOverlap), Up, mBeamBottom - FootHeight + FootOverlap);
+			AddAxisBox(FVector(0.f, Side * HalfSpan, FMath::Max(Rise - Band, Band)), FVector(HX, HY, Band));
 		}
-		const float BeamZ = mBeamBottom + BeamDepth * 0.5f;
-		const float Start = -(mHalfSpan + BeamOverhang);
-		const float Total = 2.f * (mHalfSpan + BeamOverhang);
-		PlaceBeam(mParts[BeamEndA], FVector(0.f, Start, BeamZ), Across, EndPiece);
-		PlaceBeam(mParts[BeamMid], FVector(0.f, Start + EndPiece, BeamZ), Across, Total - 2.f * EndPiece);
-		PlaceBeam(mParts[BeamEndB], FVector(0.f, Start + Total - EndPiece, BeamZ), Across, EndPiece);
+	}
+	else if (Built < 1.f)
+	{
+		// A glowing slice across the beam at each growing tip.
+		const float Span = GantryPhase(Built, GantryRiseShare, 1.f);
+		const float Middle = 2.f * (HalfSpan + BeamOverhang) - 2.f * EndPiece;
+		const float Tip = HalfSpan + BeamOverhang - EndPiece - Middle * 0.5f * Span;
+		for (float Side : { -1.f, 1.f })
+		{
+			AddAxisBox(FVector(0.f, Side * FMath::Max(Tip - Band, 0.f), BeamBottom + BeamDepth * 0.5f),
+				FVector(BeamHalfThickness + 4.f, Band, BeamDepth * 0.5f + 4.f));
+		}
+	}
+}
+
+void ARMBuildableGantry::StartRiseAnimation()
+{
+	UWorld* World = GetWorld();
+	if (!World || mParts.Num() != NumParts)
+	{
+		return;
+	}
+	mAnimating = true;
+	mBuildStart = World->GetTimeSeconds();
+	mGlowMesh = NewObject<UProceduralMeshComponent>(this, TEXT("GantryGlow"), RF_Transient);
+	mGlowMesh->SetupAttachment(GetRootComponent());
+	mGlowMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mGlowMesh->SetCanEverAffectNavigation(false);
+	mGlowMesh->SetCastShadow(false);
+	mGlowMesh->RegisterComponent();
+	World->GetTimerManager().SetTimer(mBuildTimer, this, &ARMBuildableGantry::StepBuildAnimation, 0.02f, true);
+	StepBuildAnimation();
+}
+
+void ARMBuildableGantry::StepBuildAnimation()
+{
+	UWorld* World = GetWorld();
+	const float T = World ? FMath::Clamp(static_cast<float>(World->GetTimeSeconds() - mBuildStart) / GetBuildAnimDuration(), 0.f, 1.f) : 1.f;
+	if (T >= 1.f || !World)
+	{
+		mAnimating = false;
+		if (World)
+		{
+			World->GetTimerManager().ClearTimer(mBuildTimer);
+		}
+		if (mGlowMesh)
+		{
+			mGlowMesh->DestroyComponent();
+			mGlowMesh = nullptr;
+		}
+		PlaceParts(mParts, mHalfSpan, mBeamBottom, 1.f);
+		return;
+	}
+	const float Eased = T * T * (3.f - 2.f * T);
+	PlaceParts(mParts, mHalfSpan, mBeamBottom, Eased);
+	if (mGlowMesh)
+	{
+		// Kept loaded for good: a plain static pointer would dangle once the garbage collector frees it.
+		static UMaterialInterface* GlowMaterial = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_BuildGlow.M_RM_BuildGlow")); if (M) { M->AddToRoot(); } return M; }();
+		FRMMesh Glow;
+		BuildGlowMesh(mHalfSpan, mBeamBottom, Eased, Glow);
+		TArray<FLinearColor> Colors;
+		Colors.Init(FLinearColor(1.f, 0.55f, 0.12f), Glow.Vertices.Num());
+		mGlowMesh->CreateMeshSection_LinearColor(0, Glow.Vertices, Glow.Triangles, Glow.Normals, Glow.UVs, Colors, TArray<FProcMeshTangent>(), false);
+		if (GlowMaterial)
+		{
+			mGlowMesh->SetMaterial(0, GlowMaterial);
+		}
 	}
 }
 

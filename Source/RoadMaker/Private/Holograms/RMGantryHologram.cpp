@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
+#include "Components/StaticMeshComponent.h"
 
 ARMGantryHologram::ARMGantryHologram()
 {
@@ -171,9 +172,21 @@ void ARMGantryHologram::RebuildPreview()
 	mShownHalfSpan = mHalfSpan;
 	mShownBottom = mBeamBottom;
 	mPreviewMesh->ClearAllMeshSections();
-	FRMMesh Steel;
-	ARMBuildableGantry::BuildGantryMesh(mHalfSpan, mBeamBottom, Steel);
-	Steel.ApplyToSection(mPreviewMesh, 0, false);
+	if (mParts.Num() == 0)
+	{
+		ARMBuildableGantry::CreateParts(this, mPreviewMesh, mParts);
+	}
+	if (mParts.Num() > 0)
+	{
+		// The real parts; the boxes only if a game mesh is missing.
+		ARMBuildableGantry::PlaceParts(mParts, mHalfSpan, mBeamBottom, 1.f);
+	}
+	else
+	{
+		FRMMesh Steel;
+		ARMBuildableGantry::BuildGantryMesh(mHalfSpan, mBeamBottom, Steel);
+		Steel.ApplyToSection(mPreviewMesh, 0, false);
+	}
 	UpdateHologramLook();
 }
 
@@ -185,11 +198,28 @@ void ARMGantryHologram::SetMaterialState(EHologramMaterialState state)
 
 void ARMGantryHologram::UpdateHologramLook()
 {
+	const uint8 Stencil = GetStencilForHologramMaterialState(mPlacementMaterialState);
+	if (mParts.Num() > 0)
+	{
+		// Their own materials (the game may have put its hologram material on every mesh), with the
+		// game's valid / invalid tint and outline on top, like the road hologram.
+		for (UStaticMeshComponent* Part : mParts)
+		{
+			if (Part)
+			{
+				Part->EmptyOverrideMaterials();
+				Part->SetRenderCustomDepth(true);
+				Part->SetCustomDepthStencilValue(Stencil);
+				Part->SetCastShadow(false);
+			}
+		}
+		return;
+	}
 	UMaterialInterface* Material = mPreviewMaterial;
 	if (!Material)
 	{
 		Material = (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR && mInvalidPlacementMaterial)
 			? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
 	}
-	RMHologramLook::Apply(mPreviewMesh, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+	RMHologramLook::Apply(mPreviewMesh, Material, Stencil);
 }

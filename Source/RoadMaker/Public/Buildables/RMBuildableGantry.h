@@ -58,10 +58,36 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mMainMaterial = nullptr; // unused now (the game's H-beam material is used)
 
+	/**
+	 * The game's parts that make up a gantry (feet, columns, cross beam), made for Owner under Parent;
+	 * also used by the hologram so it shows the real gantry. Empty if a mesh is missing.
+	 */
+	static void CreateParts(AActor* Owner, USceneComponent* Parent, TArray<TObjectPtr<UStaticMeshComponent>>& OutParts);
+
+	/**
+	 * Places the parts for a gantry of this shape. Built (0..1): the build animation, from the bottom
+	 * up: feet and columns grow up to the beam (first 70%), then the cross beam grows from both columns
+	 * to the middle. 1 = the finished gantry.
+	 */
+	static void PlaceParts(const TArray<TObjectPtr<UStaticMeshComponent>>& Parts, float HalfSpan, float BeamBottom, float Built = 1.f);
+
+	/** Build animation: the glowing front at Built (0..1), as boxes in local space (see PlaceParts). */
+	static void BuildGlowMesh(float HalfSpan, float BeamBottom, float Built, FRMMesh& Out);
+
 protected:
 	/** The game's H-beam parts: two columns and the cross beam. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UStaticMeshComponent>> mParts;
+
+	/** Build animation from the bottom up (the game's parts grow; a glowing band at the front). */
+	virtual void StartRiseAnimation() override;
+	virtual float GetBuildAnimDuration() const override { return 2.5f; }
+	void StepBuildAnimation();
+	FTimerHandle mBuildTimer;
+	double mBuildStart = 0.0;
+	bool mAnimating = false;
+	UPROPERTY(Transient)
+	UProceduralMeshComponent* mGlowMesh = nullptr;
 
 	UFUNCTION()
 	void OnRep_Shape() { RebuildMesh(); }
