@@ -77,7 +77,7 @@ namespace
 		else if (Flag)
 		{
 			Flag->SetPropertyValue_InContainer(Box, bOn);
-			Box->Invalidate(EInvalidateWidgetReason::Paint);
+			Box->InvalidateLayoutAndVolatility();
 		}
 	}
 
