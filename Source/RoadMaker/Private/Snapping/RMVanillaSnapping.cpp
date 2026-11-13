@@ -3157,7 +3157,6 @@ void RMVanillaSnapping::InstallHooks()
 				}
 			});
 		});
-		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGVehiclePathSegmentHologram::DoMultiStepPlacement, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
