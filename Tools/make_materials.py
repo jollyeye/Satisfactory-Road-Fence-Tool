@@ -476,11 +476,12 @@ for old in ("M_RM_TextureDump", "M_RM_TextureDumpN"):
         eal.delete_asset(ROOT + "/" + old)
         log("Deleted " + ROOT + "/" + old)
 
-# --- Cement blocks: the game's concrete (like the concrete road), with block joints ----------------
-# The colour and the normal map are the plain square of the game's foundation concrete atlas, projected
-# from the side (triplanar, 4 m per square, mirrored), as on the concrete road. The barrier's corners are
-# rounded in the lighting by the mesh (RMGeometry::ExtrudeProfileBeveled: 2.5 cm bevel strips whose
-# normals turn to the next face); the normal map's detail is laid on that smooth normal.
+# --- Cement blocks: the concrete of the concrete road's top, with block joints ----------------------
+# The colour is the plain square of the game's foundation concrete atlas, as on the concrete road's top
+# (M_RoadPavers, without its block pattern), projected from the side here (triplanar, 4 m per square,
+# mirrored). No concrete normal map: on the road's sides it makes the concrete blotchy (tested 2026-11-14).
+# The barrier's corners are rounded in the lighting by the mesh (RMGeometry::ExtrudeProfileBeveled:
+# 2.5 cm bevel strips whose normals turn to the next face).
 # The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint
 # is a thin dark groove with a small bevel on both blocks (the normal tilts along the fence).
 JOINT_HLSL = r"""
@@ -518,7 +519,7 @@ return normalize(n + normalize(Tg) * (J * 0.8));
 """
 jersey = new_material("M_RoadJersey")
 tex_jc = load_tex(CONCRETE_BC)
-tex_jn = load_tex(CONCRETE_N)
+tex_jn = None  # no concrete normal map (see above); JERSEY_NORMAL_HLSL kept for a later try
 if tex_jc:
     jbase = atlas_sample(jersey, tex_jc, RECT_BOTTOM_LEFT, True, -700, 0)
 else:
