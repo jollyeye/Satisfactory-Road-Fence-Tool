@@ -1456,6 +1456,8 @@ namespace
 	 */
 	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 0,
 		TEXT("Unused (the connections must stay shown to be built); kept for the perf log line."));
+	TAutoConsoleVariable<int32> CVarJunctionLines(TEXT("rm.JunctionLines"), 0,
+		TEXT("Draw the intersection connections as thin green / red lines on top of their holograms."));
 	TMap<TWeakObjectPtr<const AFGHologram>, TWeakObjectPtr<UProceduralMeshComponent>> GJunctionOverlays;
 
 	/** True for a connection hologram that is not the main one (those are throttled). */
@@ -1522,6 +1524,10 @@ namespace
 		if (!PC || !PC->PlayerCameraManager)
 		{
 			return;
+		}
+		if (!CVarJunctionLines.GetValueOnGameThread())
+		{
+			return; // lines off (2026-11-14: the holograms show the connections already)
 		}
 		EnsureJunctionOverlaySweeper();
 		GJunctionOverlayTime.Add(Parent, FPlatformTime::Seconds());
