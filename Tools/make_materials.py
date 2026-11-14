@@ -581,7 +581,8 @@ finish(steel)
 # at every crossing one wire goes over and the other under, alternating like a woven chain-link fence
 # (the wire on top wins; the wires bend up / down towards the crossings, which tilts their normal).
 # Output: x = opacity mask (wires 1, holes 0), yzw = world-space normal.
-# Chrome like the posts (the sign pole's plain steel: colour 198/206/209, metallic, roughness 0.25).
+# Matte metal like the back of the game's signs (the big plain panel of the real TX_DigitalSign_BC / _Refl: colour
+# 118 grey, metallic 0.86, roughness 0.41); chrome was too shiny (tested 2026-11-14).
 DIAMOND_HLSL = r"""
 float u = UV1.x;
 float v = WP.z / 100.0;
@@ -673,12 +674,12 @@ gshade = custom(grid, CHAINLINK_SHADE_HLSL, unreal.CustomMaterialOutputType.CMOT
 link(gu1, "", gshade, "UV1")
 link(gwp, "", gshade, "WP")
 gcol = node(grid, unreal.MaterialExpressionMultiply, -200, 300)
-link(color(grid, 0.565, 0.617, 0.637, -450, 300), "", gcol, "A")
+link(color(grid, 0.181, 0.181, 0.180, -450, 300), "", gcol, "A")
 link(gshade, "", gcol, "B")
 MEL.connect_material_property(gcol, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(gshade, "", MP.MP_AMBIENT_OCCLUSION)
-MEL.connect_material_property(const(grid, 1.0, -300, 400), "", MP.MP_METALLIC)
-MEL.connect_material_property(const(grid, 0.25, -300, 500), "", MP.MP_ROUGHNESS)
+MEL.connect_material_property(const(grid, 0.86, -300, 400), "", MP.MP_METALLIC)
+MEL.connect_material_property(const(grid, 0.41, -300, 500), "", MP.MP_ROUGHNESS)
 finish(grid)
 
 # --- Overlay: picked / aimed road ends of the intersection tool ---------------------------------
