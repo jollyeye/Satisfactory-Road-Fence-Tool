@@ -1113,9 +1113,7 @@ namespace
 		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
 		// Only with the build gun out (build, dismantle or paint), like the game's own sample.
-		// (IsBuildGunEquipped is also true with another tool in hand: the gun must be the one in the arms slot.)
-		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor() || !Gun->IsEquipped()
-			|| Player->GetEquipmentInSlot(EEquipmentSlot::ES_ARMS) != Gun)
+		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor())
 		{
 			return false;
 		}
@@ -1130,6 +1128,16 @@ namespace
 		}
 		const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(Hit.GetActor());
 		if (!Marking)
+		{
+			return false;
+		}
+		// Only with the build gun in hand (build, dismantle or paint), like the game's own sample.
+		AFGEquipment* Arms = Player->GetEquipmentInSlot(EEquipmentSlot::ES_ARMS);
+		const bool bGunInHand = Gun->IsEquipped() && Arms == Gun;
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: in hand %s, build gun equipped %d / IsBuildGunEquipped %d, gun state %s -> %s"),
+			Arms ? *Arms->GetClass()->GetName() : TEXT("none"), Gun->IsEquipped() ? 1 : 0, Player->IsBuildGunEquipped() ? 1 : 0,
+			Gun->GetCurrentState() ? *Gun->GetCurrentState()->GetClass()->GetName() : TEXT("none"), bGunInHand ? TEXT("sample") : TEXT("left to the game"));
+		if (!bGunInHand)
 		{
 			return false;
 		}
