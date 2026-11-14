@@ -1,5 +1,6 @@
 #include "Holograms/RMRoadHologram.h"
 #include "RMRoadLimits.h"
+#include "RoadMakerModule.h"
 #include "EnhancedInputComponent.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
