@@ -855,36 +855,44 @@ void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TAr
 		const FVector2D B = Profile[(E + 1) % Num];
 		const float Len = FVector2D::Distance(A, B);
 		const FVector2D Dir = (B - A) / FMath::Max(Len, 0.01f);
-		const float W = FMath::Min(BevelWidth, Len * 0.4f);
+		const float W = FMath::Min(FMath::Max(BevelWidth, 0.f), Len * 0.4f);
 		const int32 IB = (E + 1) % Num;
 		const FVector2D NA = Sharp(E) ? EdgeN[E] : (EdgeN[(E + Num - 1) % Num] + EdgeN[E]).GetSafeNormal();   // corner at A
 		const FVector2D NB = Sharp(IB) ? EdgeN[E] : (EdgeN[E] + EdgeN[IB]).GetSafeNormal();                  // corner at B
 		// Across the edge: corner, bevel end, bevel start, corner.
+		// BevelWidth <= 0: plain hard edges (one strip per face), for the low-detail versions.
+		const bool bBevel = W > 0.f;
+		const int32 Cols = bBevel ? 4 : 2;
 		const FVector2D Pts[4] = { A, A + Dir * W, B - Dir * W, B };
 		const FVector2D Ns[4] = { NA, EdgeN[E], EdgeN[E], NB };
 		const float Us[4] = { U0, U0 + W * S, U0 + (Len - W) * S, U0 + Len * S };
+		const int32 Pick[4] = { 0, 1, 2, 3 };
+		const int32 PickFlat[2] = { 0, 3 };
 
 		const int32 Base = Out.Vertices.Num();
 		for (const FRMFrame& F : Frames)
 		{
 			const float V = F.Dist * S;
-			for (int32 K = 0; K < 4; ++K)
+			for (int32 C = 0; C < Cols; ++C)
 			{
-				const FVector N = (F.Right * Ns[K].X + F.Up * Ns[K].Y).GetSafeNormal();
+				const int32 K = bBevel ? Pick[C] : PickFlat[C];
+				const FVector2D N2 = bBevel ? Ns[K] : EdgeN[E];
+				const FVector N = (F.Right * N2.X + F.Up * N2.Y).GetSafeNormal();
 				Out.AddVertex(F.ProfileToWorld(Pts[K]), N, FVector2D(Us[K], V), F.Fwd);
 			}
 		}
+		const FVector FaceN = (Frames[0].Right * EdgeN[E].X + Frames[0].Up * EdgeN[E].Y).GetSafeNormal();
 		for (int32 I = 0; I + 1 < Frames.Num(); ++I)
 		{
-			for (int32 K = 0; K < 3; ++K)
+			for (int32 K = 0; K + 1 < Cols; ++K)
 			{
-				const int32 A0 = Base + I * 4 + K;
+				const int32 A0 = Base + I * Cols + K;
 				const int32 B0 = A0 + 1;
-				const int32 A1 = A0 + 4;
+				const int32 A1 = A0 + Cols;
 				const int32 B1 = A1 + 1;
-				const FVector N = Out.Normals[Base + I * 4 + 1]; // the flat face's normal (winding check)
-				Out.AddTriangle(A0, B0, B1, N);
-				Out.AddTriangle(A0, B1, A1, N);
+				const FVector N = (Frames[I].Right * EdgeN[E].X + Frames[I].Up * EdgeN[E].Y).GetSafeNormal(); // winding check
+				Out.AddTriangle(A0, B0, B1, N.IsNearlyZero() ? FaceN : N);
+				Out.AddTriangle(A0, B1, A1, N.IsNearlyZero() ? FaceN : N);
 			}
 		}
 		U0 += Len * S;
@@ -1213,7 +1221,7 @@ void RMGeometry::AddBeveledPost(const FVector& Base, const FVector& AxisX, const
 	Out.AddTriangle(First + 1, First + 5, First + 7, AxisZ);
 }
 
-void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts)
+void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts, bool bLowPoly)
 {
 	const float S = 1.f; // road on +Right; mirroring is done by the caller
 
@@ -1231,12 +1239,27 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 	{
 		Profile.Add(FVector2D((-4.f + 2.5f * G[0]) * S, 2.5f * (8.5f - G[1])));
 	}
-	// Every corner rounded in the lighting (1 cm) except the four at the flanges' free ends.
-	TArray<bool> SharpCorners;
-	SharpCorners.Init(false, Profile.Num());
-	SharpCorners[0] = SharpCorners[15] = true;  // top flange end
-	SharpCorners[7] = SharpCorners[8] = true;   // bottom flange end
-	ExtrudeProfileBeveled(RailFrames, Profile, FVector2D::ZeroVector, UVScale, 1.f, Beam, &SharpCorners);
+	if (bLowPoly)
+	{
+		// Low detail (seen from afar): the outline from the road side only, the channel behind it filled (8 corners,
+		// hard edges): the front, the vee and the flanges' edges keep their shape.
+		static const float Outline[][2] = { { 0, 0 }, { 5, 0 }, { 5, 5 }, { 2, 7 }, { 2, 10 }, { 5, 12 }, { 5, 17 }, { 0, 17 } };
+		Profile.Reset();
+		for (const auto& G : Outline)
+		{
+			Profile.Add(FVector2D((-4.f + 2.5f * G[0]) * S, 2.5f * (8.5f - G[1])));
+		}
+		ExtrudeProfileBeveled(RailFrames, Profile, FVector2D::ZeroVector, UVScale, 0.f, Beam);
+	}
+	else
+	{
+		// Every corner rounded in the lighting (1 cm) except the four at the flanges' free ends.
+		TArray<bool> SharpCorners;
+		SharpCorners.Init(false, Profile.Num());
+		SharpCorners[0] = SharpCorners[15] = true;  // top flange end
+		SharpCorners[7] = SharpCorners[8] = true;   // bottom flange end
+		ExtrudeProfileBeveled(RailFrames, Profile, FVector2D::ZeroVector, UVScale, 1.f, Beam, &SharpCorners);
+	}
 	AddProfileCap(RailFrames[0], Profile, false, UVScale, Beam);
 	AddProfileCap(RailFrames.Last(), Profile, true, UVScale, Beam);
 
@@ -1247,12 +1270,19 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 		// Upright, 10 cm square, 80 cm tall, edges rounded over 1.5 cm in the lighting.
 		const FVector Fwd = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
-		AddBeveledPost(F.Pos - F.Right * (9.f * S), Fwd, Right, FVector::UpVector, 5.f, 80.f, 1.5f, Posts);
+		if (bLowPoly)
+		{
+			Posts.AddBox(F.Pos - F.Right * (9.f * S) + FVector(0.f, 0.f, 40.f), Fwd, Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), 100.f);
+		}
+		else
+		{
+			AddBeveledPost(F.Pos - F.Right * (9.f * S), Fwd, Right, FVector::UpVector, 5.f, 80.f, 1.5f, Posts);
+		}
 	});
 	MapToPoleChrome(Posts, FirstPost);
 }
 
-void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete)
+void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete, bool bLowPoly)
 {
 	// Classic New Jersey profile: 60 cm base, 15 cm top, 80 cm tall.
 	const TArray<FVector2D> Profile = {
@@ -1261,7 +1291,7 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 	};
 	const int32 First = Concrete.Vertices.Num();
 	// Corners lit as if rounded over 2.5 cm (normals only; the outline stays sharp).
-	ExtrudeProfileBeveled(Frames, Profile, FVector2D(0.f, 30.f), UVScale, 2.5f, Concrete);
+	ExtrudeProfileBeveled(Frames, Profile, FVector2D(0.f, 30.f), UVScale, bLowPoly ? 0.f : 2.5f, Concrete);
 	const int32 FirstCap = Concrete.Vertices.Num();
 	AddProfileCap(Frames[0], Profile, false, UVScale, Concrete);
 	const int32 SecondCap = Concrete.Vertices.Num();
@@ -1288,7 +1318,7 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 	}
 }
 
-void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale)
+void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale, bool bLowPoly)
 {
 	// Scale 1: 2 m tall. Scale 2: the 4 m version (twice as tall, thicker posts and tubes).
 	// Tubes and the mesh sheet stop inside the end posts, so two fences meeting at a corner or on a
@@ -1326,14 +1356,23 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 		FVector2D(FrameX + TubeHalf, TubeHalf), FVector2D(FrameX - TubeHalf, TubeHalf) };
 	// Tubes and posts: the sign pole's chrome steel (MapToPoleChrome), every edge rounded in the lighting.
 	const int32 FirstSteel = Posts.Vertices.Num();
-	ExtrudeProfileBeveled(LiftFrames(Inner, Height), Tube, FVector2D(FrameX, 0.f), UVScale, TubeHalf * 0.35f, Posts);
-	ExtrudeProfileBeveled(LiftFrames(Inner, Bottom), Tube, FVector2D(FrameX, 0.f), UVScale, TubeHalf * 0.35f, Posts);
+	const float TubeBevel = bLowPoly ? 0.f : TubeHalf * 0.35f; // low detail: hard edges
+	ExtrudeProfileBeveled(LiftFrames(Inner, Height), Tube, FVector2D(FrameX, 0.f), UVScale, TubeBevel, Posts);
+	ExtrudeProfileBeveled(LiftFrames(Inner, Bottom), Tube, FVector2D(FrameX, 0.f), UVScale, TubeBevel, Posts);
 	const float PostTop = Height + TubeHalf + 2.f;
 	ForEvery(Upright, 300.f, [&](const FRMFrame& F)
 	{
 		const FVector Fwd = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
-		AddBeveledPost(F.Pos + F.Right * FrameX, Fwd, Right, FVector::UpVector, PostHalf, PostTop, PostHalf * 0.3f, Posts);
+		if (bLowPoly)
+		{
+			Posts.AddBox(F.Pos + F.Right * FrameX + FVector(0.f, 0.f, PostTop * 0.5f), Fwd, Right, FVector::UpVector,
+				FVector(PostHalf, PostHalf, PostTop * 0.5f), 100.f);
+		}
+		else
+		{
+			AddBeveledPost(F.Pos + F.Right * FrameX, Fwd, Right, FVector::UpVector, PostHalf, PostTop, PostHalf * 0.3f, Posts);
+		}
 	});
 	MapToPoleChrome(Posts, FirstSteel);
 }

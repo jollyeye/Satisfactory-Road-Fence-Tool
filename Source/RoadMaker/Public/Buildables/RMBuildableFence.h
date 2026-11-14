@@ -33,7 +33,7 @@ public:
 	 * InwardSign < 0 the frames are mirrored first, so every fence type (also future ones) mirrors.
 	 */
 	static void BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
-		const FRMWallTexLayout& WallLayout = FRMWallTexLayout());
+		const FRMWallTexLayout& WallLayout = FRMWallTexLayout(), bool bLowPoly = false);
 
 	/**
 	 * Lowest-detail version (second distance level): one simple shape per fence type, few rings.

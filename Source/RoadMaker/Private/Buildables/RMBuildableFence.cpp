@@ -56,14 +56,15 @@ void ARMBuildableFence::RebuildMesh()
 	mLODDistance = IsWall() ? 8000.f : 6000.f;   // 80 m / 60 m
 	mLOD2Distance = IsWall() ? 20000.f : 15000.f; // 200 m / 150 m
 
-	// Level 1: the same fence sampled every 4 m instead of every 50 cm.
+	// Level 1: the same fence sampled every 4 m instead of every 50 cm, in its low-detail shape (no bevels; the guard
+	// rail's beam as its outline from the road, plain posts).
 	TArray<FRMFrame> FarFrames;
 	GetLocalFrames(FarFrames, 400.f);
 	AddChunkBoundaries(FarFrames);
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarMain, FarPanel;
-		BuildFenceMesh(Type, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout());
+		BuildFenceMesh(Type, FarFrames, mUVScale, mInwardSign, FarMain, FarPanel, GetWallLayout(), true);
 		ApplyFarSection(FarMain, 0, MainMaterial);
 		ApplyFarSection(FarPanel, 1, mPanelMaterial);
 	}
@@ -533,7 +534,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 }
 
 void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frames, float UVScale, float InwardSign, FRMMesh& Main, FRMMesh& Panel,
-	const FRMWallTexLayout& WallLayout)
+	const FRMWallTexLayout& WallLayout, bool bLowPoly)
 {
 	if (InwardSign < 0.f)
 	{
@@ -542,16 +543,16 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 	switch (Type)
 	{
 	case ERMFenceType::GuardRail:
-		RMGeometry::BuildGuardRail(Frames, UVScale, Main, Panel);
+		RMGeometry::BuildGuardRail(Frames, UVScale, Main, Panel, bLowPoly);
 		break;
 	case ERMFenceType::JerseyBarrier:
-		RMGeometry::BuildJerseyBarrier(Frames, UVScale, Main);
+		RMGeometry::BuildJerseyBarrier(Frames, UVScale, Main, bLowPoly);
 		break;
 	case ERMFenceType::GridFence:
-		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel);
+		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel, 1.f, bLowPoly);
 		break;
 	case ERMFenceType::GridFenceTall:
-		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel, 2.f);
+		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel, 2.f, bLowPoly);
 		break;
 	case ERMFenceType::ConcreteWall:
 		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout);

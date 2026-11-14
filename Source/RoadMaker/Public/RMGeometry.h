@@ -224,13 +224,13 @@ namespace RMGeometry
 	ROADMAKER_API void MapToPoleChrome(FRMMesh& Mesh, int32 First = 0);
 
 	/** Guard rail: the beam in Beam (painted, the game's H-beam material), the posts in Posts (plain steel). */
-	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts);
+	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts, bool bLowPoly = false);
 
 	/** Continuous concrete jersey barrier. */
-	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete);
+	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete, bool bLowPoly = false);
 
 	/** Posts plus a mesh panel (panel uses a masked grid material). */
-	ROADMAKER_API void BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale = 1.f);
+	ROADMAKER_API void BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Posts, FRMMesh& Panel, float Scale = 1.f, bool bLowPoly = false);
 
 	/**
 	 * Concrete fence wall: a solid upright slab Height tall and Thickness thick, standing on the
