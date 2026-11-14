@@ -703,23 +703,36 @@ namespace RMMapLayer
 			}
 			NextScan = Now + MapScanInterval;
 			UUserWidget* Painter = CachedPainter.Get();
-			// Searched again while hidden: the game may have made a new map widget.
-			if (!Painter || Painter->GetWorld() != World || !Painter->IsVisible())
+			// A known painter that is hidden = the map is closed: nothing to look for. Every widget is only
+			// searched when there is no painter yet (or it is gone), and every 5 s while hidden in case the game
+			// made a new map widget (issue #3: this used to sweep every widget 4 times a second, by class name).
+			static double NextHiddenRescan = 0.0;
+			const bool bKnownHidden = Painter && Painter->GetWorld() == World && !Painter->IsVisible();
+			if (!Painter || Painter->GetWorld() != World || (bKnownHidden && Now >= NextHiddenRescan))
 			{
-				Painter = nullptr;
+				NextHiddenRescan = Now + 5.0;
+				static TWeakObjectPtr<UClass> PainterClass;
+				UUserWidget* Found = nullptr;
 				for (TObjectIterator<UUserWidget> It; It; ++It)
 				{
 					UUserWidget* W = *It;
-					if (W && !W->IsTemplate() && W->GetWorld() == World
-						&& W->GetClass()->GetName().Contains(TEXT("MapAreaPainter")))
+					if (!W || W->IsTemplate() || W->GetWorld() != World)
 					{
-						Painter = W;
-						if (W->IsVisible())
-						{
-							break;
-						}
+						continue;
+					}
+					UClass* C = W->GetClass();
+					if (PainterClass.IsValid() ? C != PainterClass.Get() : !C->GetName().Contains(TEXT("MapAreaPainter")))
+					{
+						continue;
+					}
+					PainterClass = C;
+					Found = W;
+					if (W->IsVisible())
+					{
+						break;
 					}
 				}
+				Painter = Found;
 				CachedPainter = Painter;
 			}
 			if (!Painter || !Painter->IsVisible() || !MapUpdateMapping(World))

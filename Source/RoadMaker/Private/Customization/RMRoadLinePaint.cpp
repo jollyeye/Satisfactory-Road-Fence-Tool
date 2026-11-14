@@ -518,17 +518,25 @@ namespace
 		{
 			return; // no game loaded yet
 		}
-		URMRoadLineDescriptor* Option = nullptr;
-		for (TObjectIterator<UClass> It; It && !Option; ++It)
+		// The option is found once and kept (a sweep of every loaded class; at most 5 searches) (issue #3).
+		static TWeakObjectPtr<URMRoadLineDescriptor> GOption;
+		static int32 GOptionSearches = 0;
+		URMRoadLineDescriptor* Option = GOption.Get();
+		if (!Option && GOptionSearches < 5)
 		{
-			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			++GOptionSearches;
+			for (TObjectIterator<UClass> It; It && !Option; ++It)
 			{
-				URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
-				if (D && D->mIsMarking && D->mMarkingKind == ERMMarkingKind::Vehicle)
+				if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
 				{
-					Option = D;
+					URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+					if (D && D->mIsMarking && D->mMarkingKind == ERMMarkingKind::Vehicle)
+					{
+						Option = D;
+					}
 				}
 			}
+			GOption = Option;
 		}
 		UTexture2D* Tile = Option ? Option->GetIcon() : nullptr;
 		if (!Tile)
@@ -923,7 +931,9 @@ namespace
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 		AFGCharacterPlayer* Character = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Character ? Character->GetBuildGun() : nullptr;
-		if (!Gun || !Gun->IsEquipped())
+		// Only while a menu is open (the mouse cursor shows: build menu / customizer): the rest of the time there is
+		// no tile to fix, and this pass sweeps every widget (issue #3).
+		if (!Gun || !Gun->IsEquipped() || !PC->ShouldShowMouseCursor())
 		{
 			return true;
 		}
@@ -931,7 +941,9 @@ namespace
 		BuildIconTable();
 		RestoreReusedTiles();
 		FixInfoBoxPicture();
-		static bool bLoggedLabels = false;
+		// The label dump below is a debugging aid (set to false to get it back): left on, it formatted up to
+		// 60 strings on every pass (issue #3).
+		static bool bLoggedLabels = true;
 		TArray<FString> SeenLabels;
 		int32 Matches = 0;
 		for (TObjectIterator<UTextBlock> It; It; ++It)
@@ -998,10 +1010,19 @@ namespace
 	bool FixRoadLinesHotbarIcons(float)
 	{
 		EnsureVehicleOptionIcon();
+		// Whether a widget class is a hotbar entry, decided once per class (no class-name string per widget per pass).
+		static TMap<TWeakObjectPtr<UClass>, bool> GIsHotbarEntry;
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
 			UUserWidget* Entry = *It;
-			if (!Entry || Entry->IsTemplate() || !Entry->IsVisible() || !Entry->GetClass()->GetName().Contains(TEXT("HotbarEntry")))
+			if (!Entry || Entry->IsTemplate() || !Entry->IsVisible())
+			{
+				continue;
+			}
+			UClass* EntryClass = Entry->GetClass();
+			const bool* Known = GIsHotbarEntry.Find(EntryClass);
+			const bool bEntry = Known ? *Known : GIsHotbarEntry.Add(EntryClass, EntryClass->GetName().Contains(TEXT("HotbarEntry")));
+			if (!bEntry)
 			{
 				continue;
 			}
@@ -1134,7 +1155,8 @@ void RMRoadLinePaint::InstallHooks()
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixCustomizerIcons), 0.1f);
 
 	// Road Lines shortcuts on the hotbar: their picture (the game leaves it as a blank swatch).
-	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixRoadLinesHotbarIcons), 0.2f);
+	// Once a second is enough: a newly bound shortcut is handled by the every-frame burst below (issue #3).
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixRoadLinesHotbarIcons), 1.0f);
 	// Right after a shortcut is bound, check every frame for a moment, so the blank swatch is not seen.
 	static int32 GHotbarFastFrames = 0;
 	SUBSCRIBE_METHOD_AFTER(UFGFactoryCustomizationShortcut::SetCustomizationRecipe,

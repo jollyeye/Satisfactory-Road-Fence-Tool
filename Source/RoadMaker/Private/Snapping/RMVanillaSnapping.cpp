@@ -512,8 +512,7 @@ namespace
 			{
 				continue;
 			}
-			const FString Name = A->GetClass()->GetName();
-			if (bRail ? Name.Contains(TEXT("RailroadTrack")) : Name.Contains(TEXT("VehiclePath")))
+			if (bRail ? A->IsA<AFGBuildableRailroadTrack>() : (A->IsA<AFGVehiclePathSegment>() || A->IsA<AFGVehiclePathNode>()))
 			{
 				return true;
 			}
@@ -1687,7 +1686,7 @@ namespace
 		explicit FJunctionTimer(double& InInto) : Into(InInto), Start(FPlatformTime::Seconds()) {}
 		~FJunctionTimer() { Into += FPlatformTime::Seconds() - Start; }
 	};
-	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 1, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
+	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 0, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
 	/** Every frame: frame times while the connections are shown and around it, logged every 3 s (started on first use). */
 	void EnsureJunctionPerfTicker()
 	{
@@ -2833,7 +2832,7 @@ namespace
 	}
 
 	// ---- Debug log of the game's sign hologram (prefix "RMSignLog"): how it places, snaps, adjusts height ----
-	TAutoConsoleVariable<int32> CVarSignLog(TEXT("rm.SignLog"), 1, TEXT("Log what the game's sign hologram does (RMSignLog lines)."));
+	TAutoConsoleVariable<int32> CVarSignLog(TEXT("rm.SignLog"), 0, TEXT("Log what the game's sign hologram does (RMSignLog lines)."));
 
 	FString DescribeSign(const AFGStandaloneSignHologram* H)
 	{
