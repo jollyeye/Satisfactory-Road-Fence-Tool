@@ -44,6 +44,8 @@ Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to 
 
 - **Known issue, left as is (2026-11-14): road top level with a fence wall's top** shows a toothed edge where the wall's inner half runs under the road (coplanar surfaces, road and wall traced at different points). The game's walls also sit centred on a foundation edge, yet look clean there; not looked into. Ideas if it comes back: lower the road-side half of the wall top by 1 cm (step at the centre line), or the whole top by 1 cm.
 
+- **Intersection connections: fps** (2026-11-14, awaiting test): with the snap key on an intersection, 24 path holograms were shown: about 5 fps (210 ms/frame; RMJunctionPerf log). Our code was ~0.1 ms (finding the paths now only looks near the intersection); hiding the extra holograms gave ~40 fps, so drawing them was the cost. Now the holograms beyond the main one stay hidden (still checked and built) and every connection is drawn as a 4 px line, green = buildable, red = not, all in one procedural mesh on its own actor (M_RM_Overlay), rebuilt each frame facing the camera, removed when not drawn for 0.25 s. Next if needed: the game checking 24 holograms each frame (~8 ms) and a ~60 ms hitch when they are set up. Rail connections not changed yet.
+
 ## To do
 - **Boom barrier** (added 2026-11-12; postponed 2026-11-13, too many iterations for this release, concept image `docs/concepts/boom-barrier-concept.png`): the striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it, snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe opening for vehicles on a path through it (same detection idea as the traffic lights).
 
