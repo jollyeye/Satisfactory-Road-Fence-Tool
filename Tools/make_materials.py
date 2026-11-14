@@ -616,6 +616,33 @@ float2 n2 = acr * tc - alg * slope;
 float3 n = normalize(float3(n2.x, n2.y, sqrt(saturate(1.0 - tc * tc))));
 return float4(max(inA, inB), n);
 """
+# Shade of the wire you see (multiplies the chrome colour): a wire darkens where it dips under the other one,
+# and the wire on top casts a shadow on the one below, a band about one wire wide on each side of it.
+CHAINLINK_SHADE_HLSL = r"""
+float u = UV1.x;
+float v = WP.z / 100.0;
+float cell = 0.117;
+float wire = 0.0078;
+float2 p = float2(u + v, u - v) * 0.70710678 / cell;
+float2 idx = floor(p + 0.5);
+float2 o = (p - idx) * cell;
+float2 sN = o / wire;
+float wa = cos(3.14159265 * (p.y + idx.x));
+float wb = -cos(3.14159265 * (p.x + idx.y));
+float bend = 0.8;
+float za = sqrt(saturate(1.0 - sN.x * sN.x)) + bend * wa;
+float zb = sqrt(saturate(1.0 - sN.y * sN.y)) + bend * wb;
+bool inA = abs(o.x) < wire;
+bool inB = abs(o.y) < wire;
+bool topA = inA && (!inB || za >= zb);
+float w = topA ? wa : wb;                       // +1 where this wire is on top, -1 where it is underneath
+float dip = lerp(0.55, 1.0, saturate(w * 0.5 + 0.5));
+// Shadow of the other wire, where that one is on top (its weave > 0) and this pixel is next to it.
+float dOther = topA ? abs(o.y) : abs(o.x);
+float otherTop = topA ? wb : wa;
+float shadow = (1.0 - smoothstep(wire, wire * 2.2, dOther)) * saturate(otherTop);
+return dip * (1.0 - 0.6 * shadow);
+"""
 grid = new_material("M_RoadGridFence")
 grid.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
 grid.set_editor_property("two_sided", True)
@@ -631,7 +658,14 @@ link(dia, "", gmask, "")
 link(dia, "", gnorm, "")
 MEL.connect_material_property(gmask, "", MP.MP_OPACITY_MASK)
 MEL.connect_material_property(gnorm, "", MP.MP_NORMAL)
-MEL.connect_material_property(color(grid, 0.565, 0.617, 0.637, -300, 300), "", MP.MP_BASE_COLOR)
+gshade = custom(grid, CHAINLINK_SHADE_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "WP"], -750, 400, "ChainLinkShade")
+link(gu1, "", gshade, "UV1")
+link(gwp, "", gshade, "WP")
+gcol = node(grid, unreal.MaterialExpressionMultiply, -200, 300)
+link(color(grid, 0.565, 0.617, 0.637, -450, 300), "", gcol, "A")
+link(gshade, "", gcol, "B")
+MEL.connect_material_property(gcol, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(gshade, "", MP.MP_AMBIENT_OCCLUSION)
 MEL.connect_material_property(const(grid, 1.0, -300, 400), "", MP.MP_METALLIC)
 MEL.connect_material_property(const(grid, 0.25, -300, 500), "", MP.MP_ROUGHNESS)
 finish(grid)
