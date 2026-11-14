@@ -41,6 +41,9 @@ def new_material(name):
     if eal.does_asset_exist(path):
         mat = eal.load_asset(path)
         MEL.delete_all_material_expressions(mat)
+        # Settings outlive a rebuild: put back the default normal space (a material that dropped its world-space
+        # normal would otherwise read its tangent-space normal as world space: every face lit as facing up).
+        mat.set_editor_property("tangent_space_normal", True)
         log("Rebuilding " + path)
     else:
         mat = asset_tools.create_asset(name, ROOT, unreal.Material, unreal.MaterialFactoryNew())
