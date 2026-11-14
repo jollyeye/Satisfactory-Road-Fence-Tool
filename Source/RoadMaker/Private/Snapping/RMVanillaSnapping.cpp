@@ -1179,6 +1179,22 @@ namespace
 	/** Which connection the main hologram shows (moved to a valid one when it is not). */
 	TMap<TWeakObjectPtr<const AFGHologram>, int32> GJunctionParentLink;
 
+	/**
+	 * The game checks every hologram's placement every frame; for 24 connection holograms that cost about
+	 * 180 ms per frame (measured 2026-11-14). The connections beyond the main one do their real check once every
+	 * JunctionCheckEvery frames (at most JunctionChecksPerFrame of them per frame); in between, the reasons they
+	 * could not be built last time are put back as they were. They stay shown, so the click builds them as usual.
+	 */
+	struct FJunctionCheckMemo
+	{
+		TArray<TSubclassOf<UFGConstructDisqualifier>> Why;
+		uint64 Frame = 0;
+		bool bChecked = false;
+	};
+	TMap<TWeakObjectPtr<const AFGHologram>, FJunctionCheckMemo> GJunctionCheckMemo;
+	constexpr uint64 JunctionCheckEvery = 12;
+	constexpr int32 JunctionChecksPerFrame = 2;
+
 	/** Every sensible connection through an intersection: each arriving path to each leaving path on another end. */
 	void FindJunctionLinks(UWorld* World, const ARMBuildableIntersection* X, TArray<FJunctionLink>& OutLinks)
 	{
@@ -1336,6 +1352,7 @@ namespace
 	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link, const ARMBuildableIntersection* X,
 		TArray<FVector>* OutCourse = nullptr)
 	{
+		GJunctionCheckMemo.Remove(H); // moved: check it for real next time
 		GJunctionHolograms.Add(H);
 		FPathState& State = GPathStates.FindOrAdd(H);
 		State.bLaneMode = true;
@@ -1438,9 +1455,35 @@ namespace
 	 * instead of showing 24 overlapping path holograms (measured 2026-11-14: about 5 fps with them shown, 40 with
 	 * them hidden). The holograms stay, hidden, and still check and build the connections; the main one stays shown.
 	 */
-	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 1,
-		TEXT("Hide the intersection connections other than the main hologram (they are still checked and built; the overlay draws them)."));
+	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 0,
+		TEXT("Unused (the connections must stay shown to be built); kept for the perf log line."));
 	TMap<TWeakObjectPtr<const AFGHologram>, TWeakObjectPtr<UProceduralMeshComponent>> GJunctionOverlays;
+
+	/** True for a connection hologram that is not the main one (those are throttled). */
+	bool IsJunctionChild(const AFGHologram* H)
+	{
+		if (!H || !GJunctionHolograms.Contains(H))
+		{
+			return false;
+		}
+		for (const auto& Pair : GJunctionChildren)
+		{
+			for (const TWeakObjectPtr<AFGHologram>& C : Pair.Value)
+			{
+				if (C.Get() == H)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** CheckValidPlacement is protected: named through a class that makes it public, for the hook. */
+	struct FRMHologramCheckAccess : public AFGHologram
+	{
+		using AFGHologram::CheckValidPlacement;
+	};
 	/** When each overlay was last drawn: one not drawn for a moment (aim moved away, build gun put away) is removed. */
 	TMap<TWeakObjectPtr<const AFGHologram>, double> GJunctionOverlayTime;
 
@@ -1477,27 +1520,6 @@ namespace
 		}));
 	}
 
-	/** The local player's inventory (what holograms check their cost against). */
-	UFGInventoryComponent* LocalInventory(UWorld* World)
-	{
-		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
-		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
-		return Player ? Player->GetInventory() : nullptr;
-	}
-
-	/**
-	 * The game only checks the placement of visible holograms, and checking 24 connection holograms every frame
-	 * cost about 180 ms per frame (measured 2026-11-14). So the ones beyond the main one stay hidden, a couple are
-	 * shown and checked per frame (their result kept for the line colours), and all of them are shown and checked
-	 * just before a click, so the click builds them (a hidden hologram is not built) or is refused if one cannot be.
-	 */
-	void CheckJunctionLink(AFGHologram* H, UFGInventoryComponent* Inventory, bool& OutOk)
-	{
-		H->SetActorHiddenInGame(false);
-		H->ValidatePlacementAndCost(Inventory);
-		OutOk = H->CanConstruct();
-		H->SetActorHiddenInGame(true);
-	}
 
 	void UpdateJunctionOverlay(AFGHologram* Parent, FJunctionCache& Cache)
 	{
@@ -1572,39 +1594,11 @@ namespace
 				UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
 			}
 		}
-		// Hidden again after a click that was refused (it showed them all).
-		const bool bHideExtra = CVarJunctionHideChildren.GetValueOnGameThread() != 0;
-		for (int32 L = 1; L < Cache.LinkHolograms.Num(); ++L)
-		{
-			AFGHologram* H = Cache.LinkHolograms[L].Get();
-			if (H && H->IsHidden() != bHideExtra)
-			{
-				H->SetActorHiddenInGame(bHideExtra);
-			}
-		}
-		// A couple of the hidden connections checked per frame.
 		Cache.LinkOk.SetNum(Cache.LinkHolograms.Num());
-		if (UFGInventoryComponent* Inventory = LocalInventory(World))
+		for (int32 L = 0; L < Cache.LinkHolograms.Num(); ++L)
 		{
-			const int32 Count = Cache.LinkHolograms.Num();
-			for (int32 K = 0; K < 2 && Count > 1; ++K)
-			{
-				if (Cache.NextCheck < 1 || Cache.NextCheck >= Count)
-				{
-					Cache.NextCheck = 1;
-				}
-				if (AFGHologram* H = Cache.LinkHolograms[Cache.NextCheck].Get())
-				{
-					bool bOk = false;
-					CheckJunctionLink(H, Inventory, bOk);
-					Cache.LinkOk[Cache.NextCheck] = bOk;
-				}
-				++Cache.NextCheck;
-			}
-		}
-		if (Cache.LinkOk.Num() > 0)
-		{
-			Cache.LinkOk[0] = Parent->CanConstruct();
+			const AFGHologram* H = Cache.LinkHolograms[L].Get();
+			Cache.LinkOk[L] = H && H->CanConstruct();
 		}
 		for (int32 L = 0; L < Cache.Courses.Num(); ++L)
 		{
@@ -1638,30 +1632,6 @@ namespace
 		}
 		Mesh->SetRenderCustomDepth(false);
 		Mesh->SetVisibility(true);
-	}
-
-	/** Just before a click: every connection shown and checked, so the build gun builds them all (or refuses). */
-	void PrepareJunctionsForClick(UWorld* World)
-	{
-		UFGInventoryComponent* Inventory = LocalInventory(World);
-		for (auto& Pair : GJunctionCache)
-		{
-			AFGHologram* Parent = const_cast<AFGHologram*>(Pair.Key.Get());
-			if (!Parent || Parent->GetWorld() != World || !Inventory || Pair.Value.LinkHolograms.Num() <= 1)
-			{
-				continue;
-			}
-			for (int32 L = 1; L < Pair.Value.LinkHolograms.Num(); ++L)
-			{
-				if (AFGHologram* H = Pair.Value.LinkHolograms[L].Get())
-				{
-					H->SetActorHiddenInGame(false);
-				}
-			}
-			Parent->ValidatePlacementAndCost(Inventory);
-			UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState click: %d connections shown and checked, main can build %d"),
-				Pair.Value.LinkHolograms.Num(), Parent->CanConstruct() ? 1 : 0);
-		}
 	}
 
 	void ClearJunctionOverlay(AFGHologram* Parent)
@@ -1857,7 +1827,7 @@ namespace
 			Cache.Courses.AddDefaulted();
 			Cache.LinkHolograms.Add(Child);
 			SetupJunctionHologram(Child, Hit, Links[L], X, &Cache.Courses.Last());
-			Child->SetActorHiddenInGame(CVarJunctionHideChildren.GetValueOnGameThread() != 0); // checked a few per frame (UpdateJunctionOverlay)
+			Child->SetActorHiddenInGame(false); // must stay shown: a hidden hologram is not built (tested 2026-11-14)
 			LinkHolograms.Add(Child);
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
@@ -3737,13 +3707,46 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
-	// A click with intersection connections up: show and check them all first (they stay hidden otherwise).
-	SUBSCRIBE_METHOD(AFGBuildGun::OnPrimaryFirePressed, [](auto& Scope, AFGBuildGun* Gun)
+	// Intersection connections: real placement check every few frames per connection (see FJunctionCheckMemo).
+	SUBSCRIBE_METHOD_VIRTUAL(FRMHologramCheckAccess::CheckValidPlacement, GetMutableDefault<AFGVehiclePathSegmentHologram>(), [](auto& Scope, AFGHologram* Self)
 	{
-		if (Gun && GJunctionCache.Num() > 0)
+		if (!IsJunctionChild(Self))
 		{
-			PrepareJunctionsForClick(Gun->GetWorld());
+			return;
 		}
+		static uint64 BudgetFrame = 0;
+		static int32 Budget = 0;
+		if (BudgetFrame != GFrameCounter)
+		{
+			BudgetFrame = GFrameCounter;
+			Budget = JunctionChecksPerFrame;
+		}
+		FJunctionCheckMemo& Memo = GJunctionCheckMemo.FindOrAdd(Self);
+		if (Memo.bChecked && (GFrameCounter - Memo.Frame < JunctionCheckEvery || Budget <= 0))
+		{
+			Scope.Cancel();
+			for (const TSubclassOf<UFGConstructDisqualifier>& D : Memo.Why)
+			{
+				Self->AddConstructDisqualifier(D);
+			}
+			return;
+		}
+		--Budget;
+		TArray<TSubclassOf<UFGConstructDisqualifier>> Before;
+		Self->GetConstructDisqualifiers(Before);
+		Scope(Self); // the real check
+		TArray<TSubclassOf<UFGConstructDisqualifier>> After;
+		Self->GetConstructDisqualifiers(After);
+		Memo.Why.Reset();
+		for (const TSubclassOf<UFGConstructDisqualifier>& D : After)
+		{
+			if (!Before.Contains(D))
+			{
+				Memo.Why.Add(D);
+			}
+		}
+		Memo.Frame = GFrameCounter;
+		Memo.bChecked = true;
 	});
 
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGVehiclePathSegmentHologram::DoMultiStepPlacement, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
