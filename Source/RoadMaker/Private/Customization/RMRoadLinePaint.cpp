@@ -1131,15 +1131,14 @@ namespace
 		{
 			return false;
 		}
-		// Only with the build gun in hand (build, dismantle or paint), like the game's own sample.
+		// Only with the build gun in hand (build, dismantle or paint). With anything else in hand the click is
+		// swallowed: the game's own sample would take the build gun out on the marking's hidden, locked build
+		// recipe and show "N/A".
 		AFGEquipment* Arms = Player->GetEquipmentInSlot(EEquipmentSlot::ES_ARMS);
-		const bool bGunInHand = Gun->IsEquipped() && Arms == Gun;
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: in hand %s, build gun equipped %d / IsBuildGunEquipped %d, gun state %s -> %s"),
-			Arms ? *Arms->GetClass()->GetName() : TEXT("none"), Gun->IsEquipped() ? 1 : 0, Player->IsBuildGunEquipped() ? 1 : 0,
-			Gun->GetCurrentState() ? *Gun->GetCurrentState()->GetClass()->GetName() : TEXT("none"), bGunInHand ? TEXT("sample") : TEXT("left to the game"));
-		if (!bGunInHand)
+		if (!Gun->IsEquipped() || Arms != Gun)
 		{
-			return false;
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: build gun not in hand (%s), click ignored"), Arms ? *Arms->GetClass()->GetName() : TEXT("nothing"));
+			return true;
 		}
 		// The customizer option that paints this kind of marking, and its recipe.
 		TSubclassOf<URMRoadLineDescriptor> Option;
