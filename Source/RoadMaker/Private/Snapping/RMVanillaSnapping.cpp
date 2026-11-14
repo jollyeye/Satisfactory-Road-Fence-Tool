@@ -1511,6 +1511,39 @@ namespace
 		const FLinearColor Green(0.f, 1.f, 0.f);
 		const FLinearColor Red(1.f, 0.05f, 0.05f);
 		constexpr float Pixels = 4.f;
+		// Log (on change) which connections cannot be built and why: the click is refused while any of them cannot.
+		{
+			static TMap<TWeakObjectPtr<const AFGHologram>, FString> GLastState;
+			FString State = FString::Printf(TEXT("main can build %d;"), Parent->CanConstruct() ? 1 : 0);
+			for (int32 L = 0; L < Cache.LinkHolograms.Num(); ++L)
+			{
+				const AFGHologram* H = Cache.LinkHolograms[L].Get();
+				if (!H)
+				{
+					State += FString::Printf(TEXT(" %d gone;"), L);
+					continue;
+				}
+				if (H->CanConstruct())
+				{
+					continue;
+				}
+				TArray<TSubclassOf<UFGConstructDisqualifier>> Why;
+				H->GetConstructDisqualifiers(Why);
+				TArray<FString> Names;
+				for (const TSubclassOf<UFGConstructDisqualifier>& D : Why)
+				{
+					Names.Add(D ? D->GetName() : TEXT("?"));
+				}
+				State += FString::Printf(TEXT(" %d red (%s%s%s);"), L, *FString::Join(Names, TEXT(", ")), H->IsHidden() ? TEXT(", hidden") : TEXT(""),
+					H->IsDisabled() ? TEXT(", disabled") : TEXT(""));
+			}
+			FString& Last = GLastState.FindOrAdd(Parent);
+			if (Last != State)
+			{
+				Last = State;
+				UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
+			}
+		}
 		for (int32 L = 0; L < Cache.Courses.Num(); ++L)
 		{
 			const AFGHologram* H = Cache.LinkHolograms.IsValidIndex(L) ? Cache.LinkHolograms[L].Get() : nullptr;
