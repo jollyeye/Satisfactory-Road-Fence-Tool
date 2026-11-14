@@ -1113,7 +1113,9 @@ namespace
 		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
 		// Only with the build gun out (build, dismantle or paint), like the game's own sample.
-		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor() || !Player->IsBuildGunEquipped())
+		// (IsBuildGunEquipped is also true with another tool in hand: the gun must be the one in the arms slot.)
+		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor() || !Gun->IsEquipped()
+			|| Player->GetEquipmentInSlot(EEquipmentSlot::ES_ARMS) != Gun)
 		{
 			return false;
 		}
