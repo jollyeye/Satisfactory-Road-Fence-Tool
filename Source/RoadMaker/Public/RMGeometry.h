@@ -207,7 +207,8 @@ namespace RMGeometry
 	ROADMAKER_API void SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSplinePoint>& OutPoints);
 
 	/** Steel W-beam guard rail with posts. Frames are at the base of the fence. */
-	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal);
+	/** Guard rail: the beam in Beam (painted, the game's H-beam material), the posts in Posts (plain steel). */
+	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts);
 
 	/** Continuous concrete jersey barrier. */
 	ROADMAKER_API void BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete);

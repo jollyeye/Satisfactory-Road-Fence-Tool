@@ -633,6 +633,21 @@ link(const(glow, 4.0, -600, 200), "", gmul, "B")
 MEL.connect_material_property(gmul, "", MP.MP_EMISSIVE_COLOR)
 finish(glow)
 
+# Guard rail beam: the game's H-beam material (paintable with swatches like the game's beams; the gantry's
+# H-beams take paint the same way). The posts keep Road Maker's galvanised steel.
+game_beam_mat = None
+for path in ("/Game/FactoryGame/Buildable/Building/Pillars/Material/MI_Beam_04.MI_Beam_04",
+             "/Game/FactoryGame/Buildable/Building/Pillars/Material/MI_Beam_04"):
+    try:
+        game_beam_mat = unreal.load_asset(path)
+    except Exception:
+        game_beam_mat = None
+    if game_beam_mat:
+        log("Guard rail beam uses the game's material " + path)
+        break
+if not game_beam_mat:
+    log("  ! game H-beam material not found, the guard rail uses M_RoadSteel")
+
 # The game's own concrete wall material: the wall mesh carries the same texture layout (UV0) and the
 # wall passes the paint to it the way the game does, so it looks and paints like the game's walls.
 # Road Maker's M_RoadFenceWall stays as the fallback.
@@ -1131,7 +1146,7 @@ ASSIGN = {
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,
-    "Build_Fence_GuardRail": {"m_main_material": steel},
+    "Build_Fence_GuardRail": {"m_main_material": game_beam_mat or steel, "m_panel_material": steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},

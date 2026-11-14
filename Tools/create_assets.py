@@ -149,6 +149,7 @@ WallsSubCat = load_game_class("SC_Walls")
 VanillaConcreteWall = load_game_class("Build_Wall_Concrete_8x4")
 VanillaFicsitWall = load_game_class("Build_Wall_8x4_01") or load_game_class("Build_Wall_Orange_8x4_01")
 VanillaSteelWall = load_game_class("Build_SteelWall_8x4")
+VanillaBeam = load_game_class("Build_Beam_Painted") or load_game_class("Build_Beam")
 Desc_SteelBeam = load_game_class("Desc_SteelPlate")
 Desc_SteelPipe = load_game_class("Desc_SteelPipe") or load_game_class("Desc_Pipe")
 if Desc_SteelPipe:
@@ -648,6 +649,17 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         if lay:
             for prop, val in zip(("m_wall_u_centre", "m_wall_u_per_metre", "m_wall_v_top", "m_wall_v_per_metre", "m_wall_mirror"), lay):
                 setp(c, val, prop)
+    if name == "Fence_GuardRail":
+        # The beam has the game's H-beam material: paintable with swatches like the game's beams.
+        setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
+        src = VanillaBeam or VanillaSteelWall
+        if src:
+            sd = unreal.get_default_object(src)
+            for prop in ("m_swatch_group", "m_default_swatch_customization_override"):
+                v = getp(sd, prop)
+                log("  %s: game %s %s = %s" % (name, src.get_name(), prop, v))
+                if v or prop == "m_default_swatch_customization_override":
+                    setp(c, v, prop)
     finish(b)
     if name in FENCE_WALLS:
         fence_wall_classes[name] = b.generated_class()

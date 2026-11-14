@@ -1128,27 +1128,28 @@ void RMGeometry::SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSp
 	}
 }
 
-void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Metal)
+void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts)
 {
 	const float S = 1.f; // road on +Right; mirroring is done by the caller
 
-	// W-beam approximated by a shallow box section 32 cm tall, centred at 60 cm, bulging towards the road.
-	const TArray<FRMFrame> RailFrames = LiftFrames(Frames, 60.f);
-	TArray<FVector2D> Beam = {
-		FVector2D(-4.f, 16.f), FVector2D(4.f, 16.f), FVector2D(6.f, 0.f), FVector2D(4.f, -16.f), FVector2D(-4.f, -16.f), FVector2D(-2.f, 0.f)
+	// W-beam approximated by a shallow box section 42 cm tall, centred at 61 cm, bulging towards the road.
+	// Its top (82 cm) is just above the posts (80 cm), so their tops do not show over the beam.
+	const TArray<FRMFrame> RailFrames = LiftFrames(Frames, 61.f);
+	TArray<FVector2D> Profile = {
+		FVector2D(-4.f, 21.f), FVector2D(4.f, 21.f), FVector2D(6.f, 0.f), FVector2D(4.f, -21.f), FVector2D(-4.f, -21.f), FVector2D(-2.f, 0.f)
 	};
-	for (FVector2D& P : Beam)
+	for (FVector2D& P : Profile)
 	{
 		P.X *= S;
 	}
-	ExtrudeProfile(RailFrames, Beam, true, FVector2D::ZeroVector, UVScale, Metal);
-	AddProfileCap(RailFrames[0], Beam, false, UVScale, Metal);
-	AddProfileCap(RailFrames.Last(), Beam, true, UVScale, Metal);
+	ExtrudeProfile(RailFrames, Profile, true, FVector2D::ZeroVector, UVScale, Beam);
+	AddProfileCap(RailFrames[0], Profile, false, UVScale, Beam);
+	AddProfileCap(RailFrames.Last(), Profile, true, UVScale, Beam);
 
 	// Posts every 2 m, behind the beam (away from the road).
 	ForEvery(Frames, 200.f, [&](const FRMFrame& F)
 	{
-		Metal.AddBox(F.Pos + FVector(0.f, 0.f, 40.f) - F.Right * (9.f * S), F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), UVScale);
+		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 40.f) - F.Right * (9.f * S), F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), UVScale);
 	});
 }
 
