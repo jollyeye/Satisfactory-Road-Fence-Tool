@@ -481,7 +481,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 	case ERMFenceType::GuardRail:
 	{
 		// The beam as a plain bar (posts dropped).
-		const TArray<FVector2D> Bar = { FVector2D(-4.f, -21.f), FVector2D(5.f, -21.f), FVector2D(5.f, 21.f), FVector2D(-4.f, 21.f) };
+		const TArray<FVector2D> Bar = { FVector2D(-4.f, -21.25f), FVector2D(8.5f, -21.25f), FVector2D(8.5f, 21.25f), FVector2D(-4.f, 21.25f) };
 		const TArray<FRMFrame> Rail = Lifted(61.f);
 		RMGeometry::ExtrudeProfile(Rail, Bar, true, FVector2D(0.5f, 0.f), 400.f, Main);
 		break;

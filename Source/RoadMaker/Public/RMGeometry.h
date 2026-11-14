@@ -182,10 +182,11 @@ namespace RMGeometry
 	/**
 	 * Like ExtrudeProfile (closed profile), with rounded-looking corners: each profile edge gets a strip BevelWidth wide
 	 * along both its ends whose normal turns to the average of the two faces at the corner. The shape stays the same;
-	 * only the lighting rounds the edges (like a bevel baked into a normal map).
+	 * only the lighting rounds the edges (like a bevel baked into a normal map). Faces point outward by the profile's
+	 * winding (concave profiles work too; ProfileCentroid is not used). SharpCorners[i] true keeps corner i hard.
 	 */
 	ROADMAKER_API void ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TArray<FVector2D>& Profile,
-		const FVector2D& ProfileCentroid, float UVScale, float BevelWidth, FRMMesh& Out);
+		const FVector2D& ProfileCentroid, float UVScale, float BevelWidth, FRMMesh& Out, const TArray<bool>* SharpCorners = nullptr);
 
 	/** Fan-triangulated cap of a convex profile at a frame. Normal is +Fwd or -Fwd. */
 	ROADMAKER_API void AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& Profile, bool bFacingForward, float UVScale, FRMMesh& Out);

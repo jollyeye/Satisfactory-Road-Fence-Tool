@@ -820,7 +820,7 @@ void RMGeometry::ExtrudeProfile(const TArray<FRMFrame>& Frames, const TArray<FVe
 }
 
 void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TArray<FVector2D>& Profile,
-	const FVector2D& ProfileCentroid, float UVScale, float BevelWidth, FRMMesh& Out)
+	const FVector2D& ProfileCentroid, float UVScale, float BevelWidth, FRMMesh& Out, const TArray<bool>* SharpCorners)
 {
 	const int32 Num = Profile.Num();
 	if (Frames.Num() < 2 || Num < 3)
@@ -828,7 +828,15 @@ void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TAr
 		return;
 	}
 	const float S = 1.f / FMath::Max(UVScale, 1.f);
-	// Face normal of each profile edge (away from the centroid).
+	// Face normal of each profile edge, outward by the winding (works for concave profiles).
+	float Area2 = 0.f;
+	for (int32 I = 0; I < Num; ++I)
+	{
+		const FVector2D& A = Profile[I];
+		const FVector2D& B = Profile[(I + 1) % Num];
+		Area2 += A.X * B.Y - B.X * A.Y;
+	}
+	const float Wind = Area2 >= 0.f ? 1.f : -1.f; // counter-clockwise: outward is (dy, -dx)
 	TArray<FVector2D> EdgeN;
 	for (int32 E = 0; E < Num; ++E)
 	{
@@ -836,12 +844,9 @@ void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TAr
 		const FVector2D B = Profile[(E + 1) % Num];
 		FVector2D N2(B.Y - A.Y, -(B.X - A.X));
 		N2.Normalize();
-		if (FVector2D::DotProduct(N2, (A + B) * 0.5f - ProfileCentroid) < 0.f)
-		{
-			N2 = -N2;
-		}
-		EdgeN.Add(N2);
+		EdgeN.Add(N2 * Wind);
 	}
+	auto Sharp = [SharpCorners](int32 I) { return SharpCorners && SharpCorners->IsValidIndex(I) && (*SharpCorners)[I]; };
 
 	float U0 = 0.f;
 	for (int32 E = 0; E < Num; ++E)
@@ -851,8 +856,9 @@ void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TAr
 		const float Len = FVector2D::Distance(A, B);
 		const FVector2D Dir = (B - A) / FMath::Max(Len, 0.01f);
 		const float W = FMath::Min(BevelWidth, Len * 0.4f);
-		const FVector2D NA = (EdgeN[(E + Num - 1) % Num] + EdgeN[E]).GetSafeNormal();   // corner at A
-		const FVector2D NB = (EdgeN[E] + EdgeN[(E + 1) % Num]).GetSafeNormal();         // corner at B
+		const int32 IB = (E + 1) % Num;
+		const FVector2D NA = Sharp(E) ? EdgeN[E] : (EdgeN[(E + Num - 1) % Num] + EdgeN[E]).GetSafeNormal();   // corner at A
+		const FVector2D NB = Sharp(IB) ? EdgeN[E] : (EdgeN[E] + EdgeN[IB]).GetSafeNormal();                  // corner at B
 		// Across the edge: corner, bevel end, bevel start, corner.
 		const FVector2D Pts[4] = { A, A + Dir * W, B - Dir * W, B };
 		const FVector2D Ns[4] = { NA, EdgeN[E], EdgeN[E], NB };
@@ -1211,17 +1217,26 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 {
 	const float S = 1.f; // road on +Right; mirroring is done by the caller
 
-	// W-beam approximated by a shallow box section 42 cm tall, centred at 61 cm, bulging towards the road.
-	// Its top (82 cm) is just above the posts (80 cm), so their tops do not show over the beam.
+	// The beam's section (drawn by the user, 2026-11-14) on a 2.5 cm grid, 5 squares deep x 17 tall (12.5 x 42.5 cm):
+	// flanges top and bottom with their free ends on the posts' side, the face towards the road, and a vee in the
+	// middle set back towards the posts. Grid (u to the road, w down from the top) -> profile X = -4 + 2.5 u (the back
+	// against the posts' front at -4), Y = 61 + 2.5 (8.5 - w): top 82.25 cm, just over the 80 cm posts.
 	const TArray<FRMFrame> RailFrames = LiftFrames(Frames, 61.f);
-	TArray<FVector2D> Profile = {
-		FVector2D(-4.f, 21.f), FVector2D(4.f, 21.f), FVector2D(6.f, 0.f), FVector2D(4.f, -21.f), FVector2D(-4.f, -21.f), FVector2D(-2.f, 0.f)
+	static const float Grid[][2] = {
+		{ 0, 0 }, { 5, 0 }, { 5, 5 }, { 2, 7 }, { 2, 10 }, { 5, 12 }, { 5, 17 }, { 0, 17 },
+		{ 0, 15 }, { 3, 15 }, { 3, 13 }, { 0, 11 }, { 0, 6 }, { 3, 4 }, { 3, 2 }, { 0, 2 },
 	};
-	for (FVector2D& P : Profile)
+	TArray<FVector2D> Profile;
+	for (const auto& G : Grid)
 	{
-		P.X *= S;
+		Profile.Add(FVector2D((-4.f + 2.5f * G[0]) * S, 2.5f * (8.5f - G[1])));
 	}
-	ExtrudeProfile(RailFrames, Profile, true, FVector2D::ZeroVector, UVScale, Beam);
+	// Every corner rounded in the lighting (1 cm) except the four at the flanges' free ends.
+	TArray<bool> SharpCorners;
+	SharpCorners.Init(false, Profile.Num());
+	SharpCorners[0] = SharpCorners[15] = true;  // top flange end
+	SharpCorners[7] = SharpCorners[8] = true;   // bottom flange end
+	ExtrudeProfileBeveled(RailFrames, Profile, FVector2D::ZeroVector, UVScale, 1.f, Beam, &SharpCorners);
 	AddProfileCap(RailFrames[0], Profile, false, UVScale, Beam);
 	AddProfileCap(RailFrames.Last(), Profile, true, UVScale, Beam);
 
