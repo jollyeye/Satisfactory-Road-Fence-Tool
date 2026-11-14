@@ -103,6 +103,9 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 **Improved**
 - Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
+**Changed**
+- A fence wall (or a road fence of the same kind) is refused only when it follows another along the same curve. Touching or overlapping in part, like two walls meeting where roads split, is allowed and the hologram turns yellow, like the game's buildings that touch.
+
 **Fixed**
 - Picking a road from the hotbar or the radial menu no longer loses the "Toggle Limits" key hint.
 - Middle click on a lane marking (arrow, digit, vehicle) picks it again, ready to paint another, in any build gun mode (on whatever key Sample is bound to).

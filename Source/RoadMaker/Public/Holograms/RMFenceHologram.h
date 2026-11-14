@@ -29,9 +29,14 @@ public:
 
 	/**
 	 * A fence wall where this one would stand (same course, overlapping heights), not counting the one being
-	 * replaced; with SameRoadFence: a road fence of that kind there instead.
+	 * replaced; with SameRoadFence: a road fence of that kind there instead. True only when one follows the
+	 * other for most of the shorter one's length (the same curve); a partial overlap (ends meeting, curves
+	 * crossing) is allowed and only sets OutTouching (the hologram shows the game's yellow warning look).
 	 */
-	bool OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence = TOptional<ERMFenceType>()) const;
+	bool OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence = TOptional<ERMFenceType>(), bool* OutTouching = nullptr) const;
+
+	/** Touching another wall / same road fence in part (allowed): yellow, like the game's touching buildings. */
+	virtual EHologramMaterialState GetHologramMaterialState() const override;
 	virtual void ConfigureActor(AFGBuildable* inBuildable) const override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -48,6 +53,9 @@ protected:
 
 	/** The real fence: its materials (look) and paint, with the game's valid / invalid tint on top. */
 	virtual void UpdateHologramLook() override;
+
+	/** Set by CheckValidPlacement: this fence overlaps another in part (allowed, shown yellow). */
+	bool mTouchingOther = false;
 	virtual void ApplyCustomizationData() override;
 
 	const ARMBuildableFence* GetFenceDefaults() const;

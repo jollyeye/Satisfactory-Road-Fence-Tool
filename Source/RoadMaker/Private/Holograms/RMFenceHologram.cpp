@@ -378,21 +378,28 @@ void ARMFenceHologram::CheckValidPlacement()
 			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 		}
 	}
-	// Fence walls cannot share their space with another fence wall (like the game's walls): touching
-	// end to end or stacked edge to edge is fine, the same place is not.
-	if (GetFenceDefaults()->IsWall() && OverlapsAnotherWall())
+	// Fence walls cannot share their course with another fence wall (like the game's walls): touching
+	// end to end, stacked edge to edge or overlapping in part is fine (yellow), the same curve is not.
+	mTouchingOther = false;
+	if (GetFenceDefaults()->IsWall() && OverlapsAnotherWall(TOptional<ERMFenceType>(), &mTouchingOther))
 	{
 		AddConstructDisqualifier(URMCD_FenceWallTaken::StaticClass());
 	}
-	// Road fences: with the snap key, not on top of the same kind of road fence (a different kind is
+	// Road fences: with the snap key, not along the same kind of road fence (a different kind is
 	// fine: it replaces it when aimed at, or stands beside it).
-	if (!GetFenceDefaults()->IsWall() && mSnapToGuideLines && OverlapsAnotherWall(GetFenceDefaults()->mFenceType))
+	if (!GetFenceDefaults()->IsWall() && mSnapToGuideLines && OverlapsAnotherWall(GetFenceDefaults()->mFenceType, &mTouchingOther))
 	{
 		AddConstructDisqualifier(URMCD_SameFenceTaken::StaticClass());
 	}
 }
 
-bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence) const
+EHologramMaterialState ARMFenceHologram::GetHologramMaterialState() const
+{
+	const EHologramMaterialState State = Super::GetHologramMaterialState();
+	return State == EHologramMaterialState::HMS_OK && mTouchingOther ? EHologramMaterialState::HMS_WARNING : State;
+}
+
+bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence, bool* OutTouching) const
 {
 	UWorld* World = GetWorld();
 	TArray<FRMFrame> Local;
@@ -436,6 +443,11 @@ bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence
 		}
 		TArray<FRMFrame> Frames;
 		Other->GetWorldFrames(Frames, 50.f);
+		if (Frames.Num() < 2)
+		{
+			continue;
+		}
+		int32 Shared = 0; // samples of the new wall (1 m apart) lying on the other one
 		for (const FVector& P : Samples)
 		{
 			const FRMFrame* Near = nullptr;
@@ -460,8 +472,23 @@ bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence
 			const float Overlap = (SameRoadFence.IsSet() ? 120.f : Wall) - FMath::Abs(Rel.Z);
 			if (Along < 30.f && Across < 40.f && Overlap > 20.f)
 			{
-				return true;
+				++Shared;
 			}
+		}
+		if (Shared == 0)
+		{
+			continue;
+		}
+		// The same curve: they run together for most of the shorter one (its two free ends left out).
+		const float SharedLength = Shared * 100.f;
+		const float Shorter = FMath::Max(FMath::Min(Length, Frames.Last().Dist) - 100.f, 100.f);
+		if (SharedLength >= 0.75f * Shorter)
+		{
+			return true;
+		}
+		if (OutTouching)
+		{
+			*OutTouching = true;
 		}
 	}
 	return false;
