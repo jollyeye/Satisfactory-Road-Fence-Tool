@@ -5,6 +5,7 @@
 #include "RoadMakerModule.h"
 #include "RMRoadUtils.h"
 #include "ProceduralMeshComponent.h"
+#include "Equipment/FGBuildGun.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "Buildables/RMBuildableRoad.h"
@@ -1426,6 +1427,9 @@ namespace
 		/** Per connection: its course and its (hidden) hologram, for the overlay. */
 		TArray<TArray<FVector>> Courses;
 		TArray<TWeakObjectPtr<AFGHologram>> LinkHolograms;
+		/** Whether each connection could be built, from the last check of it (checked a few per frame). */
+		TArray<bool> LinkOk;
+		int32 NextCheck = 1;
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FJunctionCache> GJunctionCache;
 
@@ -1473,7 +1477,29 @@ namespace
 		}));
 	}
 
-	void UpdateJunctionOverlay(AFGHologram* Parent, const FJunctionCache& Cache)
+	/** The local player's inventory (what holograms check their cost against). */
+	UFGInventoryComponent* LocalInventory(UWorld* World)
+	{
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
+		return Player ? Player->GetInventory() : nullptr;
+	}
+
+	/**
+	 * The game only checks the placement of visible holograms, and checking 24 connection holograms every frame
+	 * cost about 180 ms per frame (measured 2026-11-14). So the ones beyond the main one stay hidden, a couple are
+	 * shown and checked per frame (their result kept for the line colours), and all of them are shown and checked
+	 * just before a click, so the click builds them (a hidden hologram is not built) or is refused if one cannot be.
+	 */
+	void CheckJunctionLink(AFGHologram* H, UFGInventoryComponent* Inventory, bool& OutOk)
+	{
+		H->SetActorHiddenInGame(false);
+		H->ValidatePlacementAndCost(Inventory);
+		OutOk = H->CanConstruct();
+		H->SetActorHiddenInGame(true);
+	}
+
+	void UpdateJunctionOverlay(AFGHologram* Parent, FJunctionCache& Cache)
 	{
 		UWorld* World = Parent ? Parent->GetWorld() : nullptr;
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
@@ -1525,7 +1551,7 @@ namespace
 					State += FString::Printf(TEXT(" %d gone;"), L);
 					continue;
 				}
-				if (H->CanConstruct())
+				if (!Cache.LinkOk.IsValidIndex(L) || Cache.LinkOk[L])
 				{
 					continue;
 				}
@@ -1546,27 +1572,44 @@ namespace
 				UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
 			}
 		}
-		// The connections beyond the main one: their meshes not drawn (the actors stay shown, so they are still built).
-		// Every frame, since a hologram may switch its meshes back on when it updates.
+		// Hidden again after a click that was refused (it showed them all).
 		const bool bHideExtra = CVarJunctionHideChildren.GetValueOnGameThread() != 0;
 		for (int32 L = 1; L < Cache.LinkHolograms.Num(); ++L)
 		{
-			if (AFGHologram* H = Cache.LinkHolograms[L].Get())
+			AFGHologram* H = Cache.LinkHolograms[L].Get();
+			if (H && H->IsHidden() != bHideExtra)
 			{
-				TInlineComponentArray<UPrimitiveComponent*> Prims(H);
-				for (UPrimitiveComponent* P : Prims)
-				{
-					if (P->IsVisible() == bHideExtra)
-					{
-						P->SetVisibility(!bHideExtra);
-					}
-				}
+				H->SetActorHiddenInGame(bHideExtra);
 			}
+		}
+		// A couple of the hidden connections checked per frame.
+		Cache.LinkOk.SetNum(Cache.LinkHolograms.Num());
+		if (UFGInventoryComponent* Inventory = LocalInventory(World))
+		{
+			const int32 Count = Cache.LinkHolograms.Num();
+			for (int32 K = 0; K < 2 && Count > 1; ++K)
+			{
+				if (Cache.NextCheck < 1 || Cache.NextCheck >= Count)
+				{
+					Cache.NextCheck = 1;
+				}
+				if (AFGHologram* H = Cache.LinkHolograms[Cache.NextCheck].Get())
+				{
+					bool bOk = false;
+					CheckJunctionLink(H, Inventory, bOk);
+					Cache.LinkOk[Cache.NextCheck] = bOk;
+				}
+				++Cache.NextCheck;
+			}
+		}
+		if (Cache.LinkOk.Num() > 0)
+		{
+			Cache.LinkOk[0] = Parent->CanConstruct();
 		}
 		for (int32 L = 0; L < Cache.Courses.Num(); ++L)
 		{
 			const AFGHologram* H = Cache.LinkHolograms.IsValidIndex(L) ? Cache.LinkHolograms[L].Get() : nullptr;
-			const FLinearColor Color = H && H->CanConstruct() ? Green : Red;
+			const FLinearColor Color = H && Cache.LinkOk.IsValidIndex(L) && Cache.LinkOk[L] ? Green : Red;
 			const TArray<FVector>& C = Cache.Courses[L];
 			for (int32 I = 0; I + 1 < C.Num(); ++I)
 			{
@@ -1595,6 +1638,30 @@ namespace
 		}
 		Mesh->SetRenderCustomDepth(false);
 		Mesh->SetVisibility(true);
+	}
+
+	/** Just before a click: every connection shown and checked, so the build gun builds them all (or refuses). */
+	void PrepareJunctionsForClick(UWorld* World)
+	{
+		UFGInventoryComponent* Inventory = LocalInventory(World);
+		for (auto& Pair : GJunctionCache)
+		{
+			AFGHologram* Parent = const_cast<AFGHologram*>(Pair.Key.Get());
+			if (!Parent || Parent->GetWorld() != World || !Inventory || Pair.Value.LinkHolograms.Num() <= 1)
+			{
+				continue;
+			}
+			for (int32 L = 1; L < Pair.Value.LinkHolograms.Num(); ++L)
+			{
+				if (AFGHologram* H = Pair.Value.LinkHolograms[L].Get())
+				{
+					H->SetActorHiddenInGame(false);
+				}
+			}
+			Parent->ValidatePlacementAndCost(Inventory);
+			UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState click: %d connections shown and checked, main can build %d"),
+				Pair.Value.LinkHolograms.Num(), Parent->CanConstruct() ? 1 : 0);
+		}
 	}
 
 	void ClearJunctionOverlay(AFGHologram* Parent)
@@ -1790,7 +1857,7 @@ namespace
 			Cache.Courses.AddDefaulted();
 			Cache.LinkHolograms.Add(Child);
 			SetupJunctionHologram(Child, Hit, Links[L], X, &Cache.Courses.Last());
-			Child->SetActorHiddenInGame(false); // a hidden hologram counts as "not placed" and is not built (tested 2026-11-14)
+			Child->SetActorHiddenInGame(CVarJunctionHideChildren.GetValueOnGameThread() != 0); // checked a few per frame (UpdateJunctionOverlay)
 			LinkHolograms.Add(Child);
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
@@ -1798,6 +1865,8 @@ namespace
 			RemoveJunctionChild(Parent, Children[C]); // not needed now
 		}
 
+		Cache.LinkOk.Init(false, Cache.LinkHolograms.Num());
+		Cache.NextCheck = 1;
 		UpdateJunctionOverlay(Parent, Cache);
 		// Every connection is kept with the game's normal rules: if one is invalid the click is
 		// refused, so the intersection can be improved until all connections are valid.
@@ -3668,6 +3737,15 @@ void RMVanillaSnapping::InstallHooks()
 		});
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
+	// A click with intersection connections up: show and check them all first (they stay hidden otherwise).
+	SUBSCRIBE_METHOD(AFGBuildGun::OnPrimaryFirePressed, [](auto& Scope, AFGBuildGun* Gun)
+	{
+		if (Gun && GJunctionCache.Num() > 0)
+		{
+			PrepareJunctionsForClick(Gun->GetWorld());
+		}
+	});
+
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGVehiclePathSegmentHologram::DoMultiStepPlacement, GetMutableDefault<AFGVehiclePathSegmentHologram>(),
 		[](bool Result, AFGVehiclePathSegmentHologram* Hologram, bool bIsInputFromARelease)
 		{
