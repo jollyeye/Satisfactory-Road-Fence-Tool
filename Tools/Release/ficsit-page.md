@@ -99,6 +99,10 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
+## Changelog for version 1.3.1
+**Improved**
+- Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
+
 ## Changelog for version 1.3.0
 **New**
 - **Join Road** and **Merge Road** (Road Tools > Edit road): join two roads end to end into one (same width, lying on one smooth curve), or merge two roads side by side into one wider road (edge to edge, level, starting and ending together, up to 4 wide). Lines, look, paint, markings, paths, tracks and fences are kept; a green outline shows the result.
@@ -121,7 +125,6 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Lane markings on a 1-lane road: one spot in the middle, sized to the road. Middle click a lane marking to pick it again.
 - Intersection connections (snap key on an intersection) are much lighter: about 4x the frame rate on a busy intersection.
 - Far fences use a simpler middle level of detail.
-- Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
 **Fixed**
 - Railway tracks built through intersections and along lanes in one click were not connected at the joints (trains derailed there).
