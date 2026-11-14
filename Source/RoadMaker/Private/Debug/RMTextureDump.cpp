@@ -19,6 +19,8 @@ namespace
 	const TCHAR* GDumpList[] = {
 		TEXT("/Game/FactoryGame/Buildable/Factory/ConveyorPole/Texture/TX_ConveyorPole_BC.TX_ConveyorPole_BC"),
 		TEXT("/Game/FactoryGame/Buildable/Factory/ConveyorPole/Texture/TX_ConveyorPole_Refl.TX_ConveyorPole_Refl"),
+		TEXT("/Game/FactoryGame/Buildable/Factory/SignDigital/Texture/TX_DigitalSign_BC.TX_DigitalSign_BC"),
+		TEXT("/Game/FactoryGame/Buildable/Factory/SignDigital/Texture/TX_DigitalSign_Refl.TX_DigitalSign_Refl"),
 	};
 
 	FString DumpPath(const UTexture2D* T)
