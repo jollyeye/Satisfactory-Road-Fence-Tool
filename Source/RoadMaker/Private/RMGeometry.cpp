@@ -1213,6 +1213,7 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 	AddProfileCap(RailFrames.Last(), Profile, true, UVScale, Beam);
 
 	// Posts every 2 m, behind the beam (away from the road).
+	const int32 FirstPost = Posts.Vertices.Num();
 	ForEvery(Frames, 200.f, [&](const FRMFrame& F)
 	{
 		// Upright, 10 cm square, 80 cm tall, edges rounded over 1.5 cm in the lighting.
@@ -1220,6 +1221,16 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
 		AddBeveledPost(F.Pos - F.Right * (9.f * S), Fwd, Right, FVector::UpVector, 5.f, 80.f, 1.5f, Posts);
 	});
+	// The posts' material is the game's sign pole material, whose textures are an atlas of many parts. All of each
+	// post samples one plain area of it: light steel, fully metallic, low roughness (chrome), found in the real
+	// TX_ConveyorPole_BC / _Refl (512 px: x 136..180, y 456..500).
+	const FVector2D ChromeMin(140.f / 512.f, 460.f / 512.f);
+	const FVector2D ChromeSize(36.f / 512.f, 36.f / 512.f);
+	for (int32 I = FirstPost; I < Posts.UVs.Num(); ++I)
+	{
+		const FVector2D UV = Posts.UVs[I];
+		Posts.UVs[I] = ChromeMin + FVector2D(FMath::Clamp(UV.X, 0.f, 1.f) * ChromeSize.X, FMath::Clamp(UV.Y, 0.f, 1.f) * ChromeSize.Y);
+	}
 }
 
 void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete)
