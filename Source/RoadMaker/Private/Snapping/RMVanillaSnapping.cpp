@@ -1182,12 +1182,11 @@ namespace
 	/**
 	 * The game checks every hologram's placement every frame; for 24 connection holograms that cost about
 	 * 180 ms per frame (measured 2026-11-14). The connections beyond the main one do their real check once every
-	 * JunctionCheckEvery frames (at most JunctionChecksPerFrame of them per frame); in between, the reasons they
-	 * could not be built last time are put back as they were. They stay shown, so the click builds them as usual.
+	 * JunctionCheckEvery frames (at most JunctionChecksPerFrame of them per frame); in between, their check is skipped
+	 * (ValidatePlacementAndCost), so they keep their last result. They stay shown, so the click builds them as usual.
 	 */
 	struct FJunctionCheckMemo
 	{
-		TArray<TSubclassOf<UFGConstructDisqualifier>> Why;
 		uint64 Frame = 0;
 		bool bChecked = false;
 	};
@@ -1479,12 +1478,6 @@ namespace
 		return false;
 	}
 
-	/** CheckValidPlacement is protected: its address taken inside a derived class, for the hook. */
-	struct FRMHologramCheckAccess : public AFGHologram
-	{
-		typedef void (AFGHologram::*FCheckFn)();
-		static constexpr FCheckFn CheckFn() { return &FRMHologramCheckAccess::CheckValidPlacement; }
-	};
 	/** When each overlay was last drawn: one not drawn for a moment (aim moved away, build gun put away) is removed. */
 	TMap<TWeakObjectPtr<const AFGHologram>, double> GJunctionOverlayTime;
 
@@ -3709,9 +3702,7 @@ void RMVanillaSnapping::InstallHooks()
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
 	// Intersection connections: real placement check every few frames per connection (see FJunctionCheckMemo).
-	HookInvoker<FRMHologramCheckAccess::FCheckFn, FRMHologramCheckAccess::CheckFn()>::InstallHook(TEXT("AFGHologram::CheckValidPlacement"),
-		GetMutableDefault<AFGVehiclePathSegmentHologram>());
-	HookInvoker<FRMHologramCheckAccess::FCheckFn, FRMHologramCheckAccess::CheckFn()>::AddHandlerBefore([](auto& Scope, AFGHologram* Self)
+	SUBSCRIBE_METHOD(AFGHologram::ValidatePlacementAndCost, [](auto& Scope, AFGHologram* Self, UFGInventoryComponent* Inventory)
 	{
 		if (!IsJunctionChild(Self))
 		{
@@ -3727,27 +3718,10 @@ void RMVanillaSnapping::InstallHooks()
 		FJunctionCheckMemo& Memo = GJunctionCheckMemo.FindOrAdd(Self);
 		if (Memo.bChecked && (GFrameCounter - Memo.Frame < JunctionCheckEvery || Budget <= 0))
 		{
-			Scope.Cancel();
-			for (const TSubclassOf<UFGConstructDisqualifier>& D : Memo.Why)
-			{
-				Self->AddConstructDisqualifier(D);
-			}
+			Scope.Cancel(); // keeps the result (reasons, colour) of its last real check
 			return;
 		}
 		--Budget;
-		TArray<TSubclassOf<UFGConstructDisqualifier>> Before;
-		Self->GetConstructDisqualifiers(Before);
-		Scope(Self); // the real check
-		TArray<TSubclassOf<UFGConstructDisqualifier>> After;
-		Self->GetConstructDisqualifiers(After);
-		Memo.Why.Reset();
-		for (const TSubclassOf<UFGConstructDisqualifier>& D : After)
-		{
-			if (!Before.Contains(D))
-			{
-				Memo.Why.Add(D);
-			}
-		}
 		Memo.Frame = GFrameCounter;
 		Memo.bChecked = true;
 	});
