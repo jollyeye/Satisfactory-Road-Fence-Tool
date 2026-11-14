@@ -121,6 +121,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Lane markings on a 1-lane road: one spot in the middle, sized to the road. Middle click a lane marking to pick it again.
 - Intersection connections (snap key on an intersection) are much lighter: about 4x the frame rate on a busy intersection.
 - Far fences use a simpler middle level of detail.
+- Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
 **Fixed**
 - Railway tracks built through intersections and along lanes in one click were not connected at the joints (trains derailed there).
