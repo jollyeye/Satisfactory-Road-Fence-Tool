@@ -648,7 +648,7 @@ for path in ("/Game/FactoryGame/Buildable/Building/Pillars/Material/MI_Beam_04.M
 if not game_beam_mat:
     log("  ! game H-beam material not found, the guard rail uses M_RoadSteel")
 
-# Guard rail posts: the game's sign pole material (MI_ConveyorPole_01, the chrome-like steel of the poles that hold
+# Guard rail posts, grid fence posts and tubes: the game's sign pole material (MI_ConveyorPole_01, the chrome-like steel of the poles that hold
 # signs), with our own normal map: flat (T_RM_FlatNormal), since the pole's is laid out for the pole mesh. The posts'
 # rounded edges come from the mesh (RMGeometry::AddBeveledPost).
 post_mat = None
@@ -1175,8 +1175,8 @@ ASSIGN = {
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,
     "Build_Fence_GuardRail": {"m_main_material": game_beam_mat or steel, "m_panel_material": post_mat or steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
-    "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
-    "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},
+    "Build_Fence_Grid": {"m_main_material": post_mat or steel, "m_panel_material": grid},
+    "Build_Fence_GridTall": {"m_main_material": post_mat or steel, "m_panel_material": grid},
     "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
     "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
     "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},

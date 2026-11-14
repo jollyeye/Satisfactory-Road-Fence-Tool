@@ -215,6 +215,13 @@ namespace RMGeometry
 	ROADMAKER_API void AddBeveledPost(const FVector& Base, const FVector& AxisX, const FVector& AxisY, const FVector& AxisZ,
 		float Half, float Height, float Bevel, FRMMesh& Out);
 
+	/**
+	 * Steel parts with the game's sign pole material (MI_RM_GuardRailPost): its textures are an atlas of many parts,
+	 * so every vertex from First on samples one plain area of it, light steel, fully metallic, low roughness (chrome),
+	 * found in the real TX_ConveyorPole_BC / _Refl (512 px: x 136..180, y 456..500). UVs are squeezed into it.
+	 */
+	ROADMAKER_API void MapToPoleChrome(FRMMesh& Mesh, int32 First = 0);
+
 	/** Guard rail: the beam in Beam (painted, the game's H-beam material), the posts in Posts (plain steel). */
 	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts);
 

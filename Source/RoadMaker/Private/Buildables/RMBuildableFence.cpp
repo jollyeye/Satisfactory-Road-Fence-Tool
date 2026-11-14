@@ -510,6 +510,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 		}
 		const TArray<FVector2D> Bar = { FVector2D(-6.f, Height - 6.f), FVector2D(0.f, Height - 6.f), FVector2D(0.f, Height + 2.f), FVector2D(-6.f, Height + 2.f) };
 		RMGeometry::ExtrudeProfile(Frames, Bar, true, FVector2D(-3.f, Height - 2.f), 400.f, Main);
+		RMGeometry::MapToPoleChrome(Main);
 		break;
 	}
 	case ERMFenceType::SteelWall:

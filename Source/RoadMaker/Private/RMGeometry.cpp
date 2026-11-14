@@ -1128,6 +1128,19 @@ void RMGeometry::SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSp
 	}
 }
 
+void RMGeometry::MapToPoleChrome(FRMMesh& Mesh, int32 First)
+{
+	{
+		const FVector2D ChromeMin(140.f / 512.f, 460.f / 512.f);
+		const FVector2D ChromeSize(36.f / 512.f, 36.f / 512.f);
+		for (int32 I = First; I < Mesh.UVs.Num(); ++I)
+		{
+			const FVector2D UV = Mesh.UVs[I];
+			Mesh.UVs[I] = ChromeMin + FVector2D(FMath::Frac(FMath::Abs(UV.X)) * ChromeSize.X, FMath::Frac(FMath::Abs(UV.Y)) * ChromeSize.Y);
+		}
+	}
+}
+
 void RMGeometry::AddBeveledPost(const FVector& Base, const FVector& AxisX, const FVector& AxisY, const FVector& AxisZ,
 	float Half, float Height, float Bevel, FRMMesh& Out)
 {
@@ -1221,16 +1234,7 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
 		AddBeveledPost(F.Pos - F.Right * (9.f * S), Fwd, Right, FVector::UpVector, 5.f, 80.f, 1.5f, Posts);
 	});
-	// The posts' material is the game's sign pole material, whose textures are an atlas of many parts. All of each
-	// post samples one plain area of it: light steel, fully metallic, low roughness (chrome), found in the real
-	// TX_ConveyorPole_BC / _Refl (512 px: x 136..180, y 456..500).
-	const FVector2D ChromeMin(140.f / 512.f, 460.f / 512.f);
-	const FVector2D ChromeSize(36.f / 512.f, 36.f / 512.f);
-	for (int32 I = FirstPost; I < Posts.UVs.Num(); ++I)
-	{
-		const FVector2D UV = Posts.UVs[I];
-		Posts.UVs[I] = ChromeMin + FVector2D(FMath::Clamp(UV.X, 0.f, 1.f) * ChromeSize.X, FMath::Clamp(UV.Y, 0.f, 1.f) * ChromeSize.Y);
-	}
+	MapToPoleChrome(Posts, FirstPost);
 }
 
 void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Concrete)
@@ -1305,14 +1309,18 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	// Top and bottom tubes plus posts about every 3 m (and at both ends).
 	const TArray<FVector2D> Tube = { FVector2D(FrameX - TubeHalf, -TubeHalf), FVector2D(FrameX + TubeHalf, -TubeHalf),
 		FVector2D(FrameX + TubeHalf, TubeHalf), FVector2D(FrameX - TubeHalf, TubeHalf) };
-	ExtrudeProfile(LiftFrames(Inner, Height), Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
-	ExtrudeProfile(LiftFrames(Inner, Bottom), Tube, true, FVector2D(FrameX, 0.f), UVScale, Posts);
+	// Tubes and posts: the sign pole's chrome steel (MapToPoleChrome), every edge rounded in the lighting.
+	const int32 FirstSteel = Posts.Vertices.Num();
+	ExtrudeProfileBeveled(LiftFrames(Inner, Height), Tube, FVector2D(FrameX, 0.f), UVScale, TubeHalf * 0.35f, Posts);
+	ExtrudeProfileBeveled(LiftFrames(Inner, Bottom), Tube, FVector2D(FrameX, 0.f), UVScale, TubeHalf * 0.35f, Posts);
 	const float PostTop = Height + TubeHalf + 2.f;
 	ForEvery(Upright, 300.f, [&](const FRMFrame& F)
 	{
-		Posts.AddBox(F.Pos + FVector(0.f, 0.f, PostTop * 0.5f) + F.Right * FrameX, F.Fwd, F.Right, FVector::UpVector,
-			FVector(PostHalf, PostHalf, PostTop * 0.5f), UVScale);
+		const FVector Fwd = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
+		AddBeveledPost(F.Pos + F.Right * FrameX, Fwd, Right, FVector::UpVector, PostHalf, PostTop, PostHalf * 0.3f, Posts);
 	});
+	MapToPoleChrome(Posts, FirstSteel);
 }
 
 namespace
