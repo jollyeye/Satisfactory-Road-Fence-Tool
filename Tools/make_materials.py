@@ -669,7 +669,15 @@ gnorm = node(grid, unreal.MaterialExpressionComponentMask, -450, 150, r=False, g
 link(dia, "", gmask, "")
 link(dia, "", gnorm, "")
 MEL.connect_material_property(gmask, "", MP.MP_OPACITY_MASK)
-MEL.connect_material_property(gnorm, "", MP.MP_NORMAL)
+# Low quality (graphics settings): no round wires, the flat sheet's normal (turned to the camera), like the road looks.
+g_flat = custom(grid, "float3 n = normalize(N); return dot(n, C) < 0.0 ? -n : n;", unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                ["N", "C"], -450, 600, "FlatSheetNormal")
+link(node(grid, unreal.MaterialExpressionVertexNormalWS, -650, 600), "", g_flat, "N")
+link(node(grid, unreal.MaterialExpressionCameraVectorWS, -650, 680), "", g_flat, "C")
+g_qs = node(grid, unreal.MaterialExpressionQualitySwitch, -200, 150)
+link(gnorm, "", g_qs, "Default")
+link(g_flat, "", g_qs, "Low")
+MEL.connect_material_property(g_qs, "", MP.MP_NORMAL)
 gshade = custom(grid, CHAINLINK_SHADE_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "WP"], -750, 400, "ChainLinkShade")
 link(gu1, "", gshade, "UV1")
 link(gwp, "", gshade, "WP")
