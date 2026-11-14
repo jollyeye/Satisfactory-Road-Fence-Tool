@@ -103,6 +103,9 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 **Improved**
 - Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
+**Fixed**
+- Picking a road from the hotbar or the radial menu no longer loses the "Toggle Limits" key hint.
+
 ## Changelog for version 1.3.0
 **New**
 - **Join Road** and **Merge Road** (Road Tools > Edit road): join two roads end to end into one (same width, lying on one smooth curve), or merge two roads side by side into one wider road (edge to edge, level, starting and ending together, up to 4 wide). Lines, look, paint, markings, paths, tracks and fences are kept; a green outline shows the result.

@@ -29,6 +29,9 @@ namespace RMRoadLimits
 	 */
 	ROADMAKER_API void BindRoadInput(APlayerController* PC, bool bBind);
 
+	/** Whether a road hologram still holds the road input (BindRoadInput count above zero). */
+	ROADMAKER_API bool IsRoadHeld();
+
 	/**
 	 * The build gun's button hint bar (bottom of the screen): while bShow, a "Toggle Limits [key]" hint
 	 * is kept in it (a copy of one of the game's own hint widgets, added again whenever the game

@@ -51,6 +51,15 @@ protected:
 	/** The player holding this hologram, if it is this machine's player. */
 	APlayerController* GetLocalHolder() const;
 
+	/**
+	 * This machine's player is holding the road: limits key, hint and mode labels. Done the first frame the
+	 * holder is known (BeginPlay, or Tick when a hotbar / radial menu swap sets it after BeginPlay).
+	 */
+	void SetUpLocalHolder(APlayerController* PC);
+
+	/** The player SetUpLocalHolder was done for (undone in EndPlay). */
+	TWeakObjectPtr<APlayerController> mSetUpFor;
+
 	/** The limits action's handler (empty: it makes the button hint bar show the key). */
 	void OnLimitsAction(const struct FInputActionValue& Value);
 

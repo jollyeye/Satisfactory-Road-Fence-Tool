@@ -35,6 +35,9 @@ namespace
 	/** Road Maker's input context while a road is held (see BindRoadInput). */
 	FBoundMappingContextHandle GRoadInputHandle;
 
+	/** Road holograms holding the road input (switching recipes makes the new one before the old one goes). */
+	int32 GRoadHolders = 0;
+
 	UInputAction* LimitsAction()
 	{
 		static UInputAction* Action = [] { UInputAction* A = LoadObject<UInputAction>(nullptr, TEXT("/RoadMaker/Input/IA_RM_ToggleLimits.IA_RM_ToggleLimits")); if (A) { A->AddToRoot(); } return A; }();
@@ -162,9 +165,13 @@ void RMRoadLimits::BindRoadInput(APlayerController* PC, bool bBind)
 		return;
 	}
 	// Counted: switching between road recipes makes the new hologram before the old one goes.
-	static int32 Holders = 0;
-	Holders = FMath::Max(0, Holders + (bBind ? 1 : -1));
-	FGPC->SetMappingContextBoundWithHandle(GRoadInputHandle, Context, Holders > 0, 10);
+	GRoadHolders = FMath::Max(0, GRoadHolders + (bBind ? 1 : -1));
+	FGPC->SetMappingContextBoundWithHandle(GRoadInputHandle, Context, GRoadHolders > 0, 10);
+}
+
+bool RMRoadLimits::IsRoadHeld()
+{
+	return GRoadHolders > 0;
 }
 
 void RMRoadLimits::LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC)

@@ -1221,6 +1221,7 @@ void RMRoadLinePaint::InstallHooks()
 		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 		if (!PC || !PC->IsLocalController())
 		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: pressed, no local player"));
 			return;
 		}
 		FVector Eye;
@@ -1230,11 +1231,14 @@ void RMRoadLinePaint::InstallHooks()
 		FHitResult Hit;
 		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * Gun->GetBuildGunRange(), ECC_Visibility, Params))
 		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: nothing aimed at"));
 			return;
 		}
 		const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(Hit.GetActor());
 		if (!Marking)
 		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: aimed at %s (%s), not a marking"), Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"),
+				Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("-"));
 			return;
 		}
 		// The customizer option that paints this kind of marking, and its recipe.
@@ -1261,7 +1265,8 @@ void RMRoadLinePaint::InstallHooks()
 		}
 		if (!Recipe)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s"), *Marking->GetClass()->GetName());
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s (option %s)"), *Marking->GetClass()->GetName(),
+				Option ? *Option->GetName() : TEXT("none"));
 			return;
 		}
 		Scope.Cancel();
@@ -1272,7 +1277,8 @@ void RMRoadLinePaint::InstallHooks()
 			GMarkingVariant = GSampledVariant;
 		}
 		Gun->GotoPaintState(Recipe);
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s variant %d"), *Option->GetName(), GSampledVariant);
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s, gun state %s"), *Option->GetName(), *Marking->GetClass()->GetName(),
+			GSampledVariant, *Recipe->GetName(), Gun->GetCurrentState() ? *Gun->GetCurrentState()->GetClass()->GetName() : TEXT("none"));
 	});
 
 	// Fire with a Road Lines option selected: apply it to the aimed road instead of painting.

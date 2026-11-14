@@ -414,34 +414,62 @@ void ARMRoadHologram::BeginPlay()
 		mDefaultBuildMode = mBuildModeRoadDefault;
 	}
 	Super::BeginPlay();
+	// Ticks in any case: a hotbar or radial menu swap can give the hologram its player after BeginPlay.
+	SetActorTickEnabled(true);
 	if (APlayerController* PC = GetLocalHolder())
 	{
-		mNoLimits = RMRoadLimits::AreOff();
-		RMRoadLimits::BindRoadInput(PC, true);
-		// The limits action bound on this hologram's own input component: the build gun's button hint
-		// bar lists the actions something is listening to, so it shows "Toggle Road Limits [key]".
-		// (The toggle itself is read in Tick, to skip Alt+Tab.)
-		EnableInput(PC);
-		if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent))
+		SetUpLocalHolder(PC);
+	}
+}
+
+void ARMRoadHologram::SetUpLocalHolder(APlayerController* PC)
+{
+	if (mSetUpFor.IsValid() || !PC)
+	{
+		return;
+	}
+	mSetUpFor = PC;
+	mNoLimits = RMRoadLimits::AreOff();
+	RMRoadLimits::BindRoadInput(PC, true);
+	// The limits action bound on this hologram's own input component: the build gun's button hint
+	// bar lists the actions something is listening to, so it shows "Toggle Road Limits [key]".
+	// (The toggle itself is read in Tick, to skip Alt+Tab.)
+	EnableInput(PC);
+	if (UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(InputComponent))
+	{
+		if (UInputAction* Action = RMRoadLimits::GetLimitsAction())
 		{
-			if (UInputAction* Action = RMRoadLimits::GetLimitsAction())
-			{
-				Input->BindAction(Action, ETriggerEvent::Triggered, this, &ARMRoadHologram::OnLimitsAction);
-			}
+			Input->BindAction(Action, ETriggerEvent::Triggered, this, &ARMRoadHologram::OnLimitsAction);
 		}
-		LabelBuildModes(PC);
-		SetActorTickEnabled(true);
+	}
+	LabelBuildModes(PC);
+	static int32 Logs = 0;
+	if (Logs++ < 20)
+	{
+		UE_LOG(LogRoadMaker, Display, TEXT("Road hologram %s: holder set up (%s), %s"), *GetName(),
+			HasActorBegunPlay() ? TEXT("tick") : TEXT("begin play"), RMRoadLimits::IsRoadHeld() ? TEXT("road held") : TEXT("-"));
 	}
 }
 
 void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (APlayerController* PC = GetLocalHolder())
+	// The player this hologram was set up for (its instigator may already be gone on a swap).
+	if (APlayerController* PC = mSetUpFor.Get())
 	{
 		DisableInput(PC);
 		RMRoadLimits::BindRoadInput(PC, false);
-		RMRoadLimits::UpdateHintBar(PC, false);
+		// A swap to another road makes the new hologram before this one goes: its hint stays.
+		if (!RMRoadLimits::IsRoadHeld())
+		{
+			RMRoadLimits::UpdateHintBar(PC, false);
+		}
+		static int32 Logs = 0;
+		if (Logs++ < 20)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Road hologram %s: end, %s"), *GetName(), RMRoadLimits::IsRoadHeld() ? TEXT("another road held") : TEXT("no road held"));
+		}
 	}
+	mSetUpFor.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -465,6 +493,7 @@ void ARMRoadHologram::Tick(float DeltaSeconds)
 	{
 		return;
 	}
+	SetUpLocalHolder(PC);
 	RMRoadLimits::UpdateHintBar(PC, true);
 	if (RMRoadLimits::HandleInput(PC))
 	{
