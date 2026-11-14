@@ -580,7 +580,7 @@ finish(steel)
 # slopes. Two families of diagonal wires; each wire is shaded as a round wire (normal across it), and
 # at every crossing one wire goes over and the other under, alternating like a woven chain-link fence
 # (the wire on top wins; the wires bend up / down towards the crossings, which tilts their normal).
-# Output: x = opacity mask (wires 1, holes 0), yzw = tangent-space normal (X along the fence, Y up).
+# Output: x = opacity mask (wires 1, holes 0), yzw = world-space normal.
 # Chrome like the posts (the sign pole's plain steel: colour 198/206/209, metallic, roughness 0.25).
 DIAMOND_HLSL = r"""
 float u = UV1.x;
@@ -613,8 +613,14 @@ float2 acr = topA ? acrossA : acrossB;
 float2 alg = topA ? alongA : alongB;
 float tc = clamp(t, -0.95, 0.95);
 float2 n2 = acr * tc - alg * slope;
-// The sheet's tangent-space Y points down (tested 2026-11-14: lit from below with +Y up), so up is -Y.
-float3 n = normalize(float3(n2.x, -n2.y, sqrt(saturate(1.0 - tc * tc))));
+// World-space normal, the same on every fence whichever way its sheet faces (a fence's sheet faces one way or the
+// other depending on its side of the road, which flipped tangent-space up / down between fences, tested 2026-11-14):
+// along = the mesh tangent (the way UV1.x grows), up = world up (v is the world height), out = the sheet's normal
+// turned towards the camera (the sheet is two-sided).
+float3 Tw = normalize(Tg - float3(0, 0, 1) * dot(Tg, float3(0, 0, 1)));
+float3 Nw = normalize(N);
+if (dot(Nw, C) < 0.0) Nw = -Nw;
+float3 n = normalize(Tw * n2.x + float3(0, 0, 1) * n2.y + Nw * sqrt(saturate(1.0 - tc * tc)));
 return float4(max(inA, inB), n);
 """
 # Shade of the wire you see (multiplies the chrome colour): a wire darkens where it dips under the other one,
@@ -650,9 +656,13 @@ grid.set_editor_property("two_sided", True)
 grid.set_editor_property("opacity_mask_clip_value", 0.4)
 gu1 = node(grid, unreal.MaterialExpressionTextureCoordinate, -1100, 0, coordinate_index=1)
 gwp = node(grid, unreal.MaterialExpressionWorldPosition, -1100, 120)
-dia = custom(grid, DIAMOND_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4, ["UV1", "WP"], -750, 0, "ChainLink")
+grid.set_editor_property("tangent_space_normal", False)
+dia = custom(grid, DIAMOND_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4, ["UV1", "WP", "Tg", "N", "C"], -750, 0, "ChainLink")
 link(gu1, "", dia, "UV1")
 link(gwp, "", dia, "WP")
+link(node(grid, unreal.MaterialExpressionVertexTangentWS, -1100, 240), "", dia, "Tg")
+link(node(grid, unreal.MaterialExpressionVertexNormalWS, -1100, 320), "", dia, "N")
+link(node(grid, unreal.MaterialExpressionCameraVectorWS, -1100, 400), "", dia, "C")
 gmask = node(grid, unreal.MaterialExpressionComponentMask, -450, 0, r=True, g=False, b=False, a=False)
 gnorm = node(grid, unreal.MaterialExpressionComponentMask, -450, 150, r=False, g=True, b=True, a=True)
 link(dia, "", gmask, "")
