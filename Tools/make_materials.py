@@ -613,7 +613,8 @@ float2 acr = topA ? acrossA : acrossB;
 float2 alg = topA ? alongA : alongB;
 float tc = clamp(t, -0.95, 0.95);
 float2 n2 = acr * tc - alg * slope;
-float3 n = normalize(float3(n2.x, n2.y, sqrt(saturate(1.0 - tc * tc))));
+// The sheet's tangent-space Y points down (tested 2026-11-14: lit from below with +Y up), so up is -Y.
+float3 n = normalize(float3(n2.x, -n2.y, sqrt(saturate(1.0 - tc * tc))));
 return float4(max(inA, inB), n);
 """
 # Shade of the wire you see (multiplies the chrome colour): a wire darkens where it dips under the other one,
