@@ -1,5 +1,6 @@
 #include "RoadMakerModule.h"
 #include "Signs/RMIconLibraryTools.h"
+#include "Debug/RMTextureDump.h"
 #include "RMSound.h"
 #include "LanePaint/RMLanePaint.h"
 #include "Snapping/RMVanillaSnapping.h"
@@ -100,6 +101,7 @@ void FRoadMakerModule::StartupModule()
 			if (Context.World() && (Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE))
 			{
 				URMIconLibraryTools::EnsureOurIcons(Context.World());
+				RMTextureDump::DumpListOnce(Context.World());
 			}
 		}
 		return true;
