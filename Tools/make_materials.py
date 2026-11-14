@@ -666,8 +666,9 @@ link(color(grid, 0.565, 0.617, 0.637, -450, 300), "", gcol, "A")
 link(gshade, "", gcol, "B")
 MEL.connect_material_property(gcol, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(gshade, "", MP.MP_AMBIENT_OCCLUSION)
-MEL.connect_material_property(const(grid, 1.0, -300, 400), "", MP.MP_METALLIC)
-MEL.connect_material_property(const(grid, 0.25, -300, 500), "", MP.MP_ROUGHNESS)
+# TEST (2026-11-14): no reflections, to judge the wire lighting on its own (chrome: metallic 1, roughness 0.25).
+MEL.connect_material_property(const(grid, 0.0, -300, 400), "", MP.MP_METALLIC)
+MEL.connect_material_property(const(grid, 0.7, -300, 500), "", MP.MP_ROUGHNESS)
 finish(grid)
 
 # --- Overlay: picked / aimed road ends of the intersection tool ---------------------------------
