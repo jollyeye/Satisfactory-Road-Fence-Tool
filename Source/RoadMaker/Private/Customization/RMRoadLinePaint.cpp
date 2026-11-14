@@ -15,6 +15,9 @@
 #include "FGFactoryCustomizationShortcut.h"
 #include "FGCharacterPlayer.h"
 #include "Patching/NativeHookManager.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "Engine/LocalPlayer.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -1215,6 +1218,64 @@ namespace
 		return nullptr;
 	}
 
+	/**
+	 * Whether a key is bound to the game's "Sample" action (middle mouse by default, rebindable in Options >
+	 * Controls). The game's sample actions are found once by name; their keys are read again every 2 s.
+	 */
+	bool IsSampleKey(APlayerController* PC, const FKey& Key)
+	{
+		static TArray<TWeakObjectPtr<UInputAction>> Actions;
+		static int32 Searches = 0;
+		static TArray<FKey> Keys;
+		static double NextRead = 0.0;
+		const double Now = FPlatformTime::Seconds();
+		// Looked for again while none is found (they load with the player's input, not in the main menu).
+		if (Actions.Num() == 0 && Now >= NextRead && Searches < 30)
+		{
+			++Searches;
+			TArray<FString> Names;
+			for (TObjectIterator<UInputAction> It; It; ++It)
+			{
+				const FString Name = It->GetName();
+				if (!It->HasAnyFlags(RF_ClassDefaultObject) && Name.Contains(TEXT("Sample")) && !Name.Contains(TEXT("Gamepad"))
+					&& !Name.Contains(TEXT("Hotbar")))
+				{
+					Actions.Add(*It);
+					Names.Add(Name);
+				}
+			}
+			if (Names.Num() > 0 || Searches == 1)
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: game sample actions: %s"), Names.Num() ? *FString::Join(Names, TEXT(", ")) : TEXT("none yet (middle mouse)"));
+			}
+		}
+		if (Now >= NextRead)
+		{
+			NextRead = Now + 2.0;
+			Keys.Reset();
+			ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
+			UEnhancedInputLocalPlayerSubsystem* Input = LP ? LP->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+			for (const TWeakObjectPtr<UInputAction>& Action : Actions)
+			{
+				if (Input && Action.IsValid())
+				{
+					for (const FKey& K : Input->QueryKeysMappedToAction(Action.Get()))
+					{
+						if (!K.IsGamepadKey())
+						{
+							Keys.AddUnique(K);
+						}
+					}
+				}
+			}
+			if (Keys.Num() == 0)
+			{
+				Keys.Add(EKeys::MiddleMouseButton); // nothing found (the action not loaded or not mapped right now)
+			}
+		}
+		return Keys.Contains(Key);
+	}
+
 	class FMarkingWheel : public IInputProcessor
 	{
 	public:
@@ -1225,15 +1286,25 @@ namespace
 				TickSamplePending(GameWorldPlayer());
 			}
 		}
-		/** Middle click: a lane marking aimed at is picked in the customizer (the game's sample never sees it). */
+		/**
+		 * The game's Sample key (middle click by default): a lane marking aimed at is picked in the customizer
+		 * (the game's sample never sees it). Mouse buttons and keyboard keys both, as bound in Options.
+		 */
 		virtual bool HandleMouseButtonDownEvent(FSlateApplication&, const FPointerEvent& MouseEvent) override
 		{
-			if (MouseEvent.GetEffectingButton() != EKeys::MiddleMouseButton)
-			{
-				return false;
-			}
-			return TrySampleMarking(GameWorldPlayer());
+			return OnSampleKey(MouseEvent.GetEffectingButton());
 		}
+		virtual bool HandleKeyDownEvent(FSlateApplication&, const FKeyEvent& KeyEvent) override
+		{
+			return !KeyEvent.IsRepeat() && OnSampleKey(KeyEvent.GetKey());
+		}
+	private:
+		static bool OnSampleKey(const FKey& Key)
+		{
+			APlayerController* PC = GameWorldPlayer();
+			return PC && IsSampleKey(PC, Key) && TrySampleMarking(PC);
+		}
+	public:
 		virtual bool HandleMouseWheelOrGestureEvent(FSlateApplication&, const FPointerEvent& WheelEvent, const FPointerEvent*) override
 		{
 			if (!GActiveMarking || WheelEvent.GetWheelDelta() == 0.f || !GEngine)
