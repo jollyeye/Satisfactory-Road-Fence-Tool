@@ -8,7 +8,7 @@ the game's paths, tracks, poles, signs and foundations.
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
 Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 
-![A curved asphalt road with lane arrows beside a glowing cyberpunk road, grid fence, street lights and a sign gantry](docs/screenshots/intro-1.2.jpg)
+![An asphalt road with lane markings, a glowing cyberpunk road, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](docs/screenshots/intro-1.3.jpg)
 
 ## Features
 
