@@ -575,19 +575,46 @@ MEL.connect_material_property(const(steel, 1.0, -300, 400), "", MP.MP_METALLIC)
 MEL.connect_material_property(const(steel, 0.45, -300, 500), "", MP.MP_ROUGHNESS)
 finish(steel)
 
-# --- Wire grid: diamond mesh on a single two-sided sheet --------------------------------------
+# --- Wire grid: chain-link mesh on a single two-sided sheet --------------------------------------
 # u = metres along the fence (UV1.x), v = world height in metres, so the diamonds stay upright on
-# slopes. Opacity mask: wires 1, holes 0.
+# slopes. Two families of diagonal wires; each wire is shaded as a round wire (normal across it), and
+# at every crossing one wire goes over and the other under, alternating like a woven chain-link fence
+# (the wire on top wins; the wires bend up / down towards the crossings, which tilts their normal).
+# Output: x = opacity mask (wires 1, holes 0), yzw = tangent-space normal (X along the fence, Y up).
+# Chrome like the posts (the sign pole's plain steel: colour 198/206/209, metallic, roughness 0.25).
 DIAMOND_HLSL = r"""
 float u = UV1.x;
 float v = WP.z / 100.0;
-float cell = 0.09;                               // diamond size (m, along each diagonal axis)
-float wire = 0.006;                              // half wire thickness (m)
+float cell = 0.117;                              // diamond size (m, along each diagonal axis)
+float wire = 0.0078;                             // wire radius (m)
 float2 p = float2(u + v, u - v) * 0.70710678 / cell;
-float2 f = abs(frac(p) - 0.5) * cell;            // distance to the cell centre lines, in m
-float d = cell * 0.5 - max(f.x, f.y);            // distance to the nearest wire
+float2 idx = floor(p + 0.5);                     // which wire of each family is nearest
+float2 o = (p - idx) * cell;                     // signed distance (m) to it: x for family A, y for family B
+float2 sN = o / wire;                            // -1..1 inside the wire
+// Weave: A over B where idx.x + idx.y is even, under where odd (checkerboard of crossings).
+float wa = cos(3.14159265 * (p.y + idx.x));
+float wb = -cos(3.14159265 * (p.x + idx.y));
+float bend = 0.8;                                // how far a wire bends (in wire radii)
+float za = sqrt(saturate(1.0 - sN.x * sN.x)) + bend * wa;
+float zb = sqrt(saturate(1.0 - sN.y * sN.y)) + bend * wb;
 float aa = max(fwidth(p.x) * cell, 0.0005);
-return 1.0 - smoothstep(wire - aa, wire + aa, d);
+float inA = 1.0 - smoothstep(wire - aa, wire + aa, abs(o.x));
+float inB = 1.0 - smoothstep(wire - aa, wire + aa, abs(o.y));
+bool topA = (inA > 0.5 && (inB < 0.5 || za >= zb));
+// Directions in the sheet (u along, v up): A runs along (1,-1), its across is (1,1); B the other way.
+float2 acrossA = float2(0.70710678, 0.70710678);
+float2 alongA = float2(0.70710678, -0.70710678);
+float2 acrossB = float2(0.70710678, -0.70710678);
+float2 alongB = float2(0.70710678, 0.70710678);
+float t = topA ? sN.x : sN.y;
+float s = topA ? -sin(3.14159265 * (p.y + idx.x)) : sin(3.14159265 * (p.x + idx.y));
+float slope = bend * 3.14159265 * wire / cell * s; // height change along the wire (bend)
+float2 acr = topA ? acrossA : acrossB;
+float2 alg = topA ? alongA : alongB;
+float tc = clamp(t, -0.95, 0.95);
+float2 n2 = acr * tc - alg * slope;
+float3 n = normalize(float3(n2.x, n2.y, sqrt(saturate(1.0 - tc * tc))));
+return float4(max(inA, inB), n);
 """
 grid = new_material("M_RoadGridFence")
 grid.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
@@ -595,13 +622,18 @@ grid.set_editor_property("two_sided", True)
 grid.set_editor_property("opacity_mask_clip_value", 0.4)
 gu1 = node(grid, unreal.MaterialExpressionTextureCoordinate, -1100, 0, coordinate_index=1)
 gwp = node(grid, unreal.MaterialExpressionWorldPosition, -1100, 120)
-dia = custom(grid, DIAMOND_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "WP"], -750, 0, "DiamondGrid")
+dia = custom(grid, DIAMOND_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4, ["UV1", "WP"], -750, 0, "ChainLink")
 link(gu1, "", dia, "UV1")
 link(gwp, "", dia, "WP")
-MEL.connect_material_property(dia, "", MP.MP_OPACITY_MASK)
-MEL.connect_material_property(color(grid, 0.5, 0.51, 0.52, -300, 200), "", MP.MP_BASE_COLOR)
-MEL.connect_material_property(const(grid, 1.0, -300, 300), "", MP.MP_METALLIC)
-MEL.connect_material_property(const(grid, 0.5, -300, 400), "", MP.MP_ROUGHNESS)
+gmask = node(grid, unreal.MaterialExpressionComponentMask, -450, 0, r=True, g=False, b=False, a=False)
+gnorm = node(grid, unreal.MaterialExpressionComponentMask, -450, 150, r=False, g=True, b=True, a=True)
+link(dia, "", gmask, "")
+link(dia, "", gnorm, "")
+MEL.connect_material_property(gmask, "", MP.MP_OPACITY_MASK)
+MEL.connect_material_property(gnorm, "", MP.MP_NORMAL)
+MEL.connect_material_property(color(grid, 0.565, 0.617, 0.637, -300, 300), "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(grid, 1.0, -300, 400), "", MP.MP_METALLIC)
+MEL.connect_material_property(const(grid, 0.25, -300, 500), "", MP.MP_ROUGHNESS)
 finish(grid)
 
 # --- Overlay: picked / aimed road ends of the intersection tool ---------------------------------
