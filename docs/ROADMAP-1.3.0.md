@@ -1,6 +1,6 @@
 # Road Maker 1.3.0 roadmap
 
-1.2.1 is released (2026-11-12). Work for the next version; the 1.2.0 roadmap (`ROADMAP-1.2.0.md`) is kept as history.
+1.2.1 is released (2026-11-12). 1.3.0 prepared for release 2026-11-14 (version, ficsit page and changelog in `Tools/Release/ficsit-page.md`). Work for the next version; the 1.2.0 roadmap (`ROADMAP-1.2.0.md`) is kept as history.
 Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to do.
 
 ## Done
