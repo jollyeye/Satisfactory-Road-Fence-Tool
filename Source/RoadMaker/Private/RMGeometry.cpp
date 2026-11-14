@@ -819,6 +819,72 @@ void RMGeometry::ExtrudeProfile(const TArray<FRMFrame>& Frames, const TArray<FVe
 	}
 }
 
+void RMGeometry::ExtrudeProfileBeveled(const TArray<FRMFrame>& Frames, const TArray<FVector2D>& Profile,
+	const FVector2D& ProfileCentroid, float UVScale, float BevelWidth, FRMMesh& Out)
+{
+	const int32 Num = Profile.Num();
+	if (Frames.Num() < 2 || Num < 3)
+	{
+		return;
+	}
+	const float S = 1.f / FMath::Max(UVScale, 1.f);
+	// Face normal of each profile edge (away from the centroid).
+	TArray<FVector2D> EdgeN;
+	for (int32 E = 0; E < Num; ++E)
+	{
+		const FVector2D A = Profile[E];
+		const FVector2D B = Profile[(E + 1) % Num];
+		FVector2D N2(B.Y - A.Y, -(B.X - A.X));
+		N2.Normalize();
+		if (FVector2D::DotProduct(N2, (A + B) * 0.5f - ProfileCentroid) < 0.f)
+		{
+			N2 = -N2;
+		}
+		EdgeN.Add(N2);
+	}
+
+	float U0 = 0.f;
+	for (int32 E = 0; E < Num; ++E)
+	{
+		const FVector2D A = Profile[E];
+		const FVector2D B = Profile[(E + 1) % Num];
+		const float Len = FVector2D::Distance(A, B);
+		const FVector2D Dir = (B - A) / FMath::Max(Len, 0.01f);
+		const float W = FMath::Min(BevelWidth, Len * 0.4f);
+		const FVector2D NA = (EdgeN[(E + Num - 1) % Num] + EdgeN[E]).GetSafeNormal();   // corner at A
+		const FVector2D NB = (EdgeN[E] + EdgeN[(E + 1) % Num]).GetSafeNormal();         // corner at B
+		// Across the edge: corner, bevel end, bevel start, corner.
+		const FVector2D Pts[4] = { A, A + Dir * W, B - Dir * W, B };
+		const FVector2D Ns[4] = { NA, EdgeN[E], EdgeN[E], NB };
+		const float Us[4] = { U0, U0 + W * S, U0 + (Len - W) * S, U0 + Len * S };
+
+		const int32 Base = Out.Vertices.Num();
+		for (const FRMFrame& F : Frames)
+		{
+			const float V = F.Dist * S;
+			for (int32 K = 0; K < 4; ++K)
+			{
+				const FVector N = (F.Right * Ns[K].X + F.Up * Ns[K].Y).GetSafeNormal();
+				Out.AddVertex(F.ProfileToWorld(Pts[K]), N, FVector2D(Us[K], V), F.Fwd);
+			}
+		}
+		for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+		{
+			for (int32 K = 0; K < 3; ++K)
+			{
+				const int32 A0 = Base + I * 4 + K;
+				const int32 B0 = A0 + 1;
+				const int32 A1 = A0 + 4;
+				const int32 B1 = A1 + 1;
+				const FVector N = Out.Normals[Base + I * 4 + 1]; // the flat face's normal (winding check)
+				Out.AddTriangle(A0, B0, B1, N);
+				Out.AddTriangle(A0, B1, A1, N);
+			}
+		}
+		U0 += Len * S;
+	}
+}
+
 void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& Profile, bool bFacingForward, float UVScale, FRMMesh& Out)
 {
 	if (Profile.Num() < 3)
@@ -1094,7 +1160,8 @@ void RMGeometry::BuildJerseyBarrier(const TArray<FRMFrame>& Frames, float UVScal
 		FVector2D(7.5f, 80.f), FVector2D(-7.5f, 80.f), FVector2D(-12.f, 30.f), FVector2D(-28.f, 8.f)
 	};
 	const int32 First = Concrete.Vertices.Num();
-	ExtrudeProfile(Frames, Profile, true, FVector2D(0.f, 30.f), UVScale, Concrete);
+	// Corners lit as if rounded over 2.5 cm (normals only; the outline stays sharp).
+	ExtrudeProfileBeveled(Frames, Profile, FVector2D(0.f, 30.f), UVScale, 2.5f, Concrete);
 	const int32 FirstCap = Concrete.Vertices.Num();
 	AddProfileCap(Frames[0], Profile, false, UVScale, Concrete);
 	const int32 SecondCap = Concrete.Vertices.Num();

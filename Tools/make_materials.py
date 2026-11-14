@@ -476,9 +476,13 @@ for old in ("M_RM_TextureDump", "M_RM_TextureDumpN"):
         eal.delete_asset(ROOT + "/" + old)
         log("Deleted " + ROOT + "/" + old)
 
-# --- Cement blocks: the earlier procedural concrete, finer, with block joints ----------------------
+# --- Cement blocks: the game's concrete (like the concrete road), with block joints ----------------
+# The colour and the normal map are the plain square of the game's foundation concrete atlas, projected
+# from the side (triplanar, 4 m per square, mirrored), as on the concrete road. The barrier's corners are
+# rounded in the lighting by the mesh (RMGeometry::ExtrudeProfileBeveled: 2.5 cm bevel strips whose
+# normals turn to the next face); the normal map's detail is laid on that smooth normal.
 # The fence mesh carries UV1 = (metres along, 1 on end caps) and UV2.x = block length (m). Each joint
-# is a thin dark groove with a small bevel on both blocks (tangent X runs along the fence).
+# is a thin dark groove with a small bevel on both blocks (the normal tilts along the fence).
 JOINT_HLSL = r"""
 float L = max(UV2.x, 0.1);
 float a = frac(UV1.x / L);
@@ -492,8 +496,33 @@ float groove = open * (1.0 - smoothstep(gap - aa, gap + aa, d));
 float slope = open * (1.0 - smoothstep(gap, gap + bevel, d)) * side;
 return float2(groove, slope);
 """
+# World-space normal: the concrete normal map turned onto the real (smooth) surface normal N, plus the
+# joint bevels tilting along the fence (tangent Tg).
+JERSEY_NORMAL_HLSL = r"""
+float3 Nn = normalize(N);
+float3 a = abs(Nn);
+float2 p = WP.xy;
+float3 U = float3(1, 0, 0);
+float3 V = float3(0, 1, 0);
+if (a.z < 0.7)
+{
+    if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); }
+    else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); }
+}
+float2 h = frac(p / (2.0 * Period));
+float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
+float3 Uo = normalize(U - Nn * dot(U, Nn));
+float3 Vo = normalize(V - Nn * dot(V, Nn) - Uo * dot(V, Uo));
+float3 n = normalize(-Uo * (T.x * s.x * Str) + Vo * (T.y * s.y * Str) + Nn * max(T.z, 0.2));
+return normalize(n + normalize(Tg) * (J * 0.8));
+"""
 jersey = new_material("M_RoadJersey")
-jbase = noise_blend(jersey, (0.34, 0.33, 0.31), (0.47, 0.46, 0.44), 0.12, 0)
+tex_jc = load_tex(CONCRETE_BC)
+tex_jn = load_tex(CONCRETE_N)
+if tex_jc:
+    jbase = atlas_sample(jersey, tex_jc, RECT_BOTTOM_LEFT, True, -700, 0)
+else:
+    jbase = noise_blend(jersey, (0.34, 0.33, 0.31), (0.47, 0.46, 0.44), 0.12, 0)
 ju1 = node(jersey, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
 ju2 = node(jersey, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 joint = custom(jersey, JOINT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2"], -800, 650, "BlockJoints")
@@ -512,14 +541,27 @@ link(jbase, "", jdark, "A")
 link(jshade, "", jdark, "B")
 link(jgroove, "", jdark, "Alpha")
 MEL.connect_material_property(jdark, "", MP.MP_BASE_COLOR)
-MEL.connect_material_property(const(jersey, 0.92, -300, 400), "", MP.MP_ROUGHNESS)
-# Tangent-space normal: tilt along the fence on the bevels.
-JN_HLSL = r"""return normalize(float3(S * 0.8, 0, 1));"""
-jn = custom(jersey, JN_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["S"], -300, 750, "BevelNormal")
-link(jslope, "", jn, "S")
-MEL.connect_material_property(jn, "", MP.MP_NORMAL)
+MEL.connect_material_property(const(jersey, 0.9, -300, 400), "", MP.MP_ROUGHNESS)
+if tex_jn:
+    jersey.set_editor_property("tangent_space_normal", False)
+    jt = atlas_sample(jersey, tex_jn, RECT_BOTTOM_LEFT, True, -1000, 1000)
+    jn = custom(jersey, JERSEY_NORMAL_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+                ["T", "WP", "N", "Tg", "Period", "Str", "J"], -300, 900, "ConcreteNormal")
+    link(jt, "", jn, "T")
+    link(node(jersey, unreal.MaterialExpressionWorldPosition, -600, 1150), "", jn, "WP")
+    link(node(jersey, unreal.MaterialExpressionVertexNormalWS, -600, 1230), "", jn, "N")
+    link(node(jersey, unreal.MaterialExpressionVertexTangentWS, -600, 1310), "", jn, "Tg")
+    link(const(jersey, PERIOD_CM, -600, 1390), "", jn, "Period")
+    link(const(jersey, NORMAL_STRENGTH, -600, 1460), "", jn, "Str")
+    link(jslope, "", jn, "J")
+    MEL.connect_material_property(jn, "", MP.MP_NORMAL)
+else:
+    # Tangent-space normal: tilt along the fence on the joint bevels.
+    jn = custom(jersey, r"""return normalize(float3(S * 0.8, 0, 1));""", unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["S"], -300, 750, "BevelNormal")
+    link(jslope, "", jn, "S")
+    MEL.connect_material_property(jn, "", MP.MP_NORMAL)
 finish(jersey)
-log("Cement blocks with joints")
+log("Cement blocks: game concrete, block joints, rounded corners")
 
 # --- Galvanised steel ------------------------------------------------------------------------
 steel = new_material("M_RoadSteel")
