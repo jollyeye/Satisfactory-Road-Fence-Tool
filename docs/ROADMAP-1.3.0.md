@@ -51,6 +51,8 @@ Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to 
 ## To do
 - **Boom barrier** (added 2026-11-12; postponed 2026-11-13, too many iterations for this release, concept image `docs/concepts/boom-barrier-concept.png`): the striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it, snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe opening for vehicles on a path through it (same detection idea as the traffic lights).
 
+- **LinuxServer build (GitHub issue #2, wEEEEEzY), maybe 1.3.1**: install the Linux cross-compile toolchain v22 (clang 16.0.6, https://cdn.unrealengine.com/CrossToolchain_Linux/v22_clang-16.0.6-centos7.exe; default options), restart the editor, tick LinuxServer in Alpakit Release, add it to HOW-TO-RELEASE.md. Clang may need a few code fixes on the first build. The requester offered to test on their Linux server (replied 2026-11-14: maybe in 1.3.1). No Linux OS needed (cross-compiles on Windows).
+
 ## Dropped
 - ~~**Road preview on the map** (item 8)~~: dropped (2026-11-12): opening the map cancels the hologram, so there is nothing to preview.
 
