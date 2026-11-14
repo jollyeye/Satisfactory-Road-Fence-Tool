@@ -1103,10 +1103,6 @@ namespace
 namespace
 {
 	/** While a marking is selected in the paint gun the mouse wheel picks the arrow / digit instead of anything else. */
-	/** Paint recipe to go to once the build gun is equipped (middle click on a marking with no gun out). */
-	TSubclassOf<UFGCustomizationRecipe> GSamplePendingRecipe;
-	int32 GSamplePendingFrames = 0;
-
 	/**
 	 * Middle click on a lane marking: picks that marking (same arrow / digit / vehicle) in the customizer,
 	 * ready to paint another, like middle click on a building picks it in the build gun. True when the
@@ -1116,7 +1112,8 @@ namespace
 	{
 		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
 		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
-		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor())
+		// Only with the build gun out (build, dismantle or paint), like the game's own sample.
+		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor() || !Player->IsBuildGunEquipped())
 		{
 			return false;
 		}
@@ -1168,39 +1165,10 @@ namespace
 		{
 			GMarkingVariant = GSampledVariant;
 		}
-		const bool bEquipped = Player->IsBuildGunEquipped();
-		if (bEquipped)
-		{
-			Gun->GotoPaintState(Recipe);
-		}
-		else
-		{
-			// Out with the build gun in its paint state; the recipe once it is equipped (see the ticker).
-			Player->ToggleBuildGunPaint();
-			GSamplePendingRecipe = Recipe;
-			GSamplePendingFrames = 120;
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s, build gun %s"), *Option->GetName(),
-			*Marking->GetClass()->GetName(), GSampledVariant, *Recipe->GetName(), bEquipped ? TEXT("out") : TEXT("taken out"));
+		Gun->GotoPaintState(Recipe);
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s"), *Option->GetName(),
+			*Marking->GetClass()->GetName(), GSampledVariant, *Recipe->GetName());
 		return true;
-	}
-
-	/** Each frame while a sample waits for the build gun to come out. */
-	void TickSamplePending(APlayerController* PC)
-	{
-		if (GSamplePendingFrames <= 0)
-		{
-			return;
-		}
-		--GSamplePendingFrames;
-		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
-		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
-		if (Gun && GSamplePendingRecipe && Player->IsBuildGunEquipped())
-		{
-			Gun->GotoPaintState(GSamplePendingRecipe);
-			GSamplePendingRecipe = nullptr;
-			GSamplePendingFrames = 0;
-		}
 	}
 
 	APlayerController* GameWorldPlayer()
@@ -1279,13 +1247,7 @@ namespace
 	class FMarkingWheel : public IInputProcessor
 	{
 	public:
-		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override
-		{
-			if (GSamplePendingFrames > 0)
-			{
-				TickSamplePending(GameWorldPlayer());
-			}
-		}
+		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override {}
 		/**
 		 * The game's Sample key (middle click by default): a lane marking aimed at is picked in the customizer
 		 * (the game's sample never sees it). Mouse buttons and keyboard keys both, as bound in Options.
