@@ -1434,6 +1434,8 @@ namespace
 	 * instead of showing 24 overlapping path holograms (measured 2026-11-14: about 5 fps with them shown, 40 with
 	 * them hidden). The holograms stay, hidden, and still check and build the connections; the main one stays shown.
 	 */
+	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 1,
+		TEXT("Hide the intersection connections other than the main hologram (they are still checked and built; the overlay draws them)."));
 	TMap<TWeakObjectPtr<const AFGHologram>, TWeakObjectPtr<UProceduralMeshComponent>> GJunctionOverlays;
 	/** When each overlay was last drawn: one not drawn for a moment (aim moved away, build gun put away) is removed. */
 	TMap<TWeakObjectPtr<const AFGHologram>, double> GJunctionOverlayTime;
@@ -1544,6 +1546,23 @@ namespace
 				UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
 			}
 		}
+		// The connections beyond the main one: their meshes not drawn (the actors stay shown, so they are still built).
+		// Every frame, since a hologram may switch its meshes back on when it updates.
+		const bool bHideExtra = CVarJunctionHideChildren.GetValueOnGameThread() != 0;
+		for (int32 L = 1; L < Cache.LinkHolograms.Num(); ++L)
+		{
+			if (AFGHologram* H = Cache.LinkHolograms[L].Get())
+			{
+				TInlineComponentArray<UPrimitiveComponent*> Prims(H);
+				for (UPrimitiveComponent* P : Prims)
+				{
+					if (P->IsVisible() == bHideExtra)
+					{
+						P->SetVisibility(!bHideExtra);
+					}
+				}
+			}
+		}
 		for (int32 L = 0; L < Cache.Courses.Num(); ++L)
 		{
 			const AFGHologram* H = Cache.LinkHolograms.IsValidIndex(L) ? Cache.LinkHolograms[L].Get() : nullptr;
@@ -1631,8 +1650,6 @@ namespace
 		explicit FJunctionTimer(double& InInto) : Into(InInto), Start(FPlatformTime::Seconds()) {}
 		~FJunctionTimer() { Into += FPlatformTime::Seconds() - Start; }
 	};
-	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 1,
-		TEXT("Hide the intersection connections other than the main hologram (they are still checked and built; the overlay draws them)."));
 	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 1, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
 	/** Every frame: frame times while the connections are shown and around it, logged every 3 s (started on first use). */
 	void EnsureJunctionPerfTicker()
@@ -1773,7 +1790,7 @@ namespace
 			Cache.Courses.AddDefaulted();
 			Cache.LinkHolograms.Add(Child);
 			SetupJunctionHologram(Child, Hit, Links[L], X, &Cache.Courses.Last());
-			Child->SetActorHiddenInGame(CVarJunctionHideChildren.GetValueOnGameThread() != 0); // after: placing may show it
+			Child->SetActorHiddenInGame(false); // a hidden hologram counts as "not placed" and is not built (tested 2026-11-14)
 			LinkHolograms.Add(Child);
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
