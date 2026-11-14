@@ -1448,6 +1448,8 @@ namespace
 		explicit FJunctionTimer(double& InInto) : Into(InInto), Start(FPlatformTime::Seconds()) {}
 		~FJunctionTimer() { Into += FPlatformTime::Seconds() - Start; }
 	};
+	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 1,
+		TEXT("TEST: hide the intersection connections other than the main hologram (they are still checked and built)."));
 	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 1, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
 	/** Every frame: frame times while the connections are shown and around it, logged every 3 s (started on first use). */
 	void EnsureJunctionPerfTicker()
@@ -1477,12 +1479,12 @@ namespace
 			{
 				UE_LOG(LogRoadMaker, Display,
 					TEXT("RMJunctionPerf showing: %.1f fps (%.1f ms/frame) over %d frames; not showing in the same 3 s: %.1f fps over %d frames; "
-						 "ours %.2f ms/frame (finding %.2f, placing %.2f), %d scans, %d set-ups, %d connections, %d holograms"),
+						 "ours %.2f ms/frame (finding %.2f, placing %.2f), %d scans, %d set-ups, %d connections, %d holograms, extra ones hidden %d"),
 					ActiveFrames / FMath::Max(ActiveDelta, 0.001), 1000.0 * ActiveDelta / ActiveFrames, ActiveFrames,
 					IdleFrames ? IdleFrames / FMath::Max(IdleDelta, 0.001) : 0.0, IdleFrames,
 					1000.0 * GJunctionPerf.OursSeconds / ActiveFrames, 1000.0 * GJunctionPerf.ScanSeconds / ActiveFrames,
 					1000.0 * GJunctionPerf.SetupSeconds / ActiveFrames, GJunctionPerf.Scans, GJunctionPerf.Setups, GJunctionPerf.Links,
-					GJunctionHolograms.Num());
+					GJunctionHolograms.Num(), CVarJunctionHideChildren.GetValueOnGameThread());
 			}
 			const double Last = GJunctionPerf.LastJunctionTime;
 			GJunctionPerf = FJunctionPerf();
@@ -1577,8 +1579,10 @@ namespace
 				break;
 			}
 			Child->SetDisabled(false);
-			Child->SetActorHiddenInGame(false);
+			// TEST (2026-11-14, fps drop): the extra connections are hidden (still checked and built), to see whether
+			// drawing them or checking them is what costs.
 			SetupJunctionHologram(Child, Hit, Links[L], X);
+			Child->SetActorHiddenInGame(CVarJunctionHideChildren.GetValueOnGameThread() != 0); // after: placing may show it
 			LinkHolograms.Add(Child);
 		}
 		for (int32 C = LinkHolograms.Num() - 1; C < Children.Num(); ++C)
