@@ -1479,10 +1479,11 @@ namespace
 		return false;
 	}
 
-	/** CheckValidPlacement is protected: named through a class that makes it public, for the hook. */
+	/** CheckValidPlacement is protected: its address taken inside a derived class, for the hook. */
 	struct FRMHologramCheckAccess : public AFGHologram
 	{
-		using AFGHologram::CheckValidPlacement;
+		typedef void (AFGHologram::*FCheckFn)();
+		static constexpr FCheckFn CheckFn() { return &FRMHologramCheckAccess::CheckValidPlacement; }
 	};
 	/** When each overlay was last drawn: one not drawn for a moment (aim moved away, build gun put away) is removed. */
 	TMap<TWeakObjectPtr<const AFGHologram>, double> GJunctionOverlayTime;
@@ -3708,7 +3709,9 @@ void RMVanillaSnapping::InstallHooks()
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
 	// Intersection connections: real placement check every few frames per connection (see FJunctionCheckMemo).
-	SUBSCRIBE_METHOD_VIRTUAL(FRMHologramCheckAccess::CheckValidPlacement, GetMutableDefault<AFGVehiclePathSegmentHologram>(), [](auto& Scope, AFGHologram* Self)
+	HookInvoker<FRMHologramCheckAccess::FCheckFn, FRMHologramCheckAccess::CheckFn()>::InstallHook(TEXT("AFGHologram::CheckValidPlacement"),
+		GetMutableDefault<AFGVehiclePathSegmentHologram>());
+	HookInvoker<FRMHologramCheckAccess::FCheckFn, FRMHologramCheckAccess::CheckFn()>::AddHandlerBefore([](auto& Scope, AFGHologram* Self)
 	{
 		if (!IsJunctionChild(Self))
 		{
