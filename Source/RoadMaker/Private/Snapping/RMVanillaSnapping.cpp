@@ -5,6 +5,8 @@
 #include "RoadMakerModule.h"
 #include "RMRoadUtils.h"
 #include "ProceduralMeshComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableGantry.h"
@@ -1330,7 +1332,8 @@ namespace
 		}
 	}
 
-	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link, const ARMBuildableIntersection* X)
+	void SetupJunctionHologram(AFGVehiclePathSegmentHologram* H, const FHitResult& BaseHit, const FJunctionLink& Link, const ARMBuildableIntersection* X,
+		TArray<FVector>* OutCourse = nullptr)
 	{
 		GJunctionHolograms.Add(H);
 		FPathState& State = GPathStates.FindOrAdd(H);
@@ -1366,6 +1369,20 @@ namespace
 		TArray<FVector> Tangents;
 		FollowIntersectionSurface(X, Curve, Points, Tangents);
 		SetPathSplineWorld(H, Points, Tangents);
+		if (OutCourse)
+		{
+			// The course drawn by the overlay: the same curve, finer (about every 1 m).
+			OutCourse->Reset();
+			for (int32 I = 0; I + 1 < Points.Num(); ++I)
+			{
+				const int32 Steps = FMath::Clamp(FMath::CeilToInt(FVector::Dist(Points[I], Points[I + 1]) / 100.f), 1, 16);
+				for (int32 K = 0; K < Steps; ++K)
+				{
+					OutCourse->Add(FMath::CubicInterp(Points[I], Tangents[I], Points[I + 1], Tangents[I + 1], static_cast<float>(K) / Steps));
+				}
+			}
+			OutCourse->Add(Points.Last());
+		}
 	}
 
 	/** Protected hologram child lists: detaching a child so the main hologram no longer checks or builds it. */
@@ -1406,8 +1423,140 @@ namespace
 		TWeakObjectPtr<const ARMBuildableIntersection> Intersection;
 		TArray<TPair<const void*, const void*>> Signature;
 		double LastScan = 0.0;
+		/** Per connection: its course and its (hidden) hologram, for the overlay. */
+		TArray<TArray<FVector>> Courses;
+		TArray<TWeakObjectPtr<AFGHologram>> LinkHolograms;
 	};
 	TMap<TWeakObjectPtr<const AFGHologram>, FJunctionCache> GJunctionCache;
+
+	/**
+	 * The connections are drawn as thin lines (4 px, green = can be built, red = not), all in one light mesh,
+	 * instead of showing 24 overlapping path holograms (measured 2026-11-14: about 5 fps with them shown, 40 with
+	 * them hidden). The holograms stay, hidden, and still check and build the connections; the main one stays shown.
+	 */
+	TMap<TWeakObjectPtr<const AFGHologram>, TWeakObjectPtr<UProceduralMeshComponent>> GJunctionOverlays;
+	/** When each overlay was last drawn: one not drawn for a moment (aim moved away, build gun put away) is removed. */
+	TMap<TWeakObjectPtr<const AFGHologram>, double> GJunctionOverlayTime;
+
+	void EnsureJunctionOverlaySweeper()
+	{
+		static bool bStarted = false;
+		if (bStarted)
+		{
+			return;
+		}
+		bStarted = true;
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+		{
+			const double Now = FPlatformTime::Seconds();
+			for (auto It = GJunctionOverlays.CreateIterator(); It; ++It)
+			{
+				const double* Last = GJunctionOverlayTime.Find(It.Key());
+				if (It.Key().IsValid() && Last && Now - *Last < 0.25)
+				{
+					continue;
+				}
+				if (UProceduralMeshComponent* Mesh = It.Value().Get())
+				{
+					AActor* Holder = Mesh->GetOwner();
+					if (Holder && Holder->GetWorld() && !Holder->GetWorld()->bIsTearingDown)
+					{
+						Holder->Destroy();
+					}
+				}
+				GJunctionOverlayTime.Remove(It.Key());
+				It.RemoveCurrent();
+			}
+			return true;
+		}));
+	}
+
+	void UpdateJunctionOverlay(AFGHologram* Parent, const FJunctionCache& Cache)
+	{
+		UWorld* World = Parent ? Parent->GetWorld() : nullptr;
+		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		if (!PC || !PC->PlayerCameraManager)
+		{
+			return;
+		}
+		EnsureJunctionOverlaySweeper();
+		GJunctionOverlayTime.Add(Parent, FPlatformTime::Seconds());
+		// On an actor of its own: a hologram paints all its meshes with the hologram material.
+		UProceduralMeshComponent* Mesh = GJunctionOverlays.FindRef(Parent).Get();
+		if (!Mesh)
+		{
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.ObjectFlags |= RF_Transient;
+			AActor* Holder = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, Params);
+			if (!Holder)
+			{
+				return;
+			}
+			Mesh = NewObject<UProceduralMeshComponent>(Holder, TEXT("RMJunctionOverlay"));
+			Holder->SetRootComponent(Mesh);
+			Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Mesh->SetCastShadow(false);
+			Mesh->RegisterComponent();
+			GJunctionOverlays.Add(Parent, Mesh);
+		}
+		int32 ViewW = 0, ViewH = 0;
+		PC->GetViewportSize(ViewW, ViewH);
+		const FVector Camera = PC->PlayerCameraManager->GetCameraLocation();
+		const float WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+		const FVector Base = Camera; // vertices near the origin of the mesh: precise
+		TArray<FVector> Vertices;
+		TArray<int32> Triangles;
+		TArray<FLinearColor> Colors;
+		const FLinearColor Green(0.f, 1.f, 0.f);
+		const FLinearColor Red(1.f, 0.05f, 0.05f);
+		constexpr float Pixels = 4.f;
+		for (int32 L = 0; L < Cache.Courses.Num(); ++L)
+		{
+			const AFGHologram* H = Cache.LinkHolograms.IsValidIndex(L) ? Cache.LinkHolograms[L].Get() : nullptr;
+			const FLinearColor Color = H && H->CanConstruct() ? Green : Red;
+			const TArray<FVector>& C = Cache.Courses[L];
+			for (int32 I = 0; I + 1 < C.Num(); ++I)
+			{
+				FVector A = C[I] + FVector(0.f, 0.f, 15.f);
+				FVector B = C[I + 1] + FVector(0.f, 0.f, 15.f);
+				const FVector Dir = (B - A).GetSafeNormal();
+				const float HA = Pixels * WorldPerPixel * FMath::Max(FVector::Dist(A, Camera), 10.f) * 0.5f;
+				const float HB = Pixels * WorldPerPixel * FMath::Max(FVector::Dist(B, Camera), 10.f) * 0.5f;
+				const FVector SA = FVector::CrossProduct(Dir, Camera - A).GetSafeNormal();
+				const FVector SB = FVector::CrossProduct(Dir, Camera - B).GetSafeNormal();
+				const int32 V = Vertices.Num();
+				for (const FVector& P : { A - SA * HA, A + SA * HA, B + SB * HB, B - SB * HB })
+				{
+					Vertices.Add(P - Base);
+					Colors.Add(Color);
+				}
+				Triangles.Append({ V, V + 1, V + 2, V, V + 2, V + 3 });
+			}
+		}
+		Mesh->SetWorldLocation(Base);
+		Mesh->CreateMeshSection_LinearColor(0, Vertices, Triangles, TArray<FVector>(), TArray<FVector2D>(), Colors, TArray<FProcMeshTangent>(), false);
+		static UMaterialInterface* Material = [] { UMaterialInterface* M = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (M) { M->AddToRoot(); } return M; }();
+		if (Material)
+		{
+			Mesh->SetMaterial(0, Material);
+		}
+		Mesh->SetRenderCustomDepth(false);
+		Mesh->SetVisibility(true);
+	}
+
+	void ClearJunctionOverlay(AFGHologram* Parent)
+	{
+		if (UProceduralMeshComponent* Mesh = GJunctionOverlays.FindRef(Parent).Get())
+		{
+			if (AActor* Holder = Mesh->GetOwner())
+			{
+				Holder->Destroy();
+			}
+		}
+		GJunctionOverlays.Remove(Parent);
+		GJunctionOverlayTime.Remove(Parent);
+	}
 
 	/** Hides and switches off the connection children (leaving junction mode). */
 	void ReleaseJunction(AFGHologram* Parent)
@@ -1423,6 +1572,7 @@ namespace
 		GJunctionParentLink.Remove(Parent);
 		GJunctionCache.Remove(Parent);
 		GJunctionHolograms.Remove(Parent);
+		ClearJunctionOverlay(Parent);
 		LaneSectionsRelease(Parent);
 	}
 
@@ -1449,7 +1599,7 @@ namespace
 		~FJunctionTimer() { Into += FPlatformTime::Seconds() - Start; }
 	};
 	TAutoConsoleVariable<int32> CVarJunctionHideChildren(TEXT("rm.JunctionHideChildren"), 1,
-		TEXT("TEST: hide the intersection connections other than the main hologram (they are still checked and built)."));
+		TEXT("Hide the intersection connections other than the main hologram (they are still checked and built; the overlay draws them)."));
 	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 1, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
 	/** Every frame: frame times while the connections are shown and around it, logged every 3 s (started on first use). */
 	void EnsureJunctionPerfTicker()
@@ -1517,6 +1667,7 @@ namespace
 		if (Cache.Intersection.Get() == X && Existing && Existing->bLaneMode && Now - Cache.LastScan < 0.5)
 		{
 			Scope.Cancel();
+			UpdateJunctionOverlay(Parent, Cache);
 			return true;
 		}
 
@@ -1530,6 +1681,7 @@ namespace
 		if (Links.Num() == 0)
 		{
 			Cache = FJunctionCache();
+			ClearJunctionOverlay(Parent);
 			return false;
 		}
 		TArray<TPair<const void*, const void*>> Signature;
@@ -1541,6 +1693,7 @@ namespace
 		Cache.LastScan = Now;
 		if (Cache.Intersection.Get() == X && Cache.Signature == Signature && Existing && Existing->bLaneMode)
 		{
+			UpdateJunctionOverlay(Parent, Cache);
 			return true; // same connections as before: already placed and checked
 		}
 		Cache.Intersection = X;
@@ -1552,7 +1705,11 @@ namespace
 		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
 		TArray<AFGVehiclePathSegmentHologram*> LinkHolograms; // per link
 		LinkHolograms.Add(Parent);
-		SetupJunctionHologram(Parent, Hit, Links[0], X);
+		Cache.Courses.Reset();
+		Cache.LinkHolograms.Reset();
+		Cache.Courses.AddDefaulted();
+		Cache.LinkHolograms.Add(Parent);
+		SetupJunctionHologram(Parent, Hit, Links[0], X, &Cache.Courses.Last());
 		for (int32 L = 1; L < Links.Num(); ++L)
 		{
 			const int32 ChildIndex = L - 1;
@@ -1579,9 +1736,10 @@ namespace
 				break;
 			}
 			Child->SetDisabled(false);
-			// TEST (2026-11-14, fps drop): the extra connections are hidden (still checked and built), to see whether
-			// drawing them or checking them is what costs.
-			SetupJunctionHologram(Child, Hit, Links[L], X);
+			// Hidden (still checked and built): drawn by the overlay instead (see GJunctionOverlays).
+			Cache.Courses.AddDefaulted();
+			Cache.LinkHolograms.Add(Child);
+			SetupJunctionHologram(Child, Hit, Links[L], X, &Cache.Courses.Last());
 			Child->SetActorHiddenInGame(CVarJunctionHideChildren.GetValueOnGameThread() != 0); // after: placing may show it
 			LinkHolograms.Add(Child);
 		}
@@ -1590,6 +1748,7 @@ namespace
 			RemoveJunctionChild(Parent, Children[C]); // not needed now
 		}
 
+		UpdateJunctionOverlay(Parent, Cache);
 		// Every connection is kept with the game's normal rules: if one is invalid the click is
 		// refused, so the intersection can be improved until all connections are valid.
 		return true;
