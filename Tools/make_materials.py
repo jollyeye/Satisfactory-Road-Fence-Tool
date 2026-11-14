@@ -648,6 +648,33 @@ for path in ("/Game/FactoryGame/Buildable/Building/Pillars/Material/MI_Beam_04.M
 if not game_beam_mat:
     log("  ! game H-beam material not found, the guard rail uses M_RoadSteel")
 
+# Guard rail posts: the game's sign pole material (MI_ConveyorPole_01, the chrome-like steel of the poles that hold
+# signs), with our own normal map: flat (T_RM_FlatNormal), since the pole's is laid out for the pole mesh. The posts'
+# rounded edges come from the mesh (RMGeometry::AddBeveledPost).
+post_mat = None
+POLE_MAT = "/Game/FactoryGame/Buildable/Factory/ConveyorPole/Material/MI_ConveyorPole_01"
+flat_n = None
+try:
+    flat_n = unreal.load_asset("/RoadMaker/Icons/T_RM_FlatNormal.T_RM_FlatNormal")
+except Exception:
+    flat_n = None
+if eal.does_asset_exist(POLE_MAT):
+    pole_parent = eal.load_asset(POLE_MAT)
+    pm_path = ROOT + "/MI_RM_GuardRailPost"
+    post_mat = eal.load_asset(pm_path) if eal.does_asset_exist(pm_path) else None
+    if not post_mat:
+        post_mat = asset_tools.create_asset("MI_RM_GuardRailPost", ROOT, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+    MEL.set_material_instance_parent(post_mat, pole_parent)
+    if flat_n:
+        MEL.set_material_instance_texture_parameter_value(post_mat, "Normal", flat_n)
+    else:
+        log("  ! T_RM_FlatNormal missing: the posts keep the pole's normal map")
+    MEL.update_material_instance(post_mat)
+    eal.save_loaded_asset(post_mat, only_if_is_dirty=False)
+    log("Guard rail posts: the sign pole material with a flat normal map")
+else:
+    log("  ! sign pole material not found, the guard rail posts use M_RoadSteel")
+
 # The game's own concrete wall material: the wall mesh carries the same texture layout (UV0) and the
 # wall passes the paint to it the way the game does, so it looks and paints like the game's walls.
 # Road Maker's M_RoadFenceWall stays as the fallback.
@@ -1146,7 +1173,7 @@ ASSIGN = {
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,
-    "Build_Fence_GuardRail": {"m_main_material": game_beam_mat or steel, "m_panel_material": steel},
+    "Build_Fence_GuardRail": {"m_main_material": game_beam_mat or steel, "m_panel_material": post_mat or steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": steel, "m_panel_material": grid},
     "Build_Fence_GridTall": {"m_main_material": steel, "m_panel_material": grid},

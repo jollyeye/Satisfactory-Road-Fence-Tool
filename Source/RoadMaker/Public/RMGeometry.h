@@ -207,6 +207,14 @@ namespace RMGeometry
 	ROADMAKER_API void SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSplinePoint>& OutPoints);
 
 	/** Steel W-beam guard rail with posts. Frames are at the base of the fence. */
+	/**
+	 * Upright square post standing on Base (axes X, Y across, Z up): sides and top, no bottom. Its vertical edges and the
+	 * top edges are rounded in the lighting over Bevel cm (normals turn to the neighbouring face; the outline stays
+	 * square). UVs 0..1 across each side and up its height, 0..1 over the top.
+	 */
+	ROADMAKER_API void AddBeveledPost(const FVector& Base, const FVector& AxisX, const FVector& AxisY, const FVector& AxisZ,
+		float Half, float Height, float Bevel, FRMMesh& Out);
+
 	/** Guard rail: the beam in Beam (painted, the game's H-beam material), the posts in Posts (plain steel). */
 	ROADMAKER_API void BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts);
 

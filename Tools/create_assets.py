@@ -566,6 +566,17 @@ try:
         log("  Lane Vehicle tile: full size, never streamed")
 except Exception as e:
     log("  ! Lane Vehicle tile settings: %s" % e)
+# T_RM_FlatNormal: a flat normal map (straight out of the surface), for game materials whose own normal map is laid
+# out for another mesh (the guard rail posts: their rounded edges come from the mesh's normals).
+try:
+    fn = unreal.load_asset(ROOT + "/Icons/T_RM_FlatNormal")
+    if fn:
+        fn.set_editor_property("srgb", False)
+        fn.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+        eal.save_loaded_asset(fn, only_if_is_dirty=False)
+        log("  flat normal map")
+except Exception as e:
+    log("  ! flat normal map: %s" % e)
 # Sign icons (T_RM_Sign_*): sharp UI textures, always loaded; they repeat left to right (the animated ones scroll).
 for f in sorted(os.listdir(ICON_DIR)) if os.path.isdir(ICON_DIR) else []:
     if f.startswith("T_RM_Sign_") and f.lower().endswith(".png"):

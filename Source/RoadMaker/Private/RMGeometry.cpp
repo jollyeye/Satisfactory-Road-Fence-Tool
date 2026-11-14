@@ -1128,6 +1128,72 @@ void RMGeometry::SplineThroughPoints(const TArray<FVector>& Points, TArray<FRMSp
 	}
 }
 
+void RMGeometry::AddBeveledPost(const FVector& Base, const FVector& AxisX, const FVector& AxisY, const FVector& AxisZ,
+	float Half, float Height, float Bevel, FRMMesh& Out)
+{
+	const float B = FMath::Clamp(Bevel, 0.f, Half * 0.45f);
+	// The four sides, counter-clockwise seen from above: outward normal and the direction across the face.
+	const FVector SideN[4] = { AxisX, AxisY, -AxisX, -AxisY };
+	const FVector SideT[4] = { AxisY, -AxisX, -AxisY, AxisX };
+	for (int32 K = 0; K < 4; ++K)
+	{
+		const FVector N = SideN[K];
+		const FVector T = SideT[K];
+		const FVector NPrev = SideN[(K + 3) % 4];
+		const FVector NNext = SideN[(K + 1) % 4];
+		// Columns across the face (from the corner shared with the previous side to the next one), rows up it.
+		const float Us[4] = { -Half, -Half + B, Half - B, Half };
+		const FVector ColN[4] = { (N + NPrev).GetSafeNormal(), N, N, (N + NNext).GetSafeNormal() };
+		const float Zs[3] = { 0.f, Height - B, Height };
+		const int32 First = Out.Vertices.Num();
+		for (int32 R = 0; R < 3; ++R)
+		{
+			for (int32 C = 0; C < 4; ++C)
+			{
+				const FVector P = Base + N * Half + T * Us[C] + AxisZ * Zs[R];
+				const FVector VN = R == 2 ? (ColN[C] + AxisZ).GetSafeNormal() : ColN[C];
+				Out.AddVertex(P, VN, FVector2D((Us[C] + Half) / (2.f * Half), 1.f - Zs[R] / Height), T);
+			}
+		}
+		for (int32 R = 0; R < 2; ++R)
+		{
+			for (int32 C = 0; C < 3; ++C)
+			{
+				const int32 A0 = First + R * 4 + C;
+				const int32 B0 = A0 + 1;
+				const int32 A1 = A0 + 4;
+				const int32 B1 = A1 + 1;
+				Out.AddTriangle(A0, B0, B1, N);
+				Out.AddTriangle(A0, B1, A1, N);
+			}
+		}
+	}
+	// Top: an outer ring on the edges (normals tilted out like the sides' top row) and an inner square B inside.
+	const FVector Top = Base + AxisZ * Height;
+	const FVector Corner[4] = { AxisX + AxisY, -AxisX + AxisY, -AxisX - AxisY, AxisX - AxisY };
+	const int32 First = Out.Vertices.Num();
+	for (int32 K = 0; K < 4; ++K)
+	{
+		const FVector O = Top + Corner[K] * Half;
+		const FVector I = Top + Corner[K] * (Half - B);
+		const FVector2D UVO(0.5f + 0.5f * FVector::DotProduct(Corner[K], AxisY), 0.5f - 0.5f * FVector::DotProduct(Corner[K], AxisX));
+		const FVector2D UVI = FVector2D(0.5f, 0.5f) + (UVO - FVector2D(0.5f, 0.5f)) * ((Half - B) / Half);
+		Out.AddVertex(O, (Corner[K].GetSafeNormal() + AxisZ).GetSafeNormal(), UVO, AxisY);
+		Out.AddVertex(I, AxisZ, UVI, AxisY);
+	}
+	for (int32 K = 0; K < 4; ++K)
+	{
+		const int32 O0 = First + K * 2;
+		const int32 I0 = O0 + 1;
+		const int32 O1 = First + ((K + 1) % 4) * 2;
+		const int32 I1 = O1 + 1;
+		Out.AddTriangle(O0, O1, I1, AxisZ);
+		Out.AddTriangle(O0, I1, I0, AxisZ);
+	}
+	Out.AddTriangle(First + 1, First + 3, First + 5, AxisZ);
+	Out.AddTriangle(First + 1, First + 5, First + 7, AxisZ);
+}
+
 void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Beam, FRMMesh& Posts)
 {
 	const float S = 1.f; // road on +Right; mirroring is done by the caller
@@ -1149,7 +1215,10 @@ void RMGeometry::BuildGuardRail(const TArray<FRMFrame>& Frames, float UVScale, F
 	// Posts every 2 m, behind the beam (away from the road).
 	ForEvery(Frames, 200.f, [&](const FRMFrame& F)
 	{
-		Posts.AddBox(F.Pos + FVector(0.f, 0.f, 40.f) - F.Right * (9.f * S), F.Fwd, F.Right, FVector::UpVector, FVector(5.f, 5.f, 40.f), UVScale);
+		// Upright, 10 cm square, 80 cm tall, edges rounded over 1.5 cm in the lighting.
+		const FVector Fwd = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd);
+		AddBeveledPost(F.Pos - F.Right * (9.f * S), Fwd, Right, FVector::UpVector, 5.f, 80.f, 1.5f, Posts);
 	});
 }
 
