@@ -105,6 +105,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 **Fixed**
 - Picking a road from the hotbar or the radial menu no longer loses the "Toggle Limits" key hint.
+- Middle click on a lane marking (arrow, digit, vehicle) picks it again, ready to paint another, also with the build gun put away.
+- "Show Roads on Map" keeps its tick when the map is opened again.
 
 ## Changelog for version 1.3.0
 **New**

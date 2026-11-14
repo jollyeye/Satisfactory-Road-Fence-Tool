@@ -43,6 +43,12 @@ public:
 	/** The pictures / borders around the game's button in its row (its background), copied behind ours. */
 	void CopyBackground(UWidget* GameRow, UButton* GameButton);
 
+	/**
+	 * While the map is open (every frame): the game's check box sets itself back when the map opens
+	 * again, so it is put back to the remembered state when it differs.
+	 */
+	void SyncCheck();
+
 protected:
 	UFUNCTION()
 	void OnClicked();

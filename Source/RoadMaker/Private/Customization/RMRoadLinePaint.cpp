@@ -1100,10 +1100,140 @@ namespace
 namespace
 {
 	/** While a marking is selected in the paint gun the mouse wheel picks the arrow / digit instead of anything else. */
+	/** Paint recipe to go to once the build gun is equipped (middle click on a marking with no gun out). */
+	TSubclassOf<UFGCustomizationRecipe> GSamplePendingRecipe;
+	int32 GSamplePendingFrames = 0;
+
+	/**
+	 * Middle click on a lane marking: picks that marking (same arrow / digit / vehicle) in the customizer,
+	 * ready to paint another, like middle click on a building picks it in the build gun. True when the
+	 * click was on a marking (the game's own sample is then skipped: it would pick the hidden marking tool).
+	 */
+	bool TrySampleMarking(APlayerController* PC)
+	{
+		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
+		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
+		if (!Gun || !PC->IsLocalController() || PC->ShouldShowMouseCursor())
+		{
+			return false;
+		}
+		FVector Eye;
+		FRotator View;
+		PC->GetPlayerViewPoint(Eye, View);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMMarkingSample), true, Player);
+		FHitResult Hit;
+		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * Gun->GetBuildGunRange(), ECC_Visibility, Params))
+		{
+			return false;
+		}
+		const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(Hit.GetActor());
+		if (!Marking)
+		{
+			return false;
+		}
+		// The customizer option that paints this kind of marking, and its recipe.
+		TSubclassOf<URMRoadLineDescriptor> Option;
+		for (TObjectIterator<UClass> It; It && !Option; ++It)
+		{
+			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			{
+				const URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
+				if (D && D->mIsMarking && D->mMarkingClass && Marking->IsA(D->mMarkingClass))
+				{
+					Option = *It;
+				}
+			}
+		}
+		TSubclassOf<UFGCustomizationRecipe> Recipe;
+		for (TObjectIterator<UClass> It; Option && It && !Recipe; ++It)
+		{
+			if (It->IsChildOf(UFGCustomizationRecipe::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract)
+				&& UFGCustomizationRecipe::GetCustomizationDescriptor(TSubclassOf<UFGCustomizationRecipe>(*It)) == Option.Get())
+			{
+				Recipe = *It;
+			}
+		}
+		if (!Recipe)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s (option %s)"), *Marking->GetClass()->GetName(),
+				Option ? *Option->GetName() : TEXT("none"));
+			return false;
+		}
+		GSampledMarking = Option;
+		GSampledVariant = Marking->GetVariant();
+		if (GActiveMarking == Option)
+		{
+			GMarkingVariant = GSampledVariant;
+		}
+		const bool bEquipped = Player->IsBuildGunEquipped();
+		if (bEquipped)
+		{
+			Gun->GotoPaintState(Recipe);
+		}
+		else
+		{
+			// Out with the build gun in its paint state; the recipe once it is equipped (see the ticker).
+			Player->ToggleBuildGunPaint();
+			GSamplePendingRecipe = Recipe;
+			GSamplePendingFrames = 120;
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s, build gun %s"), *Option->GetName(),
+			*Marking->GetClass()->GetName(), GSampledVariant, *Recipe->GetName(), bEquipped ? TEXT("out") : TEXT("taken out"));
+		return true;
+	}
+
+	/** Each frame while a sample waits for the build gun to come out. */
+	void TickSamplePending(APlayerController* PC)
+	{
+		if (GSamplePendingFrames <= 0)
+		{
+			return;
+		}
+		--GSamplePendingFrames;
+		AFGCharacterPlayer* Player = PC ? Cast<AFGCharacterPlayer>(PC->GetPawn()) : nullptr;
+		AFGBuildGun* Gun = Player ? Player->GetBuildGun() : nullptr;
+		if (Gun && GSamplePendingRecipe && Player->IsBuildGunEquipped())
+		{
+			Gun->GotoPaintState(GSamplePendingRecipe);
+			GSamplePendingRecipe = nullptr;
+			GSamplePendingFrames = 0;
+		}
+	}
+
+	APlayerController* GameWorldPlayer()
+	{
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (Context.WorldType == EWorldType::Game && Context.World())
+				{
+					return Context.World()->GetFirstPlayerController();
+				}
+			}
+		}
+		return nullptr;
+	}
+
 	class FMarkingWheel : public IInputProcessor
 	{
 	public:
-		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override {}
+		virtual void Tick(const float, FSlateApplication&, TSharedRef<ICursor>) override
+		{
+			if (GSamplePendingFrames > 0)
+			{
+				TickSamplePending(GameWorldPlayer());
+			}
+		}
+		/** Middle click: a lane marking aimed at is picked in the customizer (the game's sample never sees it). */
+		virtual bool HandleMouseButtonDownEvent(FSlateApplication&, const FPointerEvent& MouseEvent) override
+		{
+			if (MouseEvent.GetEffectingButton() != EKeys::MiddleMouseButton)
+			{
+				return false;
+			}
+			return TrySampleMarking(GameWorldPlayer());
+		}
 		virtual bool HandleMouseWheelOrGestureEvent(FSlateApplication&, const FPointerEvent& WheelEvent, const FPointerEvent*) override
 		{
 			if (!GActiveMarking || WheelEvent.GetWheelDelta() == 0.f || !GEngine)
@@ -1212,74 +1342,6 @@ void RMRoadLinePaint::InstallHooks()
 				GActiveMarking = nullptr;
 			}
 		});
-
-	// Middle click on a lane marking: pick that marking (same arrow / digit / vehicle) in the customizer, ready to paint
-	// another, like middle click on a building picks it in the build gun.
-	SUBSCRIBE_METHOD(AFGBuildGun::OnBuildSamplePressed, [](auto& Scope, AFGBuildGun* Gun)
-	{
-		APawn* Pawn = Gun ? Cast<APawn>(Gun->GetOwner()) : nullptr;
-		APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
-		if (!PC || !PC->IsLocalController())
-		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: pressed, no local player"));
-			return;
-		}
-		FVector Eye;
-		FRotator View;
-		PC->GetPlayerViewPoint(Eye, View);
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMMarkingSample), true, Pawn);
-		FHitResult Hit;
-		if (!PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * Gun->GetBuildGunRange(), ECC_Visibility, Params))
-		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: nothing aimed at"));
-			return;
-		}
-		const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(Hit.GetActor());
-		if (!Marking)
-		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: aimed at %s (%s), not a marking"), Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"),
-				Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("-"));
-			return;
-		}
-		// The customizer option that paints this kind of marking, and its recipe.
-		TSubclassOf<URMRoadLineDescriptor> Option;
-		for (TObjectIterator<UClass> It; It && !Option; ++It)
-		{
-			if (It->IsChildOf(URMRoadLineDescriptor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
-			{
-				const URMRoadLineDescriptor* D = It->GetDefaultObject<URMRoadLineDescriptor>();
-				if (D && D->mIsMarking && D->mMarkingClass && Marking->IsA(D->mMarkingClass))
-				{
-					Option = *It;
-				}
-			}
-		}
-		TSubclassOf<UFGCustomizationRecipe> Recipe;
-		for (TObjectIterator<UClass> It; Option && It && !Recipe; ++It)
-		{
-			if (It->IsChildOf(UFGCustomizationRecipe::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract)
-				&& UFGCustomizationRecipe::GetCustomizationDescriptor(TSubclassOf<UFGCustomizationRecipe>(*It)) == Option.Get())
-			{
-				Recipe = *It;
-			}
-		}
-		if (!Recipe)
-		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s (option %s)"), *Marking->GetClass()->GetName(),
-				Option ? *Option->GetName() : TEXT("none"));
-			return;
-		}
-		Scope.Cancel();
-		GSampledMarking = Option;
-		GSampledVariant = Marking->GetVariant();
-		if (GActiveMarking == Option)
-		{
-			GMarkingVariant = GSampledVariant;
-		}
-		Gun->GotoPaintState(Recipe);
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s, gun state %s"), *Option->GetName(), *Marking->GetClass()->GetName(),
-			GSampledVariant, *Recipe->GetName(), Gun->GetCurrentState() ? *Gun->GetCurrentState()->GetClass()->GetName() : TEXT("none"));
-	});
 
 	// Fire with a Road Lines option selected: apply it to the aimed road instead of painting.
 	SUBSCRIBE_METHOD(AFGBuildGun::OnPrimaryFirePressed, [](auto& Scope, AFGBuildGun* Gun)

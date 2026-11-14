@@ -126,6 +126,7 @@ void RMMapRoads::EnsureRow(UWorld* World)
 	URMMapRoadsRow* Row = GMapRoadsRow.Get();
 	if (Row && Row->GetParent() && Row->GetWorld() == World)
 	{
+		Row->SyncCheck();
 		return;
 	}
 	const double Now = FPlatformTime::Seconds();
@@ -390,6 +391,38 @@ void URMMapRoadsRow::Refresh()
 		mCheck->SetIsChecked(bShown);
 	}
 	SetGameCheck(mGameCheck, bShown);
+}
+
+void URMMapRoadsRow::SyncCheck()
+{
+	if (!mGameCheck)
+	{
+		return;
+	}
+	// The check box's own state (its bool with "Checked" in the name, mIsChecked), found once per class.
+	static TWeakObjectPtr<UClass> FlagClass;
+	static FBoolProperty* Flag = nullptr;
+	if (FlagClass.Get() != mGameCheck->GetClass())
+	{
+		FlagClass = mGameCheck->GetClass();
+		Flag = nullptr;
+		for (TFieldIterator<FBoolProperty> It(mGameCheck->GetClass()); It && !Flag; ++It)
+		{
+			if (It->GetName().Contains(TEXT("Checked")))
+			{
+				Flag = *It;
+			}
+		}
+	}
+	if (Flag && Flag->GetPropertyValue_InContainer(mGameCheck) != RMMapRoads::IsShown())
+	{
+		static int32 Logs = 0;
+		if (Logs++ < 5)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Map: roads tick put back to %s"), RMMapRoads::IsShown() ? TEXT("on") : TEXT("off"));
+		}
+		Refresh();
+	}
 }
 
 void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
