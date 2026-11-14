@@ -41,6 +41,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
+#include "Containers/Ticker.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
 
@@ -1200,12 +1201,31 @@ namespace
 			return -1;
 		};
 
+		// Only paths with an end near the intersection matter (a cheap distance test before anything else).
+		FVector Centre = FVector::ZeroVector;
+		for (const FRMRoadEnd& M : Mouths)
+		{
+			Centre += M.Center;
+		}
+		Centre /= FMath::Max(1, Mouths.Num());
+		float Reach = 0.f;
+		for (const FRMRoadEnd& M : Mouths)
+		{
+			Reach = FMath::Max(Reach, FVector::Dist(Centre, M.Center) + M.Width * 0.5f);
+		}
+		const float ReachSq = FMath::Square(Reach + 600.f);
+
 		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
 		{
-			USplineComponent* Spline = It->GetSplineComponent();
 			AFGVehiclePathNode* StartNode = It->GetStartNode();
 			AFGVehiclePathNode* EndNode = It->GetEndNode();
-			if (!Spline || Spline->GetNumberOfSplinePoints() < 2 || !StartNode || !EndNode)
+			if (!StartNode || !EndNode
+				|| (FVector::DistSquared(StartNode->GetActorLocation(), Centre) > ReachSq && FVector::DistSquared(EndNode->GetActorLocation(), Centre) > ReachSq))
+			{
+				continue;
+			}
+			USplineComponent* Spline = It->GetSplineComponent();
+			if (!Spline || Spline->GetNumberOfSplinePoints() < 2)
 			{
 				continue;
 			}
@@ -1411,9 +1431,76 @@ namespace
 	 * ends is shown at once (main hologram + child holograms) and one click builds the valid ones.
 	 */
 
+	// ---- Measuring the intersection connections (log prefix "RMJunctionPerf", every 3 s while they are shown) ----
+	struct FJunctionPerf
+	{
+		double OursSeconds = 0.0;   // time spent in PlaceJunction / PlaceRailJunction
+		double ScanSeconds = 0.0;   // of which: finding the connections
+		double SetupSeconds = 0.0;  // of which: placing the holograms
+		int32 Calls = 0, Scans = 0, Setups = 0, Links = 0;
+		double LastJunctionTime = 0.0;
+	};
+	FJunctionPerf GJunctionPerf;
+	struct FJunctionTimer
+	{
+		double& Into;
+		double Start;
+		explicit FJunctionTimer(double& InInto) : Into(InInto), Start(FPlatformTime::Seconds()) {}
+		~FJunctionTimer() { Into += FPlatformTime::Seconds() - Start; }
+	};
+	TAutoConsoleVariable<int32> CVarJunctionPerf(TEXT("rm.JunctionPerf"), 1, TEXT("Log how long the intersection connections take (RMJunctionPerf lines)."));
+	/** Every frame: frame times while the connections are shown and around it, logged every 3 s (started on first use). */
+	void EnsureJunctionPerfTicker()
+	{
+		static bool bStarted = false;
+		if (bStarted)
+		{
+			return;
+		}
+		bStarted = true;
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float Delta)
+	{
+		static double WindowStart = 0.0;
+		static double ActiveDelta = 0.0, IdleDelta = 0.0;
+		static int32 ActiveFrames = 0, IdleFrames = 0;
+		const double Now = FPlatformTime::Seconds();
+		const bool bActive = Now - GJunctionPerf.LastJunctionTime < 0.2;
+		(bActive ? ActiveDelta : IdleDelta) += Delta;
+		(bActive ? ActiveFrames : IdleFrames) += 1;
+		if (WindowStart == 0.0)
+		{
+			WindowStart = Now;
+		}
+		if (Now - WindowStart >= 3.0)
+		{
+			if (ActiveFrames > 0 && CVarJunctionPerf.GetValueOnGameThread())
+			{
+				UE_LOG(LogRoadMaker, Display,
+					TEXT("RMJunctionPerf showing: %.1f fps (%.1f ms/frame) over %d frames; not showing in the same 3 s: %.1f fps over %d frames; "
+						 "ours %.2f ms/frame (finding %.2f, placing %.2f), %d scans, %d set-ups, %d connections, %d holograms"),
+					ActiveFrames / FMath::Max(ActiveDelta, 0.001), 1000.0 * ActiveDelta / ActiveFrames, ActiveFrames,
+					IdleFrames ? IdleFrames / FMath::Max(IdleDelta, 0.001) : 0.0, IdleFrames,
+					1000.0 * GJunctionPerf.OursSeconds / ActiveFrames, 1000.0 * GJunctionPerf.ScanSeconds / ActiveFrames,
+					1000.0 * GJunctionPerf.SetupSeconds / ActiveFrames, GJunctionPerf.Scans, GJunctionPerf.Setups, GJunctionPerf.Links,
+					GJunctionHolograms.Num());
+			}
+			const double Last = GJunctionPerf.LastJunctionTime;
+			GJunctionPerf = FJunctionPerf();
+			GJunctionPerf.LastJunctionTime = Last;
+			ActiveDelta = IdleDelta = 0.0;
+			ActiveFrames = IdleFrames = 0;
+			WindowStart = Now;
+		}
+		return true;
+	}));
+	}
+
 	template <typename TScope, typename THologram>
 	bool PlaceJunction(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableIntersection* X)
 	{
+		EnsureJunctionPerfTicker();
+		FJunctionTimer TimeOurs(GJunctionPerf.OursSeconds);
+		GJunctionPerf.LastJunctionTime = FPlatformTime::Seconds();
 		AFGVehiclePathSegmentHologram* Parent = Cast<AFGVehiclePathSegmentHologram>(Hologram);
 		UWorld* World = Hologram->GetWorld();
 		if (!Parent || !World)
@@ -1432,7 +1519,12 @@ namespace
 		}
 
 		TArray<FJunctionLink> Links;
-		FindJunctionLinks(World, X, Links);
+		{
+			FJunctionTimer TimeScan(GJunctionPerf.ScanSeconds);
+			FindJunctionLinks(World, X, Links);
+		}
+		++GJunctionPerf.Scans;
+		GJunctionPerf.Links = Links.Num();
 		if (Links.Num() == 0)
 		{
 			Cache = FJunctionCache();
@@ -1451,6 +1543,8 @@ namespace
 		}
 		Cache.Intersection = X;
 		Cache.Signature = Signature;
+		FJunctionTimer TimeSetup(GJunctionPerf.SetupSeconds);
+		++GJunctionPerf.Setups;
 
 		// Place every connection (main hologram takes link 0 for now, children the rest).
 		TArray<TWeakObjectPtr<AFGHologram>>& Children = GJunctionChildren.FindOrAdd(Parent);
@@ -1638,6 +1732,9 @@ namespace
 	template <typename TScope, typename THologram>
 	bool PlaceRailJunction(TScope& Scope, THologram* Hologram, const FHitResult& Hit, ARMBuildableIntersection* X)
 	{
+		EnsureJunctionPerfTicker();
+		FJunctionTimer TimeOurs(GJunctionPerf.OursSeconds);
+		GJunctionPerf.LastJunctionTime = FPlatformTime::Seconds();
 		AFGRailroadTrackHologram* Parent = Cast<AFGRailroadTrackHologram>(Hologram);
 		UWorld* World = Hologram->GetWorld();
 		if (!Parent || !World)
