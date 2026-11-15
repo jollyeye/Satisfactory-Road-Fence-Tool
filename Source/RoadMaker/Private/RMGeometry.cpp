@@ -1419,7 +1419,7 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	const float Height = 200.f * Scale;
 	const float PostHalf = 5.f * (Scale > 1.f ? 1.6f : 1.f);
 	const float TubeHalf = 3.f * (Scale > 1.f ? 1.5f : 1.f);
-	const float FrameX = -3.f;
+	const float FrameX = 0.f; // centred on the line, so turning the fence round (scroll on a road edge) keeps it in place
 	const float Bottom = 8.f + (TubeHalf - 3.f);
 
 	// Built against true vertical (not the road's tilted up) so the sheet, tubes and posts stay
