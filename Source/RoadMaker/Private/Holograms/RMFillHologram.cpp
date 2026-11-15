@@ -323,9 +323,196 @@ bool ARMFillHologram::FindAimedEdge(const FHitResult& Hit, FRMFillPick& Out) con
 	return false;
 }
 
+namespace RMFill
+{
+	/** 2D distance between segments A-B and C-D (0 when they cross). */
+	float SegDist2D(const FVector& A, const FVector& B, const FVector& C, const FVector& D)
+	{
+		float T, U;
+		if (SegCross(A, B, C, D, T, U))
+		{
+			return 0.f;
+		}
+		float Dummy;
+		return FMath::Min(FMath::Min(FVector::Dist2D(ClosestOnSeg2D(C, D, A, Dummy), A), FVector::Dist2D(ClosestOnSeg2D(C, D, B, Dummy), B)),
+			FMath::Min(FVector::Dist2D(ClosestOnSeg2D(A, B, C, Dummy), C), FVector::Dist2D(ClosestOnSeg2D(A, B, D, Dummy), D)));
+	}
+
+	/**
+	 * A closed outline is usable when no two edges cross or come within 20 cm of each other, except edges next to each
+	 * other (a figure eight whose two loops touch, or an outline running back along itself, is refused).
+	 */
+	bool RingUsable(const TArray<FVector>& R)
+	{
+		const int32 N = R.Num();
+		if (N < 3 || Area2D(R) < MinArea)
+		{
+			return false;
+		}
+		for (int32 I = 0; I < N; ++I)
+		{
+			for (int32 J = I + 2; J < N; ++J)
+			{
+				const int32 Gap = FMath::Min(J - I, N - (J - I));
+				if (Gap < 2)
+				{
+					continue;
+				}
+				const float D = SegDist2D(R[I], R[(I + 1) % N], R[J], R[(J + 1) % N]);
+				if (D < (Gap == 2 ? 1.f : 20.f))
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	struct FLoop
+	{
+		TArray<FVector> Ring;
+		bool bClosedByCurves = false;
+		bool bValid = false;
+		float CloseLength = 0.f;
+		int32 OffClick = 0; // picks whose kept part is not the clicked side
+	};
+
+	/**
+	 * The outline with one choice per pick (Flip bit I: pick I keeps the other side of its crossing than the clicked one).
+	 */
+	FLoop MakeLoop(const TArray<FRMFillPick>& Picks, uint32 Flip)
+	{
+		FLoop L;
+		const int32 N = Picks.Num();
+		TArray<TArray<FVector>> Parts;
+		TArray<FVector> Cur = Picks[0].Curve;
+		bool bFixed = false;
+		for (int32 I = 1; I < N; ++I)
+		{
+			TArray<FVector> Nxt = Picks[I].Curve;
+			if (Cur.Num() < 2 || Nxt.Num() < 2)
+			{
+				continue;
+			}
+			FParam PA, PB;
+			if (Crossing(Cur, Nxt, Picks[I].Click, PA, PB))
+			{
+				if (!bFixed)
+				{
+					bool bAfter = Nearest(Cur, Picks[I - 1].Click).Key() > PA.Key(); // clicked past the crossing
+					if (Flip & (1u << (I - 1)))
+					{
+						bAfter = !bAfter;
+						++L.OffClick;
+					}
+					if (bAfter)
+					{
+						Cur = Sub(Cur, PA, End(Cur));
+						Algo::Reverse(Cur);
+					}
+					else
+					{
+						Cur = Sub(Cur, Start(), PA);
+					}
+				}
+				else
+				{
+					Cur = Sub(Cur, Start(), PA);
+				}
+				bool bAfter = Nearest(Nxt, Picks[I].Click).Key() >= PB.Key();
+				if (Flip & (1u << I))
+				{
+					bAfter = !bAfter;
+					++L.OffClick;
+				}
+				if (bAfter)
+				{
+					Nxt = Sub(Nxt, PB, End(Nxt));
+				}
+				else
+				{
+					Nxt = Sub(Nxt, Start(), PB);
+					Algo::Reverse(Nxt);
+				}
+			}
+			else
+			{
+				if (!bFixed)
+				{
+					const float D0 = FMath::Min(FVector::Dist2D(Cur[0], Nxt[0]), FVector::Dist2D(Cur[0], Nxt.Last()));
+					const float D1 = FMath::Min(FVector::Dist2D(Cur.Last(), Nxt[0]), FVector::Dist2D(Cur.Last(), Nxt.Last()));
+					if (D0 < D1)
+					{
+						Algo::Reverse(Cur);
+					}
+				}
+				if (FVector::Dist2D(Nxt.Last(), Cur.Last()) < FVector::Dist2D(Nxt[0], Cur.Last()))
+				{
+					Algo::Reverse(Nxt);
+				}
+			}
+			Parts.Add(MoveTemp(Cur));
+			Cur = MoveTemp(Nxt);
+			bFixed = true;
+		}
+		if (Parts.Num() > 0 && Cur.Num() >= 2 && Parts[0].Num() >= 2)
+		{
+			FParam PL, PF;
+			if (Crossing(Cur, Parts[0], Cur.Last(), PL, PF))
+			{
+				Cur = Sub(Cur, Start(), PL);
+				Parts[0] = Sub(Parts[0], PF, End(Parts[0]));
+				L.bClosedByCurves = true;
+			}
+		}
+		Parts.Add(MoveTemp(Cur));
+		for (const TArray<FVector>& P : Parts)
+		{
+			for (const FVector& V : P)
+			{
+				if (L.Ring.Num() == 0 || FVector::Dist2D(V, L.Ring.Last()) > 50.f)
+				{
+					L.Ring.Add(V);
+				}
+			}
+		}
+		if (L.Ring.Num() >= 2 && FVector::Dist2D(L.Ring[0], L.Ring.Last()) < 50.f)
+		{
+			L.Ring.Pop();
+			L.bClosedByCurves = true;
+		}
+		if (L.Ring.Num() >= 3)
+		{
+			L.CloseLength = L.bClosedByCurves ? 0.f : FVector::Dist2D(L.Ring.Last(), L.Ring[0]);
+			// Checked on a coarser copy (a point every 2 m): this runs for every option when the picks change.
+			TArray<FVector> Coarse;
+			for (const FVector& V : L.Ring)
+			{
+				if (Coarse.Num() == 0 || FVector::Dist2D(V, Coarse.Last()) > 200.f)
+				{
+					Coarse.Add(V);
+				}
+			}
+			L.bValid = Coarse.Num() >= 3 && RingUsable(Coarse);
+		}
+		return L;
+	}
+}
+
 void ARMFillHologram::BuildLoop()
 {
 	using namespace RMFill;
+	// Only when the picks change: every way of keeping the cut edges is tried.
+	uint32 Key = GetTypeHash(mPicks.Num()) + 7;
+	for (const FRMFillPick& P : mPicks)
+	{
+		Key = HashCombine(Key, HashCombine(GetTypeHash(P.Source.Get()), HashCombine(GetTypeHash(P.Key), GetTypeHash(P.Click))));
+	}
+	if (Key == mLoopKey)
+	{
+		return;
+	}
+	mLoopKey = Key;
 	mRing.Reset();
 	mValid = false;
 	mClosedByCurves = false;
@@ -334,104 +521,42 @@ void ARMFillHologram::BuildLoop()
 	{
 		return;
 	}
-	TArray<TArray<FVector>> Parts;
-	TArray<FVector> Cur = mPicks[0].Curve;
-	bool bFixed = false; // Cur's start is settled (it continues the part before it)
-	for (int32 I = 1; I < N; ++I)
+	// Best: usable, then the shortest closing line (the outline closes where the edges already meet), then the
+	// clicked sides (5 m per pick that keeps its other side).
+	const int32 Bits = FMath::Min(N, 6);
+	FLoop Best;
+	float BestScore = TNumericLimits<float>::Max();
+	for (uint32 Flip = 0; Flip < (1u << Bits); ++Flip)
 	{
-		TArray<FVector> Nxt = mPicks[I].Curve;
-		if (Cur.Num() < 2 || Nxt.Num() < 2)
+		FLoop L = MakeLoop(mPicks, Flip);
+		if (L.Ring.Num() < 3)
 		{
 			continue;
 		}
-		FParam PA, PB;
-		if (Crossing(Cur, Nxt, mPicks[I].Click, PA, PB))
+		const float Score = (L.bValid ? 0.f : 1.0e9f) + L.CloseLength + L.OffClick * 500.f;
+		if (Score < BestScore)
 		{
-			// Each keeps the part on the side where it was clicked; they meet at the crossing.
-			const FParam CA = Nearest(Cur, mPicks[I - 1].Click);
-			if (!bFixed && CA.Key() > PA.Key())
-			{
-				Cur = Sub(Cur, PA, End(Cur));
-				Algo::Reverse(Cur);
-			}
-			else
-			{
-				Cur = Sub(Cur, Start(), PA);
-			}
-			const FParam CB = Nearest(Nxt, mPicks[I].Click);
-			if (CB.Key() >= PB.Key())
-			{
-				Nxt = Sub(Nxt, PB, End(Nxt));
-			}
-			else
-			{
-				Nxt = Sub(Nxt, Start(), PB);
-				Algo::Reverse(Nxt);
-			}
-		}
-		else
-		{
-			// No crossing: a straight line from Cur's end to the nearer end of Nxt.
-			if (!bFixed)
-			{
-				const float D0 = FMath::Min(FVector::Dist2D(Cur[0], Nxt[0]), FVector::Dist2D(Cur[0], Nxt.Last()));
-				const float D1 = FMath::Min(FVector::Dist2D(Cur.Last(), Nxt[0]), FVector::Dist2D(Cur.Last(), Nxt.Last()));
-				if (D0 < D1)
-				{
-					Algo::Reverse(Cur);
-				}
-			}
-			if (FVector::Dist2D(Nxt.Last(), Cur.Last()) < FVector::Dist2D(Nxt[0], Cur.Last()))
-			{
-				Algo::Reverse(Nxt);
-			}
-		}
-		Parts.Add(MoveTemp(Cur));
-		Cur = MoveTemp(Nxt);
-		bFixed = true;
-	}
-	if (Parts.Num() > 0 && Cur.Num() >= 2 && Parts[0].Num() >= 2)
-	{
-		// The last edge crossing the first closes the loop by itself.
-		FParam PL, PF;
-		if (Crossing(Cur, Parts[0], Cur.Last(), PL, PF))
-		{
-			Cur = Sub(Cur, Start(), PL);
-			Parts[0] = Sub(Parts[0], PF, End(Parts[0]));
-			mClosedByCurves = true;
+			BestScore = Score;
+			Best = MoveTemp(L);
 		}
 	}
-	Parts.Add(MoveTemp(Cur));
-
-	// One outline, points at least 50 cm apart.
-	for (const TArray<FVector>& P : Parts)
+	mRing = MoveTemp(Best.Ring);
+	mClosedByCurves = Best.bClosedByCurves;
+	mValid = Best.bValid && !RingCrossesItself(mRing); // the full outline too
+	if (mRing.Num() >= 3)
 	{
-		for (const FVector& V : P)
-		{
-			if (mRing.Num() == 0 || FVector::Dist2D(V, mRing.Last()) > 50.f)
-			{
-				mRing.Add(V);
-			}
-		}
+		mCloseA = mRing.Last();
+		mCloseB = mRing[0];
 	}
-	if (mRing.Num() >= 2 && FVector::Dist2D(mRing[0], mRing.Last()) < 50.f)
-	{
-		mRing.Pop();
-		mClosedByCurves = true;
-	}
-	if (mRing.Num() < 3)
-	{
-		return;
-	}
-	mCloseA = mRing.Last();
-	mCloseB = mRing[0];
-	mValid = !RingCrossesItself(mRing) && Area2D(mRing) >= MinArea;
 }
 
 void ARMFillHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
 	const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
-	mPicks.RemoveAll([](const FRMFillPick& P) { return !P.Source.IsValid(); });
+	if (mPicks.RemoveAll([](const FRMFillPick& P) { return !P.Source.IsValid(); }) > 0)
+	{
+		mLoopKey = 0;
+	}
 	BuildLoop();
 
 	// Aiming at the closing line (shown unless it crosses the outline) comes first.
@@ -654,6 +779,7 @@ AActor* ARMFillHologram::Construct(TArray<AActor*>& out_children, FNetConstructi
 		// Built: start over.
 		mPicks.Reset();
 		mRing.Reset();
+		mLoopKey = 0;
 		mValid = false;
 		mHasHover = false;
 		mAimClosing = false;

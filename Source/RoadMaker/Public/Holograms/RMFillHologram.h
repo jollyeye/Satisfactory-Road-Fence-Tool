@@ -68,6 +68,7 @@ protected:
 	bool mValid = false;
 	FVector mCloseA = FVector::ZeroVector, mCloseB = FVector::ZeroVector;
 	uint32 mPreviewKey = 0;
+	uint32 mLoopKey = 0;
 
 	/** Sent with the build click: the outline around the hologram's location, thickness, look. */
 	UPROPERTY(Replicated, CustomSerialization)
