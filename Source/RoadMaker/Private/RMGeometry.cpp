@@ -47,9 +47,10 @@ void FRMMesh::AddTriangle(int32 A, int32 B, int32 C, const FVector& DesiredNorma
 	Triangles.Add(bSwap ? B : C);
 }
 
-void FRMMesh::WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period)
+void FRMMesh::WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period, bool bAlongY, bool bKeepInUV3Y)
 {
-	if (Period <= 0.f || MarkUV1.Num() != Vertices.Num() || FirstVertex < 0 || FirstVertex >= Vertices.Num())
+	if (Period <= 0.f || MarkUV1.Num() != Vertices.Num() || FirstVertex < 0 || FirstVertex >= Vertices.Num()
+		|| (bKeepInUV3Y && MarkUV3.Num() != Vertices.Num()))
 	{
 		return;
 	}
@@ -97,7 +98,7 @@ void FRMMesh::WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period)
 			const int32 Old = Triangles[T + K] - FirstVertex;
 			if (OldM1.IsValidIndex(Old))
 			{
-				MinU = FMath::Min(MinU, OldM1[Old].X);
+				MinU = FMath::Min(MinU, bAlongY ? OldM1[Old].Y : OldM1[Old].X);
 			}
 		}
 		const int32 Periods = MinU < TNumericLimits<float>::Max() ? FMath::FloorToInt(MinU / Period) : 0;
@@ -118,14 +119,15 @@ void FRMMesh::WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period)
 			Normals.Add(OldN.IsValidIndex(Old) ? OldN[Old] : FVector::UpVector);
 			UVs.Add(OldUV.IsValidIndex(Old) ? OldUV[Old] : FVector2D::ZeroVector);
 			Tangents.Add(OldT.IsValidIndex(Old) ? OldT[Old] : FProcMeshTangent());
-			MarkUV1.Add(FVector2D(OldM1[Old].X - Periods * Period, OldM1[Old].Y));
+			const float Off = Periods * Period;
+			MarkUV1.Add(bAlongY ? FVector2D(OldM1[Old].X, OldM1[Old].Y - Off) : FVector2D(OldM1[Old].X - Off, OldM1[Old].Y));
 			if (bM2)
 			{
 				MarkUV2.Add(OldM2[Old]);
 			}
 			if (bM3)
 			{
-				MarkUV3.Add(OldM3[Old]);
+				MarkUV3.Add(bKeepInUV3Y ? FVector2D(OldM3[Old].X, OldM3[Old].Y + Off) : OldM3[Old]);
 			}
 			Made.Add(Key, New);
 			Triangles[T + K] = New;
@@ -1078,6 +1080,7 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 
 	// Asphalt top surface: one strip, two vertices per frame (left edge, right edge).
 	const int32 TopBase = Top.Vertices.Num();
+	const int32 TopFirstTriangle = Top.Triangles.Num();
 	ExtrudeProfile(Frames, { FVector2D(-H, 0.f), FVector2D(H, 0.f) }, false, Centroid, UVScale, Top);
 
 	// Marking data in metres for the asphalt material.
@@ -1098,6 +1101,10 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 			Top.MarkUV3[V] = Style;
 		}
 	}
+	// Long roads: "metres along" kept under ~4 m plus a triangle's length (half-float UVs turned the cyberpunk
+	// circuit's rings into ovals past ~500 m); the whole metres taken off ride in UV3.y and the road
+	// materials add them back, so every pattern (lines, blocks, circuit, asphalt) stays exactly as it was.
+	Top.WrapUV1X(TopBase, TopFirstTriangle, 4.f, true, true);
 
 	// Concrete: right side, bottom, left side.
 	ExtrudeProfile(Frames, { FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height), FVector2D(-H, 0.f) },

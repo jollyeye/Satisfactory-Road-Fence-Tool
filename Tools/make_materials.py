@@ -177,6 +177,22 @@ return normalize(lerp(n, normalize(N), Flat));
 NORMAL_STRENGTH = 2.5
 
 
+# Long roads keep UV1.y (metres along) small and carry the whole metres taken off in UV3.y, above the
+# flags (0..3): the full metres along, at full precision in the shader (FRMMesh::WrapUV1X).
+FULL_UV1_HLSL = r"""
+float k = round(UV3.y);
+return float2(UV1.x, UV1.y + (k - fmod(k, 4.0)));
+"""
+
+
+def full_uv1(mat, x, y):
+    """UV1 of a road top with its full metres along (see FULL_UV1_HLSL)."""
+    f = custom(mat, FULL_UV1_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV3"], x + 150, y, "FullUV1")
+    link(node(mat, unreal.MaterialExpressionTextureCoordinate, x - 150, y, coordinate_index=1), "", f, "UV1")
+    link(node(mat, unreal.MaterialExpressionTextureCoordinate, x - 150, y + 80, coordinate_index=3), "", f, "UV3")
+    return f
+
+
 def road_inputs(mat, node_, road, x, y):
     """RUV / RW inputs of the atlas nodes: the road's UV1 / UV2 nodes, or zeros (world projection)."""
     if road:
@@ -284,7 +300,7 @@ MARKINGS_HLSL = r"""
 float u = UV1.x; float v = UV1.y;
 float W = UV2.x; float e = UV2.y;
 float N = round(UV3.x);
-float flags = round(UV3.y);              // 1 = side lines, 2 = continuous dividers
+float flags = fmod(round(UV3.y), 4.0);  // 1 = side lines, 2 = continuous dividers (+ metres along kept here, x4)
 float sides = fmod(flags, 2.0);
 float continuous = flags > 1.5 ? 1.0 : 0.0;
 if (N < 0.5 || W < 0.5) return float2(0, 0);
@@ -316,7 +332,7 @@ return float2(saturate(mid), saturate(side));
 asphalt = new_material("M_RoadAsphalt")
 tex_bc = load_tex(ASPHALT_BC)
 tex_n = load_tex(ASPHALT_N)
-uv1 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+uv1 = full_uv1(asphalt, -1300, 600)
 uv2 = node(asphalt, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 # Roads: the asphalt follows the curve (UV1 metres across / along); intersections (no UV2 width)
 # keep the world projection.
@@ -802,7 +818,7 @@ def cpd_param(mat, name, index, default, x, y):
 
 def lane_masks(mat, x, y):
     """(mid, side) lane-marking masks from the mesh UVs, same as the asphalt."""
-    u1 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y, coordinate_index=1)
+    u1 = full_uv1(mat, x - 300, y)
     u2 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 100, coordinate_index=2)
     u3 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 200, coordinate_index=3)
     m = custom(mat, MARKINGS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "UV3"], x + 300, y, "LaneMarkings")
@@ -958,7 +974,7 @@ def lines_on(mat, base, mid, side, primary, secondary, x, y):
 
 # Concrete blocks.
 pavers = new_material("M_RoadPavers")
-p_uv1 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+p_uv1 = full_uv1(pavers, -1300, 600)
 p_uv2 = node(pavers, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 p_wp = node(pavers, unreal.MaterialExpressionWorldPosition, -1100, 800)
 pv = custom(pavers, PAVERS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["UV1", "UV2", "WP"], -800, 650, "Pavers")
@@ -1030,7 +1046,7 @@ log("Concrete pavers")
 
 # Cyberpunk top: matte plastic in the primary colour, circuit grooves, glowing secondary lane lines.
 cyber = new_material("M_RoadCyber")
-c_uv1 = node(cyber, unreal.MaterialExpressionTextureCoordinate, -1100, 600, coordinate_index=1)
+c_uv1 = full_uv1(cyber, -1300, 600)
 c_uv2 = node(cyber, unreal.MaterialExpressionTextureCoordinate, -1100, 700, coordinate_index=2)
 c_wp = node(cyber, unreal.MaterialExpressionWorldPosition, -1100, 800)
 cc = custom(cyber, CIRCUIT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "UV2", "WP"], -800, 650, "Circuit")

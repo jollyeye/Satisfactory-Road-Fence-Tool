@@ -509,6 +509,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 		{
 			Panel.MarkUV1[I] = FVector2D(Panel.UVs[I].Y * 2.f, 0.f);
 		}
+		Panel.WrapUV1X(0, 0, 6.f * 1.41421356f * 0.117f); // long fences: see BuildGridFence
 		const TArray<FVector2D> Bar = { FVector2D(-6.f, Height - 6.f), FVector2D(0.f, Height - 6.f), FVector2D(0.f, Height + 2.f), FVector2D(-6.f, Height + 2.f) };
 		RMGeometry::ExtrudeProfile(Frames, Bar, true, FVector2D(-3.f, Height - 2.f), 400.f, Main);
 		RMGeometry::MapToPoleChrome(Main);

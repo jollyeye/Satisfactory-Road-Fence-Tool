@@ -135,8 +135,11 @@ struct ROADMAKER_API FRMMesh
 	 * triangle from FirstTriangle on (an index into Triangles) gets its u counted from a whole number of
 	 * Periods below its smallest u (vertices re-made where needed, shared within a triangle strip piece);
 	 * the material's pattern must repeat every Period in u. Vertices from FirstVertex on are rebuilt.
+	 * bAlongY: wraps MarkUV1.y instead. bKeepInUV3Y: the metres taken off are added to MarkUV3.y (whole
+	 * metres, the same on a triangle's three vertices, so exact), for a pattern that never repeats: the
+	 * road materials add them back (UV3.y = flags 0..3 + metres taken off, a multiple of 4).
 	 */
-	void WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period);
+	void WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period, bool bAlongY = false, bool bKeepInUV3Y = false);
 
 	/** Writes this buffer into a section of a procedural mesh component. */
 	void ApplyToSection(class UProceduralMeshComponent* Comp, int32 Section, bool bCollision, const TArray<FLinearColor>* Colors = nullptr) const;
