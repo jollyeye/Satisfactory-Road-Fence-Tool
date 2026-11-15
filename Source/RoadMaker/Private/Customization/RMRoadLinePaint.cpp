@@ -1,4 +1,5 @@
 #include "Customization/RMRoadLinePaint.h"
+#include "Customization/RMRoadLookPaint.h"
 #include "RoadMakerModule.h"
 #include "Customization/RMRoadLineDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
