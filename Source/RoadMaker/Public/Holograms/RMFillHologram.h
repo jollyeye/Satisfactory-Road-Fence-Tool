@@ -1,7 +1,6 @@
-// Road Fill tool: click road / walking path edges and intersection curbs around an area. Each picked edge joins the one
-// before: cut where they cross, else a straight line between them. A yellow line closes the loop from the last edge
-// back to the first (shown unless it would cross the outline): click it to build. A loop the edges close by themselves
-// builds on the next click away from the edges. Click a picked edge again to drop it. Overlay lines are 4 px wide.
+// Gap Fill tool: click road / walking path edges and intersection curbs around an area, in any order. They are put in
+// their order around the area, cut where they cross, else joined by straight lines; a yellow line closes the loop where
+// the edges do not meet. Click inside a valid shape to build it. Click a picked edge again to drop it. 4 px overlay.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -48,7 +47,8 @@ protected:
 	void RebuildOverlay();
 	void RebuildPreview();
 	void UpdateLook();
-	bool CanBuildNow() const { return mValid && (mClosedByCurves || mAimClosing); }
+	/** mAimClosing: aiming inside the shape (not at an edge): the click builds. */
+	bool CanBuildNow() const { return mValid && mAimClosing; }
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mPreviewMesh;

@@ -252,7 +252,7 @@ class ROADMAKER_API URMCD_FillPickEdges : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_FillPickEdges() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FillPickEdges", "Click road edges around the area, then click the yellow line to close it"); }
+	URMCD_FillPickEdges() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FillPickEdges", "Click road edges around the area, then click inside it to build"); }
 };
 
 UCLASS()

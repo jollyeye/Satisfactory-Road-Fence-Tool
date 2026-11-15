@@ -1,4 +1,4 @@
-// Road Fill (1.4.0): a slab filling the area between road edges, at the height of the roads around it. Made with the
+// Gap Fill (1.4.0, asset Build_RoadFill): a slab filling the area between road edges, at the height of the roads around it. Made with the
 // fill tool (ARMFillHologram): road / walking path edges and intersection curbs picked around an area, joined where
 // they cross or by straight lines. Only the outline is saved; the mesh is rebuilt from it (like an intersection).
 #pragma once

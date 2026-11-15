@@ -19,7 +19,6 @@
 namespace RMFill
 {
 	constexpr float OverlayPixels = 4.f;
-	constexpr float CloseAimRadius = 150.f; // cm from the closing line counts as aiming at it
 	constexpr float MinArea = 40000.f;      // cm^2 (2 x 2 m)
 
 	struct FParam
@@ -127,6 +126,19 @@ namespace RMFill
 			}
 		}
 		return bFound;
+	}
+
+	bool InsideRing2D(const TArray<FVector>& R, const FVector& P)
+	{
+		bool bIn = false;
+		for (int32 I = 0, J = R.Num() - 1; I < R.Num(); J = I++)
+		{
+			if ((R[I].Y > P.Y) != (R[J].Y > P.Y) && P.X < (R[J].X - R[I].X) * (P.Y - R[I].Y) / (R[J].Y - R[I].Y) + R[I].X)
+			{
+				bIn = !bIn;
+			}
+		}
+		return bIn;
 	}
 
 	bool RingCrossesItself(const TArray<FVector>& R)
@@ -671,15 +683,9 @@ void ARMFillHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 	}
 	BuildLoop();
 
-	// Aiming at the closing line (shown unless it crosses the outline) comes first.
-	mAimClosing = false;
-	if (mValid && !mClosedByCurves)
-	{
-		float T;
-		const FVector C = RMFill::ClosestOnSeg2D(mCloseA, mCloseB, Hit.Location, T);
-		mAimClosing = FVector::Dist2D(C, Hit.Location) < RMFill::CloseAimRadius;
-	}
-	mHasHover = !mAimClosing && FindAimedEdge(Hit, mHover);
+	// An edge under the aim is picked (or dropped); anywhere else inside a valid shape builds it.
+	mHasHover = FindAimedEdge(Hit, mHover);
+	mAimClosing = !mHasHover && mValid && RMFill::InsideRing2D(mRing, Hit.Location);
 
 	// The hologram sits in the middle of the outline (the fill is built around it).
 	if (mValid)
@@ -721,10 +727,6 @@ bool ARMFillHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		return false;
 	}
 	mLastClickTime = Now;
-	if (mAimClosing && mValid)
-	{
-		return true; // the closing line: build
-	}
 	if (mHasHover)
 	{
 		const int32 Index = mPicks.IndexOfByPredicate([this](const FRMFillPick& P) { return P.Source == mHover.Source && P.Key == mHover.Key; });
@@ -739,7 +741,7 @@ bool ARMFillHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		mPreviewKey = 0;
 		return false;
 	}
-	return mClosedByCurves && mValid; // a loop the edges closed: build on a click away from the edges
+	return mAimClosing && mValid; // inside the shape: build
 }
 
 void ARMFillHologram::CheckValidPlacement()
@@ -853,7 +855,7 @@ void ARMFillHologram::RebuildOverlay()
 		}
 		else if (mValid)
 		{
-			B.Line(mCloseA, mCloseB, mAimClosing ? YellowAimed : Yellow); // click it to build
+			B.Line(mCloseA, mCloseB, mAimClosing ? YellowAimed : Yellow); // the straight side that closes the shape
 		}
 	}
 	else if (mPicks.Num() > 0)
