@@ -2325,3 +2325,92 @@ void RMGeometry::BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face
 	}
 	(void)Height;
 }
+
+bool RMGeometry::BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing)
+{
+	if (Ring.Num() < 3)
+	{
+		return false;
+	}
+	const float S = 1.f / FMath::Max(UVScale, 1.f);
+	TArray<int32> Tris;
+	if (!TriangulatePolygon2D(Ring, Tris) || Tris.Num() < 3)
+	{
+		return false;
+	}
+	// Top: smooth heights inside (as an intersection's), else the plain outline triangulation.
+	{
+		TArray<FVector> TopPoints;
+		TArray<int32> TopTris;
+		if (!IsectSmoothTop(Ring, GridSpacing, TopPoints, TopTris))
+		{
+			TopPoints = Ring;
+			TopTris = Tris;
+		}
+		TArray<FVector> Normals;
+		Normals.Init(FVector::ZeroVector, TopPoints.Num());
+		for (int32 T = 0; T + 2 < TopTris.Num(); T += 3)
+		{
+			const FVector& A = TopPoints[TopTris[T]];
+			const FVector& B = TopPoints[TopTris[T + 1]];
+			const FVector& C = TopPoints[TopTris[T + 2]];
+			FVector FaceN = FVector::CrossProduct(B - A, C - A);
+			if (FaceN.Z < 0.f)
+			{
+				FaceN = -FaceN;
+			}
+			for (int32 E = 0; E < 3; ++E)
+			{
+				Normals[TopTris[T + E]] += FaceN;
+			}
+		}
+		const int32 Base = Top.Vertices.Num();
+		for (int32 I = 0; I < TopPoints.Num(); ++I)
+		{
+			const FVector N = Normals[I].IsNearlyZero() ? FVector::UpVector : Normals[I].GetSafeNormal();
+			Top.AddVertex(TopPoints[I], N, FVector2D(TopPoints[I].X, TopPoints[I].Y) * S, FVector::ForwardVector);
+		}
+		for (int32 T = 0; T + 2 < TopTris.Num(); T += 3)
+		{
+			Top.AddTriangle(Base + TopTris[T], Base + TopTris[T + 1], Base + TopTris[T + 2], FVector::UpVector);
+		}
+	}
+	// Bottom.
+	{
+		const FVector Down(0.f, 0.f, -Height);
+		const int32 Base = Body.Vertices.Num();
+		for (const FVector& P : Ring)
+		{
+			Body.AddVertex(P + Down, FVector::DownVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
+		}
+		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
+		{
+			Body.AddTriangle(Base + Tris[T], Base + Tris[T + 1], Base + Tris[T + 2], FVector::DownVector);
+		}
+	}
+	// Sides, facing out (from the outline's winding).
+	float RingArea = 0.f;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		RingArea += Cross2D(Ring[K], Ring[(K + 1) % Ring.Num()]);
+	}
+	const float OutSign = RingArea >= 0.f ? 1.f : -1.f;
+	float U = 0.f;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		const FVector A = Ring[K];
+		const FVector B = Ring[(K + 1) % Ring.Num()];
+		const float EdgeLen = FVector::Dist(A, B);
+		if (EdgeLen > 0.5f)
+		{
+			const FVector Edge = B - A;
+			const FVector N = (FVector(Edge.Y, -Edge.X, 0.f) * OutSign).GetSafeNormal();
+			const FVector Down(0.f, 0.f, -Height);
+			const float U1 = U + EdgeLen * S;
+			Body.AddQuad(A, B, B + Down, A + Down, N,
+				FVector2D(U, 0.f), FVector2D(U1, 0.f), FVector2D(U1, Height * S), FVector2D(U, Height * S));
+		}
+		U += EdgeLen * S;
+	}
+	return true;
+}

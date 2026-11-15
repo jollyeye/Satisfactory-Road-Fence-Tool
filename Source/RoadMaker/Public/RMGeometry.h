@@ -300,4 +300,11 @@ namespace RMGeometry
 	 * so the line lies on the slab even where the roads joined are at different heights.
 	 */
 	ROADMAKER_API void BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, const FRMMesh& Surface, FRMMesh& Out);
+
+	/**
+	 * A slab under any closed outline (Ring, the top edge, last point joins the first; concave is fine): the top with
+	 * points every GridSpacing inside, their heights smoothed between the outline's (like an intersection top), the
+	 * bottom Height below the outline, and vertical sides. False if the outline crosses itself or is too small.
+	 */
+	ROADMAKER_API bool BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing = 250.f);
 }

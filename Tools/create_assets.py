@@ -205,6 +205,8 @@ RMBuildableRoad = native_class("RMBuildableRoad")
 RMBuildableFence = native_class("RMBuildableFence")
 RMBuildableSignWall = native_class("RMBuildableSignWall")
 RMBuildableIntersection = native_class("RMBuildableIntersection")
+RMBuildableFill = native_class("RMBuildableFill")
+RMFillHologram = native_class("RMFillHologram")
 RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
 RMRoadMergeHologram = native_class("RMRoadMergeHologram")
@@ -329,6 +331,9 @@ finish(holo_fence)
 
 holo_x = make_bp("Holograms", "Holo_Intersection", RMIntersectionHologram)
 finish(holo_x)
+
+holo_fill = make_bp("Holograms", "Holo_RoadFill", RMFillHologram)
+finish(holo_fill)
 
 bm_cut_fences = make_bp("Holograms", "BM_CutWithFences", BuildModeDescriptor)
 setp(cdo(bm_cut_fences), text("Cut also fences"), "m_display_name", "mDisplayName")
@@ -528,9 +533,11 @@ TOOLS = [
      {"m_width_in_foundations": 1, "m_width_cm": 400.0, "m_is_walking_path": True, "m_default_look": 1, "m_edge_line_inset": 30.0}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("RoadFill", RMBuildableFill, holo_fill, "Road Fill", "Fills the area between roads with road surface, at their height. Click road, walking path and intersection edges around the area: each joins the one before, cut where they cross or joined by a straight line. The yellow line closes the loop back to the first edge: click it to build (when the edges close the loop by themselves, click away from them). Click a picked edge again to drop it. It takes the look of the first edge's road; the customizer's Material tab and paint change it. Free to build.",
+     {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
+MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5}
 
@@ -1033,7 +1040,7 @@ for wname, wcls in fence_wall_classes.items():
 if road_material_descs:
     setp(g, road_material_descs, "m_road_material_descs", "mRoadMaterialDescs")
     rmap = {}
-    for n in ("Road_1x", "Road_2x", "Road_3x", "Road_4x", "RoadIntersection", "WalkingPath_2m", "WalkingPath_4m"):
+    for n in ("Road_1x", "Road_2x", "Road_3x", "Road_4x", "RoadIntersection", "RoadFill", "WalkingPath_2m", "WalkingPath_4m"):
         if n in tool_classes and n in tool_recipe_classes:
             rmap[tool_classes[n]] = tool_recipe_classes[n]
     try:

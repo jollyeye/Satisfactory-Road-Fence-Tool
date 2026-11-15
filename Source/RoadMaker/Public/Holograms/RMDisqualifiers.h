@@ -246,3 +246,19 @@ class ROADMAKER_API URMCD_LongCurveTooLong : public UFGConstructDisqualifier
 public:
 	URMCD_LongCurveTooLong() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "LongCurveTooLong", "Road is longer than 1 km"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_FillPickEdges : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FillPickEdges() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FillPickEdges", "Click road edges around the area, then click the yellow line to close it"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_FillCrosses : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_FillCrosses() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FillCrosses", "The outline crosses itself"); }
+};
