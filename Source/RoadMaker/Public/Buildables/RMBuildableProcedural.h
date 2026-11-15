@@ -24,6 +24,14 @@ public:
 
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void PostInitProperties() override;
+
+	/**
+	 * Blueprint hologram (holding a blueprint): shows this piece's detailed mesh. The game's blueprint preview copies
+	 * only a building's static meshes, so our procedural ones were missing; registered for every Road Maker class
+	 * (AFGBlueprintHologram::RegisterCustomBuildableVisualization) when the class is loaded.
+	 */
+	static void ShowInBlueprintHologram(class AFGBlueprintHologram* Hologram, AFGBuildable* Buildable, USceneComponent* Root);
 
 	// IFGSaveInterface (implemented by AFGBuildable)
 	virtual void PostLoadGame_Implementation(int32 saveVersion, int32 gameVersion) override;

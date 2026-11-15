@@ -1,4 +1,6 @@
 #include "Buildables/RMBuildableProcedural.h"
+#include "Hologram/FGBlueprintHologram.h"
+#include "Holograms/RMHologramLook.h"
 #include "RMSound.h"
 #include "RoadMakerModule.h"
 #include "FGFactoryColoringTypes.h"
@@ -48,6 +50,68 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 
 	// No game build effect (it would hide the piece for the whole animation and show nothing); see StartRiseAnimation.
 	mSkipBuildEffect = true;
+}
+
+void ARMBuildableProcedural::PostInitProperties()
+{
+	Super::PostInitProperties();
+#if !WITH_EDITOR
+	if (HasAnyFlags(RF_ClassDefaultObject))
+	{
+		AFGBlueprintHologram::RegisterCustomBuildableVisualization(GetClass(),
+			AFGBlueprintHologram::FCreateBuildableVisualizationDelegate::CreateStatic(&ARMBuildableProcedural::ShowInBlueprintHologram));
+	}
+#endif
+}
+
+void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Hologram, AFGBuildable* Buildable, USceneComponent* Root)
+{
+	ARMBuildableProcedural* Piece = Cast<ARMBuildableProcedural>(Buildable);
+	if (!Hologram || !Piece || !Root || !Piece->mMesh)
+	{
+		return;
+	}
+	// The piece lives in the blueprint's own world, where it may never have begun play: build its mesh there first.
+	if (Piece->mMesh->GetNumSections() == 0)
+	{
+		Piece->RebuildMesh();
+	}
+	const FTransform ActorT = Piece->GetActorTransform();
+	TArray<UProceduralMeshComponent*> Sources;
+	for (int32 Chunk = 0; Chunk < Piece->GetBuiltChunkCount(); ++Chunk)
+	{
+		if (UProceduralMeshComponent* Src = Piece->GetChunkMesh(Chunk, 0))
+		{
+			Sources.AddUnique(Src);
+		}
+	}
+	int32 Copied = 0;
+	for (UProceduralMeshComponent* Src : Sources)
+	{
+		if (Src->GetNumSections() == 0)
+		{
+			continue;
+		}
+		UProceduralMeshComponent* Copy = NewObject<UProceduralMeshComponent>(Hologram);
+		Copy->SetupAttachment(Root);
+		Copy->SetRelativeTransform(Src->GetComponentTransform().GetRelativeTransform(ActorT));
+		Copy->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Copy->SetCastShadow(false);
+		for (int32 I = 0; I < Src->GetNumSections(); ++I)
+		{
+			if (FProcMeshSection* Section = Src->GetProcMeshSection(I))
+			{
+				Copy->SetProcMeshSection(I, *Section);
+				Copy->SetMaterial(I, RMHologramLook::HoloVersion(Src->GetMaterial(I)));
+			}
+		}
+		// The hologram's valid look (stencil 2), like our own holograms.
+		Copy->SetRenderCustomDepth(true);
+		Copy->SetCustomDepthStencilValue(2);
+		Copy->RegisterComponent();
+		++Copied;
+	}
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint hologram: %s shows %d mesh pieces"), *Piece->GetName(), Copied);
 }
 
 void ARMBuildableProcedural::BeginPlay()
