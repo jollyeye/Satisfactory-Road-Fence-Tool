@@ -7,6 +7,7 @@
 
 class APlayerController;
 class UFGBuildGunModeDescriptor;
+class UInputAction;
 
 namespace RMRoadLimits
 {
@@ -40,7 +41,7 @@ namespace RMRoadLimits
 	ROADMAKER_API void UpdateHintBar(APlayerController* PC, bool bShow);
 
 	/** The limits input action (IA_RM_ToggleLimits), or null. */
-	ROADMAKER_API class UInputAction* GetLimitsAction();
+	ROADMAKER_API UInputAction* GetLimitsAction();
 
 	ROADMAKER_API void LabelModes(const TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& Modes, APlayerController* PC);
 }
