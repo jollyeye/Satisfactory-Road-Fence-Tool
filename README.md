@@ -6,7 +6,7 @@ tools to cut, split and reshape roads, road fences and fence walls, a sign gantr
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
+Manager). Current version: **1.3.0**, for Satisfactory 1.2 with SML 3.12 (1.3.1 with fixes coming).
 
 ![An asphalt road with lane markings, a glowing cyberpunk road, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](docs/screenshots/intro-1.3.jpg)
 
@@ -16,7 +16,8 @@ Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 
 **Roads (build menu › Transport › Roads)**
 - Road 1, 2, 3 and 4 wide: two clicks, curves drawn as quadratic Bezier curves; build modes Default,
-  Straight and Smooth. Snap to road ends, intersection ends and foundation edges.
+  Straight, Smooth and Zoop. Snap to road ends, intersection ends and foundation edges.
+- Road limits toggle (Left Alt, rebindable): up to 1 km long, no turn or slope limits, for big sweeping curves.
 - Hold the snap key and aim at a built road (or an intersection curb) to build a road beside it in one click.
 - Road Intersection: pick up to 6 free road ends, they are joined with curved curbs.
 - Free to build; unlocks with the Road Maker milestone (Tier 1).
@@ -24,8 +25,9 @@ Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 **Customizer**
 - Road Lines tab: side lines on / off; 1 to 4 lanes, dashed or continuous (primary colour = middle
   lines, secondary = side lines).
-- Road Lines › Markings: **Lane Arrow** (6 arrows) and **Lane Number** (0 to 9). Aim at a lane, the
-  mouse wheel picks the variant, click paints. Sized to the lane, lying on the road surface, in the
+- Road Lines › Markings: **Lane Arrow** (6 arrows), **Lane Number** (0 to 9) and **Lane Vehicle** (the
+  game's Tractor, Truck, Explorer, Factory Cart and Cyberwagon icons). Aim at a lane, the mouse wheel
+  picks the variant, click paints, middle click picks a painted one again. Sized to the lane, lying on the road surface, in the
   road's line colours (glowing on cyberpunk roads); they move along when a road is reshaped.
 - Material tab › Roads: Asphalt, Concrete Blocks, Cyberpunk, switched in place.
 
@@ -33,15 +35,20 @@ Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 
 ![The Road Tools tab](docs/screenshots/road-tools.png)
 
-- Cut Road (optionally cutting its fences too), Split Road (lengthwise, in 8 m steps), Adjust
-  Curvature (grab a road end and reshape it), Cut Fence.
+- Cut Road (optionally cutting its fences too), Split Road (lengthwise, in 8 m steps), Join Road (two
+  roads end to end into one), Merge Road (two roads side by side into one wider road), Adjust
+  Curvature (grab a road end and reshape it), Cut Fence, Join Fence.
 
 **Fences, walls and signs**
-- Guard Rail, Cement Blocks, Metal Grid Fence: follow a road edge or intersection curb.
+- Guard Rail (H-beam material, paintable), Cement Blocks, Metal Grid Fence (woven chain-link): follow a
+  road edge or intersection curb.
 - Fence walls (Walls › Fence Walls): FICSIT, Concrete, Steel and Steel Mesh, 4 m tall, stackable,
   painted and switched like the game's walls.
 - Sign Gantry: the game's H-beams across a road, 8 to 24 m high; signs snap to it every 2 m.
 - Signs and wall attachments (wall mounts, wall holes, ladders...) snap to fence walls and the gantry.
+- Sign backgrounds: Chevrons Left and Chevrons Right in the game's sign editor.
+
+**Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu.
 
 **Snapping for game buildings**
 - One-click vehicle paths and railway tracks along a lane, and all connections through an
@@ -49,8 +56,10 @@ Manager). Current version: **1.2.1**, for Satisfactory 1.2 with SML 3.12.
 - Power poles and street lights snap to the fence lines; paths and tracks snap to road ends per lane;
   foundations, frames and ramps snap to road ends.
 
+**Build animations:** roads and fences are revealed along their length, with the game's build sounds.
+
 **Performance:** only a few numbers are saved per piece (meshes are rebuilt on load); distant pieces
-switch to simpler meshes.
+switch to simpler meshes; long roads and fences are drawn in sections of up to 100 m.
 
 The full player description and the changelogs are in [`Tools/Release/ficsit-page.md`](Tools/Release/ficsit-page.md).
 
