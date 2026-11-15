@@ -12,7 +12,7 @@
 ARMBuildableSignWall::ARMBuildableSignWall(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	mIsUseable = true;
+	// Useable (E): IsUseable_Implementation below (mIsUseable itself is private in the game's class).
 }
 
 void ARMBuildableSignWall::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

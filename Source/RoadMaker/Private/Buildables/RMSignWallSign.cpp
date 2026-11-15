@@ -51,9 +51,9 @@ void ARMSignWallSign::CopyGameSignDefaults()
 	// The sign's own settings: layouts (sign type), materials, draw size, world size, significance distance...
 	// Not what is saved per sign (the design) and not components.
 	int32 Copied = 0;
-	for (UClass* Owner : { AFGBuildableWidgetSign::StaticClass(), AFGBuildableSignBase::StaticClass() })
+	for (UClass* FromClass : { AFGBuildableWidgetSign::StaticClass(), AFGBuildableSignBase::StaticClass() })
 	{
-		for (TFieldIterator<FProperty> It(Owner, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+		for (TFieldIterator<FProperty> It(FromClass, EFieldIteratorFlags::ExcludeSuper); It; ++It)
 		{
 			FProperty* P = *It;
 			if (!P->HasAnyPropertyFlags(CPF_Edit) || P->HasAnyPropertyFlags(CPF_SaveGame | CPF_Transient | CPF_InstancedReference

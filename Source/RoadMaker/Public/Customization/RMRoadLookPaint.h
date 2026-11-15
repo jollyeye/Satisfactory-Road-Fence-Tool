@@ -2,6 +2,9 @@
 
 #include "CoreMinimal.h"
 
+class ARMBuildableProcedural;
+struct FRMMarkings;
+
 /**
  * Customizer Material tab > Roads (Asphalt / Concrete / Cyberpunk): with one of our road materials
  * selected, aiming at a road or intersection previews that look on it and firing switches it in place.
@@ -20,8 +23,8 @@ namespace RMRoadLookPaint
 namespace RMRoadSample
 {
 	/** The Sample key was pressed aiming at Piece: remembered for a few seconds. */
-	ROADMAKER_API void Note(const class ARMBuildableProcedural* Piece);
+	ROADMAKER_API void Note(const ARMBuildableProcedural* Piece);
 
 	/** Look and lines of a piece of exactly Class sampled in the last few seconds; taken once. */
-	ROADMAKER_API bool Take(const UClass* Class, uint8& OutLook, struct FRMMarkings& OutMarkings, bool& bOutHasMarkings);
+	ROADMAKER_API bool Take(const UClass* Class, uint8& OutLook, FRMMarkings& OutMarkings, bool& bOutHasMarkings);
 }
