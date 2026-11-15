@@ -10,6 +10,59 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "ProceduralMeshComponent.h"
+#include "FGSignTypes.h"
+#include "UObject/UnrealType.h"
+
+namespace
+{
+	/**
+	 * A sign's design (FPrefabSignData) read or written through the engine's reflection: the game does not let mods
+	 * call GetSignPrefabData / SetPrefabSignData directly (not exported), but both are UFUNCTIONs.
+	 */
+	bool RMSignData(AFGBuildableWidgetSign* Sign, FPrefabSignData& Data, bool bSet)
+	{
+		UFunction* Fn = Sign ? Sign->FindFunction(bSet ? FName(TEXT("SetPrefabSignData")) : FName(TEXT("GetSignPrefabData"))) : nullptr;
+		if (!Fn)
+		{
+			return false;
+		}
+		uint8* Parms = static_cast<uint8*>(FMemory_Alloca(FMath::Max<int32>(Fn->ParmsSize, 1)));
+		FMemory::Memzero(Parms, Fn->ParmsSize);
+		FStructProperty* DataProp = nullptr;
+		for (TFieldIterator<FProperty> It(Fn); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->InitializeValue_InContainer(Parms);
+			if (FStructProperty* SP = CastField<FStructProperty>(*It))
+			{
+				if (SP->Struct == FPrefabSignData::StaticStruct())
+				{
+					DataProp = SP;
+				}
+			}
+			else if (FBoolProperty* BP = CastField<FBoolProperty>(*It))
+			{
+				BP->SetPropertyValue_InContainer(Parms, false); // bFilterText: the design as it was
+			}
+		}
+		if (DataProp)
+		{
+			if (bSet)
+			{
+				DataProp->CopyCompleteValue(DataProp->ContainerPtrToValuePtr<void>(Parms), &Data);
+			}
+			Sign->ProcessEvent(Fn, Parms);
+			if (!bSet)
+			{
+				DataProp->CopyCompleteValue(&Data, DataProp->ContainerPtrToValuePtr<void>(Parms));
+			}
+		}
+		for (TFieldIterator<FProperty> It(Fn); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+		{
+			It->DestroyValue_InContainer(Parms);
+		}
+		return DataProp != nullptr;
+	}
+}
 
 ARMBuildableSignWall::ARMBuildableSignWall(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -80,8 +133,25 @@ void ARMBuildableSignWall::EnsureSign()
 	Sign->mExtraRange = Frames.Last().Dist * 0.5f;
 	mSign = Sign; // before it finishes: it sets up its design right away and tells the wall
 	Sign->FinishSpawning(At);
+	// Placed from a blueprint: the design saved on the wall.
+	if (mBlueprintHasDesign)
+	{
+		FPrefabSignData Data;
+		Data.PrefabLayout = TSoftClassPtr<UFGSignPrefabWidget>(FSoftObjectPath(mBlueprintLayout));
+		Data.TextElementData = mBlueprintTexts;
+		Data.IconElementData = mBlueprintIcons;
+		Data.ForegroundColor = mBlueprintForeground;
+		Data.BackgroundColor = mBlueprintBackground;
+		Data.AuxiliaryColor = mBlueprintAuxiliary;
+		Data.Emissive = mBlueprintEmissive;
+		Data.Glossiness = mBlueprintGlossiness;
+		Data.SignTypeDesc = mBlueprintSignType.IsEmpty() ? nullptr : TSubclassOf<UFGSignTypeDescriptor>(LoadClass<UFGSignTypeDescriptor>(nullptr, *mBlueprintSignType));
+		const bool bOk = RMSignData(Sign, Data, true);
+		ClearBlueprintDesign();
+		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took its design from the blueprint (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("failed"));
+	}
 	// A piece of a cut or a join: the design of the wall it came from.
-	if (mPendingDesign)
+	else if (mPendingDesign)
 	{
 		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, mPendingDesign, nullptr);
 		mPendingDesign = nullptr;
@@ -95,6 +165,58 @@ void ARMBuildableSignWall::EnsureSign()
 	}
 	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
 	OnSignDesignChanged();
+}
+
+void ARMBuildableSignWall::PreSerializedToBlueprint()
+{
+	Super::PreSerializedToBlueprint();
+	FPrefabSignData Data;
+	if (mSign && RMSignData(mSign, Data, false))
+	{
+		mBlueprintHasDesign = true;
+		mBlueprintLayout = Data.PrefabLayout.ToSoftObjectPath().ToString();
+		mBlueprintTexts = Data.TextElementData;
+		mBlueprintIcons = Data.IconElementData;
+		mBlueprintForeground = Data.ForegroundColor;
+		mBlueprintBackground = Data.BackgroundColor;
+		mBlueprintAuxiliary = Data.AuxiliaryColor;
+		mBlueprintEmissive = Data.Emissive;
+		mBlueprintGlossiness = Data.Glossiness;
+		mBlueprintSignType = Data.SignTypeDesc ? Data.SignTypeDesc->GetPathName() : FString();
+	}
+	// The blueprint gets no link to this wall's sign (a wall placed from it makes its own).
+	mSignWhileSerializing = mSign;
+	mSign = nullptr;
+}
+
+void ARMBuildableSignWall::PostSerializedToBlueprint()
+{
+	Super::PostSerializedToBlueprint();
+	ClearBlueprintDesign(); // only the blueprint keeps it
+	if (mSignWhileSerializing)
+	{
+		mSign = mSignWhileSerializing;
+		mSignWhileSerializing = nullptr;
+	}
+}
+
+void ARMBuildableSignWall::PostSerializedFromBlueprint(bool isBlueprintWorld)
+{
+	Super::PostSerializedFromBlueprint(isBlueprintWorld);
+	// Never another wall's sign (blueprints saved before 1.4.0 may still link one).
+	if (mSign && mSign->mWall && mSign->mWall != this)
+	{
+		mSign = nullptr;
+	}
+}
+
+void ARMBuildableSignWall::ClearBlueprintDesign()
+{
+	mBlueprintHasDesign = false;
+	mBlueprintLayout.Reset();
+	mBlueprintTexts.Reset();
+	mBlueprintIcons.Reset();
+	mBlueprintSignType.Reset();
 }
 
 void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const

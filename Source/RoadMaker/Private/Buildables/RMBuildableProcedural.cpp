@@ -1,5 +1,6 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "Hologram/FGBlueprintHologram.h"
+#include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "Holograms/RMHologramLook.h"
 #include "RMSound.h"
 #include "RoadMakerModule.h"
@@ -161,6 +162,20 @@ void ARMBuildableProcedural::BeginPlay()
 	mMesh->bUseAsyncCooking = bJustBuilt;
 	RebuildMesh();
 	mMesh->bUseAsyncCooking = true;
+	// Built inside a blueprint designer without its hologram telling the designer (lane markings painted with Road
+	// Lines, cut / joined / split pieces, made by our code): the designer would leave it out of the blueprint.
+	if (bJustBuilt && HasAuthority() && !GetBlueprintDesigner())
+	{
+		for (TActorIterator<AFGBuildableBlueprintDesigner> It(GetWorld()); It; ++It)
+		{
+			if (IsValid(*It) && It->IsLocationInsideDesigner(GetActorLocation()))
+			{
+				SetInsideBlueprintDesigner(*It);
+				It->OnBuildableConstructedInsideDesigner(this);
+				break;
+			}
+		}
+	}
 	if (bJustBuilt)
 	{
 		StartRiseAnimation();

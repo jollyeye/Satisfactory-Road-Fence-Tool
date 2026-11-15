@@ -57,7 +57,15 @@ protected:
 	/** Cut / Join: the new piece gets this wall's design (its sign is made a moment later, see EnsureSign). */
 	virtual void CopyCutSettingsTo(ARMBuildableSpline* New) const override;
 
+public:
+	// Blueprints: the design rides on the wall (see mBlueprintHasDesign).
+	virtual void PreSerializedToBlueprint() override;
+	virtual void PostSerializedToBlueprint() override;
+	virtual void PostSerializedFromBlueprint(bool isBlueprintWorld = false) override;
+protected:
+
 private:
+	void ClearBlueprintDesign();
 	/** Server: makes the hidden sign if this wall has none yet. */
 	void EnsureSign();
 	FTimerHandle mEnsureSignTimer;
@@ -65,6 +73,33 @@ private:
 	/** Server, a piece of a cut or join: the design its sign starts with (the old wall's copied settings). */
 	UPROPERTY(Transient)
 	class UFGFactoryClipboardSettings* mPendingDesign = nullptr;
+
+	/** While the wall is written into a blueprint: its sign, taken off mSign so the blueprint keeps no link to it. */
+	UPROPERTY(Transient)
+	ARMSignWallSign* mSignWhileSerializing = nullptr;
+
+	// The design, copied onto the wall while it is saved into a blueprint (the hidden sign is no building of the
+	// blueprint): the wall placed from the blueprint gives it to its new sign. Empty otherwise.
+	UPROPERTY(SaveGame)
+	bool mBlueprintHasDesign = false;
+	UPROPERTY(SaveGame)
+	FString mBlueprintLayout;
+	UPROPERTY(SaveGame)
+	TMap<FString, FString> mBlueprintTexts;
+	UPROPERTY(SaveGame)
+	TMap<FString, int32> mBlueprintIcons;
+	UPROPERTY(SaveGame)
+	FLinearColor mBlueprintForeground = FLinearColor::Black;
+	UPROPERTY(SaveGame)
+	FLinearColor mBlueprintBackground = FLinearColor::Black;
+	UPROPERTY(SaveGame)
+	FLinearColor mBlueprintAuxiliary = FLinearColor::Black;
+	UPROPERTY(SaveGame)
+	float mBlueprintEmissive = 0.f;
+	UPROPERTY(SaveGame)
+	float mBlueprintGlossiness = 0.f;
+	UPROPERTY(SaveGame)
+	FString mBlueprintSignType;
 
 	/** Material of the face: the sign's design material once it has one, else mFrontMaterial. */
 	UMaterialInterface* GetFrontMaterial() const;
