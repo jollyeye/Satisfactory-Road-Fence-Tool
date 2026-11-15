@@ -37,8 +37,11 @@ public:
 	UPROPERTY(SaveGame, Replicated)
 	float mExtraRange = 0.f;
 
-	/** What the game set up last for the design: its material instance and render target (may be null). */
-	UMaterialInstanceDynamic* GetSignMaterial() const { return mSignMaterial; }
+	/**
+	 * The design material the game shows right now (on the hidden plane; a paste can swap it without telling us), with
+	 * the real sign size set on it. Null before the game set one up.
+	 */
+	UMaterialInterface* GetSignMaterial();
 	UTextureRenderTarget2D* GetSignTexture() const { return mSignTexture; }
 
 	/** Size of the design in cm (the billboard's world dimensions), for the wall's repeat length. */

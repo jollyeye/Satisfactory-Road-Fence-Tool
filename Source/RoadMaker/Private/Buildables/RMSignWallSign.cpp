@@ -122,6 +122,25 @@ float ARMSignWallSign::GetSignificanceRange_Implementation() const
 	return mGainSignificanceDistance + mExtraRange;
 }
 
+UMaterialInterface* ARMSignWallSign::GetSignMaterial()
+{
+	UMaterialInterface* Current = mSignProxyPlane ? mSignProxyPlane->GetMaterial(0) : nullptr;
+	UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Current);
+	if (!Dynamic)
+	{
+		return mSignMaterial; // not set up yet (the plane's own default material)
+	}
+	if (Dynamic != mSignMaterial)
+	{
+		// A new design material (after a paste): the real sign size on it too, see SetupMaterialInstanceForProxyPlane.
+		const FVector2D Size = GetDesignSize();
+		Dynamic->SetScalarParameterValue(TEXT("SignWidth"), Size.X);
+		Dynamic->SetScalarParameterValue(TEXT("SignHeight"), Size.Y);
+		mSignMaterial = Dynamic;
+	}
+	return Dynamic;
+}
+
 FVector2D ARMSignWallSign::GetDesignSize() const
 {
 	return mWorldDimensions.X > 1.f && mWorldDimensions.Y > 1.f ? mWorldDimensions : FVector2D(800.f, 400.f);

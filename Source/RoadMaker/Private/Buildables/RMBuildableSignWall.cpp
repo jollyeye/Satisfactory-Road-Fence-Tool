@@ -30,6 +30,10 @@ void ARMBuildableSignWall::BeginPlay()
 		// A moment later: a wall loaded from a save gets its saved sign back first.
 		GetWorldTimerManager().SetTimer(mEnsureSignTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableSignWall::EnsureSign), 0.5f, false);
 	}
+	if (!IsRunningDedicatedServer())
+	{
+		GetWorldTimerManager().SetTimer(mDesignTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableSignWall::CheckDesignMaterial), 0.5f, true);
+	}
 	OnSignDesignChanged();
 }
 
@@ -86,6 +90,14 @@ float ARMBuildableSignWall::GetRepeatLength() const
 	return GetWallHeight() * Size.X / FMath::Max(Size.Y, 1.f);
 }
 
+void ARMBuildableSignWall::CheckDesignMaterial()
+{
+	if (mSign && GetFrontMaterial() != mShownFront.Get())
+	{
+		OnSignDesignChanged();
+	}
+}
+
 UMaterialInterface* ARMBuildableSignWall::GetFrontMaterial() const
 {
 	// The sign's own design material (the game's sign material with its background, glow and gloss), once it has one;
@@ -111,6 +123,7 @@ void ARMBuildableSignWall::OnSignDesignChanged()
 	{
 		return;
 	}
+	mShownFront = Front;
 	// Section 2 (the face) of every mesh piece, near and far.
 	ForEachMeshComponent([Front](UProceduralMeshComponent* Mesh)
 	{
@@ -197,10 +210,16 @@ TSubclassOf<UObject> ARMBuildableSignWall::GetClipboardMappingClass_Implementati
 
 UFGFactoryClipboardSettings* ARMBuildableSignWall::CopySettings_Implementation()
 {
-	return mSign ? IFGFactoryClipboardInterface::Execute_CopySettings(mSign) : nullptr;
+	UFGFactoryClipboardSettings* Settings = mSign ? IFGFactoryClipboardInterface::Execute_CopySettings(mSign) : nullptr;
+	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: copy from %s: settings %s, clipboard class %s"), *GetName(), *GetNameSafe(Settings),
+		*GetNameSafe(GetClipboardMappingClass_Implementation().Get()));
+	return Settings;
 }
 
 bool ARMBuildableSignWall::PasteSettings_Implementation(UFGFactoryClipboardSettings* settings, AFGPlayerController* player)
 {
-	return mSign && IFGFactoryClipboardInterface::Execute_PasteSettings(mSign, settings, player);
+	const bool bOk = mSign && IFGFactoryClipboardInterface::Execute_PasteSettings(mSign, settings, player);
+	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: paste on %s: settings %s -> %s"), *GetName(), *GetNameSafe(settings), bOk ? TEXT("ok") : TEXT("refused"));
+	OnSignDesignChanged();
+	return bOk;
 }

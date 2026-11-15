@@ -62,6 +62,11 @@ private:
 	/** Material of the face: the sign's design material once it has one, else mFrontMaterial. */
 	UMaterialInterface* GetFrontMaterial() const;
 
+	/** Twice a second (not on a dedicated server): the face follows the sign's design material if the game swapped it. */
+	void CheckDesignMaterial();
+	FTimerHandle mDesignTimer;
+	TWeakObjectPtr<UMaterialInterface> mShownFront;
+
 	/** Design width in cm along the wall (height x the design's aspect). */
 	float GetRepeatLength() const;
 };
