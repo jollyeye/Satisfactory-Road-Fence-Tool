@@ -103,6 +103,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 **Added**
 - Walking paths, 2 m and 4 m wide (thanks to the idea in issue #1): build them right beside a road with the snap key to widen it (one on each side of a 1-wide road makes it 1.5 foundations wide), and fences snap to their outer edge. Concrete blocks by default; no vehicle paths, tracks or lane markings on them. A 4 m path splits into two 2 m paths and two 2 m paths merge into a 4 m one. They snap to walking path ends and to road ends every 2 m across.
 
+- Road fences (guard rail, cement blocks, grid fence) and fence walls snapped to a road edge or an intersection curb turn round with the scroll wheel, to face away from the road, like the street lights.
+
 **Fixed**
 - Middle click on a road or walking path also copies its look (Concrete Blocks, Asphalt, Cyberpunk) and its lines, not only the paint.
 

@@ -132,8 +132,9 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	RMGeometry::OffsetCurve(Frames, Offset, 400.f, Edge);
 
 	// The fence spline runs the same way as the road, so the road centre is on the fence's -Side side.
-	mInwardSign = -Side;
+	mInwardSign = mFacingFlipped ? Side : -Side; // scrolled: the same edge, facing away from the road
 	mOnRoadEdge = true;
+	mOnRoadOrCurb = true;
 	SetWorldPoints(Edge);
 	return true;
 }
@@ -198,7 +199,15 @@ bool ARMFenceHologram::SnapToFoundationGrid(const FHitResult& hitResult)
 
 void ARMFenceHologram::SetHologramLocationAndRotation(const FHitResult& hitResult)
 {
+	// A scroll step while snapped to a road edge / curb (last frame) turns the fence round.
+	const int32 Scroll = GetScrollRotateValue();
+	if (mLastScroll != TNumericLimits<int32>::Min() && Scroll != mLastScroll && mOnRoadOrCurb)
+	{
+		mFacingFlipped = !mFacingFlipped;
+	}
+	mLastScroll = Scroll;
 	mOnRoadEdge = false;
+	mOnRoadOrCurb = false;
 	mInwardSign = 1.f;
 	mReplaceTarget = nullptr;
 	Super::SetHologramLocationAndRotation(hitResult);
@@ -551,8 +560,9 @@ bool ARMFenceHologram::SnapToIntersectionCurb(ARMBuildableIntersection* Intersec
 
 	TArray<FRMSplinePoint> Points;
 	RMGeometry::SplineThroughPoints(Inside, Points);
-	mInwardSign = 1.f;
+	mInwardSign = mFacingFlipped ? -1.f : 1.f; // scrolled: facing away from the intersection
 	mOnRoadEdge = true;
+	mOnRoadOrCurb = true;
 	SetWorldPoints(Points);
 	return true;
 }

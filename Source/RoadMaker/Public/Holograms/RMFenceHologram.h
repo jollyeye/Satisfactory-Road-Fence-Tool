@@ -87,4 +87,12 @@ protected:
 	/** Side of the fence the road is on (see ARMBuildableFence::SetInwardSign). */
 	UPROPERTY(Replicated, CustomSerialization)
 	float mInwardSign = 1.f;
+
+	/**
+	 * Snapped to a road edge or an intersection curb (snap key): each scroll step turns the fence round
+	 * (a guard rail facing away from the road), like the street lights. Kept while the hologram lives.
+	 */
+	bool mOnRoadOrCurb = false;
+	bool mFacingFlipped = false;
+	int32 mLastScroll = TNumericLimits<int32>::Min();
 };
