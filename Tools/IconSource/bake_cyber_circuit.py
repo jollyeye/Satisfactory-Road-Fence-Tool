@@ -31,6 +31,7 @@ hw = 0.011
 soft = 0.004 + aa
 ln = np.zeros_like(QX)
 rg = np.zeros_like(QX)
+empty0 = np.zeros(QX.shape, bool)  # where the first layer leaves an empty patch
 
 def seg(P, A, B):
     pax, pay = P[0] - A[0], P[1] - A[1]
@@ -63,6 +64,12 @@ for layer in range(2):
         dx = np.mod(np.floor(qx / DENS_X), ND[0]); dy = np.mod(np.floor(qy / (R * 8.0)), ND[1])
         dens = h1(dx * 41.3 + dy * 17.9 + layer)
         live = dens >= 0.2
+        # Empty patches give the board some rest, but where both layers leave one, a bare square shows, the same
+        # every 48 m in the tile: the second layer always fills the first one's patches.
+        if layer == 0 and dj == 0:
+            empty0 = ~live
+        if layer == 1:
+            live = live | empty0
         P = (x, qy - (j + 0.5) * R)
         Z = np.zeros_like(x)
         m = np.zeros_like(x)
