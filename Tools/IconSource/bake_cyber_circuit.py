@@ -4,13 +4,15 @@
 # 16 m across so a wide road (up to 32 m) shows each strip at most twice, with different chips in each 8 m band.
 # Same shapes as the live pattern; to tile, every cell grid divides the tile: the second layer's sections are 2.4 m
 # (2.5 m live) and its density cells 8 m along (7.5 m live), and every hash reads its cell index wrapped to the tile.
-# Usage: python3 bake_cyber_circuit.py [out.png]
+# Usage: python3 bake_cyber_circuit.py [out.png] [width height]   (default 2048 1024, the size in use)
+# A sharper 2048 x 2048 version (~2.7 MB) is kept in Tools/IconSource/Baked/ (not imported); to use it, copy it over
+# Tools/Icons/T_RM_CyberCircuit.png (the material reads the texture by name and the 48 x 16 m tile, any size).
 import sys
 import numpy as np
 from PIL import Image
 
 TILE = (48.0, 16.0)
-SIZE = (2048, 1024)
+SIZE = (int(sys.argv[2]), int(sys.argv[3])) if len(sys.argv) > 3 else (2048, 1024)
 out = sys.argv[1] if len(sys.argv) > 1 else "T_RM_CyberCircuit.png"
 
 xs = (np.arange(SIZE[0]) + 0.5) * TILE[0] / SIZE[0]

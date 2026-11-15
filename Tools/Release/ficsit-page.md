@@ -111,6 +111,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Roads on the map are now drawn by the graphics card: sharp at every zoom and far less memory than the old map pictures (a few MB instead of up to a few hundred for a big network). More detail as you zoom in: walking paths from 1.5x, lane lines from 6x, and lane markings (arrows, numbers, vehicles) once they are big enough on your screen, so larger screens and map zoom mods show them sooner. Still the bottom layer of the map, under other map mods.
 
+- Cyberpunk road on Low graphics quality: the circuit grooves are back (from a small baked texture, ~1.3 MB), instead of plain plastic. High quality is unchanged.
+
 **Fixed**
 - Middle click on a road or walking path also copies its look (Concrete Blocks, Asphalt, Cyberpunk) and its lines, not only the paint.
 
