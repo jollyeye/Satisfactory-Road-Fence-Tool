@@ -3295,7 +3295,7 @@ namespace
 				: !RMRoadUtils::IsMouthOccupied(Hologram->GetWorld(), BestEnd->Intersection, BestEnd->Location);
 			// Both adjustments are for vehicle paths only: rail tracks are not laid onto the surface
 			// (a lift would leave them floating) and have no vehicle floor check.
-			const bool bVehiclePath = Hologram->IsA<AFGVehiclePathSegmentHologram>();
+			const bool bVehiclePath = Hologram->IsA(AFGVehiclePathSegmentHologram::StaticClass()); // (no IsA<>: Hologram is a template parameter here, clang wants "template")
 			if (bVehiclePath && bFreeEnd && !HasFloorBeyond(Hologram->GetWorld(), Best, Along3))
 			{
 				Best -= Along3 * PathEndInset;
