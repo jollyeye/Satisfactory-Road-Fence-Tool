@@ -88,8 +88,8 @@ No Blueprint is edited by hand: the Python scripts are the source of truth for t
 
 ## Roadmap
 
-1.2.1 is out ([1.2.0 roadmap](docs/ROADMAP-1.2.0.md)); 1.3.0 is in progress ([1.3.0 roadmap](docs/ROADMAP-1.3.0.md)). Planned for 1.3.0: traffic lights that follow the
-intersection, a Join tool, proper build animations per piece, and a road preview on the map.
+1.3.0 is out ([1.3.0 roadmap](docs/ROADMAP-1.3.0.md), 1.3.1 fixes in progress); earlier: [1.2.0 roadmap](docs/ROADMAP-1.2.0.md). Planned for 1.4.0 ([1.4.0 roadmap](docs/ROADMAP-1.4.0.md)): sidewalks, a sign wall, traffic lights that follow the
+intersection, a boom barrier, and the cyberpunk road's circuit on Low quality.
 
 ## License and credits
 
