@@ -1,6 +1,5 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "Hologram/FGBlueprintHologram.h"
-#include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "Holograms/RMHologramLook.h"
 #include "RMSound.h"
 #include "RoadMakerModule.h"
@@ -154,21 +153,6 @@ void ARMBuildableProcedural::BeginPlay()
 	// loads or when a client joins (those all start within the first seconds).
 	const UWorld* World = GetWorld();
 	const bool bJustBuilt = !mLoadedFromSave && World && World->GetTimeSeconds() > 20.0;
-	// Before Super::BeginPlay: the game allows SetInsideBlueprintDesigner only until begin play is done (asserts).
-	// Built inside a blueprint designer without its hologram telling the designer (lane markings painted with Road
-	// Lines, cut / joined / split pieces, made by our code): the designer would leave it out of the blueprint.
-	if (bJustBuilt && HasAuthority() && !GetBlueprintDesigner())
-	{
-		for (TActorIterator<AFGBuildableBlueprintDesigner> It(GetWorld()); It; ++It)
-		{
-			if (IsValid(*It) && It->IsLocationInsideDesigner(GetActorLocation()))
-			{
-				SetInsideBlueprintDesigner(*It);
-				It->OnBuildableConstructedInsideDesigner(this);
-				break;
-			}
-		}
-	}
 	Super::BeginPlay();
 	UpdateLODDistances();
 	// Collision is worked out in the background (no hitch when a long road or fence is built, replaced or

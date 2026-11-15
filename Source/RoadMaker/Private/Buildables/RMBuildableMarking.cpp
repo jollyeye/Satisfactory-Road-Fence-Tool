@@ -796,6 +796,12 @@ ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarkin
 	// Painted like the road (its look and paint), unless it keeps its own (a moved marking).
 	New->SetLook(Look >= 0 ? static_cast<uint8>(Look) : Road->GetLook());
 	New->SetCustomizationData_Native(Paint ? *Paint : Road->GetCustomizationData_Native());
+	// Painted on a road inside a blueprint designer: part of that design (set before begin play, which tells the
+	// designer; without it the blueprint left the markings out).
+	if (Road->GetBlueprintDesigner())
+	{
+		New->SetInsideBlueprintDesigner(Road->GetBlueprintDesigner());
+	}
 	UGameplayStatics::FinishSpawningActor(New, T);
 	return New;
 }

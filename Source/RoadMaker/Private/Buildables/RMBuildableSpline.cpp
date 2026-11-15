@@ -339,6 +339,12 @@ ARMBuildableSpline* ARMBuildableSpline::SpawnLike(TSubclassOf<ARMBuildableSpline
 	New->SetCustomizationData_Native(GetCustomizationData_Native());
 	CopyCutSettingsTo(New);
 	New->SetRevealFrom(RevealFrom, RevealPoint);
+	// A piece made from one inside a blueprint designer (cut, join, split, merge) is part of that design too. Set
+	// before it begins play: its begin play tells the designer (the game's own buildings do the same).
+	if (GetBlueprintDesigner())
+	{
+		New->SetInsideBlueprintDesigner(GetBlueprintDesigner());
+	}
 	UGameplayStatics::FinishSpawningActor(New, T);
 	return New;
 }
