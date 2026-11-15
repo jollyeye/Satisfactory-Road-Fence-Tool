@@ -369,6 +369,75 @@ def fence_wall(sc, kind="concrete"):
             stripe(x + 0.04, x + 0.09, 0.0, H, groove)
 
 
+def cement_mixer(sc):
+    # Gap Fill icon: a classic site cement mixer, orange drum tilted up on a grey stand with two wheels.
+    def frame_of(d):
+        d = np.array(d, float); d /= np.linalg.norm(d)
+        a = np.array([0, 0, 1.0]) if abs(d[2]) < 0.9 else np.array([1.0, 0, 0])
+        u = np.cross(d, a); u /= np.linalg.norm(u)
+        v = np.cross(d, u)
+        return d, u, v
+    def tube(p0, p1, r, col, n=10):
+        p0 = np.array(p0, float); p1 = np.array(p1, float)
+        d, u, v = frame_of(p1 - p0)
+        for i in range(n):
+            a0, a1 = 2 * math.pi * i / n, 2 * math.pi * (i + 1) / n
+            o0 = (u * math.cos(a0) + v * math.sin(a0)) * r
+            o1 = (u * math.cos(a1) + v * math.sin(a1)) * r
+            sc.quad(p0 + o0, p0 + o1, p1 + o1, p1 + o0, col)
+    def disc(c, axis, r, thick, col, rim, n=20):
+        c = np.array(c, float); d, u, v = frame_of(axis)
+        pts = [(u * math.cos(2 * math.pi * i / n) + v * math.sin(2 * math.pi * i / n)) * r for i in range(n)]
+        for s_ in (-1, 1):
+            sc.face([c + d * thick * s_ + p for p in pts], col, two=True)
+        for i in range(n):
+            a, b = pts[i], pts[(i + 1) % n]
+            sc.quad(c - d * thick + a, c - d * thick + b, c + d * thick + b, c + d * thick + a, rim)
+    grey = np.array([120, 124, 132.0])
+    dark = np.array([40, 42, 46.0])
+    # Stand: two legs from the wheels' axle up to the drum's pivot, a third leg at the back.
+    axle_y = 1.1
+    tube((0.4, -axle_y, 0.55), (0.0, 0.0, 1.9), 0.09, grey)
+    tube((0.4, axle_y, 0.55), (0.0, 0.0, 1.9), 0.09, grey)
+    tube((-1.3, 0.0, 0.0), (0.0, 0.0, 1.9), 0.09, grey)
+    tube((0.4, -axle_y, 0.55), (0.4, axle_y, 0.55), 0.06, grey)
+    for y in (-axle_y - 0.12, axle_y + 0.12):
+        disc((0.4, y, 0.55), (0, 1, 0), 0.55, 0.1, dark, np.array([30, 30, 34.0]))
+        disc((0.4, y + (0.12 if y > 0 else -0.12), 0.55), (0, 1, 0), 0.22, 0.02, grey, grey)
+    # Motor box under the drum, handle wheel at the side.
+    box(sc, (-0.55, 0.0, 1.35), 0.38, 0.3, 0.25, grey)
+    tube((0.0, 0.95, 1.9), (0.0, 1.45, 1.9), 0.05, grey)
+    disc((0.0, 1.5, 1.9), (0, 1, 0), 0.32, 0.04, grey, grey)
+    # Drum: a barrel turned about its axis, tilted up towards the viewer, mouth open.
+    base = np.array([0.0, 0.0, 1.95])
+    d, u, v = frame_of((0.4, -0.65, 0.75))
+    prof = [(0.0, 0.0), (0.0, 0.55), (0.45, 0.95), (1.15, 0.95), (1.75, 0.5)]
+    n = 28
+    orange = ORANGE * 0.98
+    rings = []
+    for t, r in prof:
+        rings.append([base + d * t + (u * math.cos(2 * math.pi * i / n) + v * math.sin(2 * math.pi * i / n)) * r for i in range(n)])
+    for k in range(1, len(rings) - 1):
+        for i in range(n):
+            j = (i + 1) % n
+            col = orange * (0.82 if k == 2 else 1.0)  # the belly band a shade darker
+            sc.quad(rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i], col)
+    sc.face(rings[1], orange * 0.9, two=True)  # bottom
+    # Mouth: the dark inside, seen through the opening, and a rim.
+    mouth = base + d * 1.75
+    sc.face([mouth + (p - mouth) * 0.98 for p in rings[-1]], np.array([30, 24, 20.0]), layer=1, two=True, shade=False)
+    for i in range(n):
+        j = (i + 1) % n
+        a, b = rings[-1][i], rings[-1][j]
+        sc.quad(a, b, b + d * 0.08, a + d * 0.08, orange * 0.7)
+    # Ribs on the belly.
+    for t in (0.6, 1.0):
+        rib = [base + d * t + (u * math.cos(2 * math.pi * i / n) + v * math.sin(2 * math.pi * i / n)) * 0.99 for i in range(n)]
+        rib2 = [base + d * (t + 0.06) + (u * math.cos(2 * math.pi * i / n) + v * math.sin(2 * math.pi * i / n)) * 0.99 for i in range(n)]
+        for i in range(n):
+            j = (i + 1) % n
+            sc.quad(rib[i], rib[j], rib2[j], rib2[i], orange * 0.6, layer=1)
+
 def road_cut(sc):
     """A road cut in two: the pieces pulled apart, an orange outline in the gap where it was cut."""
     frs = frames_arc(20.0, 0.5, 40)
@@ -705,6 +774,7 @@ elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
 elif what == "fencewall_sign": fence_wall(sc, "sign")
+elif what == "gapfill": cement_mixer(sc)
 render(sc, out)
 if what in ("walk2b", "walk4b"):
     badge_walker(out)
