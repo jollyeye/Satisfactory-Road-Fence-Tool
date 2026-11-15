@@ -5,6 +5,7 @@
 #include "RoadMakerModule.h"
 #include "FGFactoryColoringTypes.h"
 #include "ProceduralMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "FGInventoryComponent.h"
 #include "Materials/Material.h"
 #include "Net/UnrealNetwork.h"
@@ -85,18 +86,31 @@ void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Holog
 			Sources.AddUnique(Src);
 		}
 	}
+	// The paint lives in each mesh's custom primitive data (the materials read it): copied along.
+	auto CopyLook = [](const UPrimitiveComponent* From, UPrimitiveComponent* To)
+	{
+		const TArray<float>& Data = From->GetCustomPrimitiveData().Data;
+		for (int32 I = 0; I < Data.Num(); ++I)
+		{
+			To->SetCustomPrimitiveDataFloat(I, Data[I]);
+		}
+		// The hologram's valid look (stencil 2), like our own holograms.
+		To->SetRenderCustomDepth(true);
+		To->SetCustomDepthStencilValue(2);
+		To->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		To->SetCastShadow(false);
+	};
 	int32 Copied = 0;
 	for (UProceduralMeshComponent* Src : Sources)
 	{
-		if (Src->GetNumSections() == 0)
+		// Not the invisible collision-only meshes (the gantry's boxes).
+		if (Src->GetNumSections() == 0 || !Src->bRenderInMainPass)
 		{
 			continue;
 		}
 		UProceduralMeshComponent* Copy = NewObject<UProceduralMeshComponent>(Hologram);
 		Copy->SetupAttachment(Root);
 		Copy->SetRelativeTransform(Src->GetComponentTransform().GetRelativeTransform(ActorT));
-		Copy->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Copy->SetCastShadow(false);
 		for (int32 I = 0; I < Src->GetNumSections(); ++I)
 		{
 			if (FProcMeshSection* Section = Src->GetProcMeshSection(I))
@@ -105,9 +119,28 @@ void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Holog
 				Copy->SetMaterial(I, RMHologramLook::HoloVersion(Src->GetMaterial(I)));
 			}
 		}
-		// The hologram's valid look (stencil 2), like our own holograms.
-		Copy->SetRenderCustomDepth(true);
-		Copy->SetCustomDepthStencilValue(2);
+		CopyLook(Src, Copy);
+		Copy->RegisterComponent();
+		++Copied;
+	}
+	TArray<UStaticMeshComponent*> Parts;
+	Piece->GetBlueprintPreviewParts(Parts);
+	for (UStaticMeshComponent* Src : Parts)
+	{
+		if (!Src || !Src->GetStaticMesh())
+		{
+			continue;
+		}
+		UStaticMeshComponent* Copy = NewObject<UStaticMeshComponent>(Hologram);
+		Copy->SetupAttachment(Root);
+		Copy->SetRelativeTransform(Src->GetComponentTransform().GetRelativeTransform(ActorT));
+		Copy->SetMobility(EComponentMobility::Movable);
+		Copy->SetStaticMesh(Src->GetStaticMesh());
+		for (int32 I = 0; I < Src->GetNumMaterials(); ++I)
+		{
+			Copy->SetMaterial(I, Src->GetMaterial(I));
+		}
+		CopyLook(Src, Copy);
 		Copy->RegisterComponent();
 		++Copied;
 	}

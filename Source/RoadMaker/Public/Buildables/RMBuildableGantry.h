@@ -19,6 +19,13 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void RebuildMesh() override;
+	virtual void GetBlueprintPreviewParts(TArray<UStaticMeshComponent*>& Out) const override
+	{
+		for (UStaticMeshComponent* Part : mParts)
+		{
+			Out.Add(Part);
+		}
+	}
 
 	/** Columns at +-HalfSpan across the road; BeamBottom = height of the beam's lower edge above the road (cm). */
 	void SetShape(float HalfSpan, float BeamBottom);

@@ -32,6 +32,8 @@ public:
 	 * (AFGBlueprintHologram::RegisterCustomBuildableVisualization) when the class is loaded.
 	 */
 	static void ShowInBlueprintHologram(class AFGBlueprintHologram* Hologram, AFGBuildable* Buildable, USceneComponent* Root);
+	/** Static mesh parts the blueprint hologram should show too (the sign gantry's parts, made at run time). */
+	virtual void GetBlueprintPreviewParts(TArray<UStaticMeshComponent*>& Out) const {}
 
 	// IFGSaveInterface (implemented by AFGBuildable)
 	virtual void PostLoadGame_Implementation(int32 saveVersion, int32 gameVersion) override;
