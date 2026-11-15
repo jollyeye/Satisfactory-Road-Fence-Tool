@@ -122,7 +122,23 @@ namespace RMSound
 				return;
 			}
 			const FBox Bounds = Piece->GetComponentsBoundingBox();
-			const FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
+			FVector Where = Bounds.IsValid ? Bounds.GetCenter() : Piece->GetActorLocation();
+			// Never at a broken position: a sound posted at NaN / infinity makes Wwise buzz and then go silent
+			// for the rest of the session.
+			auto IsBad = [](const FVector& V) { return V.ContainsNaN() || V.GetAbsMax() > 1.0e7; };
+			if (IsBad(Where))
+			{
+				static int32 Logs = 0;
+				if (Logs++ < 10)
+				{
+					UE_LOG(LogRoadMaker, Warning, TEXT("RMSound: %s has broken bounds, sound at its location instead"), *Piece->GetName());
+				}
+				Where = Piece->GetActorLocation();
+				if (IsBad(Where))
+				{
+					return;
+				}
+			}
 			// Posted at the location (no component of our own: a spawned one is owned by the world settings,
 			// and auto-destroying it logged "May not destroy component" errors). The build effect's game
 			// parameters are left at their defaults (a size value picked a big building's end sound).

@@ -52,6 +52,27 @@ void ARMBuildableIntersection::RebuildMesh()
 		UE_LOG(LogRoadMaker, Warning, TEXT("%s: could not rebuild intersection from %d saved ends"), *GetName(), mEnds.Num());
 		return;
 	}
+	// A broken point (NaN) would break the bounds, collision and the build sound: no mesh then, and the ends logged.
+	auto HasBadPoint = [](const FRMMesh& M)
+	{
+		for (const FVector& V : M.Vertices)
+		{
+			if (V.ContainsNaN() || V.GetAbsMax() > 1.0e7)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	if (HasBadPoint(Top) || HasBadPoint(Body))
+	{
+		UE_LOG(LogRoadMaker, Warning, TEXT("%s: intersection mesh has broken points, not shown. Ends:"), *GetName());
+		for (const FRMRoadEnd& E : mEnds)
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("  centre %s inward %s width %.0f"), *E.Center.ToString(), *E.Inward.ToString(), E.Width);
+		}
+		return;
+	}
 	Top.ApplyToSection(mMesh, 0, true);
 	Body.ApplyToSection(mMesh, 1, true);
 
