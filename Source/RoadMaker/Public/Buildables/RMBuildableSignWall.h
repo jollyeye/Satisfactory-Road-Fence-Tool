@@ -5,6 +5,7 @@
 
 #include "CoreMinimal.h"
 #include "Buildables/RMBuildableFence.h"
+#include "FGSignTypes.h"
 #include "RMBuildableSignWall.generated.h"
 
 class ARMSignWallSign;
@@ -54,10 +55,17 @@ protected:
 	UFUNCTION()
 	void OnRep_Sign() { OnSignDesignChanged(); }
 
+	/** Cut / Join: the new piece gets this wall's design (its sign is made a moment later, see EnsureSign). */
+	virtual void CopyCutSettingsTo(ARMBuildableSpline* New) const override;
+
 private:
 	/** Server: makes the hidden sign if this wall has none yet. */
 	void EnsureSign();
 	FTimerHandle mEnsureSignTimer;
+
+	/** Server, a piece of a cut or join: the design its sign starts with. */
+	FPrefabSignData mPendingDesign;
+	bool mHasPendingDesign = false;
 
 	/** Material of the face: the sign's design material once it has one, else mFrontMaterial. */
 	UMaterialInterface* GetFrontMaterial() const;

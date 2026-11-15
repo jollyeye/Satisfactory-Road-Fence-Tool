@@ -80,14 +80,33 @@ void ARMBuildableSignWall::EnsureSign()
 	Sign->mExtraRange = Frames.Last().Dist * 0.5f;
 	mSign = Sign; // before it finishes: it sets up its design right away and tells the wall
 	Sign->FinishSpawning(At);
+	// A piece of a cut or a join: the design of the wall it came from.
+	if (mHasPendingDesign)
+	{
+		mHasPendingDesign = false;
+		Sign->SetPrefabSignData(mPendingDesign, false);
+		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the design of the wall it was cut / joined from"), *GetName());
+	}
 	// Middle click on a sign wall before building this one: its design.
-	if (UFGFactoryClipboardSettings* Design = RMRoadSample::TakeSignDesign())
+	else if (UFGFactoryClipboardSettings* Design = RMRoadSample::TakeSignDesign())
 	{
 		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, Design, nullptr);
 		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the sampled design (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
 	}
 	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
 	OnSignDesignChanged();
+}
+
+void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const
+{
+	Super::CopyCutSettingsTo(New);
+	ARMBuildableSignWall* Piece = Cast<ARMBuildableSignWall>(New);
+	if (Piece && mSign)
+	{
+		mSign->GetSignPrefabData(Piece->mPendingDesign);
+		Piece->mPendingDesign.IsFromReplication = false;
+		Piece->mHasPendingDesign = true;
+	}
 }
 
 float ARMBuildableSignWall::GetRepeatLength() const
