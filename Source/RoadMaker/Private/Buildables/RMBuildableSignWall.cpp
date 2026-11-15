@@ -153,13 +153,13 @@ void ARMBuildableSignWall::OnSignDesignChanged()
 void ARMBuildableSignWall::RebuildMesh()
 {
 	Super::RebuildMesh();
-	// The sign face on the road side, near and first distance level (further away: the plain slab).
+	// The sign face on the road side, at every distance level (like a billboard, seen from across the map).
 	UMaterialInterface* Front = GetFrontMaterial();
 	const float Repeat = GetRepeatLength();
-	for (int32 Level = 0; Level < 2; ++Level)
+	for (int32 Level = 0; Level < 3; ++Level)
 	{
 		TArray<FRMFrame> Frames;
-		GetLocalFrames(Frames, Level == 0 ? mMeshStep : 400.f);
+		GetLocalFrames(Frames, Level == 0 ? mMeshStep : Level == 1 ? 400.f : 800.f);
 		AddChunkBoundaries(Frames);
 		if (Frames.Num() < 2)
 		{
@@ -175,9 +175,13 @@ void ARMBuildableSignWall::RebuildMesh()
 		{
 			ApplyNearSection(Face, 2, false, Front);
 		}
-		else
+		else if (Level == 1)
 		{
 			ApplyFarSection(Face, 2, Front);
+		}
+		else
+		{
+			ApplyFar2Section(Face, 2, Front);
 		}
 	}
 	OnSignDesignChanged();
