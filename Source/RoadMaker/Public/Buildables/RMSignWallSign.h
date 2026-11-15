@@ -42,6 +42,10 @@ public:
 	 * the real sign size set on it. Null before the game set one up.
 	 */
 	UMaterialInterface* GetSignMaterial();
+
+	/** The game keeps a sign's design sharp only while its plane is seen. Ours is a hidden speck at the wall's middle,
+	 *  off screen whenever you look at the wall's ends up close: the wall passes on when it was last drawn. */
+	void MarkSeen(float RenderTime);
 	UTextureRenderTarget2D* GetSignTexture() const { return mSignTexture; }
 
 	/** Size of the design in cm (the billboard's world dimensions), for the wall's repeat length. */

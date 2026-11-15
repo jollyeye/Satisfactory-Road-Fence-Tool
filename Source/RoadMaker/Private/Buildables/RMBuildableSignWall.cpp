@@ -33,7 +33,7 @@ void ARMBuildableSignWall::BeginPlay()
 	}
 	if (!IsRunningDedicatedServer())
 	{
-		GetWorldTimerManager().SetTimer(mDesignTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableSignWall::CheckDesignMaterial), 0.5f, true);
+		GetWorldTimerManager().SetTimer(mDesignTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableSignWall::CheckDesignMaterial), 0.2f, true);
 	}
 	OnSignDesignChanged();
 }
@@ -99,6 +99,15 @@ float ARMBuildableSignWall::GetRepeatLength() const
 
 void ARMBuildableSignWall::CheckDesignMaterial()
 {
+	if (mSign)
+	{
+		float Seen = 0.f;
+		ForEachMeshComponent([&Seen](UProceduralMeshComponent* Mesh)
+		{
+			Seen = FMath::Max(Seen, Mesh->GetLastRenderTime());
+		});
+		mSign->MarkSeen(Seen);
+	}
 	if (mSign && GetFrontMaterial() != mShownFront.Get())
 	{
 		OnSignDesignChanged();

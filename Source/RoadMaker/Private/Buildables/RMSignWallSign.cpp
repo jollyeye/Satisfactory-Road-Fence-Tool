@@ -194,3 +194,11 @@ void ARMSignWallSign::SetupMaterialInstanceForProxyPlane(UMaterialInstanceDynami
 		mWall->OnSignDesignChanged();
 	}
 }
+
+void ARMSignWallSign::MarkSeen(float RenderTime)
+{
+	if (mSignProxyPlane && RenderTime > mSignProxyPlane->GetLastRenderTime())
+	{
+		mSignProxyPlane->SetLastRenderTime(RenderTime);
+	}
+}
