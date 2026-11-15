@@ -1299,6 +1299,99 @@ MEL.connect_material_property(const(sw_front, 0.5, -400, 100), "", MP.MP_ROUGHNE
 finish(sw_front)
 log("Sign wall front (design)")
 
+# --- Map roads (GPU, 1.4.0) ---------------------------------------------------------------------
+# UI material for RMMapLayer: each road piece (~4 m) is one instance record (float4) of a Slate instance buffer,
+# drawn as a quad. Record: x, y = centre in map units (0..1024); z = angle (10 bits, 1/1024 turn) * 16384 +
+# half length (7 bits, 5 cm) * 128 + half width (7 bits, 25 cm); w = fill colour (palette index) * 65536 +
+# line colour * 256 + flags (bit 0: side lines). The window transform rides on the quad's vertices
+# (TexCoord0 = pixels per map, TexCoord1 = window origin, TexCoord4 = corner -1..1), so panning and zooming
+# touch no GPU data. Pixel stage gets: UV0 offset from the centre in pixels (along, across), UV1 half size in
+# pixels, UV2 colours, UV3 (flags, half line width in pixels).
+MAP_DECODE = r"""
+float ang = floor(B.x / 16384.0) / 1024.0 * 6.28318531;
+float hl = fmod(floor(B.x / 128.0), 128.0) * 0.05;
+float hw = fmod(B.x, 128.0) * 0.25;
+float ppm = abs(S.x) * UPM / 1024.0;
+float2 h = max(float2(hl, hw) * ppm, float2(0.5, 0.75));
+float2 L = C * (h + 1.0);
+"""
+MAP_POSITION = MAP_DECODE + r"""
+float cs = cos(ang);
+float sn = sin(ang);
+float2 P = O + S * (A / 1024.0) + float2(L.x * cs - L.y * sn, L.x * sn + L.y * cs);
+return float3(P - C, 0.0);
+"""
+MAP_LOCAL = MAP_DECODE + "return L;"
+MAP_HALF = MAP_DECODE + "return h;"
+MAP_COLOURS = "return float2(floor(B.y / 65536.0), fmod(floor(B.y / 256.0), 256.0));"
+MAP_FLAGS = MAP_DECODE + "return float2(fmod(B.y, 256.0), max(0.75 * ppm, 0.5));"
+MAP_PIXEL = r"""
+float4 fc = Pal.SampleLevel(PalSampler, float2((I.x + 0.5) / 256.0, 0.5), 0.0);
+float4 ec = Pal.SampleLevel(PalSampler, float2((I.y + 0.5) / 256.0, 0.5), 0.0);
+float3 c = fc.rgb;
+// Side lines just inside the edges, once the road is wide enough on screen to show them apart.
+if (fmod(F.x, 2.0) > 0.5 && H.y > F.y * 3.0)
+{
+    float d = abs(abs(L.y) - (H.y - F.y));
+    c = lerp(c, ec.rgb, saturate(F.y + 0.5 - d));
+}
+// Smooth sides; the ends are cut sharp (pieces overlap their neighbours, a soft end would show a seam).
+float cov = saturate(H.y - abs(L.y) + 0.5) * (abs(L.x) <= H.x ? 1.0 : 0.0);
+return float4(c, cov * Opacity);
+"""
+
+map_mat = new_material("M_RM_MapRoads")
+map_mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_UI)
+map_mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+map_mat.set_editor_property("num_customized_u_vs", 4)
+OutT = unreal.CustomMaterialOutputType
+
+
+def map_uv(i, y):
+    return node(map_mat, unreal.MaterialExpressionTextureCoordinate, -1400, y, coordinate_index=i)
+
+
+m_s, m_o, m_a, m_b, m_c = map_uv(0, 0), map_uv(1, 100), map_uv(2, 200), map_uv(3, 300), map_uv(4, 400)
+m_upm = node(map_mat, unreal.MaterialExpressionScalarParameter, -1400, 500, parameter_name="UnitsPerMetre", default_value=0.0014)
+m_opacity = node(map_mat, unreal.MaterialExpressionScalarParameter, -1400, 600, parameter_name="Opacity", default_value=1.0)
+m_pal = node(map_mat, unreal.MaterialExpressionTextureObjectParameter, -1400, 700, parameter_name="Palette",
+             texture=unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
+vs_inputs = {"S": m_s, "O": m_o, "A": m_a, "B": m_b, "C": m_c, "UPM": m_upm}
+
+
+def map_custom(code, out, inputs, y, desc):
+    c = custom(map_mat, code, out, list(inputs.keys()), -900, y, desc)
+    for k, v in inputs.items():
+        if not MEL.connect_material_expressions(v, "", c, k):
+            log("  ! map roads: could not wire %s on %s" % (k, desc))
+    return c
+
+
+m_pos = map_custom(MAP_POSITION, OutT.CMOT_FLOAT3, vs_inputs, 0, "Instance to window position")
+m_local = map_custom(MAP_LOCAL, OutT.CMOT_FLOAT2, vs_inputs, 250, "Offset from centre (px)")
+m_half = map_custom(MAP_HALF, OutT.CMOT_FLOAT2, vs_inputs, 500, "Half size (px)")
+m_cols = map_custom(MAP_COLOURS, OutT.CMOT_FLOAT2, {"B": m_b}, 750, "Colour indices")
+m_flags = map_custom(MAP_FLAGS, OutT.CMOT_FLOAT2, vs_inputs, 1000, "Flags, half line width")
+p_l, p_h, p_i, p_f = map_uv(0, 1300), map_uv(1, 1400), map_uv(2, 1500), map_uv(3, 1600)
+m_pix = map_custom(MAP_PIXEL, OutT.CMOT_FLOAT4, {"L": p_l, "H": p_h, "I": p_i, "F": p_f, "Pal": m_pal, "Opacity": m_opacity}, 1300, "Colour and coverage")
+m_rgb = node(map_mat, unreal.MaterialExpressionComponentMask, -500, 1300, r=True, g=True, b=True, a=False)
+m_alpha = node(map_mat, unreal.MaterialExpressionComponentMask, -500, 1450, r=False, g=False, b=False, a=True)
+link(m_pix, "", m_rgb, "")
+link(m_pix, "", m_alpha, "")
+map_ok = [
+    MEL.connect_material_property(m_rgb, "", MP.MP_EMISSIVE_COLOR),
+    MEL.connect_material_property(m_alpha, "", MP.MP_OPACITY),
+    MEL.connect_material_property(m_pos, "", MP.MP_WORLD_POSITION_OFFSET),
+]
+try:
+    for i, n_ in enumerate((m_local, m_half, m_cols, m_flags)):
+        map_ok.append(unreal.RMEditorTools.connect_customized_uv(map_mat, n_, i))
+except Exception as e:
+    log("  ! map roads: customized UVs: %s" % e)
+finish(map_mat)
+log("Map roads material %s" % map_ok)
+
+
 # --- Assign ----------------------------------------------------------------------------------
 # Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,

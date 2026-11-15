@@ -1,17 +1,22 @@
-// Road layer on the game's map (1.3.0).
+// Road layer on the game's map (1.3.0; drawn by the GPU since 1.4.0).
 //
 // The map widget nests the map picture in Overlay_0 (1024 x 1024 local "map units") inside
 // mMapScrollContainer (render translation = pan) inside mMapZoomContainer (render scale 1..8 = zoom).
 // Overlay_0 holds: mMap (the map picture, fog of war in its material), BPW_MapAreaPainter (map areas) and
-// mMapObjectPanel (icons). We add a canvas to that overlay directly above mMap (its ZOrder, added after it),
+// mMapObjectPanel (icons). We add our widget to that overlay directly above mMap (its ZOrder, added after it),
 // so the game pans and zooms it with the map and everything else, the game's or another mod's, draws on top:
 // roads are part of the ground. A world position maps to
 // UFGMapFunctionLibrary::GetNormalizedPosition(capture actor, location) * 1024 in that square.
 //
-// The canvas holds one picture per 512 m tile that has roads (512 x 512 px, 1 px = 1 m, with mips).
-// Roads and intersections are painted into the tiles lowest first, so a bridge covers what is under it.
-// Only while the map is open: pieces that are new, changed or gone mark the tiles they touch (old and
-// new place) dirty, and only those tiles are painted again; the first opening paints everything.
+// Drawing (1.4.0, after FactoryAtlas's map painter): every road piece of ~4 m is one 16-byte record in a Slate
+// instance buffer, drawn as a quad by the UI material M_RM_MapRoads (centre, angle, half length / width, colour
+// indices into a 256-colour palette texture, side lines). The window transform rides on the quad's 4 vertices, so
+// panning and zooming upload nothing; the records are uploaded again only when a road changes. Intersections
+// (outlines that are no strip) are flat polygons with a 1 px soft rim, built on the CPU each frame (few of them).
+// Everything is drawn lowest first, so a bridge covers what it passes over: road records in height order, split
+// into runs between the intersections that lie between them in height.
+// Pieces are read while the map is open: new, changed or gone pieces are found every 0.25 s (spread over frames
+// with a time budget), then the draw list is rebuilt.
 #include "RoadMakerModule.h"
 #if !WITH_EDITOR
 #include "Containers/Ticker.h"
@@ -23,8 +28,16 @@
 #include "Components/PanelWidget.h"
 #include "Styling/SlateBrush.h"
 #include "Widgets/SOverlay.h"
-#include "Widgets/SCanvas.h"
-#include "Widgets/Images/SImage.h"
+#include "Widgets/SLeafWidget.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Interfaces/ISlateRHIRendererModule.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "Modules/ModuleManager.h"
+#include "Rendering/DrawElements.h"
+#include "Rendering/SlateRenderer.h"
+#include "SlateMaterialBrush.h"
+#include "UObject/Package.h"
 #include "FGMapFunctionLibrary.h"
 #include "FGMinimapCaptureActor.h"
 #include "UObject/UObjectIterator.h"
@@ -37,55 +50,72 @@ namespace RMMapLayer
 {
 	namespace
 	{
-		constexpr int32 MapTilePixels = 512;
-		constexpr int32 MapSuperSample = 2; // painted at 2x, averaged down (anti-aliasing)
-		constexpr int32 MapLineThick = 3; // side line width in supersampled pixels (3 at 2x = 1.5 m)
-		constexpr int32 MapTileMips = 5; // 512 .. 32
-		constexpr double MapTileWorld = 51200.0; // cm
-		// Work per frame while the map is open (spread out so a big save never hitches): building pieces
-		// and painting tiles each stop once their time is used (at least one item per frame).
-		constexpr double MapBuildBudget = 0.003; // s
-		constexpr double MapPaintBudget = 0.004; // s
+		constexpr double MapBuildBudget = 0.003; // s of piece reading per frame while the map is open
 		constexpr double MapScanInterval = 0.25; // s between looks for new / changed / removed pieces
+		constexpr float MapLineWidthM = 1.5f; // side lines on the map (m), at least 1 px
+		constexpr int32 MapPaletteSize = 256;
+		const TCHAR* MapMaterialPath = TEXT("/RoadMaker/Materials/M_RM_MapRoads.M_RM_MapRoads");
 
-		/**
-		 * A piece of surface at one height: a road quad (4 m long) or a whole intersection. Painted in
-		 * height order across all pieces, so a ramp or bridge covers what it passes over.
-		 */
-		struct FRMMapSeg
+		/** An intersection, flattened to map units (0..1024). */
+		struct FRMMapIsect
 		{
 			float Z = 0.f;
-			TArray<FVector2D> Fill;               // polygon
-			TArray<TArray<FVector2D>> Lines;      // side lines on it
+			FVector2D Centre = FVector2D::ZeroVector;
+			TArray<FVector2D> Fill;               // outline
+			TArray<TArray<FVector2D>> Lines;      // side lines along the curbs
+			FColor FillC, EdgeC;
 		};
 
-		/** One road or intersection, flattened to map units (0..1024). */
+		/** One road (records) or intersection. */
 		struct FRMMapPiece
 		{
 			uint32 Key = 0;
-			FBox2D Bounds = FBox2D(ForceInit);
-			TArray<FRMMapSeg> Segs;
-			FColor Fill;
-			FColor Edge;
+			TArray<FVector4f> Recs;
+			TArray<float> RecZ;
+			TOptional<FRMMapIsect> Isect;
 		};
 
-		struct FRMMapTile
+		/** A run of the draw list: road records [Start, Start + Count) or intersections [Start, Start + Count). */
+		struct FRMMapBatch
 		{
-			UTexture2D* Tex = nullptr;
-			FSlateBrush Brush;
-			TSharedPtr<SImage> Image;
+			bool bIsect = false;
+			int32 Start = 0;
+			int32 Count = 0;
 		};
 
 		TWeakObjectPtr<UWorld> GMapWorld;
 		TWeakObjectPtr<AActor> GMapCapture;
 		// Map units = (Origin + AxisX * world X + AxisY * world Y) * 1024.
 		FVector2D GMapOrigin, GMapAxisX, GMapAxisY;
-		double GMapTileUnits = 0.0; // tile size in map units
+		double GMapUnitsPerMetre = 0.0;
 
 		TMap<TWeakObjectPtr<AActor>, FRMMapPiece> GMapPieces;
-		TMap<FIntPoint, TUniquePtr<FRMMapTile>> GMapTiles;
-		TSet<FIntPoint> GMapDirty;
-		TSharedPtr<SCanvas> GMapCanvas;
+		bool GMapChanged = false;
+
+		// Draw list (rebuilt when a piece changes).
+		TArray<FVector4f> GMapRecords;
+		TArray<FRMMapIsect> GMapIsects;
+		TArray<FRMMapBatch> GMapBatches;
+		bool GMapUploadPending = false;
+
+		// Palette: colour -> index (stable while the world lives).
+		TMap<uint32, uint8> GMapPaletteIndex;
+		TArray<FColor> GMapPaletteColours;
+		bool GMapPaletteDirty = false;
+
+		// GPU side (made on the first paint).
+		UMaterialInstanceDynamic* GMapMaterial = nullptr;
+		UTexture2D* GMapPalette = nullptr;
+		UTexture2D* GMapWhite = nullptr;
+		TSharedPtr<FSlateMaterialBrush> GMapBrush;
+		FSlateBrush GMapWhiteBrush;
+		FSlateResourceHandle GMapHandle, GMapWhiteHandle;
+		TSharedPtr<ISlateUpdatableInstanceBuffer> GMapInstances;
+		int32 GMapInstanceCapacity = 0;
+		bool GMapGpuFailed = false;
+
+		class SRMMapRoadsLayer;
+		TSharedPtr<SRMMapRoadsLayer> GMapWidget;
 		TWeakPtr<SOverlay> GMapHost;
 
 		FVector2D MapUnits(const FVector& W)
@@ -95,22 +125,14 @@ namespace RMMapLayer
 
 		void MapReset()
 		{
-			if (GMapCanvas.IsValid())
-			{
-				GMapCanvas->ClearChildren();
-			}
-			for (TPair<FIntPoint, TUniquePtr<FRMMapTile>>& T : GMapTiles)
-			{
-				if (T.Value->Tex)
-				{
-					T.Value->Tex->RemoveFromRoot();
-				}
-			}
-			GMapTiles.Reset();
 			GMapPieces.Reset();
-			GMapDirty.Reset();
+			GMapRecords.Reset();
+			GMapIsects.Reset();
+			GMapBatches.Reset();
+			GMapChanged = false;
+			GMapUploadPending = false;
 			GMapCapture.Reset();
-			GMapTileUnits = 0.0;
+			GMapUnitsPerMetre = 0.0;
 		}
 
 		/** World -> map units, measured from the game's own function (handles any offset / flip). */
@@ -121,7 +143,7 @@ namespace RMMapLayer
 			{
 				return false;
 			}
-			if (GMapCapture.Get() == Capture && GMapTileUnits > 0.0)
+			if (GMapCapture.Get() == Capture && GMapUnitsPerMetre > 0.0)
 			{
 				return true;
 			}
@@ -132,14 +154,14 @@ namespace RMMapLayer
 			GMapOrigin = N0;
 			GMapAxisX = (NX - N0) / D;
 			GMapAxisY = (NY - N0) / D;
-			GMapTileUnits = MapTileWorld * GMapAxisX.Size() * 1024.0;
-			if (GMapTileUnits <= 0.0)
+			GMapUnitsPerMetre = GMapAxisX.Size() * 1024.0 * 100.0;
+			if (GMapUnitsPerMetre <= 0.0)
 			{
 				return false;
 			}
 			GMapCapture = Capture;
-			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: mapping origin=%s axisX=%s axisY=%s tile=%.2f units"),
-				*GMapOrigin.ToString(), *(GMapAxisX * D).ToString(), *(GMapAxisY * D).ToString(), GMapTileUnits);
+			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: mapping origin=%s axisX=%s axisY=%s %.5f units per metre"),
+				*GMapOrigin.ToString(), *(GMapAxisX * D).ToString(), *(GMapAxisY * D).ToString(), GMapUnitsPerMetre);
 			return true;
 		}
 
@@ -175,9 +197,6 @@ namespace RMMapLayer
 			OutEdge = MapPaintColour(Secondary);
 		}
 
-		/** Side lines sit just inside the edge: half a map pixel (1 px = 1 m). */
-		constexpr float MapEdgeInset = 100.f * MapLineThick / MapSuperSample * 0.5f; // line centre: half its width inside the edge
-
 		uint32 MapColourKey(const ARMBuildableProcedural* Piece)
 		{
 			FColor Fill, Edge;
@@ -197,6 +216,53 @@ namespace RMMapLayer
 			return Key;
 		}
 
+		/** Palette index of a colour (0 = first colour seen; 256 colours, then the nearest is reused). */
+		uint8 MapPaletteOf(const FColor& C)
+		{
+			const uint32 Key = C.DWColor() | 0xFF000000u;
+			if (const uint8* Found = GMapPaletteIndex.Find(Key))
+			{
+				return *Found;
+			}
+			if (GMapPaletteColours.Num() < MapPaletteSize)
+			{
+				const uint8 Index = uint8(GMapPaletteColours.Num());
+				GMapPaletteColours.Add(FColor(C.R, C.G, C.B, 255));
+				GMapPaletteIndex.Add(Key, Index);
+				GMapPaletteDirty = true;
+				return Index;
+			}
+			int32 Best = 0;
+			int32 BestD = MAX_int32;
+			for (int32 I = 0; I < GMapPaletteColours.Num(); ++I)
+			{
+				const FColor& P = GMapPaletteColours[I];
+				const int32 D = FMath::Square(int32(P.R) - C.R) + FMath::Square(int32(P.G) - C.G) + FMath::Square(int32(P.B) - C.B);
+				if (D < BestD)
+				{
+					BestD = D;
+					Best = I;
+				}
+			}
+			return uint8(Best);
+		}
+
+		/** One road piece's record (see M_RM_MapRoads in make_materials.py for the layout). */
+		FVector4f MapRecord(const FVector2D& Centre, double AngleRad, float HalfLenM, float HalfWidthM, uint8 Fill, uint8 Edge, uint8 Flags)
+		{
+			double Turn = FMath::Fmod(AngleRad / (2.0 * PI), 1.0);
+			if (Turn < 0.0)
+			{
+				Turn += 1.0;
+			}
+			const uint32 Ang = uint32(FMath::RoundToInt(Turn * 1024.0)) & 1023u;
+			const uint32 HL = uint32(FMath::Clamp(FMath::RoundToInt(HalfLenM / 0.05f), 1, 127));
+			const uint32 HW = uint32(FMath::Clamp(FMath::RoundToInt(HalfWidthM / 0.25f), 1, 127));
+			const uint32 Z = Ang * 16384u + HL * 128u + HW;
+			const uint32 W = uint32(Fill) * 65536u + uint32(Edge) * 256u + Flags;
+			return FVector4f(float(Centre.X), float(Centre.Y), float(Z), float(W));
+		}
+
 		void MapBuildRoad(const ARMBuildableRoad* Road, FRMMapPiece& Out)
 		{
 			TArray<FRMFrame> Frames;
@@ -205,92 +271,85 @@ namespace RMMapLayer
 			{
 				return;
 			}
-			const float Half = Road->GetRoadWidth() * 0.5f;
-			const float LineHalf = Half - MapEdgeInset;
-			const bool bLines = Road->GetMarkings().bEdgeLines;
-			for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+			FColor FillC, EdgeC;
+			MapPieceColours(Road, FillC, EdgeC);
+			const uint8 Fill = MapPaletteOf(FillC);
+			const uint8 Edge = MapPaletteOf(EdgeC);
+			const uint8 Flags = Road->GetMarkings().bEdgeLines ? 1 : 0;
+			const float HalfW = Road->GetRoadWidth() * 0.005f; // m
+			const int32 Num = Frames.Num() - 1;
+			TArray<double> Angles;
+			Angles.SetNum(Num);
+			for (int32 I = 0; I < Num; ++I)
+			{
+				const FVector2D D = MapUnits(Frames[I + 1].Pos) - MapUnits(Frames[I].Pos);
+				Angles[I] = FMath::Atan2(D.Y, D.X);
+			}
+			for (int32 I = 0; I < Num; ++I)
 			{
 				const FRMFrame& A = Frames[I];
 				const FRMFrame& B = Frames[I + 1];
-				FRMMapSeg& Seg = Out.Segs.AddDefaulted_GetRef();
-				Seg.Z = (A.Pos.Z + B.Pos.Z) * 0.5f;
-				Seg.Fill = { MapUnits(A.Pos - A.Right * Half), MapUnits(A.Pos + A.Right * Half),
-					MapUnits(B.Pos + B.Right * Half), MapUnits(B.Pos - B.Right * Half) };
-				if (bLines)
+				const float Len = FVector::Dist2D(A.Pos, B.Pos) * 0.01f; // m
+				// On a bend each strip reaches into its neighbour far enough to close the wedge on the outer side.
+				float Reach = 0.f;
+				for (int32 N : { I - 1, I + 1 })
 				{
-					Seg.Lines.Add({ MapUnits(A.Pos - A.Right * LineHalf), MapUnits(B.Pos - B.Right * LineHalf) });
-					Seg.Lines.Add({ MapUnits(A.Pos + A.Right * LineHalf), MapUnits(B.Pos + B.Right * LineHalf) });
+					if (N >= 0 && N < Num)
+					{
+						const double Turn = FMath::Abs(FMath::UnwindRadians(Angles[N] - Angles[I]));
+						Reach = FMath::Max(Reach, HalfW * float(FMath::Tan(FMath::Min(Turn, 1.2) * 0.5)) + 0.1f);
+					}
 				}
-				for (const FVector2D& P : Seg.Fill) { Out.Bounds += P; }
+				const FVector2D Centre = (MapUnits(A.Pos) + MapUnits(B.Pos)) * 0.5;
+				Out.Recs.Add(MapRecord(Centre, Angles[I], Len * 0.5f + Reach, HalfW, Fill, Edge, Flags));
+				Out.RecZ.Add((A.Pos.Z + B.Pos.Z) * 0.5f);
 			}
-			MapPieceColours(Road, Out.Fill, Out.Edge);
 		}
 
 		void MapBuildIntersection(const ARMBuildableIntersection* Isect, FRMMapPiece& Out)
 		{
 			TArray<FVector> Outline;
 			TArray<bool> IsMouth;
-			if (!Isect->GetWorldOutline(Outline, IsMouth))
+			if (!Isect->GetWorldOutline(Outline, IsMouth) || Outline.Num() < 3)
 			{
 				return;
 			}
-			FRMMapSeg& Seg = Out.Segs.AddDefaulted_GetRef();
-			TArray<FVector2D> Inset;
-			double ZSum = 0.0;
+			FRMMapIsect& X = Out.Isect.Emplace();
 			FVector Centre = FVector::ZeroVector;
 			for (const FVector& P : Outline)
 			{
 				Centre += P;
 			}
 			Centre /= Outline.Num();
+			X.Centre = MapUnits(Centre);
+			X.Z = Centre.Z;
+			const float Inset = MapLineWidthM * 50.f; // line centre half a line width inside the curb (cm)
+			TArray<FVector2D> Inner;
 			for (const FVector& P : Outline)
 			{
-				const FVector In = (Centre - P).GetSafeNormal2D();
-				Seg.Fill.Add(MapUnits(P));
-				Inset.Add(MapUnits(P + In * MapEdgeInset));
-				Out.Bounds += Seg.Fill.Last();
-				ZSum += P.Z;
+				X.Fill.Add(MapUnits(P));
+				Inner.Add(MapUnits(P + (Centre - P).GetSafeNormal2D() * Inset));
 			}
 			// Side lines along the curbs (not the mouths, where roads continue), if switched on.
 			TArray<FVector2D> Run;
-			for (int32 I = 0; Isect->HasSideLines() && I < Inset.Num(); ++I)
+			for (int32 I = 0; Isect->HasSideLines() && I < Inner.Num(); ++I)
 			{
-				const bool bMouth = IsMouth.IsValidIndex(I) && IsMouth[I];
-				if (bMouth)
+				if (IsMouth.IsValidIndex(I) && IsMouth[I])
 				{
-					if (Run.Num() >= 2) { Seg.Lines.Add(Run); }
+					if (Run.Num() >= 2) { X.Lines.Add(Run); }
 					Run.Reset();
 					continue;
 				}
-				if (Run.Num() == 0) { Run.Add(Inset[I]); }
-				Run.Add(Inset[(I + 1) % Inset.Num()]);
+				if (Run.Num() == 0) { Run.Add(Inner[I]); }
+				Run.Add(Inner[(I + 1) % Inner.Num()]);
 			}
-			if (Run.Num() >= 2) { Seg.Lines.Add(Run); }
-			Seg.Z = ZSum / Outline.Num();
-			MapPieceColours(Isect, Out.Fill, Out.Edge);
+			if (Run.Num() >= 2) { X.Lines.Add(Run); }
+			MapPieceColours(Isect, X.FillC, X.EdgeC);
 		}
 
-		void MapMarkDirty(const FBox2D& Box)
-		{
-			if (!Box.bIsValid || GMapTileUnits <= 0.0)
-			{
-				return;
-			}
-			const int32 X0 = FMath::FloorToInt(Box.Min.X / GMapTileUnits), X1 = FMath::FloorToInt(Box.Max.X / GMapTileUnits);
-			const int32 Y0 = FMath::FloorToInt(Box.Min.Y / GMapTileUnits), Y1 = FMath::FloorToInt(Box.Max.Y / GMapTileUnits);
-			for (int32 Y = Y0; Y <= Y1; ++Y)
-			{
-				for (int32 X = X0; X <= X1; ++X)
-				{
-					GMapDirty.Add(FIntPoint(X, Y));
-				}
-			}
-		}
-
-		/** Finds new, changed and removed roads / intersections; marks their tiles dirty. */
 		/**
-		 * Finds new, changed and removed pieces and marks their tiles dirty. Building a piece's shape stops
-		 * when the time budget is used: returns false then (the rest is picked up next frame).
+		 * Finds new, changed and removed pieces. Building a piece's shape stops when the time budget is used:
+		 * returns false then (the rest is picked up next frame).
 		 */
 		bool MapScanPieces(UWorld* World)
 		{
@@ -312,15 +371,11 @@ namespace RMMapLayer
 					return;
 				}
 				++Built;
-				if (Old)
-				{
-					MapMarkDirty(Old->Bounds);
-				}
 				FRMMapPiece Piece;
 				Piece.Key = Key;
 				Build(Piece);
-				MapMarkDirty(Piece.Bounds);
 				GMapPieces.Add(Actor, MoveTemp(Piece));
+				GMapChanged = true;
 			};
 			for (TActorIterator<ARMBuildableRoad> It(World); It; ++It)
 			{
@@ -343,290 +398,295 @@ namespace RMMapLayer
 				AActor* Actor = It.Key().Get();
 				if (!Actor || !Seen.Contains(Actor))
 				{
-					MapMarkDirty(It.Value().Bounds);
 					It.RemoveCurrent();
+					GMapChanged = true;
 				}
 			}
 			return bComplete;
 		}
 
-		// ---- Painting -------------------------------------------------------------------------------
-
-		/** Calls Visit(X, Y) for every pixel whose centre is inside Poly (even-odd rule). */
-		template <typename FVisit>
-		void MapScanPolygon(int32 Size, const TArray<FVector2D>& Poly, FVisit&& Visit)
+		/** Every road record and intersection, lowest first, cut into runs for drawing. */
+		void MapRebuild()
 		{
-			if (Poly.Num() < 3)
-			{
-				return;
-			}
-			double MinY = Poly[0].Y, MaxY = Poly[0].Y;
-			for (const FVector2D& P : Poly)
-			{
-				MinY = FMath::Min(MinY, P.Y);
-				MaxY = FMath::Max(MaxY, P.Y);
-			}
-			const int32 Y0 = FMath::Max(0, FMath::FloorToInt(MinY));
-			const int32 Y1 = FMath::Min(Size - 1, FMath::CeilToInt(MaxY));
-			TArray<double, TInlineAllocator<16>> Xs;
-			for (int32 Y = Y0; Y <= Y1; ++Y)
-			{
-				const double SY = Y + 0.5;
-				Xs.Reset();
-				for (int32 I = 0, J = Poly.Num() - 1; I < Poly.Num(); J = I++)
-				{
-					const FVector2D& A = Poly[J];
-					const FVector2D& B = Poly[I];
-					if ((A.Y <= SY) != (B.Y <= SY))
-					{
-						Xs.Add(A.X + (SY - A.Y) / (B.Y - A.Y) * (B.X - A.X));
-					}
-				}
-				Xs.Sort();
-				for (int32 K = 0; K + 1 < Xs.Num(); K += 2)
-				{
-					const int32 XA = FMath::Max(0, FMath::CeilToInt(Xs[K] - 0.5));
-					const int32 XB = FMath::Min(Size - 1, FMath::CeilToInt(Xs[K + 1] - 0.5) - 1);
-					for (int32 X = XA; X <= XB; ++X)
-					{
-						Visit(X, Y);
-					}
-				}
-			}
-		}
-
-		/** A line Thick pixels wide (centred on A-B). */
-		void MapDrawLine(TArray<FColor>& Px, int32 Size, const FVector2D& A, const FVector2D& B, int32 Thick, const FColor& C)
-		{
-			const int32 Steps = FMath::Max(1, FMath::CeilToInt((B - A).GetAbsMax() * 2.0));
-			const double Back = Thick * 0.5;
-			for (int32 S = 0; S <= Steps; ++S)
-			{
-				const FVector2D P = FMath::Lerp(A, B, double(S) / Steps);
-				const int32 X0 = FMath::RoundToInt(P.X - Back), Y0 = FMath::RoundToInt(P.Y - Back);
-				for (int32 Y = FMath::Max(0, Y0); Y < FMath::Min(Size, Y0 + Thick); ++Y)
-				{
-					for (int32 X = FMath::Max(0, X0); X < FMath::Min(Size, X0 + Thick); ++X)
-					{
-						Px[Y * Size + X] = C;
-					}
-				}
-			}
-		}
-
-		/** Half the size: each pixel the average of 2 x 2, colours weighted by alpha (no dark fringes). */
-		void MapDownsample(const TArray<FColor>& Src, int32 Size, TArray<FColor>& Out)
-		{
-			const int32 Half = Size / 2;
-			Out.SetNumUninitialized(Half * Half);
-			for (int32 Y = 0; Y < Half; ++Y)
-			{
-				for (int32 X = 0; X < Half; ++X)
-				{
-					const FColor* Q[4] = { &Src[(2 * Y) * Size + 2 * X], &Src[(2 * Y) * Size + 2 * X + 1],
-						&Src[(2 * Y + 1) * Size + 2 * X], &Src[(2 * Y + 1) * Size + 2 * X + 1] };
-					uint32 R = 0, G = 0, B = 0, A = 0;
-					for (const FColor* C : Q)
-					{
-						R += C->R * C->A; G += C->G * C->A; B += C->B * C->A; A += C->A;
-					}
-					Out[Y * Half + X] = A > 0
-						? FColor(uint8(R / A), uint8(G / A), uint8(B / A), uint8((A + 2) / 4))
-						: FColor(0, 0, 0, 0);
-				}
-			}
-		}
-
-		/**
-		 * Transparent pixels next to painted ones take their colour (alpha stays 0). The picture is
-		 * filtered without premultiplied alpha, so a transparent black neighbour would darken every edge
-		 * into a dark outline; with the colour bled out the edge only fades.
-		 */
-		void MapBleedEdges(TArray<FColor>& Px, int32 Size)
-		{
-			for (int32 Pass = 0; Pass < 2; ++Pass)
-			{
-				const TArray<FColor> Src = Px;
-				for (int32 Y = 0; Y < Size; ++Y)
-				{
-					for (int32 X = 0; X < Size; ++X)
-					{
-						FColor& Out = Px[Y * Size + X];
-						if (Out.A != 0 || (Pass > 0 && (Out.R | Out.G | Out.B) != 0))
-						{
-							continue;
-						}
-						uint32 R = 0, G = 0, B = 0, N = 0;
-						const int32 DX[4] = { -1, 1, 0, 0 };
-						const int32 DY[4] = { 0, 0, -1, 1 };
-						for (int32 K = 0; K < 4; ++K)
-						{
-							const int32 NX = X + DX[K], NY = Y + DY[K];
-							if (NX < 0 || NY < 0 || NX >= Size || NY >= Size)
-							{
-								continue;
-							}
-							const FColor& C = Src[NY * Size + NX];
-							if (C.A != 0 || (C.R | C.G | C.B) != 0)
-							{
-								R += C.R; G += C.G; B += C.B; ++N;
-							}
-						}
-						if (N > 0)
-						{
-							Out = FColor(uint8(R / N), uint8(G / N), uint8(B / N), 0);
-						}
-					}
-				}
-			}
-		}
-
-		/** Writes the pixels (and box-filtered mips) into the tile's texture, creating it if needed. */
-		void MapUpload(FRMMapTile& Tile, const TArray<FColor>& Pixels)
-		{
-			if (!Tile.Tex)
-			{
-				Tile.Tex = UTexture2D::CreateTransient(MapTilePixels, MapTilePixels, PF_B8G8R8A8, NAME_None);
-				if (!Tile.Tex)
-				{
-					return;
-				}
-				Tile.Tex->AddToRoot();
-				Tile.Tex->SRGB = true;
-				Tile.Tex->Filter = TF_Trilinear;
-				Tile.Tex->AddressX = TA_Clamp;
-				Tile.Tex->AddressY = TA_Clamp;
-				Tile.Tex->NeverStream = true;
-				FTexturePlatformData* PD = Tile.Tex->GetPlatformData();
-				for (int32 Level = PD->Mips.Num(); Level < MapTileMips; ++Level)
-				{
-					FTexture2DMipMap* Mip = new FTexture2DMipMap();
-					Mip->SizeX = MapTilePixels >> Level;
-					Mip->SizeY = MapTilePixels >> Level;
-					Mip->BulkData.Lock(LOCK_READ_WRITE);
-					Mip->BulkData.Realloc(int64(Mip->SizeX) * Mip->SizeY * sizeof(FColor));
-					Mip->BulkData.Unlock();
-					PD->Mips.Add(Mip);
-				}
-				Tile.Brush.SetResourceObject(Tile.Tex);
-				Tile.Brush.ImageSize = FVector2D(MapTilePixels, MapTilePixels);
-				Tile.Brush.DrawAs = ESlateBrushDrawType::Image;
-			}
-			FTexturePlatformData* PD = Tile.Tex->GetPlatformData();
-			TArray<FColor> Level = Pixels;
-			int32 Size = MapTilePixels;
-			for (int32 L = 0; L < PD->Mips.Num(); ++L)
-			{
-				FTexture2DMipMap& Mip = PD->Mips[L];
-				MapBleedEdges(Level, Size);
-				void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
-				FMemory::Memcpy(Data, Level.GetData(), FMath::Min<int64>(Mip.BulkData.GetBulkDataSize(), int64(Level.Num()) * sizeof(FColor)));
-				Mip.BulkData.Unlock();
-				if (L + 1 < PD->Mips.Num())
-				{
-					TArray<FColor> Next;
-					MapDownsample(Level, Size, Next);
-					Level = MoveTemp(Next);
-					Size /= 2;
-				}
-			}
-			Tile.Tex->UpdateResource();
-		}
-
-		void MapPaintTile(const FIntPoint& Key)
-		{
-			const FVector2D TileMin(Key.X * GMapTileUnits, Key.Y * GMapTileUnits);
-			FBox2D TileBox(TileMin, TileMin + FVector2D(GMapTileUnits, GMapTileUnits));
-			TArray<const FRMMapPiece*> Pieces;
+			GMapChanged = false;
+			struct FItem { float Z; int32 Index; bool bIsect; };
+			TArray<FItem> Items;
+			TArray<const FVector4f*> RecPtrs;
+			TArray<const FRMMapIsect*> IsectPtrs;
 			for (const TPair<TWeakObjectPtr<AActor>, FRMMapPiece>& P : GMapPieces)
 			{
-				if (P.Value.Bounds.bIsValid && P.Value.Bounds.Intersect(TileBox))
+				for (int32 I = 0; I < P.Value.Recs.Num(); ++I)
 				{
-					Pieces.Add(&P.Value);
+					Items.Add({ P.Value.RecZ[I], RecPtrs.Num(), false });
+					RecPtrs.Add(&P.Value.Recs[I]);
+				}
+				if (P.Value.Isect.IsSet())
+				{
+					Items.Add({ P.Value.Isect->Z, IsectPtrs.Num(), true });
+					IsectPtrs.Add(&P.Value.Isect.GetValue());
 				}
 			}
-			TUniquePtr<FRMMapTile>* Existing = GMapTiles.Find(Key);
-			if (Pieces.Num() == 0)
+			Items.StableSort([](const FItem& A, const FItem& B) { return A.Z < B.Z; });
+			GMapRecords.Reset(RecPtrs.Num());
+			GMapIsects.Reset(IsectPtrs.Num());
+			GMapBatches.Reset();
+			for (const FItem& It : Items)
 			{
-				if (Existing && (*Existing)->Image.IsValid())
+				if (GMapBatches.Num() == 0 || GMapBatches.Last().bIsect != It.bIsect)
 				{
-					(*Existing)->Image->SetVisibility(EVisibility::Collapsed);
+					FRMMapBatch& B = GMapBatches.AddDefaulted_GetRef();
+					B.bIsect = It.bIsect;
+					B.Start = It.bIsect ? GMapIsects.Num() : GMapRecords.Num();
 				}
+				if (It.bIsect)
+				{
+					GMapIsects.Add(*IsectPtrs[It.Index]);
+				}
+				else
+				{
+					GMapRecords.Add(*RecPtrs[It.Index]);
+				}
+				++GMapBatches.Last().Count;
+			}
+			GMapUploadPending = true; // the widget paints every frame and uploads on its next paint
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: %d road records, %d intersections, %d draw runs"), GMapRecords.Num(), GMapIsects.Num(), GMapBatches.Num());
+		}
+
+		// ---- GPU ------------------------------------------------------------------------------------
+
+		ISlateRHIRendererModule& MapRenderer()
+		{
+			return FModuleManager::Get().LoadModuleChecked<ISlateRHIRendererModule>(TEXT("SlateRHIRenderer"));
+		}
+
+		bool MapEnsureGpu()
+		{
+			if (GMapHandle.IsValid() && GMapWhiteHandle.IsValid())
+			{
+				return true;
+			}
+			if (GMapGpuFailed)
+			{
+				return false;
+			}
+			UMaterialInterface* Parent = LoadObject<UMaterialInterface>(nullptr, MapMaterialPath);
+			if (!Parent)
+			{
+				GMapGpuFailed = true;
+				UE_LOG(LogRoadMaker, Warning, TEXT("RMMapLayer: %s not found: no roads on the map"), MapMaterialPath);
+				return false;
+			}
+			if (!GMapPalette)
+			{
+				GMapPalette = UTexture2D::CreateTransient(MapPaletteSize, 1, PF_B8G8R8A8);
+				GMapPalette->Filter = TF_Nearest;
+				GMapPalette->SRGB = true;
+				GMapPalette->AddToRoot();
+				GMapPalette->UpdateResource();
+				GMapPaletteDirty = true;
+			}
+			if (!GMapWhite)
+			{
+				GMapWhite = UTexture2D::CreateTransient(4, 4, PF_B8G8R8A8);
+				FTexture2DMipMap& Mip = GMapWhite->GetPlatformData()->Mips[0];
+				void* Data = Mip.BulkData.Lock(LOCK_READ_WRITE);
+				FMemory::Memset(Data, 0xFF, 4 * 4 * sizeof(FColor));
+				Mip.BulkData.Unlock();
+				GMapWhite->AddToRoot();
+				GMapWhite->UpdateResource();
+				GMapWhiteBrush.SetResourceObject(GMapWhite);
+				GMapWhiteBrush.ImageSize = FVector2D(4, 4);
+				GMapWhiteBrush.DrawAs = ESlateBrushDrawType::Image;
+			}
+			GMapMaterial = UMaterialInstanceDynamic::Create(Parent, GetTransientPackage());
+			GMapMaterial->AddToRoot();
+			GMapMaterial->SetTextureParameterValue(TEXT("Palette"), GMapPalette);
+			GMapBrush = MakeShared<FSlateMaterialBrush>(*GMapMaterial, FVector2D(64.0, 64.0));
+			GMapHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*GMapBrush);
+			GMapWhiteHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(GMapWhiteBrush);
+			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: GPU map roads ready (material %s, white %s)"),
+				GMapHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"), GMapWhiteHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"));
+			return GMapHandle.IsValid() && GMapWhiteHandle.IsValid();
+		}
+
+		void MapUploadPalette()
+		{
+			if (!GMapPaletteDirty || !GMapPalette)
+			{
 				return;
 			}
+			GMapPaletteDirty = false;
+			const int32 Bytes = MapPaletteSize * sizeof(FColor);
+			uint8* Copy = static_cast<uint8*>(FMemory::Malloc(Bytes));
+			FMemory::Memzero(Copy, Bytes);
+			FMemory::Memcpy(Copy, GMapPaletteColours.GetData(), GMapPaletteColours.Num() * sizeof(FColor));
+			FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, MapPaletteSize, 1);
+			GMapPalette->UpdateTextureRegions(0, 1, Region, MapPaletteSize * sizeof(FColor), sizeof(FColor), Copy,
+				[](uint8* Data, const FUpdateTextureRegion2D* R) { FMemory::Free(Data); delete R; });
+		}
 
-			// Every surface piece of every road in the tile, lowest first.
-			struct FRMMapDraw { const FRMMapSeg* Seg; const FRMMapPiece* Piece; int32 PieceIndex; };
-			TArray<FRMMapDraw> Draws;
-			for (int32 PieceIdx = 0; PieceIdx < Pieces.Num(); ++PieceIdx)
+		void MapUploadRecords()
+		{
+			if (!GMapUploadPending)
 			{
-				for (const FRMMapSeg& Seg : Pieces[PieceIdx]->Segs)
-				{
-					Draws.Add({ &Seg, Pieces[PieceIdx], PieceIdx });
-				}
+				return;
 			}
-			Draws.Sort([](const FRMMapDraw& A, const FRMMapDraw& B) { return A.Seg->Z < B.Seg->Z; });
-
-			// Painted at MapSuperSample x the tile resolution, then averaged down: smooth edges and lines.
-			const int32 Big = MapTilePixels * MapSuperSample;
-			const double Scale = Big / GMapTileUnits;
-			auto ToPx = [&](const FVector2D& M) { return (M - TileMin) * Scale; };
-			TArray<FColor> Pixels;
-			Pixels.Init(FColor(0, 0, 0, 0), Big * Big);
-			TArray<FVector2D> Poly;
-			for (const FRMMapDraw& D : Draws)
+			GMapUploadPending = false;
+			if (GMapRecords.Num() == 0)
 			{
-				Poly.Reset();
-				for (const FVector2D& M : D.Seg->Fill) { Poly.Add(ToPx(M)); }
-				const FColor Fill = D.Piece->Fill;
-				MapScanPolygon(Big, Poly, [&](int32 X, int32 Y) { Pixels[Y * Big + X] = Fill; });
-				for (const TArray<FVector2D>& Line : D.Seg->Lines)
+				return;
+			}
+			if (!GMapInstances.IsValid() || GMapRecords.Num() > GMapInstanceCapacity)
+			{
+				GMapInstanceCapacity = FMath::Max<int32>(1024, int32(FMath::RoundUpToPowerOfTwo(uint32(GMapRecords.Num()))));
+				GMapInstances = MapRenderer().CreateInstanceBuffer(GMapInstanceCapacity);
+			}
+			FSlateInstanceBufferData Data = GMapRecords;
+			GMapInstances->Update(Data);
+		}
+
+		/** Intersections of one run as flat triangles in window space, with a 1 px soft rim; curb lines on top. */
+		void MapIsectVerts(int32 Start, int32 Count, const FVector2f& Origin, const FVector2f& Scale, float PxPerMetre,
+			TArray<FSlateVertex>& V, TArray<SlateIndex>& I)
+		{
+			auto ToPx = [&](const FVector2D& M) { return Origin + Scale * FVector2f(M / 1024.0); };
+			auto Vert = [&](const FVector2f& P, const FColor& C)
+			{
+				FSlateVertex& Out = V.AddZeroed_GetRef();
+				Out.TexCoords[0] = 0.5f; Out.TexCoords[1] = 0.5f; Out.TexCoords[2] = 1.f; Out.TexCoords[3] = 1.f;
+				Out.MaterialTexCoords = FVector2f(0.5f, 0.5f);
+				Out.Position = P;
+				Out.Color = C;
+				Out.SecondaryColor = FColor::White;
+				return SlateIndex(V.Num() - 1);
+			};
+			const float LineHalf = FMath::Max(MapLineWidthM * PxPerMetre * 0.5f, 0.5f);
+			for (int32 K = Start; K < Start + Count; ++K)
+			{
+				const FRMMapIsect& X = GMapIsects[K];
+				const int32 N = X.Fill.Num();
+				const FVector2f C = ToPx(X.Centre);
+				const SlateIndex Mid = Vert(C, X.FillC);
+				FColor Clear = X.FillC;
+				Clear.A = 0;
+				const SlateIndex First = SlateIndex(V.Num());
+				for (int32 J = 0; J < N; ++J)
 				{
-					for (int32 I = 0; I + 1 < Line.Num(); ++I)
+					const FVector2f P = ToPx(X.Fill[J]);
+					Vert(P, X.FillC);
+					Vert(P + (P - C).GetSafeNormal() * 1.f, Clear);
+				}
+				for (int32 J = 0; J < N; ++J)
+				{
+					const SlateIndex A = First + 2 * J, B = First + 2 * ((J + 1) % N);
+					I.Append({ Mid, A, B });                // fill
+					I.Append({ A, SlateIndex(A + 1), SlateIndex(B + 1), A, SlateIndex(B + 1), B }); // rim
+				}
+				if (LineHalf * 2.f < 1.f || X.Lines.Num() == 0)
+				{
+					continue;
+				}
+				for (const TArray<FVector2D>& Line : X.Lines)
+				{
+					for (int32 J = 0; J + 1 < Line.Num(); ++J)
 					{
-						MapDrawLine(Pixels, Big, ToPx(Line[I]), ToPx(Line[I + 1]), MapLineThick, D.Piece->Edge);
+						const FVector2f A = ToPx(Line[J]), B = ToPx(Line[J + 1]);
+						const FVector2f D = (B - A).GetSafeNormal();
+						const FVector2f Nrm(-D.Y, D.X);
+						const SlateIndex Q = Vert(A - Nrm * LineHalf, X.EdgeC);
+						Vert(A + Nrm * LineHalf, X.EdgeC);
+						Vert(B + Nrm * LineHalf, X.EdgeC);
+						Vert(B - Nrm * LineHalf, X.EdgeC);
+						I.Append({ Q, SlateIndex(Q + 1), SlateIndex(Q + 2), Q, SlateIndex(Q + 2), SlateIndex(Q + 3) });
 					}
 				}
 			}
-			for (int32 Size = Big; Size > MapTilePixels; Size /= 2)
+		}
+
+		/** Our layer: covers Overlay_0 (the 1024 x 1024 map square), draws the roads in it. */
+		class SRMMapRoadsLayer : public SLeafWidget
+		{
+		public:
+			SLATE_BEGIN_ARGS(SRMMapRoadsLayer) {}
+			SLATE_END_ARGS()
+
+			void Construct(const FArguments&)
 			{
-				TArray<FColor> Smaller;
-				MapDownsample(Pixels, Size, Smaller);
-				Pixels = MoveTemp(Smaller);
+				// Painted every frame (pan / zoom are render transforms of the containers above us).
+				ForceVolatile(true);
 			}
 
-			if (!Existing)
+			virtual FVector2D ComputeDesiredSize(float) const override { return FVector2D::ZeroVector; }
+
+			virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
+				FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override
 			{
-				Existing = &GMapTiles.Add(Key, MakeUnique<FRMMapTile>());
+				if (GMapBatches.Num() == 0 || GMapUnitsPerMetre <= 0.0 || !MapEnsureGpu())
+				{
+					return LayerId;
+				}
+				MapUploadPalette();
+				MapUploadRecords();
+				static float AppliedUnitsPerMetre = -1.f;
+				if (AppliedUnitsPerMetre != float(GMapUnitsPerMetre))
+				{
+					AppliedUnitsPerMetre = float(GMapUnitsPerMetre);
+					GMapMaterial->SetScalarParameterValue(TEXT("UnitsPerMetre"), AppliedUnitsPerMetre);
+				}
+
+				// Map square (0..1) -> window pixels: origin and size from the transform of the map's containers.
+				const FVector2f Size(AllottedGeometry.GetLocalSize());
+				const FSlateRenderTransform& T = AllottedGeometry.GetAccumulatedRenderTransform();
+				const FVector2f Origin = T.TransformPoint(FVector2f::ZeroVector);
+				const FVector2f Scale(T.TransformPoint(FVector2f(Size.X, 0.f)).X - Origin.X, T.TransformPoint(FVector2f(0.f, Size.Y)).Y - Origin.Y);
+				const float PxPerMetre = FMath::Abs(Scale.X) * float(GMapUnitsPerMetre) / 1024.f;
+
+				static const TArray<SlateIndex> QuadIndices = { 0, 1, 2, 0, 2, 3 };
+				TArray<FSlateVertex> Quad;
+				Quad.SetNumZeroed(4);
+				const FVector2f Corners[4] = { { -1.f, -1.f }, { 1.f, -1.f }, { 1.f, 1.f }, { -1.f, 1.f } };
+				for (int32 K = 0; K < 4; ++K)
+				{
+					FSlateVertex& Vx = Quad[K];
+					Vx.TexCoords[0] = Scale.X;
+					Vx.TexCoords[1] = Scale.Y;
+					Vx.TexCoords[2] = Origin.X;
+					Vx.TexCoords[3] = Origin.Y;
+					Vx.MaterialTexCoords = Corners[K];
+					Vx.Position = Corners[K];
+					Vx.Color = FColor::White;
+					Vx.SecondaryColor = FColor::White;
+				}
+				int32 Layer = LayerId;
+				TArray<FSlateVertex> IV;
+				TArray<SlateIndex> II;
+				for (const FRMMapBatch& B : GMapBatches)
+				{
+					++Layer;
+					if (!B.bIsect)
+					{
+						if (GMapInstances.IsValid())
+						{
+							FSlateDrawElement::MakeCustomVerts(OutDrawElements, Layer, GMapHandle, Quad, QuadIndices, GMapInstances.Get(), uint32(B.Start), uint32(B.Count));
+						}
+						continue;
+					}
+					IV.Reset();
+					II.Reset();
+					MapIsectVerts(B.Start, B.Count, Origin, Scale, PxPerMetre, IV, II);
+					if (II.Num() > 0)
+					{
+						FSlateDrawElement::MakeCustomVerts(OutDrawElements, Layer, GMapWhiteHandle, IV, II, nullptr, 0, 0);
+					}
+				}
+				return Layer;
 			}
-			FRMMapTile& Tile = **Existing;
-			MapUpload(Tile, Pixels);
-			if (!Tile.Tex)
-			{
-				return;
-			}
-			if (!Tile.Image.IsValid() && GMapCanvas.IsValid())
-			{
-				GMapCanvas->AddSlot()
-					.Position(TileMin)
-					.Size(FVector2D(GMapTileUnits, GMapTileUnits))
-					[
-						SAssignNew(Tile.Image, SImage)
-						.Image(&Tile.Brush)
-						.Visibility(EVisibility::HitTestInvisible)
-					];
-			}
-			if (Tile.Image.IsValid())
-			{
-				Tile.Image->SetVisibility(EVisibility::HitTestInvisible);
-				Tile.Image->Invalidate(EInvalidateWidgetReason::Paint);
-			}
-		}
+		};
 
 		// ---- Widget ---------------------------------------------------------------------------------
 
 		/**
-		 * Puts our canvas into the live slate overlay that holds the area painter (Overlay_0), directly above
+		 * Puts our layer widget into the live slate overlay that holds the area painter (Overlay_0), directly above
 		 * the map picture (mMap): roads are part of the ground, so everything else on the map, the game's and
 		 * any other mod's, draws on top of them. Our slot takes mMap's own ZOrder; an overlay draws equal
 		 * ZOrders in the order they were added, so we come right after mMap and before every other child,
@@ -675,19 +735,20 @@ namespace RMMapLayer
 				UE_LOG(LogRoadMaker, Warning, TEXT("RMMapLayer: map picture not found in its overlay"));
 				return;
 			}
-			if (!GMapCanvas.IsValid())
+			if (!GMapWidget.IsValid())
 			{
-				GMapCanvas = SNew(SCanvas).Visibility(EVisibility::HitTestInvisible);
+				GMapWidget = SNew(SRMMapRoadsLayer);
+				GMapWidget->SetVisibility(EVisibility::HitTestInvisible);
 			}
 			if (TSharedPtr<SOverlay> OldHost = GMapHost.Pin())
 			{
-				OldHost->RemoveSlot(GMapCanvas.ToSharedRef());
+				OldHost->RemoveSlot(GMapWidget.ToSharedRef());
 			}
 			Host->AddSlot(ZOrder)
 				.HAlign(HAlign_Fill)
 				.VAlign(VAlign_Fill)
 				[
-					GMapCanvas.ToSharedRef()
+					GMapWidget.ToSharedRef()
 				];
 			GMapHost = Host;
 			// The stack, bottom to top, to check the order in the log.
@@ -695,7 +756,7 @@ namespace RMMapLayer
 			for (int32 I = 0; I < Children->Num(); ++I)
 			{
 				const TSharedRef<SWidget> W = Children->GetChildAt(I);
-				FString Name = W == GMapCanvas.ToSharedRef() ? TEXT("RoadMaker") : W->GetTypeAsString();
+				FString Name = W == GMapWidget.ToSharedRef() ? TEXT("RoadMaker") : W->GetTypeAsString();
 				if (W == MapLive)
 				{
 					Name = TEXT("mMap");
@@ -792,9 +853,9 @@ namespace RMMapLayer
 			MapAttach(Painter);
 			// "Show Roads on Map" (map side menu): off = the layer hidden and nothing painted.
 			RMMapRoads::EnsureRow(World);
-			if (GMapCanvas.IsValid())
+			if (GMapWidget.IsValid())
 			{
-				GMapCanvas->SetVisibility(RMMapRoads::IsShown() ? EVisibility::HitTestInvisible : EVisibility::Collapsed);
+				GMapWidget->SetVisibility(RMMapRoads::IsShown() ? EVisibility::HitTestInvisible : EVisibility::Collapsed);
 			}
 			if (!RMMapRoads::IsShown())
 			{
@@ -802,21 +863,12 @@ namespace RMMapLayer
 				return true;
 			}
 			const bool bScanned = MapScanPieces(World);
-			// Tiles wait until every piece is known (no half-painted tiles while a big save is first read).
-			if (bScanned)
+			// The draw list waits until every piece is known (no half-drawn network while a big save is first read).
+			if (bScanned && GMapChanged)
 			{
-				const double Deadline = FPlatformTime::Seconds() + MapPaintBudget;
-				for (auto It = GMapDirty.CreateIterator(); It; ++It)
-				{
-					MapPaintTile(*It);
-					It.RemoveCurrent();
-					if (FPlatformTime::Seconds() > Deadline)
-					{
-						break;
-					}
-				}
+				MapRebuild();
 			}
-			bPending = !bScanned || GMapDirty.Num() > 0;
+			bPending = !bScanned;
 			return true;
 		}
 	}

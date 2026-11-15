@@ -27,5 +27,7 @@ public class RoadMaker : ModuleRules
 			"SML",
 			"OnlineIntegration", // the game's sign header (sign wall) includes LocalUserInfo.h
 		});
+		// The map layer draws roads with Slate instance buffers (GPU map roads, 1.4.0).
+		PrivateIncludePathModuleNames.Add("SlateRHIRenderer");
 	}
 }
