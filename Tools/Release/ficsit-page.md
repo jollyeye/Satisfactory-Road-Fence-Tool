@@ -104,6 +104,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
 **Changed**
+- Roads on the map are drawn directly on the terrain, under everything else on the map, including what other map mods draw (e.g. vehicle paths).
 - A fence wall (or a road fence of the same kind) is refused only when it follows another along the same curve. Touching or overlapping in part, like two walls meeting where roads split, is allowed and the hologram turns yellow, like the game's buildings that touch.
 
 **Fixed**

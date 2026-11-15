@@ -2,9 +2,10 @@
 //
 // The map widget nests the map picture in Overlay_0 (1024 x 1024 local "map units") inside
 // mMapScrollContainer (render translation = pan) inside mMapZoomContainer (render scale 1..8 = zoom).
-// Overlay_0 holds: mMap (the map picture), BPW_MapAreaPainter (fog / map areas) and mMapObjectPanel
-// (icons). We add a canvas to that overlay right after the area painter, so the game pans and zooms it
-// with the map and the icons stay on top. A world position maps to
+// Overlay_0 holds: mMap (the map picture, fog of war in its material), BPW_MapAreaPainter (map areas) and
+// mMapObjectPanel (icons). We add a canvas to that overlay directly above mMap (its ZOrder, added after it),
+// so the game pans and zooms it with the map and everything else, the game's or another mod's, draws on top:
+// roads are part of the ground. A world position maps to
 // UFGMapFunctionLibrary::GetNormalizedPosition(capture actor, location) * 1024 in that square.
 //
 // The canvas holds one picture per 512 m tile that has roads (512 x 512 px, 1 px = 1 m, with mips).
@@ -624,13 +625,18 @@ namespace RMMapLayer
 
 		// ---- Widget ---------------------------------------------------------------------------------
 
-		/** Puts our canvas into the live slate overlay that holds the area painter, right after it. */
+		/**
+		 * Puts our canvas into the live slate overlay that holds the area painter (Overlay_0), directly above
+		 * the map picture (mMap): roads are part of the ground, so everything else on the map, the game's and
+		 * any other mod's, draws on top of them. Our slot takes mMap's own ZOrder; an overlay draws equal
+		 * ZOrders in the order they were added, so we come right after mMap and before every other child,
+		 * and whatever is added later (by a widget hook, with no ZOrder, or with that same ZOrder) is on top.
+		 */
 		void MapAttach(UUserWidget* Painter)
 		{
 			UPanelWidget* Parent = Painter->GetParent();
 			TSharedPtr<SWidget> Live = Parent ? Parent->GetCachedWidget() : nullptr;
-			TSharedPtr<SWidget> PainterLive = Painter->GetCachedWidget();
-			if (!Live.IsValid() || !PainterLive.IsValid() || Live->GetType() != FName(TEXT("SOverlay")))
+			if (!Live.IsValid() || Live->GetType() != FName(TEXT("SOverlay")))
 			{
 				return;
 			}
@@ -639,11 +645,26 @@ namespace RMMapLayer
 			{
 				return;
 			}
-			int32 ZOrder = INDEX_NONE;
-			FChildren* Children = Host->GetChildren();
-			for (int32 I = 0; Children && I < Children->Num(); ++I)
+			// The map picture: the child named mMap, else the overlay's first child.
+			TSharedPtr<SWidget> MapLive;
+			for (int32 I = 0; I < Parent->GetChildrenCount(); ++I)
 			{
-				if (Children->GetChildAt(I) == PainterLive)
+				UWidget* Child = Parent->GetChildAt(I);
+				if (Child && Child->GetFName() == FName(TEXT("mMap")))
+				{
+					MapLive = Child->GetCachedWidget();
+					break;
+				}
+			}
+			FChildren* Children = Host->GetChildren();
+			if (!Children || Children->Num() == 0)
+			{
+				return;
+			}
+			int32 ZOrder = INDEX_NONE;
+			for (int32 I = 0; I < Children->Num(); ++I)
+			{
+				if (MapLive.IsValid() ? Children->GetChildAt(I) == MapLive : I == 0)
 				{
 					ZOrder = static_cast<const SOverlay::FOverlaySlot&>(Children->GetSlotAt(I)).GetZOrder();
 					break;
@@ -651,7 +672,7 @@ namespace RMMapLayer
 			}
 			if (ZOrder == INDEX_NONE)
 			{
-				UE_LOG(LogRoadMaker, Warning, TEXT("RMMapLayer: area painter not found in its overlay"));
+				UE_LOG(LogRoadMaker, Warning, TEXT("RMMapLayer: map picture not found in its overlay"));
 				return;
 			}
 			if (!GMapCanvas.IsValid())
@@ -669,7 +690,35 @@ namespace RMMapLayer
 					GMapCanvas.ToSharedRef()
 				];
 			GMapHost = Host;
-			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: attached to %s after ZOrder %d"), *Parent->GetName(), ZOrder);
+			// The stack, bottom to top, to check the order in the log.
+			TArray<FString> Stack;
+			for (int32 I = 0; I < Children->Num(); ++I)
+			{
+				const TSharedRef<SWidget> W = Children->GetChildAt(I);
+				FString Name = W == GMapCanvas.ToSharedRef() ? TEXT("RoadMaker") : W->GetTypeAsString();
+				if (W == MapLive)
+				{
+					Name = TEXT("mMap");
+				}
+				else if (W == Painter->GetCachedWidget())
+				{
+					Name = TEXT("AreaPainter");
+				}
+				else if (W->GetType() == FName(TEXT("SObjectWidget")))
+				{
+					for (int32 C = 0; C < Parent->GetChildrenCount(); ++C)
+					{
+						UWidget* Child = Parent->GetChildAt(C);
+						if (Child && Child->GetCachedWidget() == W)
+						{
+							Name = Child->GetName();
+						}
+					}
+				}
+				Stack.Add(FString::Printf(TEXT("%s(%d)"), *Name, static_cast<const SOverlay::FOverlaySlot&>(Children->GetSlotAt(I)).GetZOrder()));
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: attached to %s above the map picture, bottom to top: %s"), *Parent->GetName(),
+				*FString::Join(Stack, TEXT(", ")));
 		}
 
 		bool MapLayerTick(float)

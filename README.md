@@ -48,7 +48,7 @@ Manager). Current version: **1.3.0**, for Satisfactory 1.2 with SML 3.12 (1.3.1 
 - Signs and wall attachments (wall mounts, wall holes, ladders...) snap to fence walls and the gantry.
 - Sign backgrounds: Chevrons Left and Chevrons Right in the game's sign editor.
 
-**Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu.
+**Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu. For map modders: the roads are drawn directly above the map picture (`mMap` in Widget_Map's `Overlay_0`), so anything you add to that overlay draws on top of them.
 
 **Snapping for game buildings**
 - One-click vehicle paths and railway tracks along a lane, and all connections through an
