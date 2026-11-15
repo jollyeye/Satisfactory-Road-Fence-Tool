@@ -428,7 +428,10 @@ namespace RMMapLayer
 			}
 			FRMMapMark& M = Out.Mark.Emplace();
 			const FTransform T = Mark->GetActorTransform();
-			M.Z = T.GetLocation().Z;
+			// Its highest point (it lies on the road, which may climb under it): drawn after every road piece it covers,
+			// also on a steep road whose far end is a height layer above the marking's start.
+			const FBox Box = Mark->GetComponentsBoundingBox(true);
+			M.Z = (Box.IsValid ? Box.Max.Z : T.GetLocation().Z) + 100.f;
 			M.LengthM = ARMBuildableMarking::HalfLength(Mark->mKind, Mark->GetLaneWidth()) * 0.02f;
 			M.Colour = MapDividerColour(Mark);
 			const bool bIcon = Mark->mKind == ERMMarkingKind::Vehicle;
