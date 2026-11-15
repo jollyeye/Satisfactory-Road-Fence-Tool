@@ -13,7 +13,8 @@ def proj(p):
     return np.array([(x - y) * 0.866, (x + y) * 0.5 - z * 1.0])
 
 class Scene:
-    def __init__(s): s.faces = []; s.bounds = []  # bounds: extra points that only count for the framing
+    def __init__(s): s.faces = []; s.bounds = []; s.overlays = []  # bounds: extra points that only count for the framing
+    # overlays: (origin, u edge, v edge, RGBA image) pasted flat on a face after the polygons (texture u right, v down)
     def face(s, pts, col, layer=0, two=False, shade=True):
         s.faces.append((np.array(pts, float), np.array(col, float), layer, two, shade))
     def quad(s, a, b, c, d, col, **k): s.face([a, b, c, d], col, **k)
@@ -55,6 +56,13 @@ def render(scene, path, shadow=True):
     for layer, depth, pts, col in sorted(faces, key=lambda f: (f[1] + f[0] * 1000.0)):
         c = tuple(int(v) for v in col) + (255,)
         d.polygon([P(p) for p in pts], fill=c, outline=c)
+    for o, eu, ev, tex in scene.overlays:
+        # The projection is affine: output pixel = P(o) + a * Pu + b * Pv, a, b in texture pixels.
+        o2 = np.array(P(o)); pu = (np.array(P(np.add(o, eu))) - o2) / tex.width; pv = (np.array(P(np.add(o, ev))) - o2) / tex.height
+        M = np.linalg.inv(np.array([[pu[0], pv[0]], [pu[1], pv[1]]]))
+        t = -M @ o2
+        layer = tex.transform((S, S), Image.AFFINE, (M[0, 0], M[0, 1], t[0], M[1, 0], M[1, 1], t[1]), Image.BICUBIC)
+        img.alpha_composite(layer)
     img = img.resize((OUT, OUT), Image.LANCZOS)
     img.save(path)
 
@@ -334,6 +342,24 @@ def fence_wall(sc, kind="concrete"):
         while z < H - 0.3:
             sc.quad((0, yy, z), (L, yy, z), (L, yy, z + 0.06), (0, yy, z + 0.06), rib, layer=1, two=True, shade=False)
             z += 0.24
+    elif kind == "sign":
+        # The sign wall: metal body (the grid fence's metal), a black design face with orange text on the road side.
+        metal = np.array([128, 133, 140.0])
+        box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, metal)
+        b = 0.12  # metal rim left round the face
+        black = np.array([14, 15, 18.0])
+        stripe(b, L - b, b, H - b, black)
+        from PIL import ImageFont
+        tw, th = 1200, 800
+        tex = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
+        dt = ImageDraw.Draw(tex)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", 330)
+        text = "FICSIT"
+        box_ = dt.textbbox((0, 0), text, font=font)
+        w_, h_ = box_[2] - box_[0], box_[3] - box_[1]
+        dt.text(((tw - w_) / 2 - box_[0], (th - h_) / 2 - box_[1]), text, font=font, fill=(250, 149, 73, 255))
+        y2 = y + 0.005
+        sc.overlays.append(((b, y2, H - b), (L - 2 * b, 0, 0), (0, 0, -(H - 2 * b)), tex))
     else:  # ficsit
         base = ORANGE * 0.95
         box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, base)
@@ -678,6 +704,7 @@ elif what == "lanevehicle": marking_icon(sc, "vehicle")
 elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
+elif what == "fencewall_sign": fence_wall(sc, "sign")
 render(sc, out)
 if what in ("walk2b", "walk4b"):
     badge_walker(out)
