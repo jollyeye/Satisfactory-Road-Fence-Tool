@@ -125,14 +125,19 @@ namespace RMMapLayer
 		class SRMMapRoadsLayer;
 		TSharedPtr<SRMMapRoadsLayer> GMapWidget;
 
-		/** The slider's zoom (1 when the zoom container was not found). */
-		float MapReadZoom()
+		/**
+		 * The slider's zoom. Without the zoom container: the map's size on screen over the smallest size seen
+		 * (fully zoomed out = 1x), which matches the slider once the map has been zoomed all the way out.
+		 */
+		float MapReadZoom(float MapPixels)
 		{
+			static float SmallestMap = TNumericLimits<float>::Max();
 			UWidget* W = GMapZoomWidget.Get();
 			TSharedPtr<SWidget> Live = W ? W->GetCachedWidget() : nullptr;
 			if (!Live.IsValid())
 			{
-				return 1.f;
+				SmallestMap = FMath::Min(SmallestMap, FMath::Max(MapPixels, 1.f));
+				return MapPixels / SmallestMap;
 			}
 			const TOptional<FSlateRenderTransform>& T = Live->GetRenderTransform();
 			return T.IsSet() ? FMath::Max(T->TransformVector(FVector2f(1.f, 0.f)).Size(), 0.01f) : 1.f;
@@ -686,7 +691,13 @@ namespace RMMapLayer
 				}
 				MapUploadPalette();
 				MapUploadRecords();
-				const float Zoom = MapReadZoom();
+				// Map square (0..1) -> window pixels: origin and size from the transform of the map's containers.
+				const FVector2f Size(AllottedGeometry.GetLocalSize());
+				const FSlateRenderTransform& T = AllottedGeometry.GetAccumulatedRenderTransform();
+				const FVector2f Origin = T.TransformPoint(FVector2f::ZeroVector);
+				const FVector2f Scale(T.TransformPoint(FVector2f(Size.X, 0.f)).X - Origin.X, T.TransformPoint(FVector2f(0.f, Size.Y)).Y - Origin.Y);
+				const float PxPerMetre = FMath::Abs(Scale.X) * float(GMapUnitsPerMetre) / 1024.f;
+				const float Zoom = MapReadZoom(FMath::Abs(Scale.X));
 				static float AppliedZoom = -1.f;
 				if (AppliedZoom != Zoom)
 				{
@@ -694,7 +705,7 @@ namespace RMMapLayer
 					{
 						GMapZoom = Zoom;
 						UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: zoom %.2fx (%.2f px per metre)"), Zoom,
-							FMath::Abs(AllottedGeometry.GetAccumulatedRenderTransform().TransformVector(FVector2f(1024.f, 0.f)).X) * float(GMapUnitsPerMetre) / 1024.f);
+							PxPerMetre);
 					}
 					AppliedZoom = Zoom;
 					GMapMaterial->SetScalarParameterValue(TEXT("Zoom"), Zoom);
@@ -706,12 +717,6 @@ namespace RMMapLayer
 					GMapMaterial->SetScalarParameterValue(TEXT("UnitsPerMetre"), AppliedUnitsPerMetre);
 				}
 
-				// Map square (0..1) -> window pixels: origin and size from the transform of the map's containers.
-				const FVector2f Size(AllottedGeometry.GetLocalSize());
-				const FSlateRenderTransform& T = AllottedGeometry.GetAccumulatedRenderTransform();
-				const FVector2f Origin = T.TransformPoint(FVector2f::ZeroVector);
-				const FVector2f Scale(T.TransformPoint(FVector2f(Size.X, 0.f)).X - Origin.X, T.TransformPoint(FVector2f(0.f, Size.Y)).Y - Origin.Y);
-				const float PxPerMetre = FMath::Abs(Scale.X) * float(GMapUnitsPerMetre) / 1024.f;
 
 				static const TArray<SlateIndex> QuadIndices = { 0, 1, 2, 0, 2, 3 };
 				TArray<FSlateVertex> Quad;
