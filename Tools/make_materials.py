@@ -1357,11 +1357,11 @@ if (lanes > 1.5 && divFade > 0.0)
     float k = clamp(round(t), 1.0, lanes - 1.0);
     float dpx = abs(t - k) * W / lanes * ppm;
     float lh = max(0.075 * ppm, 0.5);
-    float line = saturate(lh + 0.5 - dpx);
+    float divLine = saturate(lh + 0.5 - dpx);   // not "line": an HLSL keyword
     float u = F.x + L.x / max(ppm, 1e-4);
     float p = u - floor(u / 9.0) * 9.0;
     float dash = cont > 0.5 ? 1.0 : saturate(min(p, 3.0 - p) * ppm + 0.5);
-    c = lerp(c, divc, line * dash * divFade);
+    c = lerp(c, divc, divLine * dash * divFade);
 }
 // Side lines just inside the edges: 2-wide and up always, the others from 3x; once the road is wide enough on screen.
 float sideFade = wide > 0.5 ? 1.0 : saturate((Zoom - 2.6) / 0.4);
