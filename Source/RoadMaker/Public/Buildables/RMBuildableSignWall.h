@@ -74,9 +74,6 @@ private:
 	UPROPERTY(Transient)
 	class UFGFactoryClipboardSettings* mPendingDesign = nullptr;
 
-	/** While the wall is written into a blueprint: its sign, taken off mSign so the blueprint keeps no link to it. */
-	UPROPERTY(Transient)
-	ARMSignWallSign* mSignWhileSerializing = nullptr;
 
 	// The design, copied onto the wall while it is saved into a blueprint (the hidden sign is no building of the
 	// blueprint): the wall placed from the blueprint gives it to its new sign. Empty otherwise.

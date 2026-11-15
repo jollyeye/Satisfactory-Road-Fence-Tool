@@ -1,6 +1,8 @@
 #include "Buildables/RMSignWallSign.h"
 #include "Buildables/RMBuildableSignWall.h"
 #include "RoadMakerModule.h"
+#include "TimerManager.h"
+#include "EngineUtils.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -114,6 +116,30 @@ void ARMSignWallSign::BeginPlay()
 	CopyGameSignDefaults();
 	Super::BeginPlay();
 	SetActorEnableCollision(false);
+	// A sign no wall owns any more (left behind by 1.4.0 test builds, when a wall made a second one) goes away,
+	// once every wall of a loading save has had time to come back and take its sign.
+	if (HasAuthority())
+	{
+		FTimerHandle Check;
+		GetWorldTimerManager().SetTimer(Check, FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			if (mWall && mWall->GetSign() == this)
+			{
+				return;
+			}
+			// Kept when any wall still points at it (and that wall becomes its owner).
+			for (TActorIterator<ARMBuildableSignWall> It(GetWorld()); It; ++It)
+			{
+				if (It->GetSign() == this)
+				{
+					mWall = *It;
+					return;
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s belongs to no wall, removed"), *GetName());
+			Destroy();
+		}), 10.f, false);
+	}
 }
 
 float ARMSignWallSign::GetSignificanceRange_Implementation() const

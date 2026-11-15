@@ -104,6 +104,11 @@ void ARMBuildableSignWall::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ARMBuildableSignWall::EnsureSign()
 {
+	// Never another wall's sign (a wall placed from a blueprint may still link the designer wall's).
+	if (mSign && mSign->mWall && mSign->mWall != this)
+	{
+		mSign = nullptr;
+	}
 	if (!HasAuthority() || mSign || GetIsDismantled() || IsActorBeingDestroyed())
 	{
 		if (mSign)
@@ -184,20 +189,12 @@ void ARMBuildableSignWall::PreSerializedToBlueprint()
 		mBlueprintGlossiness = Data.Glossiness;
 		mBlueprintSignType = Data.SignTypeDesc ? Data.SignTypeDesc->GetPathName() : FString();
 	}
-	// The blueprint gets no link to this wall's sign (a wall placed from it makes its own).
-	mSignWhileSerializing = mSign;
-	mSign = nullptr;
 }
 
 void ARMBuildableSignWall::PostSerializedToBlueprint()
 {
 	Super::PostSerializedToBlueprint();
-	ClearBlueprintDesign(); // only the blueprint keeps it
-	if (mSignWhileSerializing)
-	{
-		mSign = mSignWhileSerializing;
-		mSignWhileSerializing = nullptr;
-	}
+	ClearBlueprintDesign(); // only the blueprint keeps it (the game may not call this: EnsureSign clears it on use too)
 }
 
 void ARMBuildableSignWall::PostSerializedFromBlueprint(bool isBlueprintWorld)
