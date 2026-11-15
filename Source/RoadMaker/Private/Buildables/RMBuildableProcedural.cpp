@@ -1,5 +1,7 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "Hologram/FGBlueprintHologram.h"
+#include "Hologram/FGHologram.h"
+#include "Containers/Ticker.h"
 #include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "Holograms/RMHologramLook.h"
 #include "RMSound.h"
@@ -52,6 +54,107 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 
 	// No game build effect (it would hide the piece for the whole animation and show nothing); see StartRiseAnimation.
 	mSkipBuildEffect = true;
+}
+
+// Our pieces in a blueprint hologram take the hologram's look as the game changes it (blue / yellow / red): every frame
+// while one exists, the material and outline stencil of one of the game's own parts of it (or, with none, the
+// hologram's valid / invalid material) are copied onto our copies.
+namespace RMBlueprintLook
+{
+	TMap<TWeakObjectPtr<AActor>, TArray<TWeakObjectPtr<UMeshComponent>>> GCopies;
+	FTSTicker::FDelegateHandle GTicker;
+
+	UMaterialInterface* HologramMaterial(AActor* Holo)
+	{
+		// The hologram's own valid / invalid material (UPROPERTYs of AFGHologram), by its placement state.
+		static FObjectProperty* ValidProp = FindFProperty<FObjectProperty>(AFGHologram::StaticClass(), TEXT("mValidPlacementMaterial"));
+		static FObjectProperty* InvalidProp = FindFProperty<FObjectProperty>(AFGHologram::StaticClass(), TEXT("mInvalidPlacementMaterial"));
+		static FProperty* StateProp = FindFProperty<FProperty>(AFGHologram::StaticClass(), TEXT("mPlacementMaterialState"));
+		bool bInvalid = false;
+		if (const FEnumProperty* E = CastField<FEnumProperty>(StateProp))
+		{
+			bInvalid = E->GetUnderlyingProperty()->GetSignedIntPropertyValue(E->ContainerPtrToValuePtr<void>(Holo)) == int64(EHologramMaterialState::HMS_ERROR);
+		}
+		else if (const FByteProperty* B = CastField<FByteProperty>(StateProp))
+		{
+			bInvalid = B->GetPropertyValue_InContainer(Holo) == uint8(EHologramMaterialState::HMS_ERROR);
+		}
+		FObjectProperty* Prop = bInvalid ? InvalidProp : ValidProp;
+		return Prop ? Cast<UMaterialInterface>(Prop->GetObjectPropertyValue_InContainer(Holo)) : nullptr;
+	}
+
+	bool Tick(float)
+	{
+		for (auto It = GCopies.CreateIterator(); It; ++It)
+		{
+			AActor* Holo = It.Key().Get();
+			It.Value().RemoveAll([](const TWeakObjectPtr<UMeshComponent>& C) { return !C.IsValid(); });
+			if (!Holo || It.Value().Num() == 0)
+			{
+				It.RemoveCurrent();
+				continue;
+			}
+			// A part of the hologram that is the game's own: its material and outline value are the current look.
+			TSet<UMeshComponent*> Ours;
+			for (const TWeakObjectPtr<UMeshComponent>& C : It.Value())
+			{
+				Ours.Add(C.Get());
+			}
+			UMaterialInterface* Material = nullptr;
+			int32 Stencil = -1;
+			TInlineComponentArray<UStaticMeshComponent*> Meshes(Holo);
+			for (UStaticMeshComponent* M : Meshes)
+			{
+				if (!M || Ours.Contains(M) || !M->IsVisible() || !M->GetStaticMesh() || M->GetName().Contains(TEXT("Bounds")) || M->GetName().Contains(TEXT("Direction")))
+				{
+					continue;
+				}
+				Material = M->GetMaterial(0);
+				if (M->bRenderCustomDepth)
+				{
+					Stencil = M->CustomDepthStencilValue;
+				}
+				break;
+			}
+			if (!Material)
+			{
+				Material = HologramMaterial(Holo);
+			}
+			for (const TWeakObjectPtr<UMeshComponent>& C : It.Value())
+			{
+				UMeshComponent* Mesh = C.Get();
+				if (Material)
+				{
+					for (int32 I = 0; I < Mesh->GetNumMaterials(); ++I)
+					{
+						if (Mesh->GetMaterial(I) != Material)
+						{
+							Mesh->SetMaterial(I, Material);
+						}
+					}
+				}
+				if (Stencil >= 0 && Mesh->CustomDepthStencilValue != Stencil)
+				{
+					Mesh->SetCustomDepthStencilValue(Stencil);
+				}
+			}
+		}
+		if (GCopies.Num() == 0)
+		{
+			GTicker.Reset(); // returning false removes this ticker
+			return false;
+		}
+		return true;
+	}
+
+	void Track(AActor* Holo, UMeshComponent* Copy)
+	{
+		GCopies.FindOrAdd(Holo).Add(Copy);
+		if (!GTicker.IsValid())
+		{
+			GTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&Tick), 0.f);
+		}
+	}
 }
 
 void ARMBuildableProcedural::PostInitProperties()
@@ -146,6 +249,7 @@ void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Holog
 		}
 		CopyLook(Src, Copy);
 		Copy->RegisterComponent();
+		RMBlueprintLook::Track(Hologram, Copy);
 		++Copied;
 	}
 	TArray<UStaticMeshComponent*> Parts;
@@ -167,6 +271,7 @@ void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Holog
 		}
 		CopyLook(Src, Copy);
 		Copy->RegisterComponent();
+		RMBlueprintLook::Track(Hologram, Copy);
 		++Copied;
 	}
 	UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint hologram: %s shows %d mesh pieces"), *Piece->GetName(), Copied);
