@@ -526,10 +526,28 @@ namespace RMFill
 			ByAngle.Add(TPair<float, int32>(FMath::Atan2(D.Y, D.X), I));
 		}
 		ByAngle.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key < B.Key; });
-		TArray<FRMFillPick> Out;
-		for (const TPair<float, int32>& E : ByAngle)
+		// Start right after the widest gap between directions: the open side of a chain that does not go all the way
+		// round yet, where the closing line belongs (starting in the middle of the chain joined its two outer edges).
+		int32 First = 0;
+		float Widest = -1.f;
+		for (int32 I = 0; I < ByAngle.Num(); ++I)
 		{
-			Out.Add(Picks[E.Value]);
+			const float Prev = ByAngle[(I + ByAngle.Num() - 1) % ByAngle.Num()].Key;
+			float Gap = ByAngle[I].Key - Prev;
+			if (Gap <= 0.f)
+			{
+				Gap += 2.f * PI;
+			}
+			if (Gap > Widest)
+			{
+				Widest = Gap;
+				First = I;
+			}
+		}
+		TArray<FRMFillPick> Out;
+		for (int32 K = 0; K < ByAngle.Num(); ++K)
+		{
+			Out.Add(Picks[ByAngle[(First + K) % ByAngle.Num()].Value]);
 		}
 		return Out;
 	}
