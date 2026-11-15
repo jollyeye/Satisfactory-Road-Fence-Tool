@@ -87,6 +87,7 @@ void ARMSignWallSign::CopyGameSignDefaults()
 	const UStaticMeshComponent* GamePlane = PlaneProp ? Cast<UStaticMeshComponent>(PlaneProp->GetObjectPropertyValue_InContainer(CDO)) : nullptr;
 	if (mSignProxyPlane)
 	{
+		mSignProxyPlane->SetMobility(EComponentMobility::Movable);
 		if (GamePlane)
 		{
 			mSignProxyPlane->SetStaticMesh(GamePlane->GetStaticMesh());
@@ -97,6 +98,8 @@ void ARMSignWallSign::CopyGameSignDefaults()
 		mSignProxyPlane->SetCastShadow(false);
 	}
 	SetActorEnableCollision(false);
+	// Twice the billboard's resolution: the wall is seen much closer than a billboard (memory: 1600 x 800).
+	mSignDrawSize = FIntPoint(mSignDrawSize.X * 2, mSignDrawSize.Y * 2);
 	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took %d settings from %s (plane mesh %s)"), *GetName(), Copied, *Game->GetName(),
 		GamePlane ? *GetNameSafe(GamePlane->GetStaticMesh()) : TEXT("none"));
 }

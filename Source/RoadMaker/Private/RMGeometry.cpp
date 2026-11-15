@@ -2274,12 +2274,54 @@ void RMGeometry::BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face
 		return;
 	}
 	const TArray<FRMFrame> Upright = SignWallUpright(Frames);
-	const int32 First = Face.Vertices.Num();
-	const int32 FirstTriangle = Face.Triangles.Num();
-	// Seen from the road (+Right), "along" runs to the viewer's right, so the design reads the right way round.
-	const float Repeat = FMath::Max(RepeatLength, 1.f);
-	SignWallStrip(Upright, Thickness * 0.5f + 0.3f, 0.f, Height - 2.f, 1.f, Face,
-		[Repeat, Height](float Dist, float Z) { return FVector2D(Dist / Repeat, (Height - Z) / Height); }, FVector2D(0.f, 0.f));
-	Face.WrapUV1X(First, FirstTriangle, 1.f); // long walls: precise half-float UVs (the material takes frac)
+	const float Repeat = FMath::Max(RepeatLength, 10.f);
+	const float X = Thickness * 0.5f + 0.3f; // a hair in front of the slab
+	const float Top = Height - 2.f;
+	// Seen from the road (+Right) the design must run to the viewer's right: along the spline, or against it when the
+	// frames are mirrored (road on the spline's left).
+	const FRMFrame& F0 = Upright[0];
+	const bool bAlong = FVector::DotProduct(FVector::CrossProduct(FVector::UpVector, F0.Fwd), F0.Right) > 0.f;
+	// One quad per piece between frames, cut at every design boundary, each with its own vertices: UV0 runs 0..1 across
+	// one design (u) and top to bottom (v), like the game sign's plane, so the sign's own material can draw it.
+	auto Lerp = [](const FRMFrame& A, const FRMFrame& B, float D)
+	{
+		const float T = (D - A.Dist) / FMath::Max(B.Dist - A.Dist, 0.01f);
+		FRMFrame F;
+		F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+		F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+		F.Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal();
+		F.Up = FVector::UpVector;
+		F.Dist = D;
+		return F;
+	};
+	auto Quad = [&](const FRMFrame& A, const FRMFrame& B, float U0, float U1)
+	{
+		const FVector NA = A.Right, NB = B.Right; // the face looks at the road (+Right)
+		const FVector N = NA;
+		const int32 I0 = Face.AddVertex(A.Pos + NA * X, NA, FVector2D(U0, 1.f), A.Fwd);
+		const int32 I1 = Face.AddVertex(A.Pos + NA * X + FVector::UpVector * Top, NA, FVector2D(U0, 0.f), A.Fwd);
+		const int32 I2 = Face.AddVertex(B.Pos + NB * X, NB, FVector2D(U1, 1.f), B.Fwd);
+		const int32 I3 = Face.AddVertex(B.Pos + NB * X + FVector::UpVector * Top, NB, FVector2D(U1, 0.f), B.Fwd);
+		Face.AddTriangle(I0, I2, I3, N);
+		Face.AddTriangle(I0, I3, I1, N);
+	};
+	auto UOf = [Repeat, bAlong](float D, int32 Panel)
+	{
+		const float Local = FMath::Clamp((D - Panel * Repeat) / Repeat, 0.f, 1.f);
+		return bAlong ? Local : 1.f - Local;
+	};
+	for (int32 I = 0; I + 1 < Upright.Num(); ++I)
+	{
+		FRMFrame A = Upright[I];
+		const FRMFrame& B = Upright[I + 1];
+		while (A.Dist < B.Dist - 0.01f)
+		{
+			const int32 Panel = FMath::FloorToInt((A.Dist + 0.01f) / Repeat);
+			const float End = FMath::Min(B.Dist, (Panel + 1) * Repeat);
+			const FRMFrame E = End >= B.Dist - 0.01f ? B : Lerp(A, B, End);
+			Quad(A, E, UOf(A.Dist, Panel), UOf(E.Dist, Panel));
+			A = E;
+		}
+	}
+	(void)Height;
 }
-

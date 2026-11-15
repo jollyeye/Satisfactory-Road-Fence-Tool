@@ -36,7 +36,7 @@ public:
 
 	ARMSignWallSign* GetSign() const { return mSign; }
 
-	/** Material of the front (sign face): samples "SignTexture" along the wall. */
+	/** Material of the face until the hidden sign has its design material (plain dark). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mFrontMaterial = nullptr;
 
@@ -53,10 +53,8 @@ private:
 	void EnsureSign();
 	FTimerHandle mEnsureSignTimer;
 
-	/** Front material instance (the design's render target goes in). */
-	UMaterialInstanceDynamic* GetFrontMaterial();
-	UPROPERTY(Transient)
-	UMaterialInstanceDynamic* mFrontMID = nullptr;
+	/** Material of the face: the sign's design material once it has one, else mFrontMaterial. */
+	UMaterialInterface* GetFrontMaterial() const;
 
 	/** Design width in cm along the wall (height x the design's aspect). */
 	float GetRepeatLength() const;

@@ -8,6 +8,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "ProceduralMeshComponent.h"
 
 ARMBuildableSignWall::ARMBuildableSignWall(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -72,8 +73,8 @@ void ARMBuildableSignWall::EnsureSign()
 	}
 	Sign->mWall = this;
 	Sign->mExtraRange = Frames.Last().Dist * 0.5f;
+	mSign = Sign; // before it finishes: it sets up its design right away and tells the wall
 	Sign->FinishSpawning(At);
-	mSign = Sign;
 	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
 	OnSignDesignChanged();
 }
@@ -85,13 +86,18 @@ float ARMBuildableSignWall::GetRepeatLength() const
 	return GetWallHeight() * Size.X / FMath::Max(Size.Y, 1.f);
 }
 
-UMaterialInstanceDynamic* ARMBuildableSignWall::GetFrontMaterial()
+UMaterialInterface* ARMBuildableSignWall::GetFrontMaterial() const
 {
-	if (!mFrontMID && mFrontMaterial)
+	// The sign's own design material (the game's sign material with its background, glow and gloss), once it has one;
+	// until then the plain front.
+	if (mSign)
 	{
-		mFrontMID = UMaterialInstanceDynamic::Create(mFrontMaterial, this);
+		if (UMaterialInstanceDynamic* Design = mSign->GetSignMaterial())
+		{
+			return Design;
+		}
 	}
-	return mFrontMID;
+	return mFrontMaterial;
 }
 
 void ARMBuildableSignWall::OnSignDesignChanged()
@@ -100,34 +106,26 @@ void ARMBuildableSignWall::OnSignDesignChanged()
 	{
 		mSign->mWall = this;
 	}
-	UMaterialInstanceDynamic* Front = GetFrontMaterial();
-	if (!Front || !mSign)
+	UMaterialInterface* Front = GetFrontMaterial();
+	if (!Front)
 	{
 		return;
 	}
-	// The design's render target, and the settings of its material that the front material also has (same names).
-	if (UMaterialInstanceDynamic* Design = mSign->GetSignMaterial())
+	// Section 2 (the face) of every mesh piece, near and far.
+	ForEachMeshComponent([Front](UProceduralMeshComponent* Mesh)
 	{
-		for (const FScalarParameterValue& V : Design->ScalarParameterValues)
+		if (Mesh->GetNumSections() > 2)
 		{
-			Front->SetScalarParameterValue(V.ParameterInfo.Name, V.ParameterValue);
+			Mesh->SetMaterial(2, Front);
 		}
-		for (const FVectorParameterValue& V : Design->VectorParameterValues)
-		{
-			Front->SetVectorParameterValue(V.ParameterInfo.Name, V.ParameterValue);
-		}
-	}
-	if (UTextureRenderTarget2D* Texture = mSign->GetSignTexture())
-	{
-		Front->SetTextureParameterValue(TEXT("SignTexture"), Texture);
-	}
+	});
 }
 
 void ARMBuildableSignWall::RebuildMesh()
 {
 	Super::RebuildMesh();
 	// The sign face on the road side, near and first distance level (further away: the plain slab).
-	UMaterialInstanceDynamic* Front = GetFrontMaterial();
+	UMaterialInterface* Front = GetFrontMaterial();
 	const float Repeat = GetRepeatLength();
 	for (int32 Level = 0; Level < 2; ++Level)
 	{

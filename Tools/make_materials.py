@@ -1293,21 +1293,9 @@ bump_normal(sw_back, swb, -0.6, None, 300, 500)
 finish(sw_back)
 log("Sign wall back (circuit)")
 
-sw_front = new_material("M_RM_SignWallFront")
-swf_uv = custom(sw_front, "return float2(frac(UV1.x), saturate(UV1.y));", unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1"], -800, 0, "DesignUV")
-link(node(sw_front, unreal.MaterialExpressionTextureCoordinate, -1100, 0, coordinate_index=1), "", swf_uv, "UV1")
-swf_tex = node(sw_front, unreal.MaterialExpressionTextureSampleParameter2D, -500, 0, parameter_name="SignTexture")
-try:
-    swf_tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
-except Exception as e:
-    log("  ! sign wall front default texture: %s" % e)
-link(swf_uv, "", swf_tex, "UVs")
-MEL.connect_material_property(swf_tex, "RGB", MP.MP_BASE_COLOR)
-swf_glow = node(sw_front, unreal.MaterialExpressionMultiply, -200, 200)
-link(swf_tex, "RGB", swf_glow, "A")
-link(node(sw_front, unreal.MaterialExpressionScalarParameter, -500, 300, parameter_name="SignWallGlow", default_value=0.15), "", swf_glow, "B")
-MEL.connect_material_property(swf_glow, "", MP.MP_EMISSIVE_COLOR)
-MEL.connect_material_property(const(sw_front, 0.5, -400, 400), "", MP.MP_ROUGHNESS)
+sw_front = new_material("M_RM_SignWallFront")  # until the hidden sign has its design material: a dark sign face
+MEL.connect_material_property(color(sw_front, 0.02, 0.02, 0.02, -400, 0), "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(sw_front, 0.5, -400, 100), "", MP.MP_ROUGHNESS)
 finish(sw_front)
 log("Sign wall front (design)")
 

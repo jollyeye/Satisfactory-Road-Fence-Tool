@@ -268,8 +268,9 @@ namespace RMGeometry
 		float Thickness = 50.f, bool bLowPoly = false);
 
 	/**
-	 * The sign face on the road side (+Right), a hair in front of the slab: UV1.x = sign widths along (the design repeats
-	 * every RepeatLength cm, kept small for precision, the material takes frac), UV1.y = 0 at the top to 1 at the bottom.
+	 * The sign face on the road side (+Right), a hair in front of the slab: cut at every design boundary (every RepeatLength
+	 * cm), UV0 runs 0..1 across each design and 0 (top) .. 1 (bottom), like the game sign's plane, reading the right way
+	 * from the road.
 	 */
 	ROADMAKER_API void BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face, float Height = 400.f, float Thickness = 50.f,
 		float RepeatLength = 800.f);
