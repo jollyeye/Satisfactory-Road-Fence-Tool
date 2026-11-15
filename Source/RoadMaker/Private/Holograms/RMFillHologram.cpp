@@ -241,6 +241,13 @@ void ARMFillHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ARMFillHologram, mLook);
 }
 
+bool ARMFillHologram::IsValidHitResult(const FHitResult& InHit) const
+{
+	// Roads and intersections are what this tool aims at (the game's check may refuse them as a floor).
+	const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit);
+	return Cast<ARMBuildableProcedural>(Hit.GetActor()) != nullptr || Super::IsValidHitResult(Hit);
+}
+
 bool ARMFillHologram::FindAimedEdge(const FHitResult& Hit, FRMFillPick& Out) const
 {
 	AActor* Actor = Hit.GetActor();
