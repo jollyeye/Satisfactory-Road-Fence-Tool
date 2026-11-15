@@ -1302,42 +1302,80 @@ log("Sign wall front (design)")
 # --- Map roads (GPU, 1.4.0) ---------------------------------------------------------------------
 # UI material for RMMapLayer: each road piece (~4 m) is one instance record (float4) of a Slate instance buffer,
 # drawn as a quad. Record: x, y = centre in map units (0..1024); z = angle (10 bits, 1/1024 turn) * 16384 +
-# half length (7 bits, 5 cm) * 128 + half width (7 bits, 25 cm); w = fill colour (palette index) * 65536 +
-# line colour * 256 + flags (bit 0: side lines). The window transform rides on the quad's vertices
-# (TexCoord0 = pixels per map, TexCoord1 = window origin, TexCoord4 = corner -1..1), so panning and zooming
-# touch no GPU data. Pixel stage gets: UV0 offset from the centre in pixels (along, across), UV1 half size in
-# pixels, UV2 colours, UV3 (flags, half line width in pixels).
+# half length (7 bits, 5 cm) * 128 + half width (7 bits, 25 cm); w = style * 65536 + dash phase * 256 + flags.
+# Style = row index into the Palette texture (256 x 4: row 0 fill, 1 side lines, 2 lane dividers). Dash phase =
+# metres along the road at the piece centre, mod 9, in 1/256 steps. Flags: 1 side lines, 2 continuous dividers,
+# 4..16 lanes (3 bits), 32 walking path, 64 two foundations wide or more.
+# The window transform rides on the quad's vertices (TexCoord0 = pixels per map, TexCoord1 = window origin,
+# TexCoord4 = corner -1..1), so panning and zooming touch no GPU data. Zoom = the map's slider value (x).
+# Pixel stage gets: UV0 offset from the centre in pixels (along, across), UV1 half size in pixels,
+# UV2 (style, flags), UV3 (dash phase in metres, pixels per metre).
+# Zoom levels (slider): walking paths from 1.5x; side lines on 2-wide and up always, on the rest from 3x;
+# lane dividers from 6x (fading in from 5x).
 MAP_DECODE = r"""
 float ang = floor(B.x / 16384.0) / 1024.0 * 6.28318531;
 float hl = fmod(floor(B.x / 128.0), 128.0) * 0.05;
 float hw = fmod(B.x, 128.0) * 0.25;
+float flags = fmod(B.y, 256.0);
+float path = fmod(floor(flags / 32.0), 2.0);
 float ppm = abs(S.x) * UPM / 1024.0;
+float vis = path > 0.5 ? saturate((Zoom - 1.3) / 0.2) : 1.0;
 float2 h = max(float2(hl, hw) * ppm, float2(0.5, 0.75));
-float2 L = C * (h + 1.0);
+float2 L = C * (h + 1.0) * (vis > 0.0 ? 1.0 : 0.0);
 """
 MAP_POSITION = MAP_DECODE + r"""
 float cs = cos(ang);
 float sn = sin(ang);
 float2 P = O + S * (A / 1024.0) + float2(L.x * cs - L.y * sn, L.x * sn + L.y * cs);
-return float3(P, 0.0);  // the window position itself (Slate does not add the vertex position: P - C left 1 px gaps)
+return float3(P, 0.0);  // the window position itself (Slate does not add the vertex position)
 """
 MAP_LOCAL = MAP_DECODE + "return L;"
 MAP_HALF = MAP_DECODE + "return h;"
-MAP_COLOURS = "return float2(floor(B.y / 65536.0), fmod(floor(B.y / 256.0), 256.0));"
-MAP_FLAGS = MAP_DECODE + "return float2(fmod(B.y, 256.0), max(1.25 * ppm, 0.75));"  # side lines 2.5 m, at least 1.5 px
+MAP_COLOURS = "return float2(floor(B.y / 65536.0), fmod(B.y, 256.0));"
+MAP_FLAGS = MAP_DECODE + "return float2(fmod(floor(B.y / 256.0), 256.0) / 256.0 * 9.0, ppm);"
 MAP_PIXEL = r"""
-float4 fc = Pal.SampleLevel(PalSampler, float2((I.x + 0.5) / 256.0, 0.5), 0.0);
-float4 ec = Pal.SampleLevel(PalSampler, float2((I.y + 0.5) / 256.0, 0.5), 0.0);
-float3 c = fc.rgb;
-// Side lines just inside the edges, once the road is wide enough on screen to show them apart.
-if (fmod(F.x, 2.0) > 0.5 && H.y > F.y * 3.0)
+float style = I.x;
+float flags = I.y;
+float sideOn = fmod(flags, 2.0);
+float cont = fmod(floor(flags / 2.0), 2.0);
+float lanes = fmod(floor(flags / 4.0), 8.0);
+float path = fmod(floor(flags / 32.0), 2.0);
+float wide = fmod(floor(flags / 64.0), 2.0);
+float ppm = F.y;
+float v0 = (style + 0.5) / 256.0;
+float3 fill = Pal.SampleLevel(PalSampler, float2(v0, 0.125), 0.0).rgb;
+float3 edge = Pal.SampleLevel(PalSampler, float2(v0, 0.375), 0.0).rgb;
+float3 divc = Pal.SampleLevel(PalSampler, float2(v0, 0.625), 0.0).rgb;
+float3 c = fill;
+// Lane dividers (6x and up): 15 cm lines (at least 1 px), 3 m dash 6 m gap unless continuous.
+float divFade = saturate((Zoom - 5.0) / 1.0);
+if (lanes > 1.5 && divFade > 0.0)
 {
-    float d = abs(abs(L.y) - (H.y - F.y));
-    c = lerp(c, ec.rgb, saturate(F.y + 0.5 - d));
+    float a = L.y / max(ppm, 1e-4) + H.y / max(ppm, 1e-4);   // metres from the left edge
+    float W = 2.0 * H.y / max(ppm, 1e-4);
+    float t = a / W * lanes;
+    float k = clamp(round(t), 1.0, lanes - 1.0);
+    float dpx = abs(t - k) * W / lanes * ppm;
+    float lh = max(0.075 * ppm, 0.5);
+    float line = saturate(lh + 0.5 - dpx);
+    float u = F.x + L.x / max(ppm, 1e-4);
+    float p = u - floor(u / 9.0) * 9.0;
+    float dash = cont > 0.5 ? 1.0 : saturate(min(p, 3.0 - p) * ppm + 0.5);
+    c = lerp(c, divc, line * dash * divFade);
 }
+// Side lines just inside the edges: 2-wide and up always, the others from 3x; once the road is wide enough on screen.
+float sideFade = wide > 0.5 ? 1.0 : saturate((Zoom - 2.6) / 0.4);
+float lhs = max(1.25 * ppm, 0.75);
+if (sideOn > 0.5 && sideFade > 0.0 && H.y > lhs * 3.0)
+{
+    float d = abs(abs(L.y) - (H.y - lhs));
+    c = lerp(c, edge, saturate(lhs + 0.5 - d) * sideFade);
+}
+// Walking paths from 1.5x.
+float vis = path > 0.5 ? saturate((Zoom - 1.3) / 0.2) : 1.0;
 // Smooth sides; the ends are cut sharp (pieces overlap their neighbours, a soft end would show a seam).
 float cov = saturate(H.y - abs(L.y) + 0.5) * (abs(L.x) <= H.x ? 1.0 : 0.0);
-return float4(c, cov * Opacity);
+return float4(c, cov * Opacity * vis);
 """
 
 map_mat = new_material("M_RM_MapRoads")
@@ -1354,9 +1392,10 @@ def map_uv(i, y):
 m_s, m_o, m_a, m_b, m_c = map_uv(0, 0), map_uv(1, 100), map_uv(2, 200), map_uv(3, 300), map_uv(4, 400)
 m_upm = node(map_mat, unreal.MaterialExpressionScalarParameter, -1400, 500, parameter_name="UnitsPerMetre", default_value=0.0014)
 m_opacity = node(map_mat, unreal.MaterialExpressionScalarParameter, -1400, 600, parameter_name="Opacity", default_value=1.0)
+m_zoom = node(map_mat, unreal.MaterialExpressionScalarParameter, -1400, 650, parameter_name="Zoom", default_value=1.0)
 m_pal = node(map_mat, unreal.MaterialExpressionTextureObjectParameter, -1400, 700, parameter_name="Palette",
              texture=unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
-vs_inputs = {"S": m_s, "O": m_o, "A": m_a, "B": m_b, "C": m_c, "UPM": m_upm}
+vs_inputs = {"S": m_s, "O": m_o, "A": m_a, "B": m_b, "C": m_c, "UPM": m_upm, "Zoom": m_zoom}
 
 
 def map_custom(code, out, inputs, y, desc):
@@ -1371,9 +1410,9 @@ m_pos = map_custom(MAP_POSITION, OutT.CMOT_FLOAT3, vs_inputs, 0, "Instance to wi
 m_local = map_custom(MAP_LOCAL, OutT.CMOT_FLOAT2, vs_inputs, 250, "Offset from centre (px)")
 m_half = map_custom(MAP_HALF, OutT.CMOT_FLOAT2, vs_inputs, 500, "Half size (px)")
 m_cols = map_custom(MAP_COLOURS, OutT.CMOT_FLOAT2, {"B": m_b}, 750, "Colour indices")
-m_flags = map_custom(MAP_FLAGS, OutT.CMOT_FLOAT2, vs_inputs, 1000, "Flags, half line width")
+m_flags = map_custom(MAP_FLAGS, OutT.CMOT_FLOAT2, vs_inputs, 1000, "Dash phase, pixels per metre")
 p_l, p_h, p_i, p_f = map_uv(0, 1300), map_uv(1, 1400), map_uv(2, 1500), map_uv(3, 1600)
-m_pix = map_custom(MAP_PIXEL, OutT.CMOT_FLOAT4, {"L": p_l, "H": p_h, "I": p_i, "F": p_f, "Pal": m_pal, "Opacity": m_opacity}, 1300, "Colour and coverage")
+m_pix = map_custom(MAP_PIXEL, OutT.CMOT_FLOAT4, {"L": p_l, "H": p_h, "I": p_i, "F": p_f, "Pal": m_pal, "Opacity": m_opacity, "Zoom": m_zoom}, 1300, "Colour and coverage")
 m_rgb = node(map_mat, unreal.MaterialExpressionComponentMask, -500, 1300, r=True, g=True, b=True, a=False)
 m_alpha = node(map_mat, unreal.MaterialExpressionComponentMask, -500, 1450, r=False, g=False, b=False, a=True)
 link(m_pix, "", m_rgb, "")

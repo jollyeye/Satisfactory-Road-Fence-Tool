@@ -100,10 +100,16 @@ namespace RMMapLayer
 		TArray<FRMMapBatch> GMapBatches;
 		bool GMapUploadPending = false;
 
-		// Palette: colour -> index (stable while the world lives).
-		TMap<uint32, uint8> GMapPaletteIndex;
-		TArray<FColor> GMapPaletteColours;
+		// Palette of styles (fill, side lines, lane dividers) -> row index (stable while the world lives).
+		struct FRMMapStyle { FColor Fill, Edge, Divider; };
+		TMap<FIntVector, uint8> GMapPaletteIndex;
+		TArray<FRMMapStyle> GMapPaletteStyles;
 		bool GMapPaletteDirty = false;
+		constexpr int32 MapPaletteRows = 4;
+
+		// The map's zoom (the slider's "x"): the render scale of mMapZoomContainer.
+		TWeakObjectPtr<UWidget> GMapZoomWidget;
+		float GMapZoom = 1.f;
 
 		// GPU side (made on the first paint).
 		UMaterialInstanceDynamic* GMapMaterial = nullptr;
@@ -118,6 +124,19 @@ namespace RMMapLayer
 
 		class SRMMapRoadsLayer;
 		TSharedPtr<SRMMapRoadsLayer> GMapWidget;
+
+		/** The slider's zoom (1 when the zoom container was not found). */
+		float MapReadZoom()
+		{
+			UWidget* W = GMapZoomWidget.Get();
+			TSharedPtr<SWidget> Live = W ? W->GetCachedWidget() : nullptr;
+			if (!Live.IsValid())
+			{
+				return 1.f;
+			}
+			const TOptional<FSlateRenderTransform>& T = Live->GetRenderTransform();
+			return T.IsSet() ? FMath::Max(T->TransformVector(FVector2f(1.f, 0.f)).Size(), 0.01f) : 1.f;
+		}
 		TWeakPtr<SOverlay> GMapHost;
 
 		FVector2D MapUnits(const FVector& W)
@@ -199,17 +218,26 @@ namespace RMMapLayer
 			OutEdge = MapPaintColour(Secondary);
 		}
 
+		/** Lane dividers: the primary colour (cyberpunk: its secondary, the primary is the surface). */
+		FColor MapDividerColour(const ARMBuildableProcedural* Piece)
+		{
+			FLinearColor Primary, Secondary;
+			Piece->GetPaintColours(Primary, Secondary);
+			return MapPaintColour(Piece->GetLook() == 2 ? Secondary : Primary);
+		}
+
 		uint32 MapColourKey(const ARMBuildableProcedural* Piece)
 		{
 			FColor Fill, Edge;
 			MapPieceColours(Piece, Fill, Edge);
-			return HashCombine(Fill.DWColor(), Edge.DWColor());
+			return HashCombine(HashCombine(Fill.DWColor(), Edge.DWColor()), MapDividerColour(Piece).DWColor());
 		}
 
 		uint32 MapRoadKey(const ARMBuildableRoad* Road)
 		{
 			uint32 Key = HashCombine(GetTypeHash(Road->GetActorLocation()), GetTypeHash(Road->GetActorRotation().Yaw));
-			Key = HashCombine(Key, Road->GetWidthInFoundations() * 131u + Road->GetLook() + (Road->GetMarkings().bEdgeLines ? 7u : 0u));
+			Key = HashCombine(Key, Road->GetWidthInFoundations() * 131u + Road->GetLook() + (Road->GetMarkings().bEdgeLines ? 7u : 0u)
+				+ Road->GetMarkings().Lanes * 1009u + (Road->GetMarkings().bContinuous ? 13u : 0u));
 			Key = HashCombine(Key, MapColourKey(Road));
 			for (const FRMSplinePoint& P : Road->GetSplinePoints())
 			{
@@ -218,28 +246,28 @@ namespace RMMapLayer
 			return Key;
 		}
 
-		/** Palette index of a colour (0 = first colour seen; 256 colours, then the nearest is reused). */
-		uint8 MapPaletteOf(const FColor& C)
+		/** Palette row of a style (fill, side lines, dividers); 256 styles, then the nearest fill is reused. */
+		uint8 MapStyleOf(const FColor& Fill, const FColor& Edge, const FColor& Divider)
 		{
-			const uint32 Key = C.DWColor() | 0xFF000000u;
+			const FIntVector Key(int32(Fill.DWColor() & 0xFFFFFFu), int32(Edge.DWColor() & 0xFFFFFFu), int32(Divider.DWColor() & 0xFFFFFFu));
 			if (const uint8* Found = GMapPaletteIndex.Find(Key))
 			{
 				return *Found;
 			}
-			if (GMapPaletteColours.Num() < MapPaletteSize)
+			if (GMapPaletteStyles.Num() < MapPaletteSize)
 			{
-				const uint8 Index = uint8(GMapPaletteColours.Num());
-				GMapPaletteColours.Add(FColor(C.R, C.G, C.B, 255));
+				const uint8 Index = uint8(GMapPaletteStyles.Num());
+				GMapPaletteStyles.Add({ Fill, Edge, Divider });
 				GMapPaletteIndex.Add(Key, Index);
 				GMapPaletteDirty = true;
 				return Index;
 			}
 			int32 Best = 0;
 			int32 BestD = MAX_int32;
-			for (int32 I = 0; I < GMapPaletteColours.Num(); ++I)
+			for (int32 I = 0; I < GMapPaletteStyles.Num(); ++I)
 			{
-				const FColor& P = GMapPaletteColours[I];
-				const int32 D = FMath::Square(int32(P.R) - C.R) + FMath::Square(int32(P.G) - C.G) + FMath::Square(int32(P.B) - C.B);
+				const FColor& P = GMapPaletteStyles[I].Fill;
+				const int32 D = FMath::Square(int32(P.R) - Fill.R) + FMath::Square(int32(P.G) - Fill.G) + FMath::Square(int32(P.B) - Fill.B);
 				if (D < BestD)
 				{
 					BestD = D;
@@ -250,7 +278,7 @@ namespace RMMapLayer
 		}
 
 		/** One road piece's record (see M_RM_MapRoads in make_materials.py for the layout). */
-		FVector4f MapRecord(const FVector2D& Centre, double AngleRad, float HalfLenM, float HalfWidthM, uint8 Fill, uint8 Edge, uint8 Flags)
+		FVector4f MapRecord(const FVector2D& Centre, double AngleRad, float HalfLenM, float HalfWidthM, uint8 Style, uint8 Phase, uint8 Flags)
 		{
 			double Turn = FMath::Fmod(AngleRad / (2.0 * PI), 1.0);
 			if (Turn < 0.0)
@@ -261,7 +289,7 @@ namespace RMMapLayer
 			const uint32 HL = uint32(FMath::Clamp(FMath::RoundToInt(HalfLenM / 0.05f), 1, 127));
 			const uint32 HW = uint32(FMath::Clamp(FMath::RoundToInt(HalfWidthM / 0.25f), 1, 127));
 			const uint32 Z = Ang * 16384u + HL * 128u + HW;
-			const uint32 W = uint32(Fill) * 65536u + uint32(Edge) * 256u + Flags;
+			const uint32 W = uint32(Style) * 65536u + uint32(Phase) * 256u + Flags;
 			return FVector4f(float(Centre.X), float(Centre.Y), float(Z), float(W));
 		}
 
@@ -276,9 +304,12 @@ namespace RMMapLayer
 			Out.Kind = Road->IsWalkingPath() ? 1 : 2;
 			FColor FillC, EdgeC;
 			MapPieceColours(Road, FillC, EdgeC);
-			const uint8 Fill = MapPaletteOf(FillC);
-			const uint8 Edge = MapPaletteOf(EdgeC);
-			const uint8 Flags = Road->GetMarkings().bEdgeLines ? 1 : 0;
+			const uint8 Style = MapStyleOf(FillC, EdgeC, MapDividerColour(Road));
+			const FRMMarkings Marks = Road->LimitMarkings(Road->GetMarkings());
+			uint8 Flags = (Marks.bEdgeLines ? 1 : 0) | (Marks.bContinuous ? 2 : 0) | (uint8(FMath::Min<int32>(Marks.Lanes, 7)) << 2);
+			Flags |= Road->IsWalkingPath() ? 32 : 0;
+			Flags |= Road->GetRoadWidth() >= 1599.f ? 64 : 0; // two foundations wide or more
+			double Along = 0.0; // metres along the road (map plane), for the dashes
 			const float HalfW = Road->GetRoadWidth() * 0.005f; // m
 			const int32 Num = Frames.Num() - 1;
 			TArray<double> Angles;
@@ -304,7 +335,10 @@ namespace RMMapLayer
 					}
 				}
 				const FVector2D Centre = (MapUnits(A.Pos) + MapUnits(B.Pos)) * 0.5;
-				Out.Recs.Add(MapRecord(Centre, Angles[I], Len * 0.5f + Reach, HalfW, Fill, Edge, Flags));
+				const double Mid = Along + Len * 0.5;
+				Along += Len;
+				const uint8 Phase = uint8(FMath::RoundToInt(FMath::Fmod(Mid, 9.0) / 9.0 * 256.0) & 255);
+				Out.Recs.Add(MapRecord(Centre, Angles[I], Len * 0.5f + Reach, HalfW, Style, Phase, Flags));
 				Out.RecZ.Add((A.Pos.Z + B.Pos.Z) * 0.5f);
 			}
 		}
@@ -498,7 +532,7 @@ namespace RMMapLayer
 			}
 			if (!GMapPalette)
 			{
-				GMapPalette = UTexture2D::CreateTransient(MapPaletteSize, 1, PF_B8G8R8A8);
+				GMapPalette = UTexture2D::CreateTransient(MapPaletteSize, MapPaletteRows, PF_B8G8R8A8);
 				GMapPalette->Filter = TF_Nearest;
 				GMapPalette->SRGB = true;
 				GMapPalette->AddToRoot();
@@ -536,12 +570,17 @@ namespace RMMapLayer
 				return;
 			}
 			GMapPaletteDirty = false;
-			const int32 Bytes = MapPaletteSize * sizeof(FColor);
-			uint8* Copy = static_cast<uint8*>(FMemory::Malloc(Bytes));
-			FMemory::Memzero(Copy, Bytes);
-			FMemory::Memcpy(Copy, GMapPaletteColours.GetData(), GMapPaletteColours.Num() * sizeof(FColor));
-			FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, MapPaletteSize, 1);
-			GMapPalette->UpdateTextureRegions(0, 1, Region, MapPaletteSize * sizeof(FColor), sizeof(FColor), Copy,
+			const int32 Count = MapPaletteSize * MapPaletteRows;
+			FColor* Copy = static_cast<FColor*>(FMemory::Malloc(Count * sizeof(FColor)));
+			FMemory::Memzero(Copy, Count * sizeof(FColor));
+			for (int32 I = 0; I < GMapPaletteStyles.Num(); ++I)
+			{
+				Copy[0 * MapPaletteSize + I] = GMapPaletteStyles[I].Fill;
+				Copy[1 * MapPaletteSize + I] = GMapPaletteStyles[I].Edge;
+				Copy[2 * MapPaletteSize + I] = GMapPaletteStyles[I].Divider;
+			}
+			FUpdateTextureRegion2D* Region = new FUpdateTextureRegion2D(0, 0, 0, 0, MapPaletteSize, MapPaletteRows);
+			GMapPalette->UpdateTextureRegions(0, 1, Region, MapPaletteSize * sizeof(FColor), sizeof(FColor), reinterpret_cast<uint8*>(Copy),
 				[](uint8* Data, const FUpdateTextureRegion2D* R) { FMemory::Free(Data); delete R; });
 		}
 
@@ -647,6 +686,19 @@ namespace RMMapLayer
 				}
 				MapUploadPalette();
 				MapUploadRecords();
+				const float Zoom = MapReadZoom();
+				static float AppliedZoom = -1.f;
+				if (AppliedZoom != Zoom)
+				{
+					if (FMath::Abs(FMath::Loge(FMath::Max(Zoom, 0.01f) / FMath::Max(GMapZoom, 0.01f))) > 0.1f)
+					{
+						GMapZoom = Zoom;
+						UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: zoom %.2fx (%.2f px per metre)"), Zoom,
+							FMath::Abs(AllottedGeometry.GetAccumulatedRenderTransform().TransformVector(FVector2f(1024.f, 0.f)).X) * float(GMapUnitsPerMetre) / 1024.f);
+					}
+					AppliedZoom = Zoom;
+					GMapMaterial->SetScalarParameterValue(TEXT("Zoom"), Zoom);
+				}
 				static float AppliedUnitsPerMetre = -1.f;
 				if (AppliedUnitsPerMetre != float(GMapUnitsPerMetre))
 				{
@@ -715,6 +767,19 @@ namespace RMMapLayer
 		void MapAttach(UUserWidget* Painter)
 		{
 			UPanelWidget* Parent = Painter->GetParent();
+			// The zoom container (its render scale is the slider's zoom), somewhere above the map square.
+			if (!GMapZoomWidget.IsValid())
+			{
+				for (UWidget* W = Parent; W; W = W->GetParent())
+				{
+					if (W->GetFName() == FName(TEXT("mMapZoomContainer")))
+					{
+						GMapZoomWidget = W;
+						UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: zoom container found (%s)"), *W->GetClass()->GetName());
+						break;
+					}
+				}
+			}
 			TSharedPtr<SWidget> Live = Parent ? Parent->GetCachedWidget() : nullptr;
 			if (!Live.IsValid() || Live->GetType() != FName(TEXT("SOverlay")))
 			{
