@@ -188,7 +188,11 @@ bool ARMBuildableSignWall::CanUseFactoryClipboard_Implementation()
 
 TSubclassOf<UObject> ARMBuildableSignWall::GetClipboardMappingClass_Implementation()
 {
-	return mSign ? IFGFactoryClipboardInterface::Execute_GetClipboardMappingClass(mSign) : GetClass();
+	if (mSign)
+	{
+		return IFGFactoryClipboardInterface::Execute_GetClipboardMappingClass(mSign);
+	}
+	return TSubclassOf<UObject>(GetClass());
 }
 
 UFGFactoryClipboardSettings* ARMBuildableSignWall::CopySettings_Implementation()

@@ -133,7 +133,7 @@ TSubclassOf<UObject> ARMSignWallSign::GetClipboardMappingClass_Implementation()
 	{
 		return IFGFactoryClipboardInterface::Execute_GetClipboardMappingClass(Game->GetDefaultObject());
 	}
-	return GetClass();
+	return TSubclassOf<UObject>(GetClass());
 }
 
 void ARMSignWallSign::SetupMaterialInstanceForProxyPlane(UMaterialInstanceDynamic* Instance, UTextureRenderTarget2D* RenderTarget)
