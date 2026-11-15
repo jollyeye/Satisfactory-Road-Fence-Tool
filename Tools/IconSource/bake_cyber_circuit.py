@@ -1,5 +1,6 @@
 # Bakes the cyberpunk road's circuit pattern (CIRCUIT_HLSL in make_materials.py) into a tiling grayscale texture
-# for Low quality: Tools/Icons/T_RM_CyberCircuit.png, 48 m along x 16 m across, 4096 x 2048 px (~1.2 x 0.8 cm per px).
+# for Low quality: Tools/Icons/T_RM_CyberCircuit.png, 48 m along x 16 m across, 2048 x 1024 px (~2.3 x 1.6 cm per px,
+# ~1.3 MB with mips in DXT1; 4096 x 2048 was sharper up close, ~5.3 MB; trying the smallest first, 2026-11-15).
 # 16 m across so a wide road (up to 32 m) shows each strip at most twice, with different chips in each 8 m band.
 # Same shapes as the live pattern; to tile, every cell grid divides the tile: the second layer's sections are 2.4 m
 # (2.5 m live) and its density cells 8 m along (7.5 m live), and every hash reads its cell index wrapped to the tile.
@@ -9,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 TILE = (48.0, 16.0)
-SIZE = (4096, 2048)
+SIZE = (2048, 1024)
 out = sys.argv[1] if len(sys.argv) > 1 else "T_RM_CyberCircuit.png"
 
 xs = (np.arange(SIZE[0]) + 0.5) * TILE[0] / SIZE[0]

@@ -590,7 +590,7 @@ try:
     cc = unreal.load_asset(ROOT + "/Icons/T_RM_CyberCircuit")
     if cc:
         cc.set_editor_property("srgb", False)
-        # Block compressed (DXT1, 4 bits per pixel: white lines on black keep crisp), ~5.6 MB with mips.
+        # Block compressed (DXT1, 4 bits per pixel: white lines on black keep crisp), ~1.3 MB with mips at 2048 x 1024.
         cc.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
         cc.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_WORLD)
         cc.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_FROM_TEXTURE_GROUP)
