@@ -60,7 +60,7 @@ namespace
 
 	bool MergeUsable(const ARMBuildableRoad* Road)
 	{
-		return Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed() && !Road->IsHidden();
+		return Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed() && !Road->IsHidden() && !Road->IsWalkingPath(); // walking paths are not merged
 	}
 }
 

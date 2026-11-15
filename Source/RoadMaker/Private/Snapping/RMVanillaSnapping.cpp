@@ -3161,7 +3161,9 @@ namespace
 			// Only the piece you aim at: a road gives its own ends' points, an intersection its own.
 			// The game's own snapping comes first (aiming at or near an existing path / track).
 			AActor* Aimed = Hit.GetActor();
-			const bool bAimRoad = Cast<ARMBuildableRoad>(Aimed) != nullptr;
+			// Walking paths take no vehicle paths or tracks: aiming at one is like aiming at the ground.
+			const ARMBuildableRoad* AimedRoad = Cast<ARMBuildableRoad>(Aimed);
+			const bool bAimRoad = AimedRoad && !AimedRoad->IsWalkingPath();
 			const bool bAimIntersection = Cast<ARMBuildableIntersection>(Aimed) != nullptr;
 
 			// One-click lane path (vehicle paths, before the first click): aiming at a road's lane.

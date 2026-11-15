@@ -127,6 +127,18 @@ def road(sc, width, lanes, length=18.0, bend=0.55, h=1.0):
     for k in range(1, lanes):
         line_strip(sc, frs, -hw + e + inner * k / lanes, 0.13, WHITE, dash=(2, 0))
 
+def walking_path(sc, width, length=10.0, bend=0.55, h=1.0):
+    """Walking path: concrete-block top, concrete sides, one dashed middle line, no side lines."""
+    frs = frames_arc(length, bend, 32)
+    hw = width / 2
+    top = np.array([196, 192, 184.0])
+    extrude(sc, frs, [(-hw, 0), (hw, 0)], top, closed=False, two=True)
+    extrude(sc, frs, [(hw, 0), (hw, -h)], CONCRETE * 0.85, closed=False, two=True)
+    extrude(sc, frs, [(-hw, -h), (-hw, 0)], CONCRETE * 0.85, closed=False, two=True)
+    cap(sc, frs[0], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE * 0.85)
+    cap(sc, frs[-1], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE * 0.85)
+    line_strip(sc, frs, 0.0, 0.07 * max(1.0, width / 2), WHITE, dash=(2, 0))
+
 def guard_rail(sc):
     frs = frames_arc(6.0, 0.35, 24)
     beam = [(-0.08, 0.95), (0.08, 0.95), (0.2, 0.8), (0.08, 0.6), (-0.08, 0.6), (0.0, 0.78)]
@@ -579,6 +591,8 @@ if what == "road1": road(sc, 8, 1)
 elif what == "road2": road(sc, 16, 2)
 elif what == "road3": road(sc, 24, 3)
 elif what == "road4": road(sc, 32, 4)
+elif what == "walk2": walking_path(sc, 2, length=13.0)
+elif what == "walk4": walking_path(sc, 4, length=13.0)
 elif what == "roadcut": road_cut(sc)
 elif what == "guard": guard_rail(sc)
 elif what == "jersey": jersey(sc)

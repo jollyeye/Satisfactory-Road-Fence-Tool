@@ -20,7 +20,20 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	int32 GetWidthInFoundations() const { return mWidthInFoundations; }
-	float GetRoadWidth() const { return mWidthInFoundations * RM::FoundationSize; }
+	float GetRoadWidth() const { return mWidthCm > 0.f ? mWidthCm : mWidthInFoundations * RM::FoundationSize; }
+
+	/**
+	 * Walking path (1.4.0): a narrow road piece (2 m / 4 m) to widen a road beside it or for foot traffic.
+	 * Same slab, snapping and tools as a road, but no vehicle path / track snapping, at most one middle
+	 * line, no lane markings, Concrete Blocks by default, and it joins only walking paths end to end.
+	 */
+	bool IsWalkingPath() const { return mIsWalkingPath; }
+
+	/** The markings this piece can have: a walking path at most one middle line (2 lanes), no side lines. */
+	FRMMarkings LimitMarkings(const FRMMarkings& In) const;
+
+	/** The look a new piece of this kind starts with (0 asphalt, 1 concrete blocks, 2 cyberpunk). */
+	uint8 GetDefaultLook() const { return mDefaultLook; }
 
 	/** Customizer: primary colour = dashed middle lines, secondary colour = side lines. */
 	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
@@ -133,6 +146,18 @@ public:
 	/** Road width in foundations (1, 2 or 3 for the three build menu entries). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
 	int32 mWidthInFoundations = 1;
+
+	/** Width in cm when not whole foundations (walking paths: 200 / 400); 0 = mWidthInFoundations. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
+	float mWidthCm = 0.f;
+
+	/** A walking path (see IsWalkingPath). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")
+	bool mIsWalkingPath = false;
+
+	/** The look a new piece starts with (0 asphalt, 1 concrete blocks, 2 cyberpunk). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	uint8 mDefaultLook = 0;
 
 	/** Thickness in cm. 100 = a 1 m foundation. */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Road")

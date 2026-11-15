@@ -1279,6 +1279,8 @@ ASSIGN = {
     "Build_Road_3x": ROAD_LOOKS,
     "Build_Road_4x": ROAD_LOOKS,
     "Build_RoadIntersection": ROAD_LOOKS,
+    "Build_WalkingPath_2m": ROAD_LOOKS,
+    "Build_WalkingPath_4m": ROAD_LOOKS,
     "Build_SignGantry": {"m_main_material": steel},
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,

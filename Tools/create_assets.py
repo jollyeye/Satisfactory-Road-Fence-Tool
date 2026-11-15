@@ -519,11 +519,15 @@ TOOLS = [
      {"m_kind": "DIGIT"}, [], road_icons, {}),
     ("LaneVehicle", RMBuildableMarking, holo_marking, "Lane Vehicle", "Paints a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon) on a lane of a road, to mark lanes for one kind of vehicle. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the vehicle. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
      {"m_kind": "VEHICLE"}, [], road_icons, {}),
+    ("WalkingPath_2m", RMBuildableRoad, holo_road, "Walking Path (2 m)", "A walking path two metres wide: concrete blocks on top, concrete sides, one dashed middle line. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: with one on each side, a 1-wide road becomes 1.5 foundations wide, and fences snap to the path's outer edge. Click the start, click the end to build one on its own; it snaps to walking path ends. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab, the middle line in Road Lines. Free to build.",
+     {"m_width_in_foundations": 1, "m_width_cm": 200.0, "m_is_walking_path": True, "m_default_look": 1}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
+    ("WalkingPath_4m", RMBuildableRoad, holo_road, "Walking Path (4 m)", "A walking path four metres wide: concrete blocks on top, concrete sides, one dashed middle line. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: one on a side of a 1-wide road makes it 1.5 foundations wide, and fences snap to the path's outer edge. Click the start, click the end to build one on its own; it snaps to walking path ends. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab, the middle line in Road Lines. Free to build.",
+     {"m_width_in_foundations": 1, "m_width_cm": 400.0, "m_is_walking_path": True, "m_default_look": 1}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("RoadIntersection", RMBuildableIntersection, holo_x, "Road Intersection", "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build.",
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5,
+MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
 
@@ -1008,7 +1012,7 @@ for wname, wcls in fence_wall_classes.items():
 if road_material_descs:
     setp(g, road_material_descs, "m_road_material_descs", "mRoadMaterialDescs")
     rmap = {}
-    for n in ("Road_1x", "Road_2x", "Road_3x", "Road_4x", "RoadIntersection"):
+    for n in ("Road_1x", "Road_2x", "Road_3x", "Road_4x", "RoadIntersection", "WalkingPath_2m", "WalkingPath_4m"):
         if n in tool_classes and n in tool_recipe_classes:
             rmap[tool_classes[n]] = tool_recipe_classes[n]
     try:

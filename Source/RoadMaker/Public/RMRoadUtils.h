@@ -20,6 +20,9 @@ struct ROADMAKER_API FRMRoadEndRef
 	float Height = 0.f;
 	float Distance = 0.f; // to the query point
 
+	/** A walking path end, or an intersection mouth as narrow as one (roads are 8 m and up). */
+	bool IsWalking() const { return Width < RM::FoundationSize - 10.f; }
+
 	/** Points every Step cm across the end (centre included, out to the edges). */
 	TArray<FVector> GetPointsAcross(float Step) const;
 

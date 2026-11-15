@@ -205,6 +205,11 @@ TArray<FVector> FRMRoadEndRef::GetPointsAcross(float Step) const
 
 TArray<FVector> FRMRoadEndRef::GetSnapPoints(UWorld* World) const
 {
+	// No vehicle paths or tracks on walking paths.
+	if (IsWalking())
+	{
+		return TArray<FVector>();
+	}
 	// Lane layout of this end: the road itself, or the road joined to this intersection end.
 	const ARMBuildableRoad* LaneRoad = Road;
 	if (!LaneRoad && Intersection && World)
@@ -299,12 +304,18 @@ void RMRoadUtils::FindEndSlots(UWorld* World, const FVector& Center, float Radiu
 	TArray<FRMRoadEndRef> Others;
 	FindFreeEnds(World, Center, Radius + RM::FoundationSize * 4.f, 0, nullptr, Others, true);
 
+	// Walking paths attach to walking path ends (centred), roads to road ends.
+	const bool bNewWalking = NewWidth < RM::FoundationSize - 10.f;
 	for (const FRMRoadEndRef& End : Ends)
 	{
+		if (End.IsWalking() != bNewWalking)
+		{
+			continue;
+		}
 		const FVector Out = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
 		const FVector Across = FVector::CrossProduct(FVector::UpVector, Out).GetSafeNormal();
 		TArray<float> Offsets = { 0.f };
-		if (End.Width > NewWidth + 1.f)
+		if (End.Width > NewWidth + 1.f && !bNewWalking)
 		{
 			const int32 Count = FMath::RoundToInt((End.Width - NewWidth) / RM::FoundationSize);
 			for (int32 I = 0; I <= Count; ++I)

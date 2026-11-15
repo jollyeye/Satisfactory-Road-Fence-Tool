@@ -112,7 +112,9 @@ bool RMRoadLinePaint::CanApplyTo(const AActor* Target)
 {
 	if (GActiveMarking)
 	{
-		return Cast<ARMBuildableRoad>(Target) != nullptr; // markings go on roads only
+		// Markings go on roads only (not on walking paths).
+		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Target);
+		return Road && !Road->IsWalkingPath();
 	}
 	if (Cast<ARMBuildableRoad>(Target))
 	{

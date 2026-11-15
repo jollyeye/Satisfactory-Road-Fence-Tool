@@ -156,9 +156,11 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	{
 		return false;
 	}
+	// The look of what it is built beside, when that is the same kind (a walking path beside a road keeps its own).
+	const bool bWalking = GetRoadDefaults()->IsWalkingPath();
 	if (ARMBuildableIntersection* Intersection = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
 	{
-		mLook = Intersection->GetLook();
+		mLook = bWalking ? GetRoadDefaults()->GetDefaultLook() : Intersection->GetLook();
 		return SnapBesideCurb(Intersection, hitResult.Location);
 	}
 	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
@@ -166,7 +168,7 @@ bool ARMRoadHologram::TrySnapBesideRoad(const FHitResult& hitResult)
 	{
 		return false;
 	}
-	mLook = Road->GetLook();
+	mLook = Road->IsWalkingPath() == bWalking ? Road->GetLook() : GetRoadDefaults()->GetDefaultLook();
 	TArray<FRMFrame> Frames;
 	Road->GetWorldFrames(Frames, 50.f);
 	if (Frames.Num() < 2)
@@ -286,7 +288,7 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	const FRMRoadEndRef& End = Ends[0];
 	if (End.Road && (mStep == 0 || !mHasCopiedMarkings))
 	{
-		mMarkings = End.Road->GetMarkings();
+		mMarkings = GetRoadDefaults()->LimitMarkings(End.Road->GetMarkings());
 		mLook = End.Road->GetLook();
 		mHasCopiedMarkings = true;
 	}
@@ -324,7 +326,7 @@ void ARMRoadHologram::RebuildPreview()
 		return;
 	}
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, mMarkings, Road->mEdgeLineInset, Top, Body);
+	RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, Road->LimitMarkings(mMarkings), Road->mEdgeLineInset, Top, Body);
 	if (IsFadingStub())
 	{
 		// Vertex alpha: 1 at the start point, 0 at the far end of the stub (the hologram materials
@@ -415,6 +417,9 @@ void ARMRoadHologram::BeginPlay()
 		mDefaultBuildMode = mBuildModeRoadDefault;
 	}
 	Super::BeginPlay();
+	// A new piece starts with its kind's look (walking paths: Concrete Blocks) and the lines it can have.
+	mLook = GetRoadDefaults()->GetDefaultLook();
+	mMarkings = GetRoadDefaults()->LimitMarkings(mMarkings);
 	// Ticks in any case: a hotbar or radial menu swap can give the hologram its player after BeginPlay.
 	SetActorTickEnabled(true);
 	if (APlayerController* PC = GetLocalHolder())

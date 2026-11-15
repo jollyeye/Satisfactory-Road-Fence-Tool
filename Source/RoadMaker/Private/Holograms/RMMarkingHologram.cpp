@@ -56,7 +56,7 @@ void ARMMarkingHologram::SetHologramLocationAndRotation(const FHitResult& hitRes
 		Road = ARMBuildableMarking::FindRoadAt(World, hitResult.Location); // aiming at a marking: the road under it
 	}
 	TArray<FRMFrame> Frames;
-	if (Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed())
+	if (Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed() && !Road->IsWalkingPath()) // not on walking paths
 	{
 		Road->GetWorldFrames(Frames, 25.f);
 	}

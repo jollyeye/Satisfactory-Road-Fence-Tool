@@ -48,7 +48,7 @@ void ARMBuildableRoad::RebuildMesh()
 	AddChunkBoundaries(Frames);
 	PrepareChunks();
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, Top, Body);
+	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body);
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
@@ -62,7 +62,7 @@ void ARMBuildableRoad::RebuildMesh()
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarTop, FarBody;
-		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, mPreviewMarkings.Get(mMarkings), mEdgeLineInset, FarTop, FarBody);
+		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody);
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
 	}
@@ -96,10 +96,20 @@ void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ARMBuildableRoad, mMarkings);
 }
 
+FRMMarkings ARMBuildableRoad::LimitMarkings(const FRMMarkings& In) const
+{
+	FRMMarkings Out = In;
+	Out.Lanes = FMath::Clamp<uint8>(Out.Lanes, 1, IsWalkingPath() ? 2 : 4);
+	if (IsWalkingPath())
+	{
+		Out.bEdgeLines = false;
+	}
+	return Out;
+}
+
 void ARMBuildableRoad::SetMarkings(const FRMMarkings& InMarkings)
 {
-	FRMMarkings Clean = InMarkings;
-	Clean.Lanes = FMath::Clamp<uint8>(Clean.Lanes, 1, 4);
+	const FRMMarkings Clean = LimitMarkings(InMarkings);
 	if (Clean == mMarkings)
 	{
 		return;
@@ -288,7 +298,7 @@ int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>&
 
 bool ARMBuildableRoad::CanSplitLengthwise() const
 {
-	if (mWidthInFoundations < 2)
+	if (mWidthInFoundations < 2 || IsWalkingPath())
 	{
 		return false;
 	}
@@ -305,9 +315,9 @@ void ARMBuildableRoad::DismantleReplaced()
 
 ARMBuildableRoad::EMergeCheck ARMBuildableRoad::CheckMerge(const ARMBuildableRoad* Other, TArray<FRMFrame>* OutCentre, float* OutWidth) const
 {
-	if (!Other || Other == this)
+	if (!Other || Other == this || IsWalkingPath() || Other->IsWalkingPath())
 	{
-		return EMergeCheck::NotBeside;
+		return EMergeCheck::NotBeside; // walking paths are not merged
 	}
 	if (mWidthInFoundations + Other->GetWidthInFoundations() > 4)
 	{
@@ -453,9 +463,9 @@ ARMBuildableRoad::EJoinCheck ARMBuildableRoad::CheckJoin(const ARMBuildableRoad*
 	{
 		return EJoinCheck::NotJoined;
 	}
-	if (mWidthInFoundations != Other->GetWidthInFoundations())
+	if (!FMath::IsNearlyEqual(GetRoadWidth(), Other->GetRoadWidth(), 1.f) || IsWalkingPath() != Other->IsWalkingPath())
 	{
-		return EJoinCheck::Width;
+		return EJoinCheck::Width; // same width, and a walking path only with a walking path
 	}
 	switch (Course)
 	{
