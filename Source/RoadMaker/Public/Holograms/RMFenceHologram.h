@@ -33,6 +33,10 @@ public:
 	 * other for most of the shorter one's length (the same curve); a partial overlap (ends meeting, curves
 	 * crossing) is allowed and only sets OutTouching (the hologram shows the game's yellow warning look).
 	 */
+	/** Snapped to a road edge where fences of the same family already stand (a wall for a wall, the same road fence for
+	 *  a road fence): the centre-line frames of only the free stretch around the aimed sample, from one fence's end to the
+	 *  next. False (keep the whole edge) when the edge is free or the aim is on a fence. */
+	bool ClipEdgeToFreeGap(const TArray<FRMFrame>& Frames, float Offset, int32 Aim, TArray<FRMFrame>& OutGap) const;
 	bool OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence = TOptional<ERMFenceType>(), bool* OutTouching = nullptr) const;
 
 	/** Touching another wall / same road fence in part (allowed): yellow, like the game's touching buildings. */

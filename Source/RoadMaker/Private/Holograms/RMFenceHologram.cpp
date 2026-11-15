@@ -132,6 +132,13 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	RMGeometry::OffsetCurve(Frames, Offset, 400.f, Edge);
 
 	// The fence spline runs the same way as the road, so the road centre is on the fence's -Side side.
+	// Fences already on this edge: the new one fills the free stretch under the aim, end to end with them.
+	TArray<FRMFrame> Gap;
+	if (ClipEdgeToFreeGap(Frames, Offset, Closest, Gap))
+	{
+		RMGeometry::OffsetCurve(Gap, Offset, 400.f, Edge);
+	}
+
 	mInwardSign = mFacingFlipped ? Side : -Side; // scrolled: the same edge, facing away from the road
 	mOnRoadEdge = true;
 	mOnRoadOrCurb = true;
@@ -400,6 +407,162 @@ void ARMFenceHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_SameFenceTaken::StaticClass());
 	}
+}
+
+bool ARMFenceHologram::ClipEdgeToFreeGap(const TArray<FRMFrame>& Frames, float Offset, int32 Aim, TArray<FRMFrame>& OutGap) const
+{
+	OutGap.Reset();
+	UWorld* World = GetWorld();
+	const int32 Num = Frames.Num();
+	if (!World || Num < 2 || !Frames.IsValidIndex(Aim))
+	{
+		return false;
+	}
+	// The edge line, sample by sample (the same 50 cm samples as the road's frames).
+	TArray<FVector> EdgePts;
+	EdgePts.Reserve(Num);
+	FBox Box(ForceInit);
+	for (const FRMFrame& F : Frames)
+	{
+		EdgePts.Add(F.Pos + F.Right * Offset);
+		Box += EdgePts.Last();
+	}
+	Box = Box.ExpandBy(FVector(200.f, 200.f, 200.f));
+
+	// The fences of the same family near this edge, as 50 cm samples, with their two ends.
+	const bool bOwnWall = GetFenceDefaults()->IsWall();
+	const ERMFenceType OwnType = GetFenceDefaults()->mFenceType;
+	TArray<TArray<FRMFrame>> Others;
+	TArray<FVector> Ends;
+	for (TActorIterator<ARMBuildableFence> It(World); It; ++It)
+	{
+		ARMBuildableFence* Other = *It;
+		const bool bCandidate = Other && (bOwnWall ? Other->IsWall() : (!Other->IsWall() && Other->GetEffectiveType() == OwnType));
+		if (!bCandidate || Other->GetIsDismantled() || Other->IsActorBeingDestroyed() || !Other->GetComponentsBoundingBox(true).Intersect(Box))
+		{
+			continue;
+		}
+		TArray<FRMFrame> OF;
+		Other->GetWorldFrames(OF, 50.f);
+		if (OF.Num() >= 2)
+		{
+			Ends.Add(OF[0].Pos);
+			Ends.Add(OF.Last().Pos);
+			Others.Add(MoveTemp(OF));
+		}
+	}
+	if (Others.Num() == 0)
+	{
+		return false;
+	}
+	// A sample is taken when a fence runs on it: within 40 cm sideways, the same course (not one stacked above).
+	auto Taken = [&](int32 I)
+	{
+		const FVector& P = EdgePts[I];
+		for (const TArray<FRMFrame>& OF : Others)
+		{
+			const FVector& A = OF[0].Pos;
+			const FVector& B = OF.Last().Pos;
+			for (const FRMFrame& F : OF)
+			{
+				if (FVector::DistSquared2D(F.Pos, P) < 40.f * 40.f && FMath::Abs(F.Pos.Z - P.Z) < 150.f)
+				{
+					// Not past either end of that fence (its end samples reach 25 cm beyond the end otherwise).
+					const bool bPastA = FVector::DotProduct(P - A, OF[0].Fwd) < 0.f;
+					const bool bPastB = FVector::DotProduct(P - B, OF.Last().Fwd) > 0.f;
+					if (!bPastA && !bPastB)
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	};
+	if (Taken(Aim))
+	{
+		return false;
+	}
+	int32 Lo = Aim, Hi = Aim;
+	while (Lo > 0 && !Taken(Lo - 1))
+	{
+		--Lo;
+	}
+	while (Hi < Num - 1 && !Taken(Hi + 1))
+	{
+		++Hi;
+	}
+	if (Lo == 0 && Hi == Num - 1)
+	{
+		return false;
+	}
+	// Exact ends: where the neighbouring fence's end lies along the road, between the taken and the free sample.
+	auto ExactDist = [&](int32 Free, int32 TakenI)
+	{
+		const FVector& P = EdgePts[Free];
+		const FVector* Best = nullptr;
+		float BestD = TNumericLimits<float>::Max();
+		for (const FVector& E : Ends)
+		{
+			const float D = FVector::DistSquared(E, P);
+			if (D < BestD)
+			{
+				BestD = D;
+				Best = &E;
+			}
+		}
+		const float DFree = Frames[Free].Dist;
+		const float DTaken = Frames[TakenI].Dist;
+		if (!Best || BestD > 150.f * 150.f)
+		{
+			return (DFree + DTaken) * 0.5f;
+		}
+		// Edge distance to centre-line distance (they differ on curves).
+		const FVector EdgeStep = EdgePts[TakenI] - P;
+		const float EdgeLen = FMath::Max(EdgeStep.Size2D(), 1.f);
+		const FVector ToEnd = *Best - P;
+		const float Along = FVector::DotProduct(FVector(ToEnd.X, ToEnd.Y, 0.f), EdgeStep.GetSafeNormal2D());
+		const float T = FMath::Clamp(Along / EdgeLen, 0.f, 1.f);
+		return FMath::Lerp(DFree, DTaken, T);
+	};
+	const float D0 = Lo > 0 ? ExactDist(Lo, Lo - 1) : Frames[0].Dist;
+	const float D1 = Hi < Num - 1 ? ExactDist(Hi, Hi + 1) : Frames.Last().Dist;
+	if (D1 - D0 < 100.f)
+	{
+		return false;
+	}
+	auto FrameAt = [&](float D)
+	{
+		int32 I = 0;
+		while (I < Num - 2 && Frames[I + 1].Dist < D)
+		{
+			++I;
+		}
+		const FRMFrame& A = Frames[I];
+		const FRMFrame& B = Frames[I + 1];
+		const float T = FMath::Clamp((D - A.Dist) / FMath::Max(B.Dist - A.Dist, 0.01f), 0.f, 1.f);
+		FRMFrame F;
+		F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+		F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+		F.Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal();
+		F.Up = FMath::Lerp(A.Up, B.Up, T).GetSafeNormal();
+		F.Dist = D;
+		return F;
+	};
+	OutGap.Add(FrameAt(D0));
+	for (const FRMFrame& F : Frames)
+	{
+		if (F.Dist > D0 + 1.f && F.Dist < D1 - 1.f)
+		{
+			OutGap.Add(F);
+		}
+	}
+	OutGap.Add(FrameAt(D1));
+	for (FRMFrame& F : OutGap)
+	{
+		F.Dist -= D0;
+	}
+	return OutGap.Num() >= 2;
 }
 
 EHologramMaterialState ARMFenceHologram::GetHologramMaterialState() const
