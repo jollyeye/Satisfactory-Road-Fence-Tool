@@ -114,6 +114,8 @@ def sampler_for(tex):
     cs = tex.get_editor_property("compression_settings")
     if cs == unreal.TextureCompressionSettings.TC_NORMALMAP:
         return unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL
+    if cs == unreal.TextureCompressionSettings.TC_GRAYSCALE:
+        return unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE if not tex.get_editor_property("srgb") else unreal.MaterialSamplerType.SAMPLERTYPE_GRAYSCALE
     if not tex.get_editor_property("srgb"):
         return unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR
     return unreal.MaterialSamplerType.SAMPLERTYPE_COLOR
@@ -1024,22 +1026,29 @@ link(p_any, "", p_rough, "Alpha")
 MEL.connect_material_property(p_rough, "", MP.MP_ROUGHNESS)
 
 
-def bump_normal(mat, height, strength, flat, x, y):
-    """World-space bump normal from a height field in cm."""
-    bn = custom(mat, BUMP_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["Hgt", "WP", "N", "Str", "Flat"], x, y, "Bump")
-    link(height, "", bn, "Hgt")
-    link(node(mat, unreal.MaterialExpressionWorldPosition, x - 300, y + 100), "", bn, "WP")
-    link(node(mat, unreal.MaterialExpressionVertexNormalWS, x - 300, y + 200), "", bn, "N")
-    link(const(mat, strength, x - 300, y + 300), "", bn, "Str")
-    if flat is None:
-        link(const(mat, 0.0, x - 300, y + 380), "", bn, "Flat")
-    else:
-        link(flat, "", bn, "Flat")
+def bump_normal(mat, height, strength, flat, x, y, low_height=None):
+    """World-space bump normal from a height field in cm. low_height: the bump on Low quality from this (cheap)
+    height instead (else the plain vertex normal there)."""
+    def bump(h, yy, desc):
+        b = custom(mat, BUMP_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT3, ["Hgt", "WP", "N", "Str", "Flat"], x, yy, desc)
+        link(h, "", b, "Hgt")
+        link(node(mat, unreal.MaterialExpressionWorldPosition, x - 300, yy + 100), "", b, "WP")
+        link(node(mat, unreal.MaterialExpressionVertexNormalWS, x - 300, yy + 200), "", b, "N")
+        link(const(mat, strength, x - 300, yy + 300), "", b, "Str")
+        if flat is None:
+            link(const(mat, 0.0, x - 300, yy + 380), "", b, "Flat")
+        else:
+            link(flat, "", b, "Flat")
+        return b
+    bn = bump(height, y, "Bump")
     mat.set_editor_property("tangent_space_normal", False)
-    # Low quality (graphics settings): no bump, the plain vertex normal.
+    # Low quality (graphics settings): the plain vertex normal, or the bump of the cheap height.
     qs = node(mat, unreal.MaterialExpressionQualitySwitch, x + 300, y)
     link(bn, "", qs, "Default")
-    link(node(mat, unreal.MaterialExpressionVertexNormalWS, x, y + 480), "", qs, "Low")
+    if low_height is not None:
+        link(bump(low_height, y + 520, "Bump (Low)"), "", qs, "Low")
+    else:
+        link(node(mat, unreal.MaterialExpressionVertexNormalWS, x, y + 480), "", qs, "Low")
     MEL.connect_material_property(qs, "", MP.MP_NORMAL)
     return bn
 
@@ -1078,8 +1087,34 @@ link(const(cyber, 0.5, -450, 380), "", faint, "B")
 link(faint, "", c_surface, "Alpha")
 cm, cs, _, _ = lane_masks(cyber, -1100, 1000)
 c_col = lines_on(cyber, c_surface, cm, cs, c_secondary, c_secondary, 50, 150)
-# Low quality: plain plastic, no circuit pattern in the colour either.
-c_col_low = lines_on(cyber, plastic, cm, cs, c_secondary, c_secondary, 50, -150)
+# Low quality: the same circuit baked into a tiling texture (48 x 8 m, Tools/IconSource/bake_cyber_circuit.py),
+# for the grooves' colour and the bump; same metres along / across as the live pattern.
+CIRCUIT_LOW_UV_HLSL = r"""
+float2 q = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
+return q / float2(48.0, 8.0);
+"""
+c_low_tex = load_tex("/RoadMaker/Icons/T_RM_CyberCircuit")
+if c_low_tex:
+    c_low_uv = custom(cyber, CIRCUIT_LOW_UV_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "WP"], -800, -350, "Circuit UV (Low)")
+    link(c_uv1, "", c_low_uv, "UV1")
+    link(c_uv2, "", c_low_uv, "UV2")
+    link(c_wp, "", c_low_uv, "WP")
+    c_low_s = node(cyber, unreal.MaterialExpressionTextureSample, -550, -350, texture=c_low_tex, sampler_type=sampler_for(c_low_tex))
+    link(c_low_uv, "", c_low_s, "UVs")
+    c_low = node(cyber, unreal.MaterialExpressionComponentMask, -350, -350, r=True, g=False, b=False, a=False)
+    link(c_low_s, "R", c_low, "")
+    faint_low = node(cyber, unreal.MaterialExpressionMultiply, -300, -250)
+    link(c_low, "", faint_low, "A")
+    link(const(cyber, 0.5, -450, -200), "", faint_low, "B")
+    c_surface_low = node(cyber, unreal.MaterialExpressionLinearInterpolate, -150, -250)
+    link(plastic, "", c_surface_low, "A")
+    link(groove, "", c_surface_low, "B")
+    link(faint_low, "", c_surface_low, "Alpha")
+    c_col_low = lines_on(cyber, c_surface_low, cm, cs, c_secondary, c_secondary, 50, -150)
+else:
+    log("  ! T_RM_CyberCircuit missing (run create_assets.py first): Low quality cyberpunk stays plain")
+    c_low = None
+    c_col_low = lines_on(cyber, plastic, cm, cs, c_secondary, c_secondary, 50, -150)
 c_qs = node(cyber, unreal.MaterialExpressionQualitySwitch, 300, 150)
 link(c_col, "", c_qs, "Default")
 link(c_col_low, "", c_qs, "Low")
@@ -1100,7 +1135,7 @@ link(const(cyber, 0.1, -200, 720), "", c_rough, "B")
 link(c_any, "", c_rough, "Alpha")
 MEL.connect_material_property(c_rough, "", MP.MP_ROUGHNESS)
 # The circuit is carved into the normal map (0.6 cm); flat under the lane lines.
-bump_normal(cyber, cc, -0.6, c_any, 300, 1100)
+bump_normal(cyber, cc, -0.6, c_any, 300, 1100, low_height=c_low)
 holo_fade(cyber)
 finish(cyber)
 holo_instance(cyber)
