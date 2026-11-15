@@ -13,6 +13,7 @@
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 #include "Algo/Reverse.h"
+#include <algorithm>
 
 // Named, not anonymous: unity builds put other files' helpers next to these.
 namespace RMFill
@@ -501,53 +502,97 @@ namespace RMFill
 
 namespace RMFill
 {
-	/**
-	 * The picks in their order around the area, whatever order they were clicked in: by direction from the middle of the
-	 * clicks, each edge at its point nearest that middle (the side of a long road that faces the area). Following
-	 * crossings instead went wrong where an edge touches several others (road pieces joined end to end).
-	 */
-	TArray<FRMFillPick> OrderAround(const TArray<FRMFillPick>& Picks)
+	/** Gap between two edges: 0 when they cross or touch, else the shortest way from an end of one to the other. */
+	float EdgeGap(const TArray<FVector>& A, const TArray<FVector>& B, const FVector& Near)
 	{
-		FVector Mid = FVector::ZeroVector;
-		for (const FRMFillPick& P : Picks)
+		if (A.Num() < 2 || B.Num() < 2)
 		{
-			Mid += P.Click;
+			return 1.0e7f;
 		}
-		Mid /= FMath::Max(Picks.Num(), 1);
-		TArray<TPair<float, int32>> ByAngle;
-		for (int32 I = 0; I < Picks.Num(); ++I)
+		FParam PA, PB;
+		if (Crossing(A, B, Near, PA, PB))
 		{
-			FVector Near = Picks[I].Click;
-			if (Picks[I].Curve.Num() >= 2)
-			{
-				Near = At(Picks[I].Curve, Nearest(Picks[I].Curve, Mid));
-			}
-			const FVector D = Near - Mid;
-			ByAngle.Add(TPair<float, int32>(FMath::Atan2(D.Y, D.X), I));
+			return 0.f;
 		}
-		ByAngle.Sort([](const TPair<float, int32>& A, const TPair<float, int32>& B) { return A.Key < B.Key; });
-		// Start right after the widest gap between directions: the open side of a chain that does not go all the way
-		// round yet, where the closing line belongs (starting in the middle of the chain joined its two outer edges).
-		int32 First = 0;
-		float Widest = -1.f;
-		for (int32 I = 0; I < ByAngle.Num(); ++I)
+		float Best = TNumericLimits<float>::Max();
+		for (const FVector& E : { A[0], A.Last() })
 		{
-			const float Prev = ByAngle[(I + ByAngle.Num() - 1) % ByAngle.Num()].Key;
-			float Gap = ByAngle[I].Key - Prev;
-			if (Gap <= 0.f)
+			float D;
+			Nearest(B, E, &D);
+			Best = FMath::Min(Best, D);
+		}
+		for (const FVector& E : { B[0], B.Last() })
+		{
+			float D;
+			Nearest(A, E, &D);
+			Best = FMath::Min(Best, D);
+		}
+		return Best;
+	}
+
+	/**
+	 * Orders of the picks around the area, whatever order they were clicked in: every order is scored by the gaps between
+	 * neighbouring edges round the loop (0 where they cross or touch), and the best few are returned (up to 4, within
+	 * 1 m of the best). More than 7 picks: the clicked order.
+	 */
+	TArray<TArray<FRMFillPick>> OrdersAround(const TArray<FRMFillPick>& Picks)
+	{
+		TArray<TArray<FRMFillPick>> Out;
+		const int32 N = Picks.Num();
+		if (N <= 3 || N > 7)
+		{
+			Out.Add(Picks);
+			if (N == 3)
 			{
-				Gap += 2.f * PI;
+				Out.Add({ Picks[0], Picks[2], Picks[1] }); // the other way round
 			}
-			if (Gap > Widest)
+			return Out;
+		}
+		TArray<float> Gap;
+		Gap.SetNumZeroed(N * N);
+		for (int32 I = 0; I < N; ++I)
+		{
+			for (int32 J = I + 1; J < N; ++J)
 			{
-				Widest = Gap;
-				First = I;
+				const float G = EdgeGap(Picks[I].Curve, Picks[J].Curve, (Picks[I].Click + Picks[J].Click) * 0.5f);
+				Gap[I * N + J] = G;
+				Gap[J * N + I] = G;
 			}
 		}
-		TArray<FRMFillPick> Out;
-		for (int32 K = 0; K < ByAngle.Num(); ++K)
+		TArray<int32> Rest;
+		for (int32 I = 1; I < N; ++I)
 		{
-			Out.Add(Picks[ByAngle[(First + K) % ByAngle.Num()].Value]);
+			Rest.Add(I);
+		}
+		TArray<TPair<float, TArray<int32>>> Scored;
+		do
+		{
+			if (Rest[0] > Rest.Last())
+			{
+				continue; // the same loop the other way round
+			}
+			float Cost = Gap[0 * N + Rest[0]] + Gap[Rest.Last() * N + 0];
+			for (int32 K = 0; K + 1 < Rest.Num(); ++K)
+			{
+				Cost += Gap[Rest[K] * N + Rest[K + 1]];
+			}
+			Scored.Add(TPair<float, TArray<int32>>(Cost, Rest));
+		}
+		while (std::next_permutation(Rest.GetData(), Rest.GetData() + Rest.Num()));
+		Scored.Sort([](const TPair<float, TArray<int32>>& A, const TPair<float, TArray<int32>>& B) { return A.Key < B.Key; });
+		for (const TPair<float, TArray<int32>>& S : Scored)
+		{
+			if (Out.Num() >= 4 || S.Key > Scored[0].Key + 100.f)
+			{
+				break;
+			}
+			TArray<FRMFillPick> Order;
+			Order.Add(Picks[0]);
+			for (int32 I : S.Value)
+			{
+				Order.Add(Picks[I]);
+			}
+			Out.Add(MoveTemp(Order));
 		}
 		return Out;
 	}
@@ -577,11 +622,11 @@ void ARMFillHologram::BuildLoop()
 	}
 	// Best: usable, then the shortest closing line (the outline closes where the edges already meet), then the
 	// clicked sides (5 m per pick that keeps its other side).
-	const int32 Bits = FMath::Min(N, 6);
+	const int32 Bits = FMath::Min(N, 5);
 	FLoop Best;
 	float BestScore = TNumericLimits<float>::Max();
+	for (const TArray<FRMFillPick>& Ordered : OrdersAround(mPicks))
 	{
-	const TArray<FRMFillPick> Ordered = OrderAround(mPicks);
 	for (uint32 Flip = 0; Flip < (1u << Bits); ++Flip)
 	{
 		FLoop L = MakeLoop(Ordered, Flip);
