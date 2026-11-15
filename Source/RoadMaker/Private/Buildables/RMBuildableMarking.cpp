@@ -12,6 +12,7 @@
 #include "RoadMakerModule.h"
 #include "EngineUtils.h"
 #include "FGDismantleInterface.h"
+#include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "FGVehicle.h"
 #include "FGIconLibrary.h"
 #include "FGIconDatabaseSubsystem.h"
