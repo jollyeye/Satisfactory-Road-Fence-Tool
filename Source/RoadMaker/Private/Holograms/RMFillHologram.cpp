@@ -499,6 +499,72 @@ namespace RMFill
 	}
 }
 
+namespace RMFill
+{
+	float EndGap(const TArray<FVector>& A, const TArray<FVector>& B)
+	{
+		return FMath::Min(FMath::Min(FVector::Dist2D(A[0], B[0]), FVector::Dist2D(A[0], B.Last())),
+			FMath::Min(FVector::Dist2D(A.Last(), B[0]), FVector::Dist2D(A.Last(), B.Last())));
+	}
+
+	/**
+	 * The picks in their order around the area, whatever order they were clicked in: from the first pick on, the next is
+	 * an edge crossing the current one (else the edge with the nearest end). Second: which crossing edge to go to first
+	 * (0 or 1: the two ways round).
+	 */
+	TArray<FRMFillPick> OrderAround(const TArray<FRMFillPick>& Picks, int32 Second)
+	{
+		TArray<FRMFillPick> Out;
+		if (Picks.Num() == 0)
+		{
+			return Out;
+		}
+		TArray<int32> Left;
+		for (int32 I = 1; I < Picks.Num(); ++I)
+		{
+			Left.Add(I);
+		}
+		int32 Cur = 0;
+		Out.Add(Picks[0]);
+		bool bFirstStep = true;
+		while (Left.Num() > 0)
+		{
+			TArray<int32> Crossing;
+			for (int32 K = 0; K < Left.Num(); ++K)
+			{
+				FParam A, B;
+				if (RMFill::Crossing(Picks[Cur].Curve, Picks[Left[K]].Curve, Picks[Left[K]].Click, A, B))
+				{
+					Crossing.Add(K);
+				}
+			}
+			int32 Pick = INDEX_NONE;
+			if (Crossing.Num() > 0)
+			{
+				Pick = Crossing[bFirstStep && Crossing.Num() > 1 ? FMath::Clamp(Second, 0, Crossing.Num() - 1) : 0];
+			}
+			else
+			{
+				float Best = TNumericLimits<float>::Max();
+				for (int32 K = 0; K < Left.Num(); ++K)
+				{
+					const float D = EndGap(Picks[Cur].Curve, Picks[Left[K]].Curve);
+					if (D < Best)
+					{
+						Best = D;
+						Pick = K;
+					}
+				}
+			}
+			Cur = Left[Pick];
+			Out.Add(Picks[Cur]);
+			Left.RemoveAt(Pick);
+			bFirstStep = false;
+		}
+		return Out;
+	}
+}
+
 void ARMFillHologram::BuildLoop()
 {
 	using namespace RMFill;
@@ -526,9 +592,10 @@ void ARMFillHologram::BuildLoop()
 	const int32 Bits = FMath::Min(N, 6);
 	FLoop Best;
 	float BestScore = TNumericLimits<float>::Max();
+	for (int32 Way = 0; Way < (N > 2 ? 2 : 1); ++Way)
 	for (uint32 Flip = 0; Flip < (1u << Bits); ++Flip)
 	{
-		FLoop L = MakeLoop(mPicks, Flip);
+		FLoop L = MakeLoop(OrderAround(mPicks, Way), Flip);
 		if (L.Ring.Num() < 3)
 		{
 			continue;
