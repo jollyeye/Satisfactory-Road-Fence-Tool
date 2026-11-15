@@ -154,14 +154,7 @@ void ARMBuildableProcedural::BeginPlay()
 	// loads or when a client joins (those all start within the first seconds).
 	const UWorld* World = GetWorld();
 	const bool bJustBuilt = !mLoadedFromSave && World && World->GetTimeSeconds() > 20.0;
-	Super::BeginPlay();
-	UpdateLODDistances();
-	// Collision is worked out in the background (no hitch when a long road or fence is built, replaced or
-	// rebuilt; the old collision stays until the new one is ready), except for pieces arriving with the
-	// world: someone may be standing on them as the save loads.
-	mMesh->bUseAsyncCooking = bJustBuilt;
-	RebuildMesh();
-	mMesh->bUseAsyncCooking = true;
+	// Before Super::BeginPlay: the game allows SetInsideBlueprintDesigner only until begin play is done (asserts).
 	// Built inside a blueprint designer without its hologram telling the designer (lane markings painted with Road
 	// Lines, cut / joined / split pieces, made by our code): the designer would leave it out of the blueprint.
 	if (bJustBuilt && HasAuthority() && !GetBlueprintDesigner())
@@ -176,6 +169,14 @@ void ARMBuildableProcedural::BeginPlay()
 			}
 		}
 	}
+	Super::BeginPlay();
+	UpdateLODDistances();
+	// Collision is worked out in the background (no hitch when a long road or fence is built, replaced or
+	// rebuilt; the old collision stays until the new one is ready), except for pieces arriving with the
+	// world: someone may be standing on them as the save loads.
+	mMesh->bUseAsyncCooking = bJustBuilt;
+	RebuildMesh();
+	mMesh->bUseAsyncCooking = true;
 	if (bJustBuilt)
 	{
 		StartRiseAnimation();
