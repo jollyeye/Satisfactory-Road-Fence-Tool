@@ -1266,6 +1266,51 @@ if chev_r and chev_l:
 else:
     log("  ! sign icon textures missing (run create_assets.py first)")
 
+# --- Sign wall (1.4.0) ------------------------------------------------------------------------
+# Body: the grid fence's matte metal. Back: the same metal with the cyberpunk road's circuit grooves (UV1 = metres up /
+# along, UV2.x = 1 so the circuit reads them). Front: the design the game draws for the wall's hidden sign, handed over as
+# "SignTexture", repeated along the wall (UV1.x = design widths, its fraction), lit like a sign.
+sw_metal = new_material("M_RM_SignWallMetal")
+MEL.connect_material_property(color(sw_metal, 0.181, 0.181, 0.180, -400, 0), "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(sw_metal, 0.86, -400, 100), "", MP.MP_METALLIC)
+MEL.connect_material_property(const(sw_metal, 0.41, -400, 200), "", MP.MP_ROUGHNESS)
+finish(sw_metal)
+log("Sign wall metal")
+
+sw_back = new_material("M_RM_SignWallBack")
+swb = custom(sw_back, CIRCUIT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT1, ["UV1", "UV2", "WP"], -800, 300, "Circuit")
+link(node(sw_back, unreal.MaterialExpressionTextureCoordinate, -1100, 200, coordinate_index=1), "", swb, "UV1")
+link(node(sw_back, unreal.MaterialExpressionTextureCoordinate, -1100, 300, coordinate_index=2), "", swb, "UV2")
+link(node(sw_back, unreal.MaterialExpressionWorldPosition, -1100, 400), "", swb, "WP")
+swb_col = node(sw_back, unreal.MaterialExpressionLinearInterpolate, -300, 0)
+link(color(sw_back, 0.181, 0.181, 0.180, -600, -50), "", swb_col, "A")
+link(color(sw_back, 0.10, 0.10, 0.10, -600, 50), "", swb_col, "B")
+link(swb, "", swb_col, "Alpha")
+MEL.connect_material_property(swb_col, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(sw_back, 0.86, -400, 150), "", MP.MP_METALLIC)
+MEL.connect_material_property(const(sw_back, 0.41, -400, 220), "", MP.MP_ROUGHNESS)
+bump_normal(sw_back, swb, -0.6, None, 300, 500)
+finish(sw_back)
+log("Sign wall back (circuit)")
+
+sw_front = new_material("M_RM_SignWallFront")
+swf_uv = custom(sw_front, "return float2(frac(UV1.x), saturate(UV1.y));", unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1"], -800, 0, "DesignUV")
+link(node(sw_front, unreal.MaterialExpressionTextureCoordinate, -1100, 0, coordinate_index=1), "", swf_uv, "UV1")
+swf_tex = node(sw_front, unreal.MaterialExpressionTextureSampleParameter2D, -500, 0, parameter_name="SignTexture")
+try:
+    swf_tex.set_editor_property("texture", unreal.load_asset("/Engine/EngineResources/WhiteSquareTexture"))
+except Exception as e:
+    log("  ! sign wall front default texture: %s" % e)
+link(swf_uv, "", swf_tex, "UVs")
+MEL.connect_material_property(swf_tex, "RGB", MP.MP_BASE_COLOR)
+swf_glow = node(sw_front, unreal.MaterialExpressionMultiply, -200, 200)
+link(swf_tex, "RGB", swf_glow, "A")
+link(node(sw_front, unreal.MaterialExpressionScalarParameter, -500, 300, parameter_name="SignWallGlow", default_value=0.15), "", swf_glow, "B")
+MEL.connect_material_property(swf_glow, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(const(sw_front, 0.5, -400, 400), "", MP.MP_ROUGHNESS)
+finish(sw_front)
+log("Sign wall front (design)")
+
 # --- Assign ----------------------------------------------------------------------------------
 # Asphalt is the default look; the Material tab looks (concrete, cyberpunk) are index look - 1.
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
@@ -1291,6 +1336,7 @@ ASSIGN = {
     "Build_Fence_GridTall": {"m_main_material": post_mat or steel, "m_panel_material": grid},
     "Build_FenceWall_Concrete": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
     "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    "Build_FenceWall_Sign": {"m_main_material": sw_metal, "m_panel_material": sw_back, "m_front_material": sw_front},
     "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
 }
 for name, props in ASSIGN.items():

@@ -15,6 +15,7 @@ enum class ERMFenceType : uint8
 	ConcreteWall  UMETA(DisplayName = "Concrete Fence Wall"),
 	SteelWall     UMETA(DisplayName = "Steel Fence Wall"),
 	FicsitWall    UMETA(DisplayName = "FICSIT Fence Wall"),
+	SignWall      UMETA(DisplayName = "Sign Wall"),
 };
 
 UCLASS()
@@ -87,7 +88,7 @@ public:
 	bool IsWall() const { return IsWallType(mFenceType); }
 	static bool IsWallType(ERMFenceType Type)
 	{
-		return HasLooksType(Type) || Type == ERMFenceType::GridFenceTall;
+		return HasLooksType(Type) || Type == ERMFenceType::GridFenceTall || Type == ERMFenceType::SignWall;
 	}
 
 	/** Fence walls whose look the customizer's Material tab switches (concrete / FICSIT / steel). */

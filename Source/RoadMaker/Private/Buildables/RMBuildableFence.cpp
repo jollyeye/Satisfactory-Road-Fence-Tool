@@ -531,6 +531,12 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 	case ERMFenceType::FicsitWall:
 		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, WallLayout);
 		break;
+	case ERMFenceType::SignWall:
+	{
+		FRMMesh NoBack;
+		RMGeometry::BuildSignWall(Frames, 400.f, Main, NoBack, GetWallHeight(), 50.f, true);
+		break;
+	}
 	}
 }
 
@@ -563,6 +569,10 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 		break;
 	case ERMFenceType::FicsitWall:
 		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout); // shape to follow
+		break;
+	case ERMFenceType::SignWall:
+		// Body and back here; the sign face is added by ARMBuildableSignWall.
+		RMGeometry::BuildSignWall(Frames, UVScale, Main, Panel, GetWallHeight(), 50.f, bLowPoly);
 		break;
 	}
 }

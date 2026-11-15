@@ -260,6 +260,21 @@ namespace RMGeometry
 		const FRMWallTexLayout& Layout = FRMWallTexLayout());
 
 	/**
+	 * Sign wall (1.4.0), road on +Right: Body = the slab with bevelled edges (metal; plain edges when low poly), Back = a
+	 * strip on the back face for the circuit grooves (UV1 = metres up / along, UV2.x = 1 so the circuit material reads
+	 * them). The front face is built separately (BuildSignWallFace).
+	 */
+	ROADMAKER_API void BuildSignWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Body, FRMMesh& Back, float Height = 400.f,
+		float Thickness = 50.f, bool bLowPoly = false);
+
+	/**
+	 * The sign face on the road side (+Right), a hair in front of the slab: UV1.x = sign widths along (the design repeats
+	 * every RepeatLength cm, kept small for precision, the material takes frac), UV1.y = 0 at the top to 1 at the bottom.
+	 */
+	ROADMAKER_API void BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face, float Height = 400.f, float Thickness = 50.f,
+		float RepeatLength = 800.f);
+
+	/**
 	 * Builds the slab that joins 2..N road ends. Ends are ordered by angle around their centroid, the
 	 * corners of neighbouring ends are joined by curb fillets (quadratic Bezier whose control point is
 	 * where the two road edges meet), and the outline is fan-triangulated from the centroid.

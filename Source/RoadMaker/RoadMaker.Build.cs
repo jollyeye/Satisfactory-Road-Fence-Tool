@@ -25,6 +25,7 @@ public class RoadMaker : ModuleRules
 			// Satisfactory + mod loader
 			"FactoryGame",
 			"SML",
+			"OnlineIntegration", // the game's sign header (sign wall) includes LocalUserInfo.h
 		});
 	}
 }

@@ -203,6 +203,7 @@ RMFenceHologram = native_class("RMFenceHologram")
 RMIntersectionHologram = native_class("RMIntersectionHologram")
 RMBuildableRoad = native_class("RMBuildableRoad")
 RMBuildableFence = native_class("RMBuildableFence")
+RMBuildableSignWall = native_class("RMBuildableSignWall")
 RMBuildableIntersection = native_class("RMBuildableIntersection")
 RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
@@ -396,7 +397,7 @@ if VehiclePathSubCat:
 # Base Building milestone (added at runtime by the world module), not by the Road Maker milestone.
 FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel"}
 # Everything in the Walls tab, Fence Walls section (the steel mesh wall too).
-WALLS_MENU = FENCE_WALLS | {"Fence_GridTall"}
+WALLS_MENU = FENCE_WALLS | {"Fence_GridTall", "FenceWall_Sign"}
 
 basic_steel = None
 for sname in ("Schematic_3-1", "Schematic_3-2", "Schematic_3-3", "Schematic_3-4"):
@@ -509,6 +510,8 @@ TOOLS = [
      {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Ficsit", RMBuildableFence, holo_fence, "FICSIT Fence Wall", "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 1)], fence_icons, {"m_main_material": mat_concrete}),
+    ("FenceWall_Sign", RMBuildableSignWall, holo_fence, "Sign Wall", "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 4 m.",
+     {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 2), (Desc_Wire, 2)], fence_icons, {}),
     ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel.",
@@ -529,7 +532,7 @@ TOOLS = [
 
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
-              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4}
+              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
 MarkingKindEnum = getattr(unreal, "RMMarkingKind", None)
@@ -733,6 +736,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
             wall_recipes.append(r.generated_class())
         if name == "Fence_GridTall" and basic_steel:
             recipe_unlocked_by[r.generated_class()] = basic_steel
+        if name == "FenceWall_Sign":
+            recipes.append(r.generated_class())  # with the Road Maker milestone
     elif name not in MARKING_TOOLS:
         recipes.append(r.generated_class())
 

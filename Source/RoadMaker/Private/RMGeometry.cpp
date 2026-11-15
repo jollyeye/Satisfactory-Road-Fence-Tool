@@ -2196,3 +2196,90 @@ void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inse
 		}
 	}
 }
+
+namespace
+{
+	/** Frames stood upright (true vertical, level right), for walls. */
+	TArray<FRMFrame> SignWallUpright(const TArray<FRMFrame>& Frames)
+	{
+		TArray<FRMFrame> Upright = Frames;
+		for (FRMFrame& F : Upright)
+		{
+			F.Up = FVector::UpVector;
+			F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+		}
+		return Upright;
+	}
+
+	/** A flat strip on one face of the wall (X lateral, from Z0 to Z1), one quad per frame step, all channels filled. */
+	template <typename FUV1>
+	void SignWallStrip(const TArray<FRMFrame>& Frames, float X, float Z0, float Z1, float NormalSign, FRMMesh& Out, FUV1&& UV1Of,
+		const FVector2D& UV2)
+	{
+		const int32 First = Out.Vertices.Num();
+		for (const FRMFrame& F : Frames)
+		{
+			const FVector N = F.Right * NormalSign;
+			for (const float Z : { Z0, Z1 })
+			{
+				Out.AddVertex(F.Pos + F.Right * X + FVector::UpVector * Z, N, FVector2D(F.Dist / 400.f, Z / 400.f), F.Fwd);
+				Out.MarkUV1.SetNum(Out.Vertices.Num());
+				Out.MarkUV2.SetNum(Out.Vertices.Num());
+				Out.MarkUV3.SetNumZeroed(Out.Vertices.Num());
+				Out.MarkUV1.Last() = UV1Of(F.Dist, Z);
+				Out.MarkUV2.Last() = UV2;
+			}
+		}
+		for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+		{
+			const int32 A = First + I * 2, B = A + 1, C = A + 2, D = A + 3;
+			const FVector N = Frames[I].Right * NormalSign;
+			Out.AddTriangle(A, C, D, N);
+			Out.AddTriangle(A, D, B, N);
+		}
+	}
+}
+
+void RMGeometry::BuildSignWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Body, FRMMesh& Back, float Height, float Thickness,
+	bool bLowPoly)
+{
+	if (Frames.Num() < 2)
+	{
+		return;
+	}
+	const TArray<FRMFrame> Upright = SignWallUpright(Frames);
+	const float Half = Thickness * 0.5f;
+	const float Bottom = -2.f; // a little below the ground line, like the fence walls
+	const float Bevel = 2.f;
+	const TArray<FVector2D> Profile = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom), FVector2D(Half, Height), FVector2D(-Half, Height) };
+	if (bLowPoly)
+	{
+		ExtrudeProfile(Upright, Profile, true, FVector2D(0.f, Height * 0.5f), UVScale, Body);
+	}
+	else
+	{
+		ExtrudeProfileBeveled(Upright, Profile, FVector2D(0.f, Height * 0.5f), UVScale, Bevel, Body);
+	}
+	AddProfileCap(Upright[0], Profile, false, UVScale, Body);
+	AddProfileCap(Upright.Last(), Profile, true, UVScale, Body);
+	// Back face: circuit grooves laid out by (metres up, metres along).
+	SignWallStrip(Upright, -Half - 0.3f, 0.f, Height - Bevel, -1.f, Back,
+		[](float Dist, float Z) { return FVector2D(Z / 100.f, Dist / 100.f); }, FVector2D(1.f, 0.f));
+}
+
+void RMGeometry::BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face, float Height, float Thickness, float RepeatLength)
+{
+	if (Frames.Num() < 2)
+	{
+		return;
+	}
+	const TArray<FRMFrame> Upright = SignWallUpright(Frames);
+	const int32 First = Face.Vertices.Num();
+	const int32 FirstTriangle = Face.Triangles.Num();
+	// Seen from the road (+Right), "along" runs to the viewer's right, so the design reads the right way round.
+	const float Repeat = FMath::Max(RepeatLength, 1.f);
+	SignWallStrip(Upright, Thickness * 0.5f + 0.3f, 0.f, Height - 2.f, 1.f, Face,
+		[Repeat, Height](float Dist, float Z) { return FVector2D(Dist / Repeat, (Height - Z) / Height); }, FVector2D(0.f, 0.f));
+	Face.WrapUV1X(First, FirstTriangle, 1.f); // long walls: precise half-float UVs (the material takes frac)
+}
+
