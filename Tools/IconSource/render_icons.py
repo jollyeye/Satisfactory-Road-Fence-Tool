@@ -13,7 +13,7 @@ def proj(p):
     return np.array([(x - y) * 0.866, (x + y) * 0.5 - z * 1.0])
 
 class Scene:
-    def __init__(s): s.faces = []
+    def __init__(s): s.faces = []; s.bounds = []  # bounds: extra points that only count for the framing
     def face(s, pts, col, layer=0, two=False, shade=True):
         s.faces.append((np.array(pts, float), np.array(col, float), layer, two, shade))
     def quad(s, a, b, c, d, col, **k): s.face([a, b, c, d], col, **k)
@@ -35,7 +35,7 @@ def render(scene, path, shadow=True):
             n = -n
         depth = float(np.mean(pts @ CAM))
         faces.append((layer, depth, pts, shade_col(n, col) if sh else col))
-    allp = np.array([proj(p) for f in faces for p in f[2]])
+    allp = np.array([proj(p) for f in faces for p in f[2]] + [proj(p) for p in scene.bounds])
     lo, hi = allp.min(0), allp.max(0)
     scale = 0.84 * S / max(hi - lo)
     off = np.array([S, S]) / 2 - (lo + hi) / 2 * scale
@@ -120,13 +120,14 @@ def box(sc, c, hx, hy, hz, col, fwd=(1, 0, 0), layer=0):
 ASPHALT = np.array([62, 64, 68.0]); CONCRETE = np.array([178, 174, 166.0]); YELLOW = np.array([250, 190, 40.0])
 WHITE = np.array([240, 240, 236.0]); STEEL = np.array([168, 176, 186.0]); DARKSTEEL = np.array([110, 118, 128.0])
 ORANGE = np.array([250, 149, 73.0])
+PAINT_WHITE = np.array([255, 255, 255.0])
 ORANGE_CUT = np.array([255, 110, 20.0])
 
-def line_strip(sc, frs, lat, w, col, dash=None, z=0.02):
+def line_strip(sc, frs, lat, w, col, dash=None, z=0.02, shade=True):
     for i in range(len(frs) - 1):
         if dash and (i // dash[0]) % 2 == 1:
             continue
-        sc.quad(at(frs[i], lat - w, z), at(frs[i], lat + w, z), at(frs[i + 1], lat + w, z), at(frs[i + 1], lat - w, z), col, layer=1, two=True)
+        sc.quad(at(frs[i], lat - w, z), at(frs[i], lat + w, z), at(frs[i + 1], lat + w, z), at(frs[i + 1], lat - w, z), col, layer=1, two=True, shade=shade)
 
 def road(sc, width, lanes, length=18.0, bend=0.55, h=1.0):
     frs = frames_arc(length, bend, 32)
@@ -180,9 +181,9 @@ def paint_walker(sc, frs, length, along, lat, size, col, stretch=1.5):
     """The pictogram painted on a path's top, head towards the start (upright seen from the end), drawn
     longer along the path like road paint (stretch)."""
     for poly in walker_polys():
-        sc.face([path_point(frs, length, along - (y - 0.5) * size * stretch, lat - x * size, 0.03) for (x, y) in poly], col, layer=2, two=True)
+        sc.face([path_point(frs, length, along - (y - 0.5) * size * stretch, lat - x * size, 0.03) for (x, y) in poly], col, layer=2, two=True, shade=False)
 
-def walking_path(sc, width, length=10.0, bend=0.55, h=1.0, walker=None, side_lines=False):
+def walking_path(sc, width, length=10.0, bend=0.55, h=1.0, walker=None, side_lines=False, middle_line=False, frame_width=None):
     """Walking path: concrete-block top, concrete sides; walker="middle" paints the pictogram on it."""
     frs = frames_arc(length, bend, 32)
     hw = width / 2
@@ -195,8 +196,17 @@ def walking_path(sc, width, length=10.0, bend=0.55, h=1.0, walker=None, side_lin
     if side_lines:
         line_strip(sc, frs, -hw + 0.3, 0.07, WHITE)
         line_strip(sc, frs, hw - 0.3, 0.07, WHITE)
-    if walker == "middle":
-        paint_walker(sc, frs, length, length * 0.55, 0.0, width * 0.9, WHITE)
+    if middle_line:
+        line_strip(sc, frs, 0.0, 0.06, PAINT_WHITE, shade=False)
+    if walker:
+        # Same size on every path (1.8 m tall figure); on the 4 m path in the right lane.
+        lat = 0.0 if walker == "middle" else width / 4.0
+        paint_walker(sc, frs, length, length * 0.55, lat, 1.8, PAINT_WHITE)
+    if frame_width:
+        # Frame as if the path were frame_width wide, so icons of different widths share one scale.
+        fw = frame_width / 2
+        for fr in (frs[0], frs[len(frs) // 2], frs[-1]):
+            sc.bounds += [at(fr, -fw, 0), at(fr, fw, 0), at(fr, -fw, -h), at(fr, fw, -h)]
     return frs
 
 def guard_rail(sc):
@@ -651,8 +661,8 @@ if what == "road1": road(sc, 8, 1)
 elif what == "road2": road(sc, 16, 2)
 elif what == "road3": road(sc, 24, 3)
 elif what == "road4": road(sc, 32, 4)
-elif what == "walk2": walking_path(sc, 2, length=13.0, walker="middle")
-elif what == "walk4": walking_path(sc, 4, length=13.0, walker="middle")
+elif what == "walk2": walking_path(sc, 2, length=13.0, walker="middle", frame_width=4)
+elif what == "walk4": walking_path(sc, 4, length=13.0, walker="right", middle_line=True, frame_width=4)
 elif what == "walk2b": walking_path(sc, 2, length=13.0)
 elif what == "walk4b": walking_path(sc, 4, length=13.0)
 elif what == "roadcut": road_cut(sc)

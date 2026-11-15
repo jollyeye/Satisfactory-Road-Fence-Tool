@@ -16,6 +16,24 @@
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 
+namespace
+{
+	/** The road piece class (and its recipe) of a width: roads by foundations, walking paths by metres. */
+	void RoadClassFor(bool bWalking, float WidthCm, UClass*& OutClass, UClass*& OutRecipe)
+	{
+		if (bWalking)
+		{
+			const int32 M = FMath::RoundToInt(WidthCm / 100.f);
+			OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_WalkingPath_%dm.Build_WalkingPath_%dm_C"), M, M));
+			OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_WalkingPath_%dm.Recipe_WalkingPath_%dm_C"), M, M));
+			return;
+		}
+		const int32 F = FMath::RoundToInt(WidthCm / RM::FoundationSize);
+		OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), F, F));
+		OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), F, F));
+	}
+}
+
 ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -499,24 +517,6 @@ ARMBuildableRoad* ARMBuildableRoad::JoinWith(ARMBuildableRoad* Other, int32 MyEn
 	DismantleReplaced();
 	Other->DismantleReplaced();
 	return Joined;
-}
-
-namespace
-{
-	/** The road piece class (and its recipe) of a width: roads by foundations, walking paths by metres. */
-	void RoadClassFor(bool bWalking, float WidthCm, UClass*& OutClass, UClass*& OutRecipe)
-	{
-		if (bWalking)
-		{
-			const int32 M = FMath::RoundToInt(WidthCm / 100.f);
-			OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_WalkingPath_%dm.Build_WalkingPath_%dm_C"), M, M));
-			OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_WalkingPath_%dm.Recipe_WalkingPath_%dm_C"), M, M));
-			return;
-		}
-		const int32 F = FMath::RoundToInt(WidthCm / RM::FoundationSize);
-		OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), F, F));
-		OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), F, F));
-	}
 }
 
 ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftUnits, ARMBuildableRoad** OutRight)
