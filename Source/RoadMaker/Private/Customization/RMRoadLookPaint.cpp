@@ -277,12 +277,12 @@ void RMRoadSample::NoteSignWall(ARMBuildableSignWall* Wall)
 
 UFGFactoryClipboardSettings* RMRoadSample::TakeSignDesign()
 {
-	if (!GSampledDesign.IsValid() || FPlatformTime::Seconds() - GSampledDesignTime > 5.0)
+	// Kept for every wall built in a row (like the game's sample), until 30 s after the last one.
+	if (!GSampledDesign.IsValid() || FPlatformTime::Seconds() - GSampledDesignTime > 30.0)
 	{
 		GSampledDesign.Reset();
 		return nullptr;
 	}
-	UFGFactoryClipboardSettings* Design = GSampledDesign.Get();
-	GSampledDesign.Reset();
-	return Design; // still referenced by the caller's frame (pasted right away)
+	GSampledDesignTime = FPlatformTime::Seconds();
+	return GSampledDesign.Get();
 }

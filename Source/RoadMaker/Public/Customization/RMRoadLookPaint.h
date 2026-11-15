@@ -28,7 +28,7 @@ namespace RMRoadSample
 	/** The Sample key was pressed aiming at a sign wall: its design is copied, for the next sign wall built. */
 	ROADMAKER_API void NoteSignWall(class ARMBuildableSignWall* Wall);
 
-	/** The design of a sign wall sampled in the last few seconds (copy / paste settings); taken once. */
+	/** The design of a sign wall sampled before (copy / paste settings), for every wall built in a row (30 s). */
 	ROADMAKER_API class UFGFactoryClipboardSettings* TakeSignDesign();
 
 	/** Look and lines of a piece of exactly Class sampled in the last few seconds; taken once. */
