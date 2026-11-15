@@ -603,9 +603,11 @@ bool ARMRoadHologram::TrySnapToFoundation(const FHitResult& hitResult)
 		return false;
 	}
 
+	// The blueprint designer's floor: always on top (its mesh is no foundation shape; a flush road sank into it).
+	const bool bDesigner = Actor->GetClass()->GetName().Contains(TEXT("BlueprintDesigner"));
 	// Only buildings: classic buildable actors, or lightweight buildables (foundations since 1.0 are
 	// rendered as instances owned by an abstract instance manager).
-	const bool bBuilding = Actor->IsA<AFGBuildable>()
+	const bool bBuilding = bDesigner || Actor->IsA<AFGBuildable>()
 		|| Actor->GetClass()->GetName().Contains(TEXT("AbstractInstance"))
 		|| Actor->GetClass()->GetName().Contains(TEXT("Lightweight"));
 	if (!bBuilding)
@@ -626,7 +628,7 @@ bool ARMRoadHologram::TrySnapToFoundation(const FHitResult& hitResult)
 	// Foundation-shaped: at least half a foundation wide each way, 0.5 to 4.5 m thick.
 	const FBox Box = Mesh->GetStaticMesh()->GetBoundingBox();
 	const FVector Size = Box.GetSize() * PieceTransform.GetScale3D().GetAbs();
-	if (Size.X < 390.f || Size.Y < 390.f || Size.Z < 50.f || Size.Z > 450.f)
+	if (!bDesigner && (Size.X < 390.f || Size.Y < 390.f || Size.Z < 50.f || Size.Z > 450.f))
 	{
 		return false;
 	}
@@ -642,6 +644,64 @@ bool ARMRoadHologram::TrySnapToFoundation(const FHitResult& hitResult)
 		{
 			Edge = I;
 		}
+	}
+
+	// Aimed at the top more than 1.5 m in from every edge (or at the designer's floor): the road stands on top, its
+	// start / end on the foundation grid (like other buildings); near an edge: flush with the top at that edge.
+	const FVector Scale3 = PieceTransform.GetScale3D().GetAbs();
+	const float EdgeDistWorld = Dist[Edge] * (Edge < 2 ? Scale3.X : Scale3.Y);
+	if (bDesigner ? hitResult.ImpactNormal.Z > 0.7f : (hitResult.ImpactNormal.Z > 0.7f && EdgeDistWorld > 150.f))
+	{
+		const float StepX = mFoundationEdgeStep / FMath::Max(Scale3.X, KINDA_SMALL_NUMBER);
+		const float StepY = mFoundationEdgeStep / FMath::Max(Scale3.Y, KINDA_SMALL_NUMBER);
+		const FVector LocalTop(Center.X + FMath::RoundToFloat((Local.X - Center.X) / StepX) * StepX,
+			Center.Y + FMath::RoundToFloat((Local.Y - Center.Y) / StepY) * StepY, bDesigner ? Local.Z : Box.Max.Z);
+		FVector Top = PieceTransform.TransformPosition(LocalTop);
+		if (bDesigner)
+		{
+			Top.Z = hitResult.ImpactPoint.Z;
+		}
+		const FVector P = Top + FVector(0.f, 0.f, GetSurfaceOffset());
+		// Along the foundation's axis nearest to where you look; the mouse wheel turns it.
+		FVector View = hitResult.TraceEnd - hitResult.TraceStart;
+		View.Z = 0.f;
+		View = View.GetSafeNormal();
+		FVector Dir = FVector::ForwardVector;
+		float Best = -2.f;
+		for (const FVector& Axis : { PieceTransform.GetUnitAxis(EAxis::X), PieceTransform.GetUnitAxis(EAxis::Y) })
+		{
+			const FVector Flat = FVector(Axis.X, Axis.Y, 0.f).GetSafeNormal();
+			for (const float Sign : { 1.f, -1.f })
+			{
+				const float D = FVector::DotProduct(Flat * Sign, View);
+				if (D > Best)
+				{
+					Best = D;
+					Dir = Flat * Sign;
+				}
+			}
+		}
+		if (mStep == 0)
+		{
+			mStart = P;
+			mStartDir = Dir.RotateAngleAxis(GetStepScrollYaw(), FVector::UpVector);
+			mStartSnapped = false;
+		}
+		else
+		{
+			if (FVector::Dist(P, mStart) < 100.f)
+			{
+				return false;
+			}
+			mEnd = P;
+			mEndSnapped = false;
+		}
+		UpdateCurve();
+		return true;
+	}
+	if (bDesigner)
+	{
+		return false;
 	}
 
 	const bool bAlongY = Edge < 2; // X edges run along Y
