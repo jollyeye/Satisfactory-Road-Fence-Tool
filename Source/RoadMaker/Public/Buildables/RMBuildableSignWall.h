@@ -5,7 +5,6 @@
 
 #include "CoreMinimal.h"
 #include "Buildables/RMBuildableFence.h"
-#include "FGSignTypes.h"
 #include "RMBuildableSignWall.generated.h"
 
 class ARMSignWallSign;
@@ -63,9 +62,9 @@ private:
 	void EnsureSign();
 	FTimerHandle mEnsureSignTimer;
 
-	/** Server, a piece of a cut or join: the design its sign starts with. */
-	FPrefabSignData mPendingDesign;
-	bool mHasPendingDesign = false;
+	/** Server, a piece of a cut or join: the design its sign starts with (the old wall's copied settings). */
+	UPROPERTY(Transient)
+	class UFGFactoryClipboardSettings* mPendingDesign = nullptr;
 
 	/** Material of the face: the sign's design material once it has one, else mFrontMaterial. */
 	UMaterialInterface* GetFrontMaterial() const;

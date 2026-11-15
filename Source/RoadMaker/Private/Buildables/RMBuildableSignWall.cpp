@@ -81,11 +81,11 @@ void ARMBuildableSignWall::EnsureSign()
 	mSign = Sign; // before it finishes: it sets up its design right away and tells the wall
 	Sign->FinishSpawning(At);
 	// A piece of a cut or a join: the design of the wall it came from.
-	if (mHasPendingDesign)
+	if (mPendingDesign)
 	{
-		mHasPendingDesign = false;
-		Sign->SetPrefabSignData(mPendingDesign, false);
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the design of the wall it was cut / joined from"), *GetName());
+		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, mPendingDesign, nullptr);
+		mPendingDesign = nullptr;
+		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the design of the wall it was cut / joined from (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
 	}
 	// Middle click on a sign wall before building this one: its design.
 	else if (UFGFactoryClipboardSettings* Design = RMRoadSample::TakeSignDesign())
@@ -103,9 +103,8 @@ void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const
 	ARMBuildableSignWall* Piece = Cast<ARMBuildableSignWall>(New);
 	if (Piece && mSign)
 	{
-		mSign->GetSignPrefabData(Piece->mPendingDesign);
-		Piece->mPendingDesign.IsFromReplication = false;
-		Piece->mHasPendingDesign = true;
+		// The game's own copy (the same as copy settings / middle click), pasted on the piece's new sign.
+		Piece->mPendingDesign = IFGFactoryClipboardInterface::Execute_CopySettings(mSign);
 	}
 }
 
