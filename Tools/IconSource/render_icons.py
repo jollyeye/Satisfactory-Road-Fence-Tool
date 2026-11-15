@@ -370,54 +370,94 @@ def fence_wall(sc, kind="concrete"):
 
 
 def cement_mixer(sc):
-    """Gap Fill: a site cement mixer standing on a road tile, in the set's style: few flat faces, an 8-sided orange
-    drum tilted up with its mouth open, square legs, 8-sided wheels (like the gantry on its road)."""
-    road(sc, 12, 1, length=12.0, bend=0.0)
-    DARK = np.array([92, 96, 104.0]); GREY = np.array([150, 154, 162.0]); INSIDE = np.array([34, 30, 28.0])
+    """Gap Fill: a classic site cement mixer in the set's flat style: a big orange drum turned towards the viewer with
+    grey concrete in its wide mouth, an orange frame (A-frame leg with two black wheels, upright post with a T foot) and
+    the big spoked hand wheel at its side."""
+    DRUM = np.array([255, 168, 48.0])
+    FRAME = np.array([245, 150, 40.0])
+    TYRE = np.array([38, 38, 42.0]); HUB = np.array([150, 154, 162.0])
+    INSIDE = np.array([190, 95, 20.0]); CONCRETE = np.array([110, 112, 116.0])
     def frame_of(d):
         d = np.array(d, float); d /= np.linalg.norm(d)
         a = np.array([0, 0, 1.0]) if abs(d[2]) < 0.9 else np.array([1.0, 0, 0])
         u = np.cross(d, a); u /= np.linalg.norm(u)
         return d, u, np.cross(d, u)
-    def ring(c, d, u, v, r, n, rot=0.0):
+    def ring(c, d, u, v, r, n, rot=0.5):
+        c = np.array(c, float)
         return [c + (u * math.cos(2 * math.pi * (i + rot) / n) + v * math.sin(2 * math.pi * (i + rot) / n)) * r for i in range(n)]
-    def bar(p0, p1, r, col):  # a square bar between two points
+    def bar(p0, p1, r, col, layer=0):  # square bar
         p0 = np.array(p0, float); p1 = np.array(p1, float)
         d, u, v = frame_of(p1 - p0)
-        a, b = ring(p0, d, u, v, r, 4, 0.5), ring(p1, d, u, v, r, 4, 0.5)
+        a, b = ring(p0, d, u, v, r, 4), ring(p1, d, u, v, r, 4)
         for i in range(4):
             j = (i + 1) % 4
-            sc.quad(a[i], a[j], b[j], b[i], col, layer=1)
-    def wheel(c, r, w, col):
-        d, u, v = frame_of((0, 1, 0))
+            sc.quad(a[i], a[j], b[j], b[i], col, layer=layer)
+        sc.face(a, col, layer=layer, two=True); sc.face(b, col, layer=layer, two=True)
+    def cylinder(c, axis, r, w, col, n, cap_col=None, layer=0):
+        d, u, v = frame_of(axis)
         c = np.array(c, float)
-        a, b = ring(c - d * w, d, u, v, r, 8, 0.5), ring(c + d * w, d, u, v, r, 8, 0.5)
-        sc.face(a, col, layer=1, two=True)
-        sc.face(b, col, layer=1, two=True)
-        for i in range(8):
-            j = (i + 1) % 8
-            sc.quad(a[i], a[j], b[j], b[i], col, layer=1)
-        sc.face(ring(c + d * (w + 0.02), d, u, v, r * 0.4, 8, 0.5), GREY, layer=2, two=True)
-    x0 = 6.0
-    pivot = np.array([x0, 0.0, 6.0])
-    # Stand: two legs from the axle up to the pivot, one at the back; the axle; the wheels; the motor box.
-    for y in (-3.2, 3.2):
-        bar((x0 + 1.6, y, 1.7), pivot, 0.4, GREY)
-        wheel((x0 + 1.6, y * 1.15, 1.7), 1.7, 0.5, DARK)
-    bar((x0 - 4.0, 0.0, 0.1), pivot, 0.4, GREY)
-    bar((x0 + 1.6, -3.4, 1.7), (x0 + 1.6, 3.4, 1.7), 0.3, GREY)
-    box(sc, (x0 - 1.6, 0.0, 4.6), 1.1, 0.9, 0.8, GREY, layer=1)
-    # Drum: 8 sides, bottom, belly, mouth; tilted up towards the viewer.
-    d, u, v = frame_of((0.55, -0.55, 0.62))
-    base = pivot - d * 1.0
-    prof = [(0.0, 2.2), (1.2, 3.1), (4.8, 3.1), (6.8, 1.8)]
-    rings = [ring(base + d * t, d, u, v, r, 8, 0.5) for t, r in prof]
+        a, b = ring(c - d * w, d, u, v, r, n), ring(c + d * w, d, u, v, r, n)
+        for i in range(n):
+            j = (i + 1) % n
+            sc.quad(a[i], a[j], b[j], b[i], col, layer=layer)
+        sc.face(a, cap_col if cap_col is not None else col, layer=layer, two=True)
+        sc.face(b, cap_col if cap_col is not None else col, layer=layer, two=True)
+        return d, u, v
+    # Frame: A-frame leg with the wheels (left), upright post with a T foot (right), joined under the drum.
+    knee = (0.0, 1.6, 3.2)
+    for x in (-2.0, 2.0):
+        bar((x, 4.0, 1.1), knee, 0.22, FRAME)
+        d, u, v = cylinder((x * 1.18, 4.0, 1.1), (1, 0, 0), 1.1, 0.35, TYRE, 12)
+        sc.face(ring((x * 1.18 + (0.36 if x > 0 else -0.36), 4.0, 1.1), d, u, v, 0.45, 12), HUB, layer=1, two=True)
+    bar((-2.4, 4.0, 1.1), (2.4, 4.0, 1.1), 0.16, FRAME)
+    bar(knee, (0.0, -4.4, 3.2), 0.22, FRAME)
+    bar((0.0, -4.4, 0.25), (0.0, -4.4, 6.6), 0.26, FRAME)
+    bar((-2.2, -4.4, 0.25), (2.2, -4.4, 0.25), 0.26, FRAME)
+    bar(knee, (0.0, 1.0, 5.0), 0.22, FRAME)
+    # Drum: 14 flat sides, turned up towards the viewer, the mouth wide.
+    C = np.array([0.0, 0.6, 6.4])
+    d, u, v = frame_of((0.25, 0.85, 0.45))
+    base = C - d * 2.4
+    prof = [(0.0, 2.3), (1.0, 3.2), (3.2, 3.2), (4.6, 2.7)]
+    n = 14
+    rings = [ring(base + d * t, d, u, v, r, n) for t, r in prof]
     for k in range(len(rings) - 1):
-        for i in range(8):
-            j = (i + 1) % 8
-            sc.quad(rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i], ORANGE, layer=1)
-    sc.face(rings[0], ORANGE, layer=1, two=True)
-    sc.face(ring(base + d * 6.8, d, u, v, 1.5, 8, 0.5), INSIDE, layer=2, two=True, shade=False)
+        for i in range(n):
+            j = (i + 1) % n
+            sc.quad(rings[k][i], rings[k][j], rings[k + 1][j], rings[k + 1][i], DRUM, layer=1)
+    sc.face(rings[0], DRUM, layer=1, two=True)
+    # The mouth: the dark orange inside, with concrete heaped in its lower part.
+    mouth = base + d * 4.6
+    sc.face(ring(mouth, d, u, v, 2.55, n), INSIDE, layer=2, two=True, shade=False)
+    down = np.array([0, 0, -1.0]); down = down - d * np.dot(down, d); down /= np.linalg.norm(down)
+    side = np.cross(d, down)
+    # The heap: its bottom follows the inside of the mouth, its top is lumpy.
+    R = 2.35
+    lump = []
+    for k in range(13):  # bottom arc, from one side under to the other
+        ang = math.pi * k / 12
+        lump.append(mouth + d * 0.02 + side * (R * math.cos(ang)) + down * (R * math.sin(ang)))
+    for k in range(1, 24):  # rounded lumps on top, back across
+        x = 1.0 - 2.0 * k / 24
+        bump = 0.22 * abs(math.sin(k * math.pi / 6.0))
+        lump.append(mouth + d * 0.02 + side * (-R * x * 0.98) + down * (0.25 - 0.5 * (1 - x * x) - bump))
+    sc.face(lump, CONCRETE, layer=3, two=True, shade=False)
+    # Hand wheel beside the drum: rim, four spokes, hub, on the post.
+    W = np.array([0.0, -4.4, 6.6])
+    wd, wu, wv = frame_of((0, 1, 0))
+    outer, inner = ring(W, wd, wu, wv, 2.3, 16), ring(W, wd, wu, wv, 1.95, 16)
+    for off in (-0.15, 0.15):
+        o2 = [p + wd * off for p in outer]; i2 = [p + wd * off for p in inner]
+        for i in range(16):
+            j = (i + 1) % 16
+            sc.quad(o2[i], o2[j], i2[j], i2[i], FRAME, layer=2, two=True)
+    for i in range(16):
+        j = (i + 1) % 16
+        sc.quad(outer[i] - wd * 0.15, outer[j] - wd * 0.15, outer[j] + wd * 0.15, outer[i] + wd * 0.15, FRAME, layer=2)
+    for a in range(4):
+        ang = math.pi / 4 + math.pi / 2 * a
+        bar(W, W + (wu * math.cos(ang) + wv * math.sin(ang)) * 2.0, 0.12, FRAME, layer=2)
+    cylinder(W, (0, 1, 0), 0.55, 0.3, FRAME, 12, layer=2)
 
 def road_cut(sc):
     """A road cut in two: the pieces pulled apart, an orange outline in the gap where it was cut."""
