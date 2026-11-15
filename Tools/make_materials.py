@@ -1310,7 +1310,7 @@ log("Sign wall front (design)")
 # TexCoord4 = corner -1..1), so panning and zooming touch no GPU data. Zoom = the map's slider value (x).
 # Pixel stage gets: UV0 offset from the centre in pixels (along, across), UV1 half size in pixels,
 # UV2 (style, flags), UV3 (dash phase in metres, pixels per metre).
-# Zoom levels (slider): walking paths from 1.5x; side lines on 2-wide and up always, on the rest from 3x;
+# Zoom levels (slider): walking paths from 1.5x; side lines on 2-wide and up always, on walking paths from 3x, never on 1-wide;
 # lane dividers from 6x (fading in from 5x).
 MAP_DECODE = r"""
 float ang = floor(B.x / 16384.0) / 1024.0 * 6.28318531;
@@ -1363,8 +1363,9 @@ if (lanes > 1.5 && divFade > 0.0)
     float dash = cont > 0.5 ? 1.0 : saturate(min(p, 3.0 - p) * ppm + 0.5);
     c = lerp(c, divc, divLine * dash * divFade);
 }
-// Side lines just inside the edges: 2-wide and up always, the others from 3x; once the road is wide enough on screen.
-float sideFade = wide > 0.5 ? 1.0 : saturate((Zoom - 2.6) / 0.4);
+// Side lines just inside the edges: roads 2 wide and up always, walking paths from 3x, 1-wide roads never;
+// once the road is wide enough on screen.
+float sideFade = wide > 0.5 ? 1.0 : (path > 0.5 ? saturate((Zoom - 2.6) / 0.4) : 0.0);
 float lhs = max(1.25 * ppm, 0.75);
 if (sideOn > 0.5 && sideFade > 0.0 && H.y > lhs * 3.0)
 {

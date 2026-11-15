@@ -43,6 +43,7 @@
 #include "UObject/UObjectIterator.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "RMGeometry.h"
 #include "Map/RMMapRoadsRow.h"
 
@@ -54,6 +55,7 @@ namespace RMMapLayer
 		constexpr double MapScanInterval = 0.25; // s between looks for new / changed / removed pieces
 		constexpr float MapLineWidthM = 2.5f; // side lines on the map (m), at least 1.5 px (same as M_RM_MapRoads)
 		constexpr float MapLayerCm = 300.f; // height layers for the draw order (see MapRebuild)
+		constexpr float MapMarkMinPx = 8.f;  // a marking shows once it is this long on screen (fully at + 4 px)
 		constexpr int32 MapPaletteSize = 256;
 		const TCHAR* MapMaterialPath = TEXT("/RoadMaker/Materials/M_RM_MapRoads.M_RM_MapRoads");
 
@@ -67,20 +69,33 @@ namespace RMMapLayer
 			FColor FillC, EdgeC;
 		};
 
-		/** One road (records) or intersection. */
+		/** A lane marking, flattened to map units: triangles (arrows, digits) or one textured quad (vehicles). */
+		struct FRMMapMark
+		{
+			float Z = 0.f;
+			float LengthM = 0.f;            // its length along the lane: shown once that is MapMarkMinPx on screen
+			TArray<FVector2D> Tris;         // 3 points per triangle
+			TArray<FVector2D> UVs;          // vehicles: texture coordinates per point
+			int32 Icon = INDEX_NONE;        // vehicles: the vehicle (icon brush)
+			FColor Colour;
+		};
+
+		/** One road (records), intersection or marking. */
 		struct FRMMapPiece
 		{
 			uint32 Key = 0;
-			int32 Kind = 2; // draw order inside a height layer: 0 intersection, 1 walking path, 2 road
+			int32 Kind = 2; // draw order inside a height layer: 0 intersection, 1 walking path, 2 road, 3 marking
 			TArray<FVector4f> Recs;
 			TArray<float> RecZ;
 			TOptional<FRMMapIsect> Isect;
+			TOptional<FRMMapMark> Mark;
 		};
 
-		/** A run of the draw list: road records [Start, Start + Count) or intersections [Start, Start + Count). */
+		/** A run of the draw list: road records, intersections or markings [Start, Start + Count). */
+		enum class ERMMapRun : uint8 { Roads, Isects, Marks };
 		struct FRMMapBatch
 		{
-			bool bIsect = false;
+			ERMMapRun Type = ERMMapRun::Roads;
 			int32 Start = 0;
 			int32 Count = 0;
 		};
@@ -97,6 +112,7 @@ namespace RMMapLayer
 		// Draw list (rebuilt when a piece changes).
 		TArray<FVector4f> GMapRecords;
 		TArray<FRMMapIsect> GMapIsects;
+		TArray<FRMMapMark> GMapMarks;
 		TArray<FRMMapBatch> GMapBatches;
 		bool GMapUploadPending = false;
 
@@ -117,6 +133,8 @@ namespace RMMapLayer
 		UTexture2D* GMapWhite = nullptr;
 		TSharedPtr<FSlateMaterialBrush> GMapBrush;
 		FSlateBrush GMapWhiteBrush;
+		FSlateBrush GMapIconBrushes[5];
+		FSlateResourceHandle GMapIconHandles[5];
 		FSlateResourceHandle GMapHandle, GMapWhiteHandle;
 		TSharedPtr<ISlateUpdatableInstanceBuffer> GMapInstances;
 		int32 GMapInstanceCapacity = 0;
@@ -154,6 +172,7 @@ namespace RMMapLayer
 			GMapPieces.Reset();
 			GMapRecords.Reset();
 			GMapIsects.Reset();
+			GMapMarks.Reset();
 			GMapBatches.Reset();
 			GMapChanged = false;
 			GMapUploadPending = false;
@@ -390,6 +409,40 @@ namespace RMMapLayer
 			MapPieceColours(Isect, X.FillC, X.EdgeC);
 		}
 
+		uint32 MapMarkKey(const ARMBuildableMarking* Mark)
+		{
+			uint32 Key = HashCombine(GetTypeHash(Mark->GetActorLocation()), GetTypeHash(Mark->GetActorRotation().Yaw));
+			Key = HashCombine(Key, uint32(Mark->mKind) * 7919u + Mark->GetVariant() * 31u + uint32(Mark->GetLook()));
+			Key = HashCombine(Key, GetTypeHash(Mark->GetLaneWidth()));
+			return HashCombine(Key, MapDividerColour(Mark).DWColor());
+		}
+
+		void MapBuildMarking(const ARMBuildableMarking* Mark, FRMMapPiece& Out)
+		{
+			Out.Kind = 3;
+			FRMMesh Mesh;
+			ARMBuildableMarking::BuildMarkingMesh(Mark->mKind, Mark->GetVariant(), Mark->GetLaneWidth(), Mesh, nullptr);
+			if (Mesh.Triangles.Num() < 3)
+			{
+				return;
+			}
+			FRMMapMark& M = Out.Mark.Emplace();
+			const FTransform T = Mark->GetActorTransform();
+			M.Z = T.GetLocation().Z;
+			M.LengthM = ARMBuildableMarking::HalfLength(Mark->mKind, Mark->GetLaneWidth()) * 0.02f;
+			M.Colour = MapDividerColour(Mark);
+			const bool bIcon = Mark->mKind == ERMMarkingKind::Vehicle;
+			M.Icon = bIcon ? FMath::Clamp<int32>(Mark->GetVariant(), 0, 4) : INDEX_NONE;
+			for (int32 Idx : Mesh.Triangles)
+			{
+				M.Tris.Add(MapUnits(T.TransformPosition(Mesh.Vertices[Idx])));
+				if (bIcon)
+				{
+					M.UVs.Add(Mesh.UVs.IsValidIndex(Idx) ? Mesh.UVs[Idx] : FVector2D::ZeroVector);
+				}
+			}
+		}
+
 		/**
 		 * Finds new, changed and removed pieces. Building a piece's shape stops when the time budget is used:
 		 * returns false then (the rest is picked up next frame).
@@ -436,6 +489,14 @@ namespace RMMapLayer
 					Visit(Isect, HashCombine(Isect->GetShapeKey(), HashCombine(MapColourKey(Isect), Isect->HasSideLines() ? 1u : 0u)), [Isect](FRMMapPiece& P) { MapBuildIntersection(Isect, P); });
 				}
 			}
+			for (TActorIterator<ARMBuildableMarking> It(World); It; ++It)
+			{
+				ARMBuildableMarking* Mark = *It;
+				if (IsValid(Mark) && !Mark->IsActorBeingDestroyed())
+				{
+					Visit(Mark, MapMarkKey(Mark), [Mark](FRMMapPiece& P) { MapBuildMarking(Mark, P); });
+				}
+			}
 			for (auto It = GMapPieces.CreateIterator(); It; ++It)
 			{
 				AActor* Actor = It.Key().Get();
@@ -458,10 +519,11 @@ namespace RMMapLayer
 		void MapRebuild()
 		{
 			GMapChanged = false;
-			struct FItem { float Z; int32 Index; bool bIsect; int32 Layer; int32 Kind; int32 Piece; int32 Seq; };
+			struct FItem { float Z; int32 Index; ERMMapRun Type; int32 Layer; int32 Kind; int32 Piece; int32 Seq; };
 			TArray<FItem> Items;
 			TArray<const FVector4f*> RecPtrs;
 			TArray<const FRMMapIsect*> IsectPtrs;
+			TArray<const FRMMapMark*> MarkPtrs;
 			int32 PieceNo = 0;
 			for (const TPair<TWeakObjectPtr<AActor>, FRMMapPiece>& P : GMapPieces)
 			{
@@ -469,14 +531,20 @@ namespace RMMapLayer
 				for (int32 I = 0; I < P.Value.Recs.Num(); ++I)
 				{
 					const float Z = P.Value.RecZ[I];
-					Items.Add({ Z, RecPtrs.Num(), false, FMath::FloorToInt(Z / MapLayerCm), P.Value.Kind, PieceNo, I });
+					Items.Add({ Z, RecPtrs.Num(), ERMMapRun::Roads, FMath::FloorToInt(Z / MapLayerCm), P.Value.Kind, PieceNo, I });
 					RecPtrs.Add(&P.Value.Recs[I]);
 				}
 				if (P.Value.Isect.IsSet())
 				{
 					const float Z = P.Value.Isect->Z;
-					Items.Add({ Z, IsectPtrs.Num(), true, FMath::FloorToInt(Z / MapLayerCm), 0, PieceNo, 0 });
+					Items.Add({ Z, IsectPtrs.Num(), ERMMapRun::Isects, FMath::FloorToInt(Z / MapLayerCm), 0, PieceNo, 0 });
 					IsectPtrs.Add(&P.Value.Isect.GetValue());
+				}
+				if (P.Value.Mark.IsSet())
+				{
+					const float Z = P.Value.Mark->Z;
+					Items.Add({ Z, MarkPtrs.Num(), ERMMapRun::Marks, FMath::FloorToInt(Z / MapLayerCm), 3, PieceNo, 0 });
+					MarkPtrs.Add(&P.Value.Mark.GetValue());
 				}
 			}
 			Items.Sort([](const FItem& A, const FItem& B)
@@ -488,18 +556,23 @@ namespace RMMapLayer
 			});
 			GMapRecords.Reset(RecPtrs.Num());
 			GMapIsects.Reset(IsectPtrs.Num());
+			GMapMarks.Reset(MarkPtrs.Num());
 			GMapBatches.Reset();
 			for (const FItem& It : Items)
 			{
-				if (GMapBatches.Num() == 0 || GMapBatches.Last().bIsect != It.bIsect)
+				if (GMapBatches.Num() == 0 || GMapBatches.Last().Type != It.Type)
 				{
 					FRMMapBatch& B = GMapBatches.AddDefaulted_GetRef();
-					B.bIsect = It.bIsect;
-					B.Start = It.bIsect ? GMapIsects.Num() : GMapRecords.Num();
+					B.Type = It.Type;
+					B.Start = It.Type == ERMMapRun::Isects ? GMapIsects.Num() : It.Type == ERMMapRun::Marks ? GMapMarks.Num() : GMapRecords.Num();
 				}
-				if (It.bIsect)
+				if (It.Type == ERMMapRun::Isects)
 				{
 					GMapIsects.Add(*IsectPtrs[It.Index]);
+				}
+				else if (It.Type == ERMMapRun::Marks)
+				{
+					GMapMarks.Add(*MarkPtrs[It.Index]);
 				}
 				else
 				{
@@ -563,6 +636,16 @@ namespace RMMapLayer
 			GMapBrush = MakeShared<FSlateMaterialBrush>(*GMapMaterial, FVector2D(64.0, 64.0));
 			GMapHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(*GMapBrush);
 			GMapWhiteHandle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(GMapWhiteBrush);
+			for (int32 V = 0; V < 5; ++V)
+			{
+				if (UTexture2D* Icon = ARMBuildableMarking::VehicleIcon(V))
+				{
+					GMapIconBrushes[V].SetResourceObject(Icon);
+					GMapIconBrushes[V].ImageSize = FVector2D(64, 64);
+					GMapIconBrushes[V].DrawAs = ESlateBrushDrawType::Image;
+					GMapIconHandles[V] = FSlateApplication::Get().GetRenderer()->GetResourceHandle(GMapIconBrushes[V]);
+				}
+			}
 			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: GPU map roads ready (material %s, white %s)"),
 				GMapHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"), GMapWhiteHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"));
 			return GMapHandle.IsValid() && GMapWhiteHandle.IsValid();
@@ -667,6 +750,44 @@ namespace RMMapLayer
 			}
 		}
 
+		/**
+		 * Markings of one run, those long enough on screen (fading in over 4 px): arrows and digits as triangles
+		 * into V / I (white brush), vehicles into the per-vehicle lists (their icon brush).
+		 */
+		void MapMarkVerts(int32 Start, int32 Count, const FVector2f& Origin, const FVector2f& Scale, float PxPerMetre,
+			TArray<FSlateVertex>& V, TArray<SlateIndex>& I, TArray<FSlateVertex> (&IconV)[5], TArray<SlateIndex> (&IconI)[5])
+		{
+			auto ToPx = [&](const FVector2D& M) { return Origin + Scale * FVector2f(M / 1024.0); };
+			auto Vert = [](TArray<FSlateVertex>& Into, const FVector2f& P, const FVector2D& UV, const FColor& C)
+			{
+				FSlateVertex& Out = Into.AddZeroed_GetRef();
+				Out.TexCoords[0] = float(UV.X); Out.TexCoords[1] = float(UV.Y); Out.TexCoords[2] = 1.f; Out.TexCoords[3] = 1.f;
+				Out.MaterialTexCoords = FVector2f(UV);
+				Out.Position = P;
+				Out.Color = C;
+				Out.SecondaryColor = FColor::White;
+				return SlateIndex(Into.Num() - 1);
+			};
+			for (int32 K = Start; K < Start + Count; ++K)
+			{
+				const FRMMapMark& M = GMapMarks[K];
+				const float Fade = FMath::Clamp((M.LengthM * PxPerMetre - MapMarkMinPx) / 4.f, 0.f, 1.f);
+				if (Fade <= 0.f)
+				{
+					continue;
+				}
+				FColor C = M.Colour;
+				C.A = uint8(FMath::RoundToInt(255.f * Fade));
+				const bool bIcon = M.Icon != INDEX_NONE && GMapIconHandles[M.Icon].IsValid();
+				TArray<FSlateVertex>& IntoV = bIcon ? IconV[M.Icon] : V;
+				TArray<SlateIndex>& IntoI = bIcon ? IconI[M.Icon] : I;
+				for (int32 J = 0; J < M.Tris.Num(); ++J)
+				{
+					IntoI.Add(Vert(IntoV, ToPx(M.Tris[J]), bIcon && M.UVs.IsValidIndex(J) ? M.UVs[J] : FVector2D(0.5, 0.5), C));
+				}
+			}
+		}
+
 		/** Our layer: covers Overlay_0 (the 1024 x 1024 map square), draws the roads in it. */
 		class SRMMapRoadsLayer : public SLeafWidget
 		{
@@ -737,10 +858,35 @@ namespace RMMapLayer
 				int32 Layer = LayerId;
 				TArray<FSlateVertex> IV;
 				TArray<SlateIndex> II;
+				TArray<FSlateVertex> IconV[5];
+				TArray<SlateIndex> IconI[5];
 				for (const FRMMapBatch& B : GMapBatches)
 				{
 					++Layer;
-					if (!B.bIsect)
+					if (B.Type == ERMMapRun::Marks)
+					{
+						IV.Reset();
+						II.Reset();
+						for (int32 K = 0; K < 5; ++K)
+						{
+							IconV[K].Reset();
+							IconI[K].Reset();
+						}
+						MapMarkVerts(B.Start, B.Count, Origin, Scale, PxPerMetre, IV, II, IconV, IconI);
+						if (II.Num() > 0)
+						{
+							FSlateDrawElement::MakeCustomVerts(OutDrawElements, Layer, GMapWhiteHandle, IV, II, nullptr, 0, 0);
+						}
+						for (int32 K = 0; K < 5; ++K)
+						{
+							if (IconI[K].Num() > 0)
+							{
+								FSlateDrawElement::MakeCustomVerts(OutDrawElements, ++Layer, GMapIconHandles[K], IconV[K], IconI[K], nullptr, 0, 0);
+							}
+						}
+						continue;
+					}
+					if (B.Type == ERMMapRun::Roads)
 					{
 						if (GMapInstances.IsValid())
 						{
