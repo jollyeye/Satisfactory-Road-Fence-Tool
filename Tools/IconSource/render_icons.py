@@ -459,6 +459,33 @@ def cement_mixer(sc):
         bar(W, W + (wu * math.cos(ang) + wv * math.sin(ang)) * 2.0, 0.12, FRAME, layer=2)
     cylinder(W, (0, 1, 0), 0.55, 0.3, FRAME, 12, layer=2)
 
+def traffic_cone(sc):
+    """Gap Fill (for now): a traffic cone, orange with two white bands, on a square dark base; flat faces."""
+    CONE = np.array([255, 120, 30.0]); WHITE = np.array([240, 240, 236.0]); BASE = np.array([52, 54, 60.0])
+    # Base: a square slab with cut corners.
+    h, a, c = 0.35, 2.4, 0.5
+    outline = [(a - c, -a), (a, -a + c), (a, a - c), (a - c, a), (-a + c, a), (-a, a - c), (-a, -a + c), (-a + c, -a)]
+    bottom = [np.array([x, y, 0.0]) for x, y in outline]
+    top = [np.array([x, y, h]) for x, y in outline]
+    sc.face(top, BASE, two=True)
+    for i in range(len(outline)):
+        j = (i + 1) % len(outline)
+        sc.quad(bottom[i], bottom[j], top[j], top[i], BASE)
+    # Cone: 12 flat sides from the base up to a small top; bands of colour by height.
+    n = 12
+    bands = [(h, 1.75, CONE), (2.3, 1.3, WHITE), (3.0, 1.14, CONE), (4.4, 0.82, WHITE), (5.0, 0.68, CONE), (6.6, 0.32, CONE)]
+    def ring_at(z, r):
+        return [np.array([r * math.cos(2 * math.pi * (i + 0.5) / n), r * math.sin(2 * math.pi * (i + 0.5) / n), z]) for i in range(n)]
+    for k in range(len(bands) - 1):
+        z0, r0, col = bands[k]
+        z1, r1, _ = bands[k + 1]
+        A, B = ring_at(z0, r0), ring_at(z1, r1)
+        for i in range(n):
+            j = (i + 1) % n
+            sc.quad(A[i], A[j], B[j], B[i], col, layer=1)
+    sc.face(ring_at(bands[-1][0], bands[-1][1]), CONE, layer=1, two=True)
+
+
 def road_cut(sc):
     """A road cut in two: the pieces pulled apart, an orange outline in the gap where it was cut."""
     frs = frames_arc(20.0, 0.5, 40)
@@ -795,7 +822,8 @@ elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
 elif what == "fencewall_sign": fence_wall(sc, "sign")
-elif what == "gapfill": cement_mixer(sc)
+elif what == "gapfill": traffic_cone(sc)
+elif what == "cementmixer": cement_mixer(sc)
 render(sc, out)
 if what in ("walk2b", "walk4b"):
     badge_walker(out)
