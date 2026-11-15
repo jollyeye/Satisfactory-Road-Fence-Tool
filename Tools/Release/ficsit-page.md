@@ -112,7 +112,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Middle click on a lane marking (arrow, digit, vehicle) picks it again, ready to paint another, like the game's own sample (on whatever key Sample is bound to; the build gun comes out if it is put away).
 - "Show Roads on Map" keeps its tick when the map is opened again.
 - The chain-link mesh of the Metal Grid Fence and the Steel Mesh Fence Wall no longer breaks into flat bands far along long fences (past about 500 m).
-- The concrete sides of roads no longer turn dark where a curve faces another direction (their bumps were lit from the wrong side on two of the four facings).
+- The concrete sides of roads no longer turn dark all at once along a curve: they are lit by their real facing, fading smoothly like the game's walls.
 - The cyberpunk road's circuit pattern no longer stretches (rings turning into ovals) far along long roads.
 
 ## Changelog for version 1.3.0

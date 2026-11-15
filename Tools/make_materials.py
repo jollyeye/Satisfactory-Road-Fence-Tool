@@ -161,6 +161,11 @@ if (Tri > 0.5 && a.z < 0.7)
 {
     if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); W = float3(N.x >= 0 ? 1 : -1, 0, 0); hand = N.x >= 0 ? 1.0 : -1.0; }
     else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); W = float3(0, N.y >= 0 ? 1 : -1, 0); hand = N.y >= 0 ? -1.0 : 1.0; }
+    // Lit around the wall's real facing, not the projection axis: a curved wall otherwise shaded like flat
+    // east-west / north-south panels, the light jumping where it turned past 45 degrees.
+    W = normalize(N);
+    U = normalize(U - W * dot(U, W));
+    V = normalize(V - W * dot(V, W));
 }
 if (RW > 0.5)
 {
