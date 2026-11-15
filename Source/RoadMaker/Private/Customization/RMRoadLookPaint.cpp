@@ -212,3 +212,46 @@ void RMRoadLookPaint::InstallHooks()
 void RMRoadLookPaint::InstallHooks() {}
 
 #endif
+
+namespace
+{
+	struct FRMSampledPiece
+	{
+		TWeakObjectPtr<const UClass> Class;
+		uint8 Look = 0;
+		FRMMarkings Markings;
+		bool bHasMarkings = false;
+		double Time = -1.0;
+	} GSampledPiece;
+}
+
+void RMRoadSample::Note(const ARMBuildableProcedural* Piece)
+{
+	GSampledPiece = FRMSampledPiece();
+	if (!Piece)
+	{
+		return;
+	}
+	GSampledPiece.Class = Piece->GetClass();
+	GSampledPiece.Look = Piece->GetLook();
+	if (const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Piece))
+	{
+		GSampledPiece.Markings = Road->GetMarkings();
+		GSampledPiece.bHasMarkings = true;
+	}
+	GSampledPiece.Time = FPlatformTime::Seconds();
+}
+
+bool RMRoadSample::Take(const UClass* Class, uint8& OutLook, FRMMarkings& OutMarkings, bool& bOutHasMarkings)
+{
+	// A few seconds: with another tool in hand the game takes the build gun out first.
+	if (!Class || GSampledPiece.Class.Get() != Class || FPlatformTime::Seconds() - GSampledPiece.Time > 3.0)
+	{
+		return false;
+	}
+	OutLook = GSampledPiece.Look;
+	OutMarkings = GSampledPiece.Markings;
+	bOutHasMarkings = GSampledPiece.bHasMarkings;
+	GSampledPiece = FRMSampledPiece();
+	return true;
+}

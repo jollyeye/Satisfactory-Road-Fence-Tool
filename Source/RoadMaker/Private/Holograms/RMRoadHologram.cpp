@@ -8,6 +8,7 @@
 #include "GameFramework/Pawn.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Holograms/RMHologramLook.h"
+#include "Customization/RMRoadLookPaint.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
@@ -425,6 +426,21 @@ void ARMRoadHologram::BeginPlay()
 		mMarkings = FRMMarkings();
 		mMarkings.Lanes = 1; // no lines by default (Road Lines adds a middle line, side lines on 4 m)
 		mMarkings.bEdgeLines = false;
+	}
+	// Middle click on a piece of this kind: its look and lines too (the game copies only the paint).
+	{
+		uint8 SampledLook = 0;
+		FRMMarkings SampledMarkings;
+		bool bHasMarkings = false;
+		if (RMRoadSample::Take(GetRoadDefaults()->GetClass(), SampledLook, SampledMarkings, bHasMarkings))
+		{
+			mLook = SampledLook;
+			if (bHasMarkings)
+			{
+				mMarkings = SampledMarkings;
+				mHasCopiedMarkings = true;
+			}
+		}
 	}
 	mMarkings = GetRoadDefaults()->LimitMarkings(mMarkings);
 	// Ticks in any case: a hotbar or radial menu swap can give the hologram its player after BeginPlay.

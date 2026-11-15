@@ -1308,7 +1308,30 @@ namespace
 		static bool OnSampleKey(const FKey& Key)
 		{
 			APlayerController* PC = GameWorldPlayer();
-			return PC && IsSampleKey(PC, Key) && TrySampleMarking(PC);
+			if (!PC || !IsSampleKey(PC, Key))
+			{
+				return false;
+			}
+			NoteSampledPiece(PC); // a road / walking path: its look and lines for the new hologram
+			return TrySampleMarking(PC);
+		}
+
+		/** The road piece under the crosshair, noted for the hologram the game's sample makes. */
+		static void NoteSampledPiece(APlayerController* PC)
+		{
+			if (PC->ShouldShowMouseCursor() || !PC->GetPawn())
+			{
+				return;
+			}
+			FVector Eye;
+			FRotator View;
+			PC->GetPlayerViewPoint(Eye, View);
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(RMPieceSample), true, PC->GetPawn());
+			FHitResult Hit;
+			if (PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
+			{
+				RMRoadSample::Note(Cast<ARMBuildableRoad>(Hit.GetActor()));
+			}
 		}
 	public:
 		virtual bool HandleMouseWheelOrGestureEvent(FSlateApplication&, const FPointerEvent& WheelEvent, const FPointerEvent*) override
