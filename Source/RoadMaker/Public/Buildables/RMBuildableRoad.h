@@ -29,7 +29,14 @@ public:
 	 */
 	bool IsWalkingPath() const { return mIsWalkingPath; }
 
-	/** The markings this piece can have: a walking path at most one middle line (2 lanes), no side lines. */
+	/**
+	 * Split / Merge step across the width: 8 m for roads, 2 m for walking paths (a 4 m path splits into two
+	 * 2 m paths, two 2 m paths merge into a 4 m one).
+	 */
+	float GetSplitUnit() const { return IsWalkingPath() ? 200.f : RM::FoundationSize; }
+	int32 GetWidthUnits() const { return FMath::Max(1, FMath::RoundToInt(GetRoadWidth() / GetSplitUnit())); }
+
+	/** The markings this piece can have: a walking path at most one middle line (2 lanes), side lines only when 4 m wide. */
 	FRMMarkings LimitMarkings(const FRMMarkings& In) const;
 
 	/** The look a new piece of this kind starts with (0 asphalt, 1 concrete blocks, 2 cyberpunk). */
@@ -70,7 +77,7 @@ public:
 	 * (OutSplits). Returns how many would be left with a piece shorter than the game allows (the
 	 * track's / path's own minimum length): the cut is refused then.
 	 */
-	/** Split Road: lengthwise split possible (2+ wide, nothing of the game built on it)? */
+	/** Split Road: lengthwise split possible (roads 2+ foundations wide, walking paths 4 m)? */
 	bool CanSplitLengthwise() const;
 
 	/**
@@ -84,7 +91,8 @@ public:
 	 */
 	void DismantleReplaced();
 
-	ARMBuildableRoad* SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight = nullptr);
+	/** LeftUnits: the left piece's width in split units (GetSplitUnit). */
+	ARMBuildableRoad* SplitLengthwise(int32 LeftUnits, ARMBuildableRoad** OutRight = nullptr);
 
 	/** Merge Road: can Other (lying beside this road) be merged with it? */
 	enum class EMergeCheck : uint8 { Ok, NotBeside, LengthMismatch, TooWide };

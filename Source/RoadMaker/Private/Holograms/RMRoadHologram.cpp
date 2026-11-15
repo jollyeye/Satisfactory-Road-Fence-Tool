@@ -286,7 +286,8 @@ bool ARMRoadHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 		return TrySnapToFoundation(hitResult);
 	}
 	const FRMRoadEndRef& End = Ends[0];
-	if (End.Road && (mStep == 0 || !mHasCopiedMarkings))
+	// Lines and look of the piece it continues, when it is the same kind (a walking path at a road cap keeps its own).
+	if (End.Road && End.Road->IsWalkingPath() == GetRoadDefaults()->IsWalkingPath() && (mStep == 0 || !mHasCopiedMarkings))
 	{
 		mMarkings = GetRoadDefaults()->LimitMarkings(End.Road->GetMarkings());
 		mLook = End.Road->GetLook();
@@ -419,6 +420,12 @@ void ARMRoadHologram::BeginPlay()
 	Super::BeginPlay();
 	// A new piece starts with its kind's look (walking paths: Concrete Blocks) and the lines it can have.
 	mLook = GetRoadDefaults()->GetDefaultLook();
+	if (GetRoadDefaults()->IsWalkingPath())
+	{
+		mMarkings = FRMMarkings();
+		mMarkings.Lanes = 1; // no lines by default (Road Lines adds a middle line, side lines on 4 m)
+		mMarkings.bEdgeLines = false;
+	}
 	mMarkings = GetRoadDefaults()->LimitMarkings(mMarkings);
 	// Ticks in any case: a hotbar or radial menu swap can give the hologram its player after BeginPlay.
 	SetActorTickEnabled(true);

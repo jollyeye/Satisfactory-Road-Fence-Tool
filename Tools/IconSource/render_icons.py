@@ -58,6 +58,22 @@ def render(scene, path, shadow=True):
     img = img.resize((OUT, OUT), Image.LANCZOS)
     img.save(path)
 
+def badge_walker(path):
+    """Walking man badge in the bottom-left corner of a rendered icon (white on a blue sign)."""
+    im = Image.open(path).convert("RGBA")
+    k = 4; W = im.width * k
+    big = Image.new("RGBA", (W, W), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    box = (int(W * 0.03), int(W * 0.60), int(W * 0.40), int(W * 0.97))
+    d.rounded_rectangle(box, radius=int(W * 0.045), fill=(36, 98, 186, 255), outline=(255, 255, 255, 255), width=int(W * 0.012))
+    cx, cy = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    size = (box[3] - box[1]) * 0.78
+    for poly in walker_polys():
+        d.polygon([(cx + x * size, cy + size * 0.5 - y * size) for (x, y) in poly], fill=(255, 255, 255, 255))
+    big = big.resize(im.size, Image.LANCZOS)
+    im.alpha_composite(big)
+    im.save(path)
+
 # ---- geometry helpers -----------------------------------------------------------------------
 def frames_arc(length, bend, n=24):
     """Path along +x bending towards +y; returns list of (pos, fwd, right(level))."""
@@ -127,8 +143,47 @@ def road(sc, width, lanes, length=18.0, bend=0.55, h=1.0):
     for k in range(1, lanes):
         line_strip(sc, frs, -hw + e + inner * k / lanes, 0.13, WHITE, dash=(2, 0))
 
-def walking_path(sc, width, length=10.0, bend=0.55, h=1.0):
-    """Walking path: concrete-block top, concrete sides, one dashed middle line, no side lines."""
+# Walking man pictogram (2D, height 1, x right, y up): head + thick limbs, as polygons.
+WALKER_HEAD = ((0.06, 0.89), 0.095)
+WALKER_LIMBS = [  # polylines, drawn thick
+    [(0.04, 0.76), (-0.02, 0.43)],                       # torso
+    [(0.03, 0.72), (0.15, 0.57), (0.27, 0.62)],          # front arm
+    [(0.03, 0.72), (-0.11, 0.58), (-0.17, 0.44)],        # back arm
+    [(-0.02, 0.43), (0.11, 0.23), (0.22, 0.02)],         # front leg
+    [(-0.02, 0.43), (-0.08, 0.21), (-0.24, 0.06)],       # back leg
+]
+WALKER_W = 0.085
+
+def walker_polys():
+    """The pictogram as a list of 2D polygons (thick segments, round joints, head)."""
+    polys = []
+    def circle(c, r, n=14):
+        return [(c[0] + r * math.cos(2 * math.pi * k / n), c[1] + r * math.sin(2 * math.pi * k / n)) for k in range(n)]
+    for line in WALKER_LIMBS:
+        for a, b in zip(line, line[1:]):
+            d = np.array(b) - np.array(a); d = d / np.linalg.norm(d); nrm = np.array([-d[1], d[0]]) * WALKER_W / 2
+            polys.append([tuple(np.array(a) + nrm), tuple(np.array(b) + nrm), tuple(np.array(b) - nrm), tuple(np.array(a) - nrm)])
+        for pt in line:
+            polys.append(circle(pt, WALKER_W / 2, 10))
+    polys.append(circle(*WALKER_HEAD))
+    return polys
+
+def path_point(frs, length, along, lat, up=0.0):
+    """A point on a path: along (0..length), lat (across, + = right)."""
+    t = min(max(along / length, 0.0), 1.0) * (len(frs) - 1)
+    i = min(int(t), len(frs) - 2); f = t - i
+    p = frs[i][0] * (1 - f) + frs[i + 1][0] * f
+    r = frs[i][2] * (1 - f) + frs[i + 1][2] * f
+    return p + r * lat + np.array([0, 0, up])
+
+def paint_walker(sc, frs, length, along, lat, size, col, stretch=1.5):
+    """The pictogram painted on a path's top, head towards the start (upright seen from the end), drawn
+    longer along the path like road paint (stretch)."""
+    for poly in walker_polys():
+        sc.face([path_point(frs, length, along - (y - 0.5) * size * stretch, lat - x * size, 0.03) for (x, y) in poly], col, layer=2, two=True)
+
+def walking_path(sc, width, length=10.0, bend=0.55, h=1.0, walker=None, side_lines=False):
+    """Walking path: concrete-block top, concrete sides; walker="middle" paints the pictogram on it."""
     frs = frames_arc(length, bend, 32)
     hw = width / 2
     top = np.array([196, 192, 184.0])
@@ -137,7 +192,12 @@ def walking_path(sc, width, length=10.0, bend=0.55, h=1.0):
     extrude(sc, frs, [(-hw, -h), (-hw, 0)], CONCRETE * 0.85, closed=False, two=True)
     cap(sc, frs[0], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE * 0.85)
     cap(sc, frs[-1], [(-hw, 0), (hw, 0), (hw, -h), (-hw, -h)], CONCRETE * 0.85)
-    line_strip(sc, frs, 0.0, 0.07 * max(1.0, width / 2), WHITE, dash=(2, 0))
+    if side_lines:
+        line_strip(sc, frs, -hw + 0.3, 0.07, WHITE)
+        line_strip(sc, frs, hw - 0.3, 0.07, WHITE)
+    if walker == "middle":
+        paint_walker(sc, frs, length, length * 0.55, 0.0, width * 0.9, WHITE)
+    return frs
 
 def guard_rail(sc):
     frs = frames_arc(6.0, 0.35, 24)
@@ -591,8 +651,10 @@ if what == "road1": road(sc, 8, 1)
 elif what == "road2": road(sc, 16, 2)
 elif what == "road3": road(sc, 24, 3)
 elif what == "road4": road(sc, 32, 4)
-elif what == "walk2": walking_path(sc, 2, length=13.0)
-elif what == "walk4": walking_path(sc, 4, length=13.0)
+elif what == "walk2": walking_path(sc, 2, length=13.0, walker="middle")
+elif what == "walk4": walking_path(sc, 4, length=13.0, walker="middle")
+elif what == "walk2b": walking_path(sc, 2, length=13.0)
+elif what == "walk4b": walking_path(sc, 4, length=13.0)
 elif what == "roadcut": road_cut(sc)
 elif what == "guard": guard_rail(sc)
 elif what == "jersey": jersey(sc)
@@ -607,3 +669,5 @@ elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
 render(sc, out)
+if what in ("walk2b", "walk4b"):
+    badge_walker(out)

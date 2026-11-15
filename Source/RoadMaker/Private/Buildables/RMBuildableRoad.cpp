@@ -100,9 +100,9 @@ FRMMarkings ARMBuildableRoad::LimitMarkings(const FRMMarkings& In) const
 {
 	FRMMarkings Out = In;
 	Out.Lanes = FMath::Clamp<uint8>(Out.Lanes, 1, IsWalkingPath() ? 2 : 4);
-	if (IsWalkingPath())
+	if (IsWalkingPath() && GetRoadWidth() < 300.f)
 	{
-		Out.bEdgeLines = false;
+		Out.bEdgeLines = false; // side lines on 4 m walking paths only
 	}
 	return Out;
 }
@@ -298,11 +298,7 @@ int32 ARMBuildableRoad::PlanRiderCuts(float Dist, TArray<TPair<AActor*, float>>&
 
 bool ARMBuildableRoad::CanSplitLengthwise() const
 {
-	if (mWidthInFoundations < 2 || IsWalkingPath())
-	{
-		return false;
-	}
-	return true;
+	return GetWidthUnits() >= 2;
 }
 
 void ARMBuildableRoad::DismantleReplaced()
@@ -315,11 +311,12 @@ void ARMBuildableRoad::DismantleReplaced()
 
 ARMBuildableRoad::EMergeCheck ARMBuildableRoad::CheckMerge(const ARMBuildableRoad* Other, TArray<FRMFrame>* OutCentre, float* OutWidth) const
 {
-	if (!Other || Other == this || IsWalkingPath() || Other->IsWalkingPath())
+	if (!Other || Other == this || IsWalkingPath() != Other->IsWalkingPath())
 	{
-		return EMergeCheck::NotBeside; // walking paths are not merged
+		return EMergeCheck::NotBeside; // a road and a walking path are not merged
 	}
-	if (mWidthInFoundations + Other->GetWidthInFoundations() > 4)
+	// Roads up to 4 foundations together; walking paths only two 2 m paths into a 4 m one.
+	if (IsWalkingPath() ? GetRoadWidth() + Other->GetRoadWidth() > 401.f : mWidthInFoundations + Other->GetWidthInFoundations() > 4)
 	{
 		return EMergeCheck::TooWide;
 	}
@@ -429,9 +426,8 @@ ARMBuildableRoad* ARMBuildableRoad::MergeWith(ARMBuildableRoad* Other)
 	}
 	TArray<FRMSplinePoint> Points;
 	RMGeometry::OffsetCurve(Centre, 0.f, 200.f, Points);
-	const int32 Foundations = mWidthInFoundations + Other->GetWidthInFoundations();
-	UClass* Class = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), Foundations, Foundations));
-	UClass* Recipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), Foundations, Foundations));
+	UClass *Class = nullptr, *Recipe = nullptr;
+	RoadClassFor(IsWalkingPath(), GetRoadWidth() + Other->GetRoadWidth(), Class, Recipe);
 	if (!Class || Points.Num() < 2)
 	{
 		return nullptr;
@@ -505,14 +501,32 @@ ARMBuildableRoad* ARMBuildableRoad::JoinWith(ARMBuildableRoad* Other, int32 MyEn
 	return Joined;
 }
 
-ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBuildableRoad** OutRight)
+namespace
+{
+	/** The road piece class (and its recipe) of a width: roads by foundations, walking paths by metres. */
+	void RoadClassFor(bool bWalking, float WidthCm, UClass*& OutClass, UClass*& OutRecipe)
+	{
+		if (bWalking)
+		{
+			const int32 M = FMath::RoundToInt(WidthCm / 100.f);
+			OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_WalkingPath_%dm.Build_WalkingPath_%dm_C"), M, M));
+			OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_WalkingPath_%dm.Recipe_WalkingPath_%dm_C"), M, M));
+			return;
+		}
+		const int32 F = FMath::RoundToInt(WidthCm / RM::FoundationSize);
+		OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), F, F));
+		OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), F, F));
+	}
+}
+
+ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftUnits, ARMBuildableRoad** OutRight)
 {
 	if (OutRight)
 	{
 		*OutRight = nullptr;
 	}
-	const int32 RightFoundations = mWidthInFoundations - LeftFoundations;
-	if (!HasAuthority() || GetIsDismantled() || IsActorBeingDestroyed() || LeftFoundations < 1 || RightFoundations < 1 || !CanSplitLengthwise())
+	const int32 RightUnits = GetWidthUnits() - LeftUnits;
+	if (!HasAuthority() || GetIsDismantled() || IsActorBeingDestroyed() || LeftUnits < 1 || RightUnits < 1 || !CanSplitLengthwise())
 	{
 		return nullptr;
 	}
@@ -524,8 +538,8 @@ ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBu
 	}
 	// Each half is this road's curve moved sideways to the centre of its half.
 	const float Half = GetRoadWidth() * 0.5f;
-	const float LeftW = LeftFoundations * RM::FoundationSize;
-	const float RightW = RightFoundations * RM::FoundationSize;
+	const float LeftW = LeftUnits * GetSplitUnit();
+	const float RightW = RightUnits * GetSplitUnit();
 	TArray<FRMSplinePoint> LeftPoints, RightPoints;
 	RMGeometry::OffsetCurve(Frames, -Half + LeftW * 0.5f, 200.f, LeftPoints);
 	RMGeometry::OffsetCurve(Frames, Half - RightW * 0.5f, 200.f, RightPoints);
@@ -533,14 +547,9 @@ ARMBuildableRoad* ARMBuildableRoad::SplitLengthwise(int32 LeftFoundations, ARMBu
 	{
 		return nullptr;
 	}
-	auto ClassFor = [](int32 Foundations, UClass*& OutClass, UClass*& OutRecipe)
-	{
-		OutClass = LoadClass<ARMBuildableRoad>(nullptr, *FString::Printf(TEXT("/RoadMaker/Buildables/Build_Road_%dx.Build_Road_%dx_C"), Foundations, Foundations));
-		OutRecipe = LoadClass<UFGRecipe>(nullptr, *FString::Printf(TEXT("/RoadMaker/Unlocks/Recipe_Road_%dx.Recipe_Road_%dx_C"), Foundations, Foundations));
-	};
 	UClass *LeftClass = nullptr, *LeftRecipe = nullptr, *RightClass = nullptr, *RightRecipe = nullptr;
-	ClassFor(LeftFoundations, LeftClass, LeftRecipe);
-	ClassFor(RightFoundations, RightClass, RightRecipe);
+	RoadClassFor(IsWalkingPath(), LeftW, LeftClass, LeftRecipe);
+	RoadClassFor(IsWalkingPath(), RightW, RightClass, RightRecipe);
 	if (!LeftClass || !RightClass)
 	{
 		return nullptr;

@@ -117,11 +117,11 @@ void ARMRoadCutHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		}
 		if (mSplitTool && Nearest)
 		{
-			// Where across the road you aim, in whole foundations from its left edge (every 8 m).
+			// Where across the road you aim, in whole split units from its left edge (8 m; 2 m on walking paths).
 			const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
 			const float Half = Road->GetRoadWidth() * 0.5f;
 			const float FromLeft = Half + FVector::DotProduct(hitResult.Location - Nearest->Pos, Nearest->Right);
-			mSplitLeft = FMath::Clamp(FMath::RoundToInt(FromLeft / RM::FoundationSize), 1, FMath::Max(1, Road->GetWidthInFoundations() - 1));
+			mSplitLeft = FMath::Clamp(FMath::RoundToInt(FromLeft / Road->GetSplitUnit()), 1, FMath::Max(1, Road->GetWidthUnits() - 1));
 		}
 	}
 	else
@@ -205,7 +205,7 @@ bool ARMRoadCutHologram::IsCutValid() const
 	if (mSplitTool)
 	{
 		const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(mTarget);
-		return Road && Road->GetWidthInFoundations() >= 2 && mSplitLeft >= 1 && mSplitLeft < Road->GetWidthInFoundations();
+		return Road && Road->CanSplitLengthwise() && mSplitLeft >= 1 && mSplitLeft < Road->GetWidthUnits();
 	}
 	return mTarget && mCutDist >= MinPieceLength() && mTarget->GetLength() - mCutDist >= MinPieceLength();
 }
@@ -405,7 +405,7 @@ void ARMRoadCutHologram::RebuildOverlay()
 		const bool bOk = IsCutValid();
 		TArray<FRMFrame> Frames;
 		mTarget->GetWorldFrames(Frames, 100.f);
-		const float Across = -Road->GetRoadWidth() * 0.5f + mSplitLeft * RM::FoundationSize;
+		const float Across = -Road->GetRoadWidth() * 0.5f + mSplitLeft * Road->GetSplitUnit();
 		// Bright cyan (red if refused) on a dark border: visible on yellow lane lines and asphalt alike.
 		const FLinearColor Color = bOk ? FLinearColor(0.f, 0.9f, 1.f) : FLinearColor(1.f, 0.05f, 0.05f);
 		const FLinearColor Border(0.f, 0.f, 0.f);

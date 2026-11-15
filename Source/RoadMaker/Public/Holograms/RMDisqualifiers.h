@@ -52,7 +52,7 @@ class ROADMAKER_API URMCD_MergeNotBeside : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_MergeNotBeside() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeNotBeside", "Not right beside the picked road (edge to edge, same height, all along)"); }
+	URMCD_MergeNotBeside() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeNotBeside", "Not right beside the picked road (edge to edge, same height, all along; a road and a walking path do not merge)"); }
 };
 
 UCLASS()
@@ -68,7 +68,7 @@ class ROADMAKER_API URMCD_MergeTooWide : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_MergeTooWide() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeTooWide", "Together they would be wider than 4 foundations"); }
+	URMCD_MergeTooWide() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "MergeTooWide", "Together they would be wider than 4 foundations (walking paths: only two 2 m paths)"); }
 };
 
 UCLASS()
@@ -156,7 +156,7 @@ class ROADMAKER_API URMCD_RoadTooNarrow : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_RoadTooNarrow() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RoadTooNarrow", "Only roads 2 or more wide can be split"); }
+	URMCD_RoadTooNarrow() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "RoadTooNarrow", "Only roads 2 or more wide (or 4 m walking paths) can be split"); }
 };
 
 UCLASS()

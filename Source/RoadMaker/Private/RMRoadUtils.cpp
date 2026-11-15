@@ -304,18 +304,39 @@ void RMRoadUtils::FindEndSlots(UWorld* World, const FVector& Center, float Radiu
 	TArray<FRMRoadEndRef> Others;
 	FindFreeEnds(World, Center, Radius + RM::FoundationSize * 4.f, 0, nullptr, Others, true);
 
-	// Walking paths attach to walking path ends (centred), roads to road ends.
+	// Roads attach to road ends. Walking paths attach to walking path ends (a 2 m one on a 4 m end in the
+	// middle or on either side, like a split path) and to road caps every 2 m across, edge aligned.
 	const bool bNewWalking = NewWidth < RM::FoundationSize - 10.f;
 	for (const FRMRoadEndRef& End : Ends)
 	{
-		if (End.IsWalking() != bNewWalking)
+		if (End.IsWalking() && !bNewWalking)
 		{
 			continue;
 		}
 		const FVector Out = FVector(End.Outward.X, End.Outward.Y, 0.f).GetSafeNormal();
 		const FVector Across = FVector::CrossProduct(FVector::UpVector, Out).GetSafeNormal();
 		TArray<float> Offsets = { 0.f };
-		if (End.Width > NewWidth + 1.f && !bNewWalking)
+		if (bNewWalking && End.Width > NewWidth + 1.f)
+		{
+			const float Free = End.Width - NewWidth; // room left beside the path across the end
+			if (End.IsWalking())
+			{
+				Offsets = { -Free * 0.5f, 0.f, Free * 0.5f };
+			}
+			else
+			{
+				Offsets.Reset();
+				for (float O = -Free * 0.5f; O <= Free * 0.5f + 1.f; O += 200.f)
+				{
+					Offsets.Add(FMath::RoundToFloat(O));
+				}
+			}
+		}
+		else if (bNewWalking && End.Width + 1.f < NewWidth)
+		{
+			continue; // a 4 m path does not attach to a 2 m end
+		}
+		else if (End.Width > NewWidth + 1.f && !bNewWalking)
 		{
 			const int32 Count = FMath::RoundToInt((End.Width - NewWidth) / RM::FoundationSize);
 			for (int32 I = 0; I <= Count; ++I)
