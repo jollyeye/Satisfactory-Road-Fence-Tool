@@ -539,13 +539,9 @@ namespace RMFill
 	{
 		TArray<TArray<FRMFillPick>> Out;
 		const int32 N = Picks.Num();
-		if (N <= 3 || N > 7)
+		if (N <= 1 || N > 7)
 		{
 			Out.Add(Picks);
-			if (N == 3)
-			{
-				Out.Add({ Picks[0], Picks[2], Picks[1] }); // the other way round
-			}
 			return Out;
 		}
 		TArray<float> Gap;
@@ -586,11 +582,25 @@ namespace RMFill
 			{
 				break;
 			}
-			TArray<FRMFillPick> Order;
-			Order.Add(Picks[0]);
-			for (int32 I : S.Value)
+			// Round the loop, starting after the widest gap: the closing line goes where the edges do not meet.
+			TArray<int32> Cycle;
+			Cycle.Add(0);
+			Cycle.Append(S.Value);
+			int32 Widest = 0;
+			float WidestGap = -1.f;
+			for (int32 K = 0; K < Cycle.Num(); ++K)
 			{
-				Order.Add(Picks[I]);
+				const float G = Gap[Cycle[K] * N + Cycle[(K + 1) % Cycle.Num()]];
+				if (G > WidestGap)
+				{
+					WidestGap = G;
+					Widest = K;
+				}
+			}
+			TArray<FRMFillPick> Order;
+			for (int32 K = 1; K <= Cycle.Num(); ++K)
+			{
+				Order.Add(Picks[Cycle[(Widest + K) % Cycle.Num()]]);
 			}
 			Out.Add(MoveTemp(Order));
 		}
