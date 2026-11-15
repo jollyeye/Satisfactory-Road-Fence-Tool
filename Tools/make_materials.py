@@ -154,10 +154,13 @@ float2 p = WP.xy;
 float3 U = float3(1, 0, 0);
 float3 V = float3(0, 1, 0);
 float3 W = float3(0, 0, N.z >= 0 ? 1 : -1);
+// Walls (triplanar): the projected map is seen mirrored on two of the four facings (U, V, W turn the other
+// way round), so its sideways tilt is turned with it; one sign per facing, matching the top's (hand 1).
+float hand = 1.0;
 if (Tri > 0.5 && a.z < 0.7)
 {
-    if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); W = float3(N.x >= 0 ? 1 : -1, 0, 0); }
-    else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); W = float3(0, N.y >= 0 ? 1 : -1, 0); }
+    if (a.x > a.y) { p = WP.yz; U = float3(0, 1, 0); V = float3(0, 0, 1); W = float3(N.x >= 0 ? 1 : -1, 0, 0); hand = N.x >= 0 ? 1.0 : -1.0; }
+    else           { p = WP.xz; U = float3(1, 0, 0); V = float3(0, 0, 1); W = float3(0, N.y >= 0 ? 1 : -1, 0); hand = N.y >= 0 ? -1.0 : 1.0; }
 }
 if (RW > 0.5)
 {
@@ -171,7 +174,7 @@ if (RW > 0.5)
 float2 h = frac(p / (2.0 * Period));
 float2 s = float2(h.x < 0.5 ? 1.0 : -1.0, h.y < 0.5 ? 1.0 : -1.0);
 // Signs checked in game (the first guess lit bumps from the wrong side).
-float3 n = normalize(-U * (T.x * s.x * Str) + V * (T.y * s.y * Str) + W * max(T.z, 0.2));
+float3 n = normalize(-U * (T.x * s.x * Str * hand) + V * (T.y * s.y * Str) + W * max(T.z, 0.2));
 return normalize(lerp(n, normalize(N), Flat));
 """
 NORMAL_STRENGTH = 2.5
