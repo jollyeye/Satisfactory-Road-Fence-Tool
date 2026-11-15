@@ -32,6 +32,14 @@ public:
 	 * (AFGBlueprintHologram::RegisterCustomBuildableVisualization) when the class is loaded.
 	 */
 	static void ShowInBlueprintHologram(class AFGBlueprintHologram* Hologram, AFGBuildable* Buildable, USceneComponent* Root);
+	/**
+	 * A piece our code made from another inside a blueprint designer (a painted marking, a cut / joined piece): makes it
+	 * part of that design. Call Before before FinishSpawning (the game allows the designer only until begin play), After
+	 * after it: adds it to the designer's list unless begin play already did (never twice).
+	 */
+	static void JoinDesignerBefore(AFGBuildable* New, const AFGBuildable* From);
+	static void JoinDesignerAfter(AFGBuildable* New);
+
 	/** Static mesh parts the blueprint hologram should show too (the sign gantry's parts, made at run time). */
 	virtual void GetBlueprintPreviewParts(TArray<UStaticMeshComponent*>& Out) const {}
 

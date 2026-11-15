@@ -798,11 +798,11 @@ ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarkin
 	New->SetCustomizationData_Native(Paint ? *Paint : Road->GetCustomizationData_Native());
 	// Painted on a road inside a blueprint designer: part of that design (set before begin play, which tells the
 	// designer; without it the blueprint left the markings out).
-	if (Road->GetBlueprintDesigner())
-	{
-		New->SetInsideBlueprintDesigner(Road->GetBlueprintDesigner());
-	}
+	JoinDesignerBefore(New, Road);
 	UGameplayStatics::FinishSpawningActor(New, T);
+	JoinDesignerAfter(New);
+	UE_LOG(LogRoadMaker, Display, TEXT("Marking %s painted on %s (designer: %s)"), *New->GetName(), *Road->GetName(),
+		Road->GetBlueprintDesigner() ? *Road->GetBlueprintDesigner()->GetName() : TEXT("none"));
 	return New;
 }
 

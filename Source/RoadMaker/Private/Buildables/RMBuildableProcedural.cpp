@@ -1,5 +1,6 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "Hologram/FGBlueprintHologram.h"
+#include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "Holograms/RMHologramLook.h"
 #include "RMSound.h"
 #include "RoadMakerModule.h"
@@ -63,6 +64,30 @@ void ARMBuildableProcedural::PostInitProperties()
 			AFGBlueprintHologram::FCreateBuildableVisualizationDelegate::CreateStatic(&ARMBuildableProcedural::ShowInBlueprintHologram));
 	}
 #endif
+}
+
+void ARMBuildableProcedural::JoinDesignerBefore(AFGBuildable* New, const AFGBuildable* From)
+{
+	if (New && From && From->GetBlueprintDesigner())
+	{
+		New->SetInsideBlueprintDesigner(From->GetBlueprintDesigner());
+	}
+}
+
+void ARMBuildableProcedural::JoinDesignerAfter(AFGBuildable* New)
+{
+	AFGBuildableBlueprintDesigner* Designer = New ? New->GetBlueprintDesigner() : nullptr;
+	if (!Designer)
+	{
+		return;
+	}
+	const bool bListed = Designer->GetBuildablesInBlueprintDesigner().Contains(New);
+	if (!bListed)
+	{
+		Designer->OnBuildableConstructedInsideDesigner(New);
+	}
+	UE_LOG(LogRoadMaker, Display, TEXT("Blueprint designer: %s %s (%d buildings in the designer)"), *New->GetName(),
+		bListed ? TEXT("was listed by its begin play") : TEXT("added"), Designer->GetBuildablesInBlueprintDesigner().Num());
 }
 
 void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Hologram, AFGBuildable* Buildable, USceneComponent* Root)

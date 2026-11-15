@@ -337,11 +337,9 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 			New->SetCostMultiplier(mCostMultiplier);
 			New->SetSplinePoints(mSplinePoints);
 			New->SetCustomizationData_Native(mCustomizationData);
-			if (GetBlueprintDesigner())
-			{
-				New->SetInsideBlueprintDesigner(GetBlueprintDesigner()); // still part of the design
-			}
+			JoinDesignerBefore(New, this); // still part of the design
 			UGameplayStatics::FinishSpawningActor(New, T);
+			JoinDesignerAfter(New);
 			// Out of the way at once (the dismantle takes a moment): aiming must find the new wall.
 			SetActorEnableCollision(false);
 			SetActorHiddenInGame(true);
