@@ -1319,7 +1319,7 @@ MAP_POSITION = MAP_DECODE + r"""
 float cs = cos(ang);
 float sn = sin(ang);
 float2 P = O + S * (A / 1024.0) + float2(L.x * cs - L.y * sn, L.x * sn + L.y * cs);
-return float3(P - C, 0.0);
+return float3(P, 0.0);  // the window position itself (Slate does not add the vertex position: P - C left 1 px gaps)
 """
 MAP_LOCAL = MAP_DECODE + "return L;"
 MAP_HALF = MAP_DECODE + "return h;"
