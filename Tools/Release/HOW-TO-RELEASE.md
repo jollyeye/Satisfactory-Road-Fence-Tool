@@ -5,7 +5,7 @@
 2. Run `D:\SFMods\update-and-package.bat` once (pulls the latest code, assets and materials) and make sure it ends with ALL DONE.
 3. Open the project in Unreal Editor (`D:\SFMods\SML\FactoryGame.uproject`).
 4. In the toolbar click **Alpakit** › **Alpakit Release**.
-5. In the list, tick **RoadMaker**. Under targets tick **Windows** and **WindowsServer** (leave LinuxServer off unless the Linux cross-compile toolchain is installed).
+5. In the list, tick **RoadMaker**. Under targets tick **Windows**, **WindowsServer** and **LinuxServer** (LinuxServer needs the Linux cross-compile toolchain `v25_clang-18.1.0-rockylinux8`, installed 2026-11-15; `D:\SFMods\build-linux-server.bat` test-builds the Linux server version alone, log in `D:\SFMods\linux-server-log.txt`).
 6. Click **Alpakit Release!** and wait for "Packaging finished".
 7. The zip is at `D:\SFMods\SML\Saved\ArchivedPlugins\RoadMaker\RoadMaker.zip`.
 

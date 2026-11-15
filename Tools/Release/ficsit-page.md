@@ -101,6 +101,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 ## Changelog for version 1.3.1
 **Improved**
+- Linux dedicated servers are supported (thanks to the request in issue #2).
 - Less background work in every session (thanks to scotthowson, issue #3): the map, customizer and hotbar checks no longer go through every on-screen widget several times a second, and the debug logs are off by default.
 
 **Changed**
