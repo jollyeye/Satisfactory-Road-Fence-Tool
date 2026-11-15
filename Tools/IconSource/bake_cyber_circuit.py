@@ -1,5 +1,6 @@
 # Bakes the cyberpunk road's circuit pattern (CIRCUIT_HLSL in make_materials.py) into a tiling grayscale texture
-# for Low quality: Tools/Icons/T_RM_CyberCircuit.png, 48 m along x 8 m across, 4096 x 1024 px (~1.2 x 0.8 cm per px).
+# for Low quality: Tools/Icons/T_RM_CyberCircuit.png, 48 m along x 16 m across, 4096 x 2048 px (~1.2 x 0.8 cm per px).
+# 16 m across so a wide road (up to 32 m) shows each strip at most twice, with different chips in each 8 m band.
 # Same shapes as the live pattern; to tile, every cell grid divides the tile: the second layer's sections are 2.4 m
 # (2.5 m live) and its density cells 8 m along (7.5 m live), and every hash reads its cell index wrapped to the tile.
 # Usage: python3 bake_cyber_circuit.py [out.png]
@@ -7,8 +8,8 @@ import sys
 import numpy as np
 from PIL import Image
 
-TILE = (48.0, 8.0)
-SIZE = (4096, 1024)
+TILE = (48.0, 16.0)
+SIZE = (4096, 2048)
 out = sys.argv[1] if len(sys.argv) > 1 else "T_RM_CyberCircuit.png"
 
 xs = (np.arange(SIZE[0]) + 0.5) * TILE[0] / SIZE[0]
@@ -108,7 +109,8 @@ legX = np.where((bx > 0) & (bx < 0.3) & (by < -0.1), 1.0 - smoothstep(0.02, 0.02
 dotm = 1.0 - smoothstep(0.04, 0.04 + soft, np.hypot(QX - (cx - hsx + 0.18), QY - (cy - hsy + 0.18)))
 has = hc < 0.4
 chip = np.where(has, np.maximum(np.maximum(outline, dotm), np.maximum(legY, legX)), 0.0)
-clear = np.where(has, smoothstep(0.30, 0.45, sd), 1.0)
+# Tracks stop crisply around a chip (the live pattern fades them over 15 cm, which baked reads as a smudge).
+clear = np.where(has, smoothstep(0.375 - aa * 0.5, 0.375 + aa * 0.5, sd), 1.0)
 mask = np.clip(np.maximum(np.maximum(ln, rg) * clear, chip), 0, 1)
 Image.fromarray((mask * 255 + 0.5).astype(np.uint8), "L").save(out)
 print("wrote", out, mask.shape, "coverage %.3f" % mask.mean())

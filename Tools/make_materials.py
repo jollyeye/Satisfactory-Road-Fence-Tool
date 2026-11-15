@@ -1087,11 +1087,11 @@ link(const(cyber, 0.5, -450, 380), "", faint, "B")
 link(faint, "", c_surface, "Alpha")
 cm, cs, _, _ = lane_masks(cyber, -1100, 1000)
 c_col = lines_on(cyber, c_surface, cm, cs, c_secondary, c_secondary, 50, 150)
-# Low quality: the same circuit baked into a tiling texture (48 x 8 m, Tools/IconSource/bake_cyber_circuit.py),
+# Low quality: the same circuit baked into a tiling texture (48 x 16 m, Tools/IconSource/bake_cyber_circuit.py),
 # for the grooves' colour and the bump; same metres along / across as the live pattern.
 CIRCUIT_LOW_UV_HLSL = r"""
 float2 q = UV2.x > 0.5 ? float2(UV1.y, UV1.x) : WP.xy / 100.0;   // metres along, across
-return q / float2(48.0, 8.0);
+return q / float2(48.0, 16.0);
 """
 c_low_tex = load_tex("/RoadMaker/Icons/T_RM_CyberCircuit")
 if c_low_tex:

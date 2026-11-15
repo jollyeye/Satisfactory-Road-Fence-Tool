@@ -585,12 +585,13 @@ try:
 except Exception as e:
     log("  ! flat normal map: %s" % e)
 # T_RM_CyberCircuit: the cyberpunk road's circuit baked for Low quality (Tools/IconSource/bake_cyber_circuit.py):
-# a height mask, linear grayscale, tiling, with mips.
+# a height mask (linear, red channel), 48 x 16 m, tiling, with mips.
 try:
     cc = unreal.load_asset(ROOT + "/Icons/T_RM_CyberCircuit")
     if cc:
         cc.set_editor_property("srgb", False)
-        cc.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_GRAYSCALE)
+        # Block compressed (DXT1, 4 bits per pixel: white lines on black keep crisp), ~5.6 MB with mips.
+        cc.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
         cc.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_WORLD)
         cc.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_FROM_TEXTURE_GROUP)
         cc.set_editor_property("address_x", unreal.TextureAddress.TA_WRAP)
