@@ -1,5 +1,6 @@
 #include "Buildables/RMBuildableSignWall.h"
 #include "Buildables/RMSignWallSign.h"
+#include "Customization/RMRoadLookPaint.h"
 #include "RoadMakerModule.h"
 #include "RMGeometry.h"
 #include "FGCharacterPlayer.h"
@@ -79,6 +80,12 @@ void ARMBuildableSignWall::EnsureSign()
 	Sign->mExtraRange = Frames.Last().Dist * 0.5f;
 	mSign = Sign; // before it finishes: it sets up its design right away and tells the wall
 	Sign->FinishSpawning(At);
+	// Middle click on a sign wall before building this one: its design.
+	if (UFGFactoryClipboardSettings* Design = RMRoadSample::TakeSignDesign())
+	{
+		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, Design, nullptr);
+		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the sampled design (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
+	}
 	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
 	OnSignDesignChanged();
 }
@@ -104,7 +111,7 @@ UMaterialInterface* ARMBuildableSignWall::GetFrontMaterial() const
 	// until then the plain front.
 	if (mSign)
 	{
-		if (UMaterialInstanceDynamic* Design = mSign->GetSignMaterial())
+		if (UMaterialInterface* Design = mSign->GetSignMaterial())
 		{
 			return Design;
 		}

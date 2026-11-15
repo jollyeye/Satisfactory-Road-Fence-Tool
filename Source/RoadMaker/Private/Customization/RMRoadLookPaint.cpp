@@ -1,4 +1,7 @@
 #include "Customization/RMRoadLookPaint.h"
+#include "Buildables/RMBuildableSignWall.h"
+#include "Buildables/RMSignWallSign.h"
+#include "UObject/StrongObjectPtr.h"
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableMarking.h"
@@ -254,4 +257,32 @@ bool RMRoadSample::Take(const UClass* Class, uint8& OutLook, FRMMarkings& OutMar
 	bOutHasMarkings = GSampledPiece.bHasMarkings;
 	GSampledPiece = FRMSampledPiece();
 	return true;
+}
+
+namespace
+{
+	TStrongObjectPtr<UFGFactoryClipboardSettings> GSampledDesign;
+	double GSampledDesignTime = -1.0;
+}
+
+void RMRoadSample::NoteSignWall(ARMBuildableSignWall* Wall)
+{
+	GSampledDesign.Reset();
+	if (Wall && Wall->GetSign())
+	{
+		GSampledDesign.Reset(IFGFactoryClipboardInterface::Execute_CopySettings(Wall->GetSign()));
+		GSampledDesignTime = FPlatformTime::Seconds();
+	}
+}
+
+UFGFactoryClipboardSettings* RMRoadSample::TakeSignDesign()
+{
+	if (!GSampledDesign.IsValid() || FPlatformTime::Seconds() - GSampledDesignTime > 5.0)
+	{
+		GSampledDesign.Reset();
+		return nullptr;
+	}
+	UFGFactoryClipboardSettings* Design = GSampledDesign.Get();
+	GSampledDesign.Reset();
+	return Design; // still referenced by the caller's frame (pasted right away)
 }

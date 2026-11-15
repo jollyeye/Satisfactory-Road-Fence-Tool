@@ -1,5 +1,6 @@
 #include "Customization/RMRoadLinePaint.h"
 #include "Customization/RMRoadLookPaint.h"
+#include "Buildables/RMBuildableSignWall.h"
 #include "RoadMakerModule.h"
 #include "Customization/RMRoadLineDescriptor.h"
 #include "Buildables/RMBuildableRoad.h"
@@ -1332,6 +1333,7 @@ namespace
 			if (PC->GetWorld()->LineTraceSingleByChannel(Hit, Eye, Eye + View.Vector() * 10000.f, ECC_Visibility, Params))
 			{
 				RMRoadSample::Note(Cast<ARMBuildableRoad>(Hit.GetActor()));
+				RMRoadSample::NoteSignWall(Cast<ARMBuildableSignWall>(Hit.GetActor())); // its design for the next sign wall
 			}
 		}
 	public:
