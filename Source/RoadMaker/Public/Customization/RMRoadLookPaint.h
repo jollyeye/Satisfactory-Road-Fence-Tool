@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 
 class ARMBuildableProcedural;
+class ARMBuildableSignWall;
+class UFGFactoryClipboardSettings;
 struct FRMMarkings;
 
 /**
@@ -26,10 +28,10 @@ namespace RMRoadSample
 	ROADMAKER_API void Note(const ARMBuildableProcedural* Piece);
 
 	/** The Sample key was pressed aiming at a sign wall: its design is copied, for the next sign wall built. */
-	ROADMAKER_API void NoteSignWall(class ARMBuildableSignWall* Wall);
+	ROADMAKER_API void NoteSignWall(ARMBuildableSignWall* Wall);
 
 	/** The design of a sign wall sampled before (copy / paste settings), for every wall built in a row (30 s). */
-	ROADMAKER_API class UFGFactoryClipboardSettings* TakeSignDesign();
+	ROADMAKER_API UFGFactoryClipboardSettings* TakeSignDesign();
 
 	/** Look and lines of a piece of exactly Class sampled in the last few seconds; taken once. */
 	ROADMAKER_API bool Take(const UClass* Class, uint8& OutLook, FRMMarkings& OutMarkings, bool& bOutHasMarkings);
