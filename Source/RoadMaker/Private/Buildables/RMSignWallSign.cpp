@@ -127,9 +127,26 @@ FVector2D ARMSignWallSign::GetDesignSize() const
 	return mWorldDimensions.X > 1.f && mWorldDimensions.Y > 1.f ? mWorldDimensions : FVector2D(800.f, 400.f);
 }
 
+TSubclassOf<UObject> ARMSignWallSign::GetClipboardMappingClass_Implementation()
+{
+	if (UClass* Game = GetGameSignClass())
+	{
+		return IFGFactoryClipboardInterface::Execute_GetClipboardMappingClass(Game->GetDefaultObject());
+	}
+	return GetClass();
+}
+
 void ARMSignWallSign::SetupMaterialInstanceForProxyPlane(UMaterialInstanceDynamic* Instance, UTextureRenderTarget2D* RenderTarget)
 {
 	Super::SetupMaterialInstanceForProxyPlane(Instance, RenderTarget);
+	if (Instance)
+	{
+		// The game sets these from the plane's size, which is tiny here (hidden in the wall): the real sign's size, so
+		// background patterns and animations are laid out like on the billboard.
+		const FVector2D Size = GetDesignSize();
+		Instance->SetScalarParameterValue(TEXT("SignWidth"), Size.X);
+		Instance->SetScalarParameterValue(TEXT("SignHeight"), Size.Y);
+	}
 	mSignMaterial = Instance;
 	mSignTexture = RenderTarget;
 	static int32 Logs = 0;

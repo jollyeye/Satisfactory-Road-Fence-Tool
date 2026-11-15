@@ -180,3 +180,23 @@ void ARMBuildableSignWall::GetChildDismantleActors_Implementation(TArray<AActor*
 		out_ChildDismantleActors.AddUnique(mSign);
 	}
 }
+
+bool ARMBuildableSignWall::CanUseFactoryClipboard_Implementation()
+{
+	return mSign != nullptr;
+}
+
+TSubclassOf<UObject> ARMBuildableSignWall::GetClipboardMappingClass_Implementation()
+{
+	return mSign ? IFGFactoryClipboardInterface::Execute_GetClipboardMappingClass(mSign) : GetClass();
+}
+
+UFGFactoryClipboardSettings* ARMBuildableSignWall::CopySettings_Implementation()
+{
+	return mSign ? IFGFactoryClipboardInterface::Execute_CopySettings(mSign) : nullptr;
+}
+
+bool ARMBuildableSignWall::PasteSettings_Implementation(UFGFactoryClipboardSettings* settings, AFGPlayerController* player)
+{
+	return mSign && IFGFactoryClipboardInterface::Execute_PasteSettings(mSign, settings, player);
+}

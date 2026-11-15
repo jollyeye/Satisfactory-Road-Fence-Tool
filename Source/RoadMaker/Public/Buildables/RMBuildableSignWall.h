@@ -28,6 +28,12 @@ public:
 	virtual void OnUse_Implementation(class AFGCharacterPlayer* byCharacter, const FUseState& state) override;
 	virtual FText GetLookAtDecription_Implementation(class AFGCharacterPlayer* byCharacter, const FUseState& state) const override;
 
+	// Copy / paste settings: the sign's design (works with the game's signs).
+	virtual bool CanUseFactoryClipboard_Implementation() override;
+	virtual TSubclassOf<UObject> GetClipboardMappingClass_Implementation() override;
+	virtual UFGFactoryClipboardSettings* CopySettings_Implementation() override;
+	virtual bool PasteSettings_Implementation(UFGFactoryClipboardSettings* settings, class AFGPlayerController* player) override;
+
 	// Dismantling the wall takes its sign along.
 	virtual void GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const override;
 

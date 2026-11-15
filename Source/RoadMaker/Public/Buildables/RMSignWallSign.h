@@ -44,6 +44,9 @@ public:
 	/** Size of the design in cm (the billboard's world dimensions), for the wall's repeat length. */
 	FVector2D GetDesignSize() const;
 
+	/** Copy / paste settings work between this sign and the game's signs: the billboard's clipboard class. */
+	virtual TSubclassOf<UObject> GetClipboardMappingClass_Implementation() override;
+
 protected:
 	virtual void SetupMaterialInstanceForProxyPlane(UMaterialInstanceDynamic* Instance, UTextureRenderTarget2D* RenderTarget) override;
 
