@@ -1324,7 +1324,7 @@ return float3(P - C, 0.0);
 MAP_LOCAL = MAP_DECODE + "return L;"
 MAP_HALF = MAP_DECODE + "return h;"
 MAP_COLOURS = "return float2(floor(B.y / 65536.0), fmod(floor(B.y / 256.0), 256.0));"
-MAP_FLAGS = MAP_DECODE + "return float2(fmod(B.y, 256.0), max(0.75 * ppm, 0.5));"
+MAP_FLAGS = MAP_DECODE + "return float2(fmod(B.y, 256.0), max(1.25 * ppm, 0.75));"  # side lines 2.5 m, at least 1.5 px
 MAP_PIXEL = r"""
 float4 fc = Pal.SampleLevel(PalSampler, float2((I.x + 0.5) / 256.0, 0.5), 0.0);
 float4 ec = Pal.SampleLevel(PalSampler, float2((I.y + 0.5) / 256.0, 0.5), 0.0);

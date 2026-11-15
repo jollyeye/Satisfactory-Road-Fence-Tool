@@ -52,7 +52,8 @@ namespace RMMapLayer
 	{
 		constexpr double MapBuildBudget = 0.003; // s of piece reading per frame while the map is open
 		constexpr double MapScanInterval = 0.25; // s between looks for new / changed / removed pieces
-		constexpr float MapLineWidthM = 1.5f; // side lines on the map (m), at least 1 px
+		constexpr float MapLineWidthM = 2.5f; // side lines on the map (m), at least 1.5 px (same as M_RM_MapRoads)
+		constexpr float MapLayerCm = 300.f; // height layers for the draw order (see MapRebuild)
 		constexpr int32 MapPaletteSize = 256;
 		const TCHAR* MapMaterialPath = TEXT("/RoadMaker/Materials/M_RM_MapRoads.M_RM_MapRoads");
 
@@ -70,6 +71,7 @@ namespace RMMapLayer
 		struct FRMMapPiece
 		{
 			uint32 Key = 0;
+			int32 Kind = 2; // draw order inside a height layer: 0 intersection, 1 walking path, 2 road
 			TArray<FVector4f> Recs;
 			TArray<float> RecZ;
 			TOptional<FRMMapIsect> Isect;
@@ -271,6 +273,7 @@ namespace RMMapLayer
 			{
 				return;
 			}
+			Out.Kind = Road->IsWalkingPath() ? 1 : 2;
 			FColor FillC, EdgeC;
 			MapPieceColours(Road, FillC, EdgeC);
 			const uint8 Fill = MapPaletteOf(FillC);
@@ -314,6 +317,7 @@ namespace RMMapLayer
 			{
 				return;
 			}
+			Out.Kind = 0;
 			FRMMapIsect& X = Out.Isect.Emplace();
 			FVector Centre = FVector::ZeroVector;
 			for (const FVector& P : Outline)
@@ -405,28 +409,44 @@ namespace RMMapLayer
 			return bComplete;
 		}
 
-		/** Every road record and intersection, lowest first, cut into runs for drawing. */
+		/**
+		 * Every road record and intersection, lowest first, cut into runs for drawing. Lowest first by 3 m height
+		 * layers, not by exact height: inside a layer intersections, then walking paths, then roads, each piece
+		 * whole. (By exact height, a path beside a road at nearly the same height took turns with the road piece
+		 * by piece where the path is drawn wider than it is, zoomed out: stripes.) A bridge or a ramp's high end
+		 * is a layer or more above what it passes over, so it still covers it.
+		 */
 		void MapRebuild()
 		{
 			GMapChanged = false;
-			struct FItem { float Z; int32 Index; bool bIsect; };
+			struct FItem { float Z; int32 Index; bool bIsect; int32 Layer; int32 Kind; int32 Piece; int32 Seq; };
 			TArray<FItem> Items;
 			TArray<const FVector4f*> RecPtrs;
 			TArray<const FRMMapIsect*> IsectPtrs;
+			int32 PieceNo = 0;
 			for (const TPair<TWeakObjectPtr<AActor>, FRMMapPiece>& P : GMapPieces)
 			{
+				++PieceNo;
 				for (int32 I = 0; I < P.Value.Recs.Num(); ++I)
 				{
-					Items.Add({ P.Value.RecZ[I], RecPtrs.Num(), false });
+					const float Z = P.Value.RecZ[I];
+					Items.Add({ Z, RecPtrs.Num(), false, FMath::FloorToInt(Z / MapLayerCm), P.Value.Kind, PieceNo, I });
 					RecPtrs.Add(&P.Value.Recs[I]);
 				}
 				if (P.Value.Isect.IsSet())
 				{
-					Items.Add({ P.Value.Isect->Z, IsectPtrs.Num(), true });
+					const float Z = P.Value.Isect->Z;
+					Items.Add({ Z, IsectPtrs.Num(), true, FMath::FloorToInt(Z / MapLayerCm), 0, PieceNo, 0 });
 					IsectPtrs.Add(&P.Value.Isect.GetValue());
 				}
 			}
-			Items.StableSort([](const FItem& A, const FItem& B) { return A.Z < B.Z; });
+			Items.Sort([](const FItem& A, const FItem& B)
+			{
+				if (A.Layer != B.Layer) { return A.Layer < B.Layer; }
+				if (A.Kind != B.Kind) { return A.Kind < B.Kind; }
+				if (A.Piece != B.Piece) { return A.Piece < B.Piece; }
+				return A.Seq < B.Seq;
+			});
 			GMapRecords.Reset(RecPtrs.Num());
 			GMapIsects.Reset(IsectPtrs.Num());
 			GMapBatches.Reset();
@@ -560,7 +580,7 @@ namespace RMMapLayer
 				Out.SecondaryColor = FColor::White;
 				return SlateIndex(V.Num() - 1);
 			};
-			const float LineHalf = FMath::Max(MapLineWidthM * PxPerMetre * 0.5f, 0.5f);
+			const float LineHalf = FMath::Max(MapLineWidthM * PxPerMetre * 0.5f, 0.75f);
 			for (int32 K = Start; K < Start + Count; ++K)
 			{
 				const FRMMapIsect& X = GMapIsects[K];
