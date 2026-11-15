@@ -129,6 +129,15 @@ struct ROADMAKER_API FRMMesh
 	void AddBox(const FVector& Center, const FVector& AxisX, const FVector& AxisY, const FVector& AxisZ,
 		const FVector& HalfExtents, float UVScale);
 
+	/**
+	 * Keeps MarkUV1.x small on long pieces: procedural meshes store UVs as half floats (0.5 m steps past
+	 * 512 m, 1 m past 1024 m), which turns a fine pattern laid out by "metres along" into bands. Each
+	 * triangle from FirstTriangle on (an index into Triangles) gets its u counted from a whole number of
+	 * Periods below its smallest u (vertices re-made where needed, shared within a triangle strip piece);
+	 * the material's pattern must repeat every Period in u. Vertices from FirstVertex on are rebuilt.
+	 */
+	void WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period);
+
 	/** Writes this buffer into a section of a procedural mesh component. */
 	void ApplyToSection(class UProceduralMeshComponent* Comp, int32 Section, bool bCollision, const TArray<FLinearColor>* Colors = nullptr) const;
 };

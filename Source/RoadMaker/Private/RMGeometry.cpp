@@ -47,6 +47,92 @@ void FRMMesh::AddTriangle(int32 A, int32 B, int32 C, const FVector& DesiredNorma
 	Triangles.Add(bSwap ? B : C);
 }
 
+void FRMMesh::WrapUV1X(int32 FirstVertex, int32 FirstTriangle, float Period)
+{
+	if (Period <= 0.f || MarkUV1.Num() != Vertices.Num() || FirstVertex < 0 || FirstVertex >= Vertices.Num())
+	{
+		return;
+	}
+	// The vertices being rebuilt, set aside.
+	const int32 Count = Vertices.Num() - FirstVertex;
+	auto Tail = [FirstVertex, Count](const auto& Array)
+	{
+		using T = typename TDecay<decltype(Array)>::Type::ElementType;
+		TArray<T> Out;
+		if (Array.Num() >= FirstVertex + Count)
+		{
+			Out.Append(Array.GetData() + FirstVertex, Count);
+		}
+		return Out;
+	};
+	const TArray<FVector> OldV = Tail(Vertices);
+	const TArray<FVector> OldN = Tail(Normals);
+	const TArray<FVector2D> OldUV = Tail(UVs);
+	const TArray<FProcMeshTangent> OldT = Tail(Tangents);
+	const TArray<FVector2D> OldM1 = Tail(MarkUV1);
+	const TArray<FVector2D> OldM2 = Tail(MarkUV2);
+	const TArray<FVector2D> OldM3 = Tail(MarkUV3);
+	Vertices.SetNum(FirstVertex);
+	Normals.SetNum(FMath::Min(Normals.Num(), FirstVertex));
+	UVs.SetNum(FMath::Min(UVs.Num(), FirstVertex));
+	Tangents.SetNum(FMath::Min(Tangents.Num(), FirstVertex));
+	MarkUV1.SetNum(FirstVertex);
+	const bool bM2 = OldM2.Num() == Count;
+	const bool bM3 = OldM3.Num() == Count;
+	if (bM2)
+	{
+		MarkUV2.SetNum(FirstVertex);
+	}
+	if (bM3)
+	{
+		MarkUV3.SetNum(FirstVertex);
+	}
+	// (old vertex, periods taken off) -> new vertex: triangles with the same offset share their vertices.
+	TMap<TPair<int32, int32>, int32> Made;
+	for (int32 T = FMath::Max(FirstTriangle, 0); T + 2 < Triangles.Num(); T += 3)
+	{
+		float MinU = TNumericLimits<float>::Max();
+		for (int32 K = 0; K < 3; ++K)
+		{
+			const int32 Old = Triangles[T + K] - FirstVertex;
+			if (OldM1.IsValidIndex(Old))
+			{
+				MinU = FMath::Min(MinU, OldM1[Old].X);
+			}
+		}
+		const int32 Periods = MinU < TNumericLimits<float>::Max() ? FMath::FloorToInt(MinU / Period) : 0;
+		for (int32 K = 0; K < 3; ++K)
+		{
+			const int32 Old = Triangles[T + K] - FirstVertex;
+			if (!OldV.IsValidIndex(Old))
+			{
+				continue; // a vertex before FirstVertex: kept as it is
+			}
+			const TPair<int32, int32> Key(Old, Periods);
+			if (const int32* Found = Made.Find(Key))
+			{
+				Triangles[T + K] = *Found;
+				continue;
+			}
+			const int32 New = Vertices.Add(OldV[Old]);
+			Normals.Add(OldN.IsValidIndex(Old) ? OldN[Old] : FVector::UpVector);
+			UVs.Add(OldUV.IsValidIndex(Old) ? OldUV[Old] : FVector2D::ZeroVector);
+			Tangents.Add(OldT.IsValidIndex(Old) ? OldT[Old] : FProcMeshTangent());
+			MarkUV1.Add(FVector2D(OldM1[Old].X - Periods * Period, OldM1[Old].Y));
+			if (bM2)
+			{
+				MarkUV2.Add(OldM2[Old]);
+			}
+			if (bM3)
+			{
+				MarkUV3.Add(OldM3[Old]);
+			}
+			Made.Add(Key, New);
+			Triangles[T + K] = New;
+		}
+	}
+}
+
 void FRMMesh::AddQuad(const FVector& P0, const FVector& P1, const FVector& P2, const FVector& P3,
 	const FVector& N, const FVector2D& UV0, const FVector2D& UV1, const FVector2D& UV2, const FVector2D& UV3)
 {
@@ -1343,6 +1429,7 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	// is laid out by the material from UV1.x = metres along the fence and the world height, so it
 	// stays upright on slopes.
 	const int32 PanelFirst = Panel.Vertices.Num();
+	const int32 PanelFirstTriangle = Panel.Triangles.Num();
 	ExtrudeProfile(Inner, { FVector2D(FrameX, Height - TubeHalf), FVector2D(FrameX, Bottom + TubeHalf) }, false,
 		FVector2D(FrameX + 10.f, Height * 0.5f), 200.f, Panel);
 	Panel.MarkUV1.SetNumZeroed(Panel.Vertices.Num());
@@ -1350,6 +1437,10 @@ void RMGeometry::BuildGridFence(const TArray<FRMFrame>& Frames, float UVScale, F
 	{
 		Panel.MarkUV1[I] = FVector2D(Panel.UVs[I].Y * 2.f, 0.f); // UV0.y = cm / 200
 	}
+	// Long fences: "metres along" counted from a nearby whole number of pattern repeats, so the half-float
+	// UVs stay precise (they banded the mesh past ~500 m). The chain-link repeats every diagonal of its
+	// diamond (sqrt(2) x 0.117 m, M_RoadGridFence); 6 repeats ~ 1 m.
+	Panel.WrapUV1X(PanelFirst, PanelFirstTriangle, 6.f * 1.41421356f * 0.117f);
 
 	// Top and bottom tubes plus posts about every 3 m (and at both ends).
 	const TArray<FVector2D> Tube = { FVector2D(FrameX - TubeHalf, -TubeHalf), FVector2D(FrameX + TubeHalf, -TubeHalf),
