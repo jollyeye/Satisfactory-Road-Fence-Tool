@@ -109,6 +109,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Fences fill gaps: snapped to a road edge that already has fences on it, a new fence fills just the free stretch you aim at, end to end with its neighbours. Cut a wall, dismantle a piece and put a sign wall in its place.
 
+- Roads on the map are now drawn by the graphics card: sharp at every zoom, side lines that stay visible, and far less memory than the old map pictures (a few MB instead of up to a few hundred for a big network). Still the bottom layer of the map, under other map mods.
+
 **Fixed**
 - Middle click on a road or walking path also copies its look (Concrete Blocks, Asphalt, Cyberpunk) and its lines, not only the paint.
 
