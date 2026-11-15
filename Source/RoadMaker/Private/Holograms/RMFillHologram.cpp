@@ -593,9 +593,11 @@ void ARMFillHologram::BuildLoop()
 	FLoop Best;
 	float BestScore = TNumericLimits<float>::Max();
 	for (int32 Way = 0; Way < (N > 2 ? 2 : 1); ++Way)
+	{
+	const TArray<FRMFillPick> Ordered = OrderAround(mPicks, Way);
 	for (uint32 Flip = 0; Flip < (1u << Bits); ++Flip)
 	{
-		FLoop L = MakeLoop(OrderAround(mPicks, Way), Flip);
+		FLoop L = MakeLoop(Ordered, Flip);
 		if (L.Ring.Num() < 3)
 		{
 			continue;
@@ -606,6 +608,7 @@ void ARMFillHologram::BuildLoop()
 			BestScore = Score;
 			Best = MoveTemp(L);
 		}
+	}
 	}
 	mRing = MoveTemp(Best.Ring);
 	mClosedByCurves = Best.bClosedByCurves;
