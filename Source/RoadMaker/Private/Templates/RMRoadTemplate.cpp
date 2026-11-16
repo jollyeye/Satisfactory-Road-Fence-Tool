@@ -2564,6 +2564,15 @@ namespace RMRoadTemplate
 					Scope.Override(FMath::Max(1, FMath::RoundToInt(S->Frames.Last().Dist / S->L)));
 				}
 			});
+		// Aiming at a Blueprint Road's wireframe is a valid aim for a blueprint (it snaps to its ends).
+		SUBSCRIBE_METHOD_VIRTUAL(AFGBlueprintHologram::IsValidHitResult, GetMutableDefault<AFGBlueprintHologram>(),
+			[](auto& Scope, const AFGBlueprintHologram* Self, const FHitResult& Hit)
+			{
+				if (Cast<ARMBuildableBlueprintRoad>(Hit.GetActor()))
+				{
+					Scope.Override(true);
+				}
+			});
 		// While drawing, the blueprint stays at its start and the curve follows the aim. On foundations the game snaps the
 		// blueprint in TrySnapToActor and skips SetHologramLocationAndRotation: both are followed.
 		SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBlueprintHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBlueprintHologram>(),
