@@ -4,6 +4,7 @@
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableMarking.h"
 #include "Buildables/RMBuildableBlueprintRoad.h"
+#include "Holograms/RMHologramLook.h"
 #include "Hologram/FGBlueprintHologram.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Patching/NativeHookManager.h"
@@ -106,6 +107,7 @@ namespace RMRoadTemplate
 			FTransform Rel; // source mesh, relative to the hologram at the first click
 			TArray<TWeakObjectPtr<UProceduralMeshComponent>> Tiles;
 			int32 Stretch = INDEX_NONE; // its piece in FState::Stretches
+			bool bHoloLook = false; // from the piece itself (its simpler far mesh): drawn with the hologram look
 		};
 
 		struct FRigid
@@ -624,7 +626,28 @@ namespace RMRoadTemplate
 						}
 					}
 				}
-				if (StretchIndex != INDEX_NONE)
+				// The preview bends the piece's simpler far mesh (far fewer points to bend and send, many times a second);
+				// where it has none, the hologram's copy of the detailed one.
+				TArray<UProceduralMeshComponent*> Simple;
+				if (StretchIndex != INDEX_NONE && Piece)
+				{
+					Piece->GetPreviewMeshes(Simple, true);
+				}
+				if (StretchIndex != INDEX_NONE && Simple.Num() > 0)
+				{
+					const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+					const FTransform PieceT = Piece->GetActorTransform();
+					for (UProceduralMeshComponent* M : Simple)
+					{
+						FBent& B = S.Bents.AddDefaulted_GetRef();
+						B.Src = M;
+						B.Rel = M->GetComponentTransform().GetRelativeTransform(PieceT) * RootRel;
+						B.Stretch = StretchIndex;
+						B.bHoloLook = true;
+					}
+					++Stretched;
+				}
+				else if (StretchIndex != INDEX_NONE)
 				{
 					for (USceneComponent* C : Children)
 					{
@@ -829,12 +852,22 @@ namespace RMRoadTemplate
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: start fixed, %d pieces stretched along the road, %d repeated"), Stretched, Repeated);
 		}
 
-		UProceduralMeshComponent* MakeBentTile(AFGBlueprintHologram* Self, UProceduralMeshComponent* Src)
+		UProceduralMeshComponent* MakeBentTile(AFGBlueprintHologram* Self, UProceduralMeshComponent* Src, bool bHoloLook)
 		{
 			UProceduralMeshComponent* Copy = NewObject<UProceduralMeshComponent>(Self);
 			Copy->SetupAttachment(Self->GetRootComponent());
 			Copy->SetRelativeTransform(FTransform::Identity);
 			CopyLook(Src, Copy);
+			if (bHoloLook)
+			{
+				// Taken from the piece itself: its hologram versions, and the hologram's valid look (stencil 2).
+				for (int32 I = 0; I < Src->GetNumMaterials(); ++I)
+				{
+					Copy->SetMaterial(I, RMHologramLook::HoloVersion(Src->GetMaterial(I)));
+				}
+				Copy->SetRenderCustomDepth(true);
+				Copy->SetCustomDepthStencilValue(2);
+			}
 			Copy->RegisterComponent();
 			return Copy;
 		}
@@ -1561,7 +1594,7 @@ namespace RMRoadTemplate
 				{
 					if (K >= B.Tiles.Num())
 					{
-						B.Tiles.Add(MakeBentTile(Self, Src));
+						B.Tiles.Add(MakeBentTile(Self, Src, B.bHoloLook));
 					}
 					UProceduralMeshComponent* Tile = B.Tiles[K].Get();
 					if (!Tile)

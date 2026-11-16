@@ -64,6 +64,23 @@ public:
 	void SetCostMultiplier(int32 InMultiplier) { mCostMultiplier = FMath::Max(1, InMultiplier); }
 	int32 GetCostMultiplier() const { return mCostMultiplier; }
 	UProceduralMeshComponent* GetProceduralMesh() const { return mMesh; }
+	/**
+	 * The meshes a preview of this piece is drawn from, one per chunk: the simpler far version where there is one
+	 * (bSimple: Road Mode's preview bends every point of every copy, many times a second), else the detailed one.
+	 */
+	void GetPreviewMeshes(TArray<UProceduralMeshComponent*>& Out, bool bSimple) const
+	{
+		for (int32 Chunk = 0; Chunk < GetBuiltChunkCount(); ++Chunk)
+		{
+			UProceduralMeshComponent* Far = bSimple ? GetChunkMesh(Chunk, 1) : nullptr;
+			UProceduralMeshComponent* Near = GetChunkMesh(Chunk, 0);
+			UProceduralMeshComponent* Use = Far && Far->GetNumSections() > 0 ? Far : Near;
+			if (Use && Use->GetNumSections() > 0)
+			{
+				Out.Add(Use);
+			}
+		}
+	}
 
 	/** Road surface looks (roads and intersections): 0 asphalt, 1 concrete blocks, 2 cyberpunk. */
 	static constexpr uint8 NoPreviewLook = 255;
