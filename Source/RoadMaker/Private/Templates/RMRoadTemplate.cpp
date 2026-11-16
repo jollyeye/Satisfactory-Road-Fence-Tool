@@ -29,6 +29,7 @@
 #include "Buildables/FGBuildablePowerPole.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "FGBlueprintProxy.h"
 #include "FGBlueprintSubsystem.h"
 #include "FGDismantleInterface.h"
@@ -2389,6 +2390,20 @@ namespace RMRoadTemplate
 					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far"),
 						K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
 				}
+			}
+			// Vehicle paths were checked (which vehicles fit) as they spawned, before the rest of the placement and the
+			// links existed: checked again now that everything is there (the game does it in the background).
+			if (AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(World))
+			{
+				FBox Area(ForceInit);
+				for (const FRMFrame& F : S.Frames)
+				{
+					Area += F.Pos + F.Right * (S.HalfW + 1000.f);
+					Area += F.Pos - F.Right * (S.HalfW + 1000.f);
+				}
+				Area.Min.Z -= 1000.f;
+				Area.Max.Z += FMath::Max(S.Height, 400.f) + 1000.f;
+				Vehicles->InvalidateVehiclePathsInVolume(Area);
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
 				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
