@@ -39,6 +39,7 @@
 #include "FGDismantleInterface.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Containers/Ticker.h"
 
 namespace RMRoadTemplate
 {
@@ -1864,8 +1865,429 @@ namespace RMRoadTemplate
 		}
 
 		/** Second click: our stretched pieces built along the drawn curve, paid from the player's inventory. */
+		/** The tiles of a Road Mode placement, built a few per frame after the click (all at once made the game stop
+		 *  for a moment): each tile is the blueprint loaded once and moved onto the curve. */
+		struct FTileJob
+		{
+			FState S; // a copy: the hologram's state goes once building starts
+			TWeakObjectPtr<UWorld> World;
+			TWeakObjectPtr<AFGBlueprintProxy> Proxy;
+			TWeakObjectPtr<AFGCharacterPlayer> Player;
+			TWeakObjectPtr<UFGBlueprintDescriptor> Descriptor;
+			int32 Tiles = 0;
+			int32 Next = 0;
+			TArray<FSplineEnd> OuterEnds;
+			TArray<FPathEnd> OuterPaths;
+			int32 OuterJoined = 0;
+			TArray<FSplineEnd> PrevEnds;
+			TArray<FPathEnd> PrevPaths;
+			TMap<const FRigid*, AFGBuildable*> PrevPower;
+			int32 Joined = 0, Wired = 0, Built = 0;
+			double Started = 0.0;
+			double Busy = 0.0;
+		};
+
+		void RunTile(FTileJob& Job, int32 K)
+		{
+			const FState& S = Job.S;
+			UWorld* World = Job.World.Get();
+			AFGBlueprintProxy* Proxy = Job.Proxy.Get();
+			AFGCharacterPlayer* Player = Job.Player.Get();
+			UFGBlueprintDescriptor* Descriptor = Job.Descriptor.Get();
+			AFGBlueprintSubsystem* Blueprints = World ? AFGBlueprintSubsystem::Get(World) : nullptr;
+			if (!World || !Blueprints || !Descriptor)
+			{
+				return;
+			}
+			TArray<FSplineEnd>& OuterEnds = Job.OuterEnds;
+			TArray<FPathEnd>& OuterPaths = Job.OuterPaths;
+			int32& OuterJoined = Job.OuterJoined;
+			TArray<FSplineEnd>& PrevEnds = Job.PrevEnds;
+			TArray<FPathEnd>& PrevPaths = Job.PrevPaths;
+			TMap<const FRigid*, AFGBuildable*>& PrevPower = Job.PrevPower;
+			int32& Joined = Job.Joined;
+			int32& Wired = Job.Wired;
+			int32& Built = Job.Built;
+
+			TArray<FSplineEnd> CurEnds;
+			TArray<FPathEnd> CurPaths;
+			TArray<AFGVehiclePathNode*> Orphans;
+			TMap<const FRigid*, AFGBuildable*> CurPower;
+			TArray<AFGBuildable*> Spawned;
+			TArray<AFGBuildable*> Drop;
+			TArray<TPair<AFGBuildable*, FTransform>> Moves;
+			int32 Logged = 0;
+			// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
+			// made again just before they begin play.
+			auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &CurPaths, &PrevPaths, &Orphans, &Joined, &OuterEnds, &OuterPaths, &OuterJoined, K]()
+			{
+				// Vehicle paths: a segment starting where the previous tile's one ends (or ending where it starts)
+				// takes over that node; its own node there is left without segments and goes after.
+				for (const FPathEnd& Cur : CurPaths)
+				{
+					AFGVehiclePathSegment* Seg = Cur.Seg.Get();
+					if (!Seg)
+					{
+						continue;
+					}
+					TArray<FPathEnd> Candidates = PrevPaths;
+					Candidates.Append(OuterPaths);
+					for (const FPathEnd& Prev : Candidates)
+					{
+						AFGVehiclePathSegment* PrevSeg = Prev.Seg.Get();
+						if (!PrevSeg || Prev.bStart == Cur.bStart || FVector::DistSquared(Cur.Pos, Prev.Pos) >= 400.f)
+						{
+							continue;
+						}
+						AFGVehiclePathNode* Shared = Prev.bStart ? PrevSeg->GetStartNode() : PrevSeg->GetEndNode();
+						AFGVehiclePathNode* Own = Cur.bStart ? Seg->GetStartNode() : Seg->GetEndNode();
+						if (!Shared || Shared == Own)
+						{
+							continue;
+						}
+						if (Cur.bStart)
+						{
+							Seg->SetNodeConnections(Shared, Seg->GetEndNode());
+							if (Own)
+							{
+								Own->RemoveLeavingConnection(Seg, false);
+							}
+							Shared->AddLeavingConnection(Seg);
+						}
+						else
+						{
+							Seg->SetNodeConnections(Seg->GetStartNode(), Shared);
+							if (Own)
+							{
+								Own->RemoveArrivingConnection(Seg, false);
+							}
+							Shared->AddArrivingConnection(Seg);
+						}
+						if (Own)
+						{
+							Orphans.AddUnique(Own);
+						}
+						++Joined;
+						break;
+					}
+				}
+				// Spline ends meeting the previous tile's free ends: joined before they begin play (like building a
+				// belt onto an existing one).
+				for (const FSplineEnd& Cur : CurEnds)
+				{
+					bool bDone = false;
+					for (const FSplineEnd& Prev : PrevEnds)
+					{
+						if (FVector::DistSquared(Cur.Pos, Prev.Pos) < 400.f && JoinEnds(Cur.Conn.Get(), Prev.Conn.Get()))
+						{
+							++Joined;
+							bDone = true;
+							break;
+						}
+					}
+					// Or another placement's free end there.
+					if (!bDone)
+					{
+						if (UFGConnectionComponent* Outer = OuterAt(OuterEnds, Cur.Pos, Cur.Conn.Get()))
+						{
+							if (JoinEnds(Cur.Conn.Get(), Outer))
+							{
+								++OuterJoined;
+							}
+						}
+					}
+				}
+				int32 Checked = 0;
+				for (const TPair<AFGBuildable*, FTransform>& M : Moves)
+				{
+					if (!IsValid(M.Key))
+					{
+						continue;
+					}
+					if (Checked++ < 1)
+					{
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
+							*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
+					}
+					MoveBuilding(M.Key, M.Value);
+				}
+			};
+			Blueprints->LoadStoredBlueprint(Descriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
+				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
+				{
+					if (!B)
+					{
+						return;
+					}
+					FTransform Rel = B->GetActorTransform().GetRelativeTransform(S.RoadT);
+					Rel.AddToTranslation(S.LoaderToPreview); // where the hologram showed it
+					const FVector P = Rel.GetLocation();
+					if (B->IsA<ARMBuildableRoad>() || B->IsA<ARMBuildableFence>())
+					{
+						for (const FStretch& St : S.Stretches)
+						{
+							if (St.Piece.IsValid() && St.Piece->GetClass() == B->GetClass() && FVector::DistSquared(St.RootLoc, P) < 2500.f)
+							{
+								Drop.Add(B);
+								return;
+							}
+						}
+					}
+					// Which of the blueprint's objects this is (a marking may follow its road).
+					const FRigid* Match = nullptr;
+					for (const FRigid& R : S.Rigids)
+					{
+						if (R.Buildable.IsValid() && R.Buildable->GetClass() == B->GetClass() && FVector::DistSquared(R.Rel.GetLocation(), P) < 2500.f)
+						{
+							Match = &R;
+							break;
+						}
+					}
+					if (Match && Match->bSplineFull)
+					{
+						// Rebuilt over the whole curve instead: this copy never finishes spawning.
+						GSuppressed.Add(B);
+						Drop.Add(B);
+						return;
+					}
+					const bool bHasParent = Match && Match->bHasParent;
+					FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
+						Match ? Match->bLevel : !TiltsWithCurve(B));
+					if (Match && Match->bSplineBend)
+					{
+						Target.SetRotation(FQuat::Identity); // its points are laid anew below; unturned (see the whole-curve pieces)
+					}
+					if (Logged++ < 3)
+					{
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
+					}
+					// A straight game spline: its points laid on the curve (before it begins play, which builds its mesh).
+					if (Match && Match->bSplineBend)
+					{
+						{
+							if (TArray<FSplinePointData>* Pts = SplinePointsOf(B))
+							{
+								TArray<FVector> Pos, Tan;
+								BendSpline(S, Rel, *Pts, K, Pos, Tan);
+								if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
+								{
+									if (Pos.Num() >= 2)
+									{
+										CurPaths.Add({ Path, Pos[0], true });
+										CurPaths.Add({ Path, Pos.Last(), false });
+									}
+								}
+								if (IFGSplineBuildableInterface* Ends = Cast<IFGSplineBuildableInterface>(B))
+								{
+									if (Pos.Num() >= 2)
+									{
+										CurEnds.Add({ Ends->GetSplineConnection0(), Pos[0] });
+										CurEnds.Add({ Ends->GetSplineConnection1(), Pos.Last() });
+									}
+								}
+								Pts->Reset();
+								for (int32 I = 0; I < Pos.Num(); ++I)
+								{
+									FSplinePointData Pt;
+									Pt.Location = Target.InverseTransformPosition(Pos[I]);
+									Pt.ArriveTangent = Target.InverseTransformVector(Tan[I]);
+									Pt.LeaveTangent = Pt.ArriveTangent;
+									Pts->Add(Pt);
+								}
+								// A vehicle path keeps checks made along its course (which vehicles fit): made again on the new one.
+								if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
+								{
+									const TArray<FSplinePointData> Bent = *Pts;
+									Path->SetSplinePointsAndValidatePath(Bent);
+								}
+							}
+						}
+					}
+					// A marking along the arrow: the road surface under it follows the curve too.
+					if (ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(B))
+					{
+						if (!bHasParent && FMath::Abs(Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
+						{
+							BendMarking(S, K, Marking, Rel, Target);
+						}
+					}
+					if (Match && Match->bChainPower)
+					{
+						CurPower.Add(Match, B);
+					}
+					Moves.Emplace(B, Target);
+					GPendingMoves.Add(B, Target);
+					MoveBuilding(B, Target);
+				},
+				ApplyMoves);
+			GPendingMoves.Reset();
+			if (Moves.Num() > 0 && IsValid(Moves[0].Key))
+			{
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
+			}
+			for (AFGBuildable* B : Drop)
+			{
+				if (Proxy)
+				{
+					Proxy->UnregisterBuildable(B);
+				}
+				if (GSuppressed.Remove(B) > 0 && (!IsValid(B) || B->IsActorBeingDestroyed()))
+				{
+					continue; // never spawned
+				}
+				if (!IsValid(B))
+				{
+					continue;
+				}
+				B->SetBlueprintProxy(nullptr);
+				// Dismantled, not just destroyed: the game's pieces leave parts behind otherwise (a hypertube's
+				// end caps stayed in the air, saved). Hidden first: no dismantle effect to see.
+				B->SetActorHiddenInGame(true);
+				B->SetActorEnableCollision(false);
+				IFGDismantleInterface::Execute_Dismantle(B);
+			}
+			// Power: each chained pole wired to its copy on the previous tile.
+			for (const TPair<const FRigid*, AFGBuildable*>& Cur : CurPower)
+			{
+				AFGBuildable* const* Prev = PrevPower.Find(Cur.Key);
+				UFGCircuitConnectionComponent* A = Prev && IsValid(*Prev) ? WireConnectionOf(*Prev) : nullptr;
+				UFGCircuitConnectionComponent* B2 = IsValid(Cur.Value) ? WireConnectionOf(Cur.Value) : nullptr;
+				UClass* Wire = WireClass();
+				if (!A || !B2 || !Wire)
+				{
+					continue;
+				}
+				const FTransform WireT(A->GetComponentLocation());
+				AFGBuildableWire* NewWire = World->SpawnActorDeferred<AFGBuildableWire>(Wire, WireT, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (NewWire)
+				{
+					NewWire->SetBuiltWithRecipe(WireRecipe());
+					UGameplayStatics::FinishSpawningActor(NewWire, WireT);
+					if (NewWire->Connect(A, B2))
+					{
+						++Wired;
+						if (Proxy)
+						{
+							NewWire->SetBlueprintProxy(Proxy);
+							Proxy->RegisterBuildable(NewWire);
+						}
+					}
+					else
+					{
+						NewWire->Destroy();
+					}
+				}
+			}
+			// Vehicle path nodes left without segments (their segment took over the previous tile's node) go.
+			for (AFGVehiclePathNode* Node : Orphans)
+			{
+				if (IsValid(Node) && Node->GetArrivingConnections().Num() == 0 && Node->GetLeavingConnections().Num() == 0)
+				{
+					if (Proxy)
+					{
+						Proxy->UnregisterBuildable(Node);
+					}
+					Node->SetBlueprintProxy(nullptr);
+					Node->SetActorHiddenInGame(true);
+					IFGDismantleInterface::Execute_Dismantle(Node);
+				}
+			}
+			PrevPaths = MoveTemp(CurPaths);
+			PrevPower = MoveTemp(CurPower);
+			PrevEnds = MoveTemp(CurEnds);
+			Built += Spawned.Num() - Drop.Num();
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far"),
+				K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
+		}
+
+		/** After the last tile: the checks that need the whole placement. */
+		void FinishJob(FTileJob& Job)
+		{
+			const FState& S = Job.S;
+			UWorld* World = Job.World.Get();
+			if (!World)
+			{
+				return;
+			}
+			AFGBlueprintProxy* Proxy = Job.Proxy.Get();
+			const int32 Built = Job.Built;
+			const int32 OuterJoined = Job.OuterJoined;
+
+			// Vehicle paths were checked (which vehicles fit) as they spawned, before the rest of the placement and the
+			// links existed: checked again now that everything is there (the game does it in the background).
+			if (AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(World))
+			{
+				FBox Area(ForceInit);
+				for (const FRMFrame& F : S.Frames)
+				{
+					Area += F.Pos + F.Right * (S.HalfW + 1000.f);
+					Area += F.Pos - F.Right * (S.HalfW + 1000.f);
+				}
+				Area.Min.Z -= 1000.f;
+				Area.Max.Z += FMath::Max(S.Height, 400.f) + 1000.f;
+				Vehicles->InvalidateVehiclePathsInVolume(Area);
+				// And checked right away (a few seconds on, once the pieces' collision is ready) for the paths of this
+				// placement: a blueprint keeps the result made in the designer (e.g. red from the designer's own terminal
+				// next to the path), which the background re-check may not redo.
+				TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Paths;
+				for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+				{
+					if (Area.IsInside(It->GetActorLocation()))
+					{
+						Paths.Add(*It);
+					}
+				}
+				FTimerHandle Handle;
+				World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([Paths]()
+				{
+					for (const TWeakObjectPtr<AFGVehiclePathSegment>& Path : Paths)
+					{
+						if (Path.IsValid() && !Path->IsActorBeingDestroyed())
+						{
+							Path->ImmediateRebuildPathValidationData();
+						}
+					}
+				}), 4.f, false);
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
+				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d tiles built over %.2f s (%.1f ms of work)"), Job.Tiles,
+				FPlatformTime::Seconds() - Job.Started, Job.Busy * 1000.0);
+		}
+
+		/** Starts the tiles: a few each frame, up to a small time budget (at least one). */
+		void StartJob(TSharedPtr<FTileJob> Job)
+		{
+			Job->Started = FPlatformTime::Seconds();
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Job](float) -> bool
+			{
+				if (!Job->World.IsValid())
+				{
+					return false;
+				}
+				const double T0 = FPlatformTime::Seconds();
+				while (Job->Next < Job->Tiles)
+				{
+					RunTile(*Job, Job->Next++);
+					if (FPlatformTime::Seconds() - T0 > 0.004)
+					{
+						break;
+					}
+				}
+				Job->Busy += FPlatformTime::Seconds() - T0;
+				if (Job->Next < Job->Tiles)
+				{
+					return true;
+				}
+				FinishJob(*Job);
+				return false;
+			}));
+		}
+
+
 		AActor* Build(AFGBlueprintHologram* Self, const FState& S)
 		{
+			const double ClickStart = FPlatformTime::Seconds();
 			UWorld* World = Self->GetWorld();
 			if (!World || S.Frames.Num() < 2)
 			{
@@ -2137,348 +2559,22 @@ namespace RMRoadTemplate
 				}
 				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s rebuilt over the whole curve in %d pieces"), *Source->GetName(), PiecePos.Num());
 			}
-
 			// Everything else: the blueprint placed once per tile by the game's own loader, each piece moved onto the
 			// curve before it begins play (its distance along and across, turned with the curve). Our pieces along the
-			// arrow come along too and go again (built above, bent).
-			AFGBlueprintSubsystem* Blueprints = AFGBlueprintSubsystem::Get(World);
-			if (Tiles > 0 && Blueprints && Self->mBlueprintDescriptor)
-			{
-				TArray<FSplineEnd> PrevEnds;
-				TArray<FPathEnd> PrevPaths;
-				TMap<const FRigid*, AFGBuildable*> PrevPower;
-				int32 Joined = 0, Wired = 0;
-				for (int32 K = 0; K < Tiles; ++K)
-				{
-					TArray<FSplineEnd> CurEnds;
-					TArray<FPathEnd> CurPaths;
-					TArray<AFGVehiclePathNode*> Orphans;
-					TMap<const FRigid*, AFGBuildable*> CurPower;
-					TArray<AFGBuildable*> Spawned;
-					TArray<AFGBuildable*> Drop;
-					TArray<TPair<AFGBuildable*, FTransform>> Moves;
-					int32 Logged = 0;
-					// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
-					// made again just before they begin play.
-					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &CurPaths, &PrevPaths, &Orphans, &Joined, &OuterEnds, &OuterPaths, &OuterJoined, K]()
-					{
-						// Vehicle paths: a segment starting where the previous tile's one ends (or ending where it starts)
-						// takes over that node; its own node there is left without segments and goes after.
-						for (const FPathEnd& Cur : CurPaths)
-						{
-							AFGVehiclePathSegment* Seg = Cur.Seg.Get();
-							if (!Seg)
-							{
-								continue;
-							}
-							TArray<FPathEnd> Candidates = PrevPaths;
-							Candidates.Append(OuterPaths);
-							for (const FPathEnd& Prev : Candidates)
-							{
-								AFGVehiclePathSegment* PrevSeg = Prev.Seg.Get();
-								if (!PrevSeg || Prev.bStart == Cur.bStart || FVector::DistSquared(Cur.Pos, Prev.Pos) >= 400.f)
-								{
-									continue;
-								}
-								AFGVehiclePathNode* Shared = Prev.bStart ? PrevSeg->GetStartNode() : PrevSeg->GetEndNode();
-								AFGVehiclePathNode* Own = Cur.bStart ? Seg->GetStartNode() : Seg->GetEndNode();
-								if (!Shared || Shared == Own)
-								{
-									continue;
-								}
-								if (Cur.bStart)
-								{
-									Seg->SetNodeConnections(Shared, Seg->GetEndNode());
-									if (Own)
-									{
-										Own->RemoveLeavingConnection(Seg, false);
-									}
-									Shared->AddLeavingConnection(Seg);
-								}
-								else
-								{
-									Seg->SetNodeConnections(Seg->GetStartNode(), Shared);
-									if (Own)
-									{
-										Own->RemoveArrivingConnection(Seg, false);
-									}
-									Shared->AddArrivingConnection(Seg);
-								}
-								if (Own)
-								{
-									Orphans.AddUnique(Own);
-								}
-								++Joined;
-								break;
-							}
-						}
-						// Spline ends meeting the previous tile's free ends: joined before they begin play (like building a
-						// belt onto an existing one).
-						for (const FSplineEnd& Cur : CurEnds)
-						{
-							bool bDone = false;
-							for (const FSplineEnd& Prev : PrevEnds)
-							{
-								if (FVector::DistSquared(Cur.Pos, Prev.Pos) < 400.f && JoinEnds(Cur.Conn.Get(), Prev.Conn.Get()))
-								{
-									++Joined;
-									bDone = true;
-									break;
-								}
-							}
-							// Or another placement's free end there.
-							if (!bDone)
-							{
-								if (UFGConnectionComponent* Outer = OuterAt(OuterEnds, Cur.Pos, Cur.Conn.Get()))
-								{
-									if (JoinEnds(Cur.Conn.Get(), Outer))
-									{
-										++OuterJoined;
-									}
-								}
-							}
-						}
-						int32 Checked = 0;
-						for (const TPair<AFGBuildable*, FTransform>& M : Moves)
-						{
-							if (!IsValid(M.Key))
-							{
-								continue;
-							}
-							if (Checked++ < 1)
-							{
-								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
-									*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
-							}
-							MoveBuilding(M.Key, M.Value);
-						}
-					};
-					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
-						[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
-						{
-							if (!B)
-							{
-								return;
-							}
-							FTransform Rel = B->GetActorTransform().GetRelativeTransform(S.RoadT);
-							Rel.AddToTranslation(S.LoaderToPreview); // where the hologram showed it
-							const FVector P = Rel.GetLocation();
-							if (B->IsA<ARMBuildableRoad>() || B->IsA<ARMBuildableFence>())
-							{
-								for (const FStretch& St : S.Stretches)
-								{
-									if (St.Piece.IsValid() && St.Piece->GetClass() == B->GetClass() && FVector::DistSquared(St.RootLoc, P) < 2500.f)
-									{
-										Drop.Add(B);
-										return;
-									}
-								}
-							}
-							// Which of the blueprint's objects this is (a marking may follow its road).
-							const FRigid* Match = nullptr;
-							for (const FRigid& R : S.Rigids)
-							{
-								if (R.Buildable.IsValid() && R.Buildable->GetClass() == B->GetClass() && FVector::DistSquared(R.Rel.GetLocation(), P) < 2500.f)
-								{
-									Match = &R;
-									break;
-								}
-							}
-							if (Match && Match->bSplineFull)
-							{
-								// Rebuilt over the whole curve instead: this copy never finishes spawning.
-								GSuppressed.Add(B);
-								Drop.Add(B);
-								return;
-							}
-							const bool bHasParent = Match && Match->bHasParent;
-							FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
-								Match ? Match->bLevel : !TiltsWithCurve(B));
-							if (Match && Match->bSplineBend)
-							{
-								Target.SetRotation(FQuat::Identity); // its points are laid anew below; unturned (see the whole-curve pieces)
-							}
-							if (Logged++ < 3)
-							{
-								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
-							}
-							// A straight game spline: its points laid on the curve (before it begins play, which builds its mesh).
-							if (Match && Match->bSplineBend)
-							{
-								{
-									if (TArray<FSplinePointData>* Pts = SplinePointsOf(B))
-									{
-										TArray<FVector> Pos, Tan;
-										BendSpline(S, Rel, *Pts, K, Pos, Tan);
-										if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
-										{
-											if (Pos.Num() >= 2)
-											{
-												CurPaths.Add({ Path, Pos[0], true });
-												CurPaths.Add({ Path, Pos.Last(), false });
-											}
-										}
-										if (IFGSplineBuildableInterface* Ends = Cast<IFGSplineBuildableInterface>(B))
-										{
-											if (Pos.Num() >= 2)
-											{
-												CurEnds.Add({ Ends->GetSplineConnection0(), Pos[0] });
-												CurEnds.Add({ Ends->GetSplineConnection1(), Pos.Last() });
-											}
-										}
-										Pts->Reset();
-										for (int32 I = 0; I < Pos.Num(); ++I)
-										{
-											FSplinePointData Pt;
-											Pt.Location = Target.InverseTransformPosition(Pos[I]);
-											Pt.ArriveTangent = Target.InverseTransformVector(Tan[I]);
-											Pt.LeaveTangent = Pt.ArriveTangent;
-											Pts->Add(Pt);
-										}
-										// A vehicle path keeps checks made along its course (which vehicles fit): made again on the new one.
-										if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
-										{
-											const TArray<FSplinePointData> Bent = *Pts;
-											Path->SetSplinePointsAndValidatePath(Bent);
-										}
-									}
-								}
-							}
-							// A marking along the arrow: the road surface under it follows the curve too.
-							if (ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(B))
-							{
-								if (!bHasParent && FMath::Abs(Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
-								{
-									BendMarking(S, K, Marking, Rel, Target);
-								}
-							}
-							if (Match && Match->bChainPower)
-							{
-								CurPower.Add(Match, B);
-							}
-							Moves.Emplace(B, Target);
-							GPendingMoves.Add(B, Target);
-							MoveBuilding(B, Target);
-						},
-						ApplyMoves);
-					GPendingMoves.Reset();
-					if (Moves.Num() > 0 && IsValid(Moves[0].Key))
-					{
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
-					}
-					for (AFGBuildable* B : Drop)
-					{
-						if (Proxy)
-						{
-							Proxy->UnregisterBuildable(B);
-						}
-						if (GSuppressed.Remove(B) > 0 && (!IsValid(B) || B->IsActorBeingDestroyed()))
-						{
-							continue; // never spawned
-						}
-						if (!IsValid(B))
-						{
-							continue;
-						}
-						B->SetBlueprintProxy(nullptr);
-						// Dismantled, not just destroyed: the game's pieces leave parts behind otherwise (a hypertube's
-						// end caps stayed in the air, saved). Hidden first: no dismantle effect to see.
-						B->SetActorHiddenInGame(true);
-						B->SetActorEnableCollision(false);
-						IFGDismantleInterface::Execute_Dismantle(B);
-					}
-					// Power: each chained pole wired to its copy on the previous tile.
-					for (const TPair<const FRigid*, AFGBuildable*>& Cur : CurPower)
-					{
-						AFGBuildable* const* Prev = PrevPower.Find(Cur.Key);
-						UFGCircuitConnectionComponent* A = Prev && IsValid(*Prev) ? WireConnectionOf(*Prev) : nullptr;
-						UFGCircuitConnectionComponent* B2 = IsValid(Cur.Value) ? WireConnectionOf(Cur.Value) : nullptr;
-						UClass* Wire = WireClass();
-						if (!A || !B2 || !Wire)
-						{
-							continue;
-						}
-						const FTransform WireT(A->GetComponentLocation());
-						AFGBuildableWire* NewWire = World->SpawnActorDeferred<AFGBuildableWire>(Wire, WireT, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-						if (NewWire)
-						{
-							NewWire->SetBuiltWithRecipe(WireRecipe());
-							UGameplayStatics::FinishSpawningActor(NewWire, WireT);
-							if (NewWire->Connect(A, B2))
-							{
-								++Wired;
-								if (Proxy)
-								{
-									NewWire->SetBlueprintProxy(Proxy);
-									Proxy->RegisterBuildable(NewWire);
-								}
-							}
-							else
-							{
-								NewWire->Destroy();
-							}
-						}
-					}
-					// Vehicle path nodes left without segments (their segment took over the previous tile's node) go.
-					for (AFGVehiclePathNode* Node : Orphans)
-					{
-						if (IsValid(Node) && Node->GetArrivingConnections().Num() == 0 && Node->GetLeavingConnections().Num() == 0)
-						{
-							if (Proxy)
-							{
-								Proxy->UnregisterBuildable(Node);
-							}
-							Node->SetBlueprintProxy(nullptr);
-							Node->SetActorHiddenInGame(true);
-							IFGDismantleInterface::Execute_Dismantle(Node);
-						}
-					}
-					PrevPaths = MoveTemp(CurPaths);
-					PrevPower = MoveTemp(CurPower);
-					PrevEnds = MoveTemp(CurEnds);
-					Built += Spawned.Num() - Drop.Num();
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far"),
-						K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
-				}
-			}
-			// Vehicle paths were checked (which vehicles fit) as they spawned, before the rest of the placement and the
-			// links existed: checked again now that everything is there (the game does it in the background).
-			if (AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(World))
-			{
-				FBox Area(ForceInit);
-				for (const FRMFrame& F : S.Frames)
-				{
-					Area += F.Pos + F.Right * (S.HalfW + 1000.f);
-					Area += F.Pos - F.Right * (S.HalfW + 1000.f);
-				}
-				Area.Min.Z -= 1000.f;
-				Area.Max.Z += FMath::Max(S.Height, 400.f) + 1000.f;
-				Vehicles->InvalidateVehiclePathsInVolume(Area);
-				// And checked right away (a few seconds on, once the pieces' collision is ready) for the paths of this
-				// placement: a blueprint keeps the result made in the designer (e.g. red from the designer's own terminal
-				// next to the path), which the background re-check may not redo.
-				TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Paths;
-				for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
-				{
-					if (Area.IsInside(It->GetActorLocation()))
-					{
-						Paths.Add(*It);
-					}
-				}
-				FTimerHandle Handle;
-				World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([Paths]()
-				{
-					for (const TWeakObjectPtr<AFGVehiclePathSegment>& Path : Paths)
-					{
-						if (Path.IsValid() && !Path->IsActorBeingDestroyed())
-						{
-							Path->ImmediateRebuildPathValidationData();
-						}
-					}
-				}), 4.f, false);
-			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
-				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
+			// arrow come along too and go again (built above, bent). Spread over the next frames (see FTileJob).
+			TSharedPtr<FTileJob> Job = MakeShared<FTileJob>();
+			Job->S = S;
+			Job->World = World;
+			Job->Proxy = Proxy;
+			Job->Player = Player;
+			Job->Descriptor = Self->mBlueprintDescriptor;
+			Job->Tiles = AFGBlueprintSubsystem::Get(World) && Self->mBlueprintDescriptor ? Tiles : 0;
+			Job->OuterEnds = MoveTemp(OuterEnds);
+			Job->OuterPaths = MoveTemp(OuterPaths);
+			Job->OuterJoined = OuterJoined;
+			Job->Built = Built;
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
+			StartJob(Job);
 			return Proxy;
 		}
 

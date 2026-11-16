@@ -220,11 +220,32 @@ void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const
 {
 	Super::CopyCutSettingsTo(New);
 	ARMBuildableSignWall* Piece = Cast<ARMBuildableSignWall>(New);
-	if (Piece && mSign)
+	if (!Piece)
+	{
+		return;
+	}
+	if (mSign && (!mSign->mWall || mSign->mWall == this))
 	{
 		// The game's own copy (the same as copy settings / middle click), pasted on the piece's new sign.
 		Piece->mPendingDesign = IFGFactoryClipboardInterface::Execute_CopySettings(mSign);
 	}
+	else if (mBlueprintHasDesign)
+	{
+		// A wall of a blueprint (Road Mode stretches it over the curve): it has no sign of its own, only the
+		// design saved with the blueprint. The new wall gives it to its sign like a wall placed from the blueprint.
+		Piece->mBlueprintHasDesign = true;
+		Piece->mBlueprintLayout = mBlueprintLayout;
+		Piece->mBlueprintTexts = mBlueprintTexts;
+		Piece->mBlueprintIcons = mBlueprintIcons;
+		Piece->mBlueprintForeground = mBlueprintForeground;
+		Piece->mBlueprintBackground = mBlueprintBackground;
+		Piece->mBlueprintAuxiliary = mBlueprintAuxiliary;
+		Piece->mBlueprintEmissive = mBlueprintEmissive;
+		Piece->mBlueprintGlossiness = mBlueprintGlossiness;
+		Piece->mBlueprintSignType = mBlueprintSignType;
+	}
+	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s passes its design to %s (%s)"), *GetName(), *Piece->GetName(),
+		Piece->mPendingDesign ? TEXT("from its sign") : Piece->mBlueprintHasDesign ? TEXT("from the blueprint") : TEXT("none"));
 }
 
 float ARMBuildableSignWall::GetRepeatLength() const
