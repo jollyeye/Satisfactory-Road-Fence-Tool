@@ -134,6 +134,9 @@ namespace RMRoadTemplate
 			TArray<FRigid> Rigids;
 			TArray<FStretch> Stretches;
 			float RigidMaxX = -1.f; // furthest repeated object from the back edge (-1: none)
+			/** Where the game's loader puts a piece vs where the hologram shows it (road space): the hologram centres
+			 *  its preview on the blueprint's bounds, the loader does not. Added to what the loader spawns. */
+			FVector LoaderToPreview = FVector::ZeroVector;
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
@@ -401,6 +404,30 @@ namespace RMRoadTemplate
 			MeasureBox(Self, S);
 
 			int32 Stretched = 0, Repeated = 0;
+			{
+				// The loader places a blueprint-world piece at (its transform there) x (the origin); the hologram shows it at its root.
+				FVector Sum = FVector::ZeroVector;
+				FVector Min(TNumericLimits<float>::Max()), Max(-TNumericLimits<float>::Max());
+				int32 Count = 0;
+				for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
+				{
+					if (Pair.Key && Pair.Value)
+					{
+						const FVector Shown = S.RoadT.InverseTransformPosition(Pair.Value->GetComponentLocation());
+						const FVector Loaded = S.RoadT.InverseTransformPosition(S.StartT.TransformPosition(Pair.Key->GetActorLocation()));
+						const FVector D = Shown - Loaded;
+						Sum += D;
+						Min = Min.ComponentMin(D);
+						Max = Max.ComponentMax(D);
+						++Count;
+					}
+				}
+				if (Count > 0)
+				{
+					S.LoaderToPreview = Sum / Count;
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: loader to preview offset %s (spread %s)"), *S.LoaderToPreview.ToString(), *(Max - Min).ToString());
+				}
+			}
 			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
 			{
 				USceneComponent* Root = Pair.Value;
@@ -1106,7 +1133,8 @@ namespace RMRoadTemplate
 							{
 								return;
 							}
-							const FTransform Rel = B->GetActorTransform().GetRelativeTransform(S.RoadT);
+							FTransform Rel = B->GetActorTransform().GetRelativeTransform(S.RoadT);
+							Rel.AddToTranslation(S.LoaderToPreview); // where the hologram showed it
 							const FVector P = Rel.GetLocation();
 							if (B->IsA<ARMBuildableRoad>() || B->IsA<ARMBuildableFence>())
 							{
