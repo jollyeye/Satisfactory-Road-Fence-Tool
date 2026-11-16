@@ -909,8 +909,39 @@ namespace RMRoadTemplate
 			return Len;
 		}
 
-		/** Longest piece of a game spline built in one go; longer ones are split and joined. */
-		constexpr float MaxSplinePiece = 5000.f;
+		/**
+		 * Longest piece of a game spline the game lets you build in one go, read from its hologram (belts and pipes
+		 * 56 m, vehicle paths 100 m, rails their own); longer ones are split and joined. 50 m if not found.
+		 */
+		float MaxSplinePiece(UClass* BuildableClass)
+		{
+			static TMap<TWeakObjectPtr<UClass>, float> Cache;
+			if (const float* Found = Cache.Find(BuildableClass))
+			{
+				return *Found;
+			}
+			float Max = 5000.f;
+			const AFGBuildable* Cdo = BuildableClass ? GetDefault<AFGBuildable>(BuildableClass) : nullptr;
+			UClass* Holo = Cdo ? Cdo->mHologramClass.Get() : nullptr;
+			if (Holo)
+			{
+				for (const TCHAR* Name : { TEXT("mMaxSplineLength"), TEXT("mMaxLength"), TEXT("mMaxPathLength") })
+				{
+					if (const FFloatProperty* Prop = FindFProperty<FFloatProperty>(Holo, Name))
+					{
+						const float Value = Prop->GetPropertyValue_InContainer(Holo->GetDefaultObject());
+						if (Value > 100.f)
+						{
+							Max = Value - 10.f; // a hair under the limit
+							break;
+						}
+					}
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s pieces up to %.0f m (hologram %s)"), *GetNameSafe(BuildableClass), Max / 100.f, *GetNameSafe(Holo));
+			Cache.Add(BuildableClass, Max);
+			return Max;
+		}
 
 		/**
 		 * A full-length game spline over the whole curve: points every ~4 m in the way it runs (world), split into
@@ -945,7 +976,7 @@ namespace RMRoadTemplate
 			{
 				Total += FVector::Dist(Pos[I], Pos[I + 1]);
 			}
-			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(Total / MaxSplinePiece));
+			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(Total / MaxSplinePiece(R.Buildable.IsValid() ? R.Buildable->GetClass() : nullptr)));
 			for (int32 P = 0; P < Pieces; ++P)
 			{
 				const int32 First = FMath::RoundToInt(static_cast<float>(N) * P / Pieces);
@@ -1645,8 +1676,8 @@ namespace RMRoadTemplate
 				Built += New ? 1 : 0;
 			}
 
-			// Full-length belts, pipes, rails, hypertubes and vehicle paths: built over the whole curve, in pieces of at
-			// most MaxSplinePiece, each joined to the one before it (before it begins play).
+			// Full-length belts, pipes, rails, hypertubes and vehicle paths: built over the whole curve, in pieces no
+			// longer than the game allows for each (MaxSplinePiece), each joined to the one before it (before it begins play).
 			for (const FRigid& R : S.Rigids)
 			{
 				AFGBuildable* Source = R.Buildable.Get();
