@@ -65,6 +65,8 @@ protected:
 	const ARMBuildableFence* GetFenceDefaults() const;
 
 	/** Aiming at an intersection: follow the curved curb nearest the aim point, facing the centre. */
+	/** Fence walls only: the side of a Gap Fill nearest the aim (its outline split at corners), on the slab. */
+	bool SnapToFillSide(class ARMBuildableFill* Fill, const FVector& AimPoint);
 	bool SnapToIntersectionCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint);
 
 	/** Aiming at a foundation: the point being placed snaps to its grid, at its top. */

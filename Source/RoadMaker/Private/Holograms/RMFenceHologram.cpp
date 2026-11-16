@@ -4,6 +4,8 @@
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "Buildables/RMBuildableFill.h"
+#include "Algo/Reverse.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Equipment/FGBuildGunBuild.h"
@@ -35,7 +37,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	const ARMBuildableFence* AimedFence = Cast<ARMBuildableFence>(hitResult.GetActor());
 	const bool bStacking = AimedFence && AimedFence->IsWall() && GetFenceDefaults()->IsWall();
 	if (!mSnapToGuideLines && !bStacking && (AimedFence || Cast<ARMBuildableRoad>(hitResult.GetActor())
-		|| Cast<ARMBuildableIntersection>(hitResult.GetActor())))
+		|| Cast<ARMBuildableIntersection>(hitResult.GetActor()) || Cast<ARMBuildableFill>(hitResult.GetActor())))
 	{
 		return false;
 	}
@@ -98,6 +100,10 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 	if (ARMBuildableIntersection* X = Cast<ARMBuildableIntersection>(hitResult.GetActor()))
 	{
 		return SnapToIntersectionCurb(X, hitResult.Location);
+	}
+	if (ARMBuildableFill* Fill = Cast<ARMBuildableFill>(hitResult.GetActor()))
+	{
+		return GetFenceDefaults()->IsWall() && SnapToFillSide(Fill, hitResult.Location); // walls only: a fill is no road
 	}
 	ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	if (!Road)
@@ -680,6 +686,104 @@ void ARMFenceHologram::ConfigureActor(AFGBuildable* inBuildable) const
 		Fence->SetInwardSign(mInwardSign);
 	}
 	Super::ConfigureActor(inBuildable);
+}
+
+bool ARMFenceHologram::SnapToFillSide(ARMBuildableFill* Fill, const FVector& AimPoint)
+{
+	TArray<FVector> Ring;
+	Fill->GetWorldOutline(Ring);
+	const int32 N = Ring.Num();
+	if (N < 3)
+	{
+		return false;
+	}
+	// Wound so the inside is on each edge's +Right side (as an intersection's curbs).
+	float Area = 0.f;
+	for (int32 I = 0; I < N; ++I)
+	{
+		Area += Ring[I].X * Ring[(I + 1) % N].Y - Ring[(I + 1) % N].X * Ring[I].Y;
+	}
+	if (Area < 0.f)
+	{
+		Algo::Reverse(Ring);
+	}
+	// Corners: where the outline turns more than 35 degrees.
+	auto Dir = [&Ring, N](int32 I) { return FVector(Ring[(I + 1) % N] - Ring[I]).GetSafeNormal2D(); };
+	TArray<int32> Corners;
+	for (int32 I = 0; I < N; ++I)
+	{
+		if (FVector::DotProduct(Dir((I + N - 1) % N), Dir(I)) < FMath::Cos(FMath::DegreesToRadians(35.f)))
+		{
+			Corners.Add(I);
+		}
+	}
+	// The edge nearest the aim, and the side (corner to corner) it belongs to.
+	int32 Nearest = 0;
+	float Best = TNumericLimits<float>::Max();
+	for (int32 I = 0; I < N; ++I)
+	{
+		const FVector A = Ring[I], B = Ring[(I + 1) % N];
+		const FVector AB(B.X - A.X, B.Y - A.Y, 0.f);
+		const float T = FMath::Clamp(FVector::DotProduct(FVector(AimPoint.X - A.X, AimPoint.Y - A.Y, 0.f), AB) / FMath::Max(AB.SizeSquared(), 1.f), 0.f, 1.f);
+		const float D = FVector::DistSquared2D(A + (B - A) * T, AimPoint);
+		if (D < Best)
+		{
+			Best = D;
+			Nearest = I;
+		}
+	}
+	int32 First = 0, Last = N; // no corners: all the way round
+	if (Corners.Num() > 0)
+	{
+		First = Corners.Last();
+		for (int32 C : Corners)
+		{
+			if (C <= Nearest)
+			{
+				First = C;
+			}
+		}
+		Last = Corners[0] + N;
+		for (int32 C : Corners)
+		{
+			if (C > Nearest)
+			{
+				Last = C;
+				break;
+			}
+		}
+		if (First > Nearest)
+		{
+			First -= N; // the side runs over the start of the outline
+		}
+		if (Last <= First)
+		{
+			Last += N;
+		}
+	}
+	const float Inset = GetFenceDefaults()->mEdgeInset;
+	TArray<FVector> Inside;
+	for (int32 K = First; K <= Last; ++K)
+	{
+		const int32 I = ((K % N) + N) % N;
+		const FVector Prev = Ring[((I - 1) % N + N) % N];
+		const FVector Next = Ring[(I + 1) % N];
+		// At the side's ends, the direction of the side itself (not of the corner).
+		const FVector Fwd = (K == First ? FVector(Next - Ring[I]) : K == Last ? FVector(Ring[I] - Prev) : FVector(Next - Prev)).GetSafeNormal2D();
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
+		Inside.Add(Ring[I] + Right * Inset);
+	}
+	if (Inside.Num() < 2)
+	{
+		return false;
+	}
+	TArray<FRMSplinePoint> Points;
+	RMGeometry::SplineThroughPoints(Inside, Points);
+	mInwardSign = mFacingFlipped ? -1.f : 1.f; // scrolled: facing away from the fill
+	mOnRoadEdge = true;
+	mOnRoadOrCurb = true;
+	SetWorldPoints(Points);
+	return true;
 }
 
 bool ARMFenceHologram::SnapToIntersectionCurb(ARMBuildableIntersection* Intersection, const FVector& AimPoint)
