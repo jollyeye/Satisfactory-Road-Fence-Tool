@@ -25,6 +25,8 @@
 #include "FGCircuitConnectionComponent.h"
 #include "Buildables/FGBuildableWire.h"
 #include "Buildables/FGBuildablePowerPole.h"
+#include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "WheeledVehicles/FGVehiclePathNode.h"
 #include "FGBlueprintProxy.h"
 #include "FGBlueprintSubsystem.h"
 #include "FGDismantleInterface.h"
@@ -966,6 +968,14 @@ namespace RMRoadTemplate
 			return false;
 		}
 
+		/** A vehicle path end of a placed tile: where it is (world), its segment, start or end. */
+		struct FPathEnd
+		{
+			TWeakObjectPtr<AFGVehiclePathSegment> Seg;
+			FVector Pos = FVector::ZeroVector;
+			bool bStart = true;
+		};
+
 		/** A free spline end of a placed tile: where it is (world) and its connection. */
 		struct FSplineEnd
 		{
@@ -1468,11 +1478,14 @@ namespace RMRoadTemplate
 			if (Tiles > 0 && Blueprints && Self->mBlueprintDescriptor)
 			{
 				TArray<FSplineEnd> PrevEnds;
+				TArray<FPathEnd> PrevPaths;
 				TMap<const FRigid*, AFGBuildable*> PrevPower;
 				int32 Joined = 0, Wired = 0;
 				for (int32 K = 0; K < Tiles; ++K)
 				{
 					TArray<FSplineEnd> CurEnds;
+					TArray<FPathEnd> CurPaths;
+					TArray<AFGVehiclePathNode*> Orphans;
 					TMap<const FRigid*, AFGBuildable*> CurPower;
 					TArray<AFGBuildable*> Spawned;
 					TArray<AFGBuildable*> Drop;
@@ -1480,8 +1493,56 @@ namespace RMRoadTemplate
 					int32 Logged = 0;
 					// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
 					// made again just before they begin play.
-					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &Joined, K]()
+					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &CurPaths, &PrevPaths, &Orphans, &Joined, K]()
 					{
+						// Vehicle paths: a segment starting where the previous tile's one ends (or ending where it starts)
+						// takes over that node; its own node there is left without segments and goes after.
+						for (const FPathEnd& Cur : CurPaths)
+						{
+							AFGVehiclePathSegment* Seg = Cur.Seg.Get();
+							if (!Seg)
+							{
+								continue;
+							}
+							for (const FPathEnd& Prev : PrevPaths)
+							{
+								AFGVehiclePathSegment* PrevSeg = Prev.Seg.Get();
+								if (!PrevSeg || Prev.bStart == Cur.bStart || FVector::DistSquared(Cur.Pos, Prev.Pos) >= 400.f)
+								{
+									continue;
+								}
+								AFGVehiclePathNode* Shared = Prev.bStart ? PrevSeg->GetStartNode() : PrevSeg->GetEndNode();
+								AFGVehiclePathNode* Own = Cur.bStart ? Seg->GetStartNode() : Seg->GetEndNode();
+								if (!Shared || Shared == Own)
+								{
+									continue;
+								}
+								if (Cur.bStart)
+								{
+									Seg->SetNodeConnections(Shared, Seg->GetEndNode());
+									if (Own)
+									{
+										Own->RemoveLeavingConnection(Seg, false);
+									}
+									Shared->AddLeavingConnection(Seg);
+								}
+								else
+								{
+									Seg->SetNodeConnections(Seg->GetStartNode(), Shared);
+									if (Own)
+									{
+										Own->RemoveArrivingConnection(Seg, false);
+									}
+									Shared->AddArrivingConnection(Seg);
+								}
+								if (Own)
+								{
+									Orphans.AddUnique(Own);
+								}
+								++Joined;
+								break;
+							}
+						}
 						// Spline ends meeting the previous tile's free ends: joined before they begin play (like building a
 						// belt onto an existing one).
 						for (const FSplineEnd& Cur : CurEnds)
@@ -1511,7 +1572,7 @@ namespace RMRoadTemplate
 						}
 					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
-						[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPower, K](AFGBuildable* B, int32 Index)
+						[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
 						{
 							if (!B)
 							{
@@ -1556,6 +1617,14 @@ namespace RMRoadTemplate
 									{
 										TArray<FVector> Pos, Tan;
 										BendSpline(S, Rel, *Pts, K, Pos, Tan);
+										if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
+										{
+											if (Pos.Num() >= 2)
+											{
+												CurPaths.Add({ Path, Pos[0], true });
+												CurPaths.Add({ Path, Pos.Last(), false });
+											}
+										}
 										if (IFGSplineBuildableInterface* Ends = Cast<IFGSplineBuildableInterface>(B))
 										{
 											if (Pos.Num() >= 2)
@@ -1572,6 +1641,12 @@ namespace RMRoadTemplate
 											Pt.ArriveTangent = Target.InverseTransformVector(Tan[I]);
 											Pt.LeaveTangent = Pt.ArriveTangent;
 											Pts->Add(Pt);
+										}
+										// A vehicle path keeps checks made along its course (which vehicles fit): made again on the new one.
+										if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
+										{
+											const TArray<FSplinePointData> Bent = *Pts;
+											Path->SetSplinePointsAndValidatePath(Bent);
 										}
 									}
 								}
@@ -1639,6 +1714,20 @@ namespace RMRoadTemplate
 							}
 						}
 					}
+					// Vehicle path nodes left without segments (their segment took over the previous tile's node) go.
+					for (AFGVehiclePathNode* Node : Orphans)
+					{
+						if (IsValid(Node) && Node->GetArrivingConnections().Num() == 0 && Node->GetLeavingConnections().Num() == 0)
+						{
+							if (Proxy)
+							{
+								Proxy->UnregisterBuildable(Node);
+							}
+							Node->SetBlueprintProxy(nullptr);
+							Node->Destroy();
+						}
+					}
+					PrevPaths = MoveTemp(CurPaths);
 					PrevPower = MoveTemp(CurPower);
 					PrevEnds = MoveTemp(CurEnds);
 					Built += Spawned.Num() - Drop.Num();
