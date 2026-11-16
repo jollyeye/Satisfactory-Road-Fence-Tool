@@ -107,6 +107,7 @@ namespace RMRoadTemplate
 			bool bHasParent = false;  // a marking on a road that is repeated as it is: it goes where that road goes
 			FTransform ParentRel;     // that road, in road space
 			bool bLevel = true;       // kept level (buildings, machines, poles); splines and our road pieces tilt with the curve
+			bool bOnWall = false;     // a sign / wall attachment on a fence wall along the arrow (bLevel set by the wall rules)
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -538,6 +539,31 @@ namespace RMRoadTemplate
 				{
 					S.Hidden.Emplace(C, C->IsVisible());
 					C->SetVisibility(false, false);
+				}
+			}
+			// Signs and wall attachments on a fence wall running along the arrow: they follow the bent wall like the wall
+			// snapping places them (facing out of the wall, tilted with its slope; belt wall mounts and ladders level).
+			for (FRigid& R : S.Rigids)
+			{
+				const AFGBuildable* B = R.Buildable.Get();
+				if (!B || TiltsWithCurve(B))
+				{
+					continue;
+				}
+				const FVector P = R.Rel.GetLocation();
+				for (const FStretch& St : S.Stretches)
+				{
+					const ARMBuildableFence* Wall = Cast<ARMBuildableFence>(St.Piece.Get());
+					if (Wall && Wall->IsWall() && FMath::Abs(P.Y - S.Yc - St.Y) <= 60.f
+						&& P.X - S.X0 >= St.XMin - 10.f && P.X - S.X0 <= St.XMax + 10.f
+						&& P.Z - S.Zb >= St.Z - 50.f && P.Z - S.Zb <= St.Z + ARMBuildableFence::GetWallHeight() + 50.f)
+					{
+						const FString Name = B->GetClass()->GetName();
+						R.bLevel = (Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")))) || Name.Contains(TEXT("Ladder"));
+						R.bOnWall = true;
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s is on the wall %s: follows it%s"), *B->GetName(), *Wall->GetName(), R.bLevel ? TEXT(" (level)") : TEXT(""));
+						break;
+					}
 				}
 			}
 			// Markings on a road that is repeated as it is (a curved road in the blueprint) stay on it: they go where it goes.
@@ -1158,7 +1184,8 @@ namespace RMRoadTemplate
 								}
 							}
 							const bool bHasParent = Match && Match->bHasParent;
-							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity, !TiltsWithCurve(B));
+							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
+								Match ? Match->bLevel : !TiltsWithCurve(B));
 							if (Logged++ < 3)
 							{
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
