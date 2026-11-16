@@ -120,6 +120,7 @@ namespace RMRoadTemplate
 			bool bSplineBend = false; // a belt / pipe / rail / hypertube running straight along the arrow: bent with the curve
 			float SplineLen = 0.f;    // its length in the blueprint
 			TArray<FSplinePointData> SplinePoints; // its points (its actor's space)
+			bool bSplineFull = false; // ...and it runs the blueprint's whole length with both ends free: rebuilt over the whole curve
 			bool bChainPower = false; // a power pole / single wall outlet with no wire in the blueprint: wired to its copy on the next tile
 			/** Preview: per tile, the copies of its spline meshes and their sources. */
 			TArray<TArray<TPair<TWeakObjectPtr<USplineMeshComponent>, TWeakObjectPtr<USplineMeshComponent>>>> SplineCopies;
@@ -265,6 +266,41 @@ namespace RMRoadTemplate
 				}
 			}
 			return nullptr;
+		}
+
+		/** Whether a spline end is free in the blueprint (nothing connected to it). */
+		bool EndFree(UFGConnectionComponent* C)
+		{
+			if (UFGFactoryConnectionComponent* F = Cast<UFGFactoryConnectionComponent>(C))
+			{
+				return !F->IsConnected();
+			}
+			if (UFGPipeConnectionComponentBase* P = Cast<UFGPipeConnectionComponentBase>(C))
+			{
+				return !P->IsConnected();
+			}
+			if (UFGRailroadTrackConnectionComponent* R = Cast<UFGRailroadTrackConnectionComponent>(C))
+			{
+				return R->GetConnection() == nullptr;
+			}
+			return true;
+		}
+
+		/** Both ends of a game spline free in the blueprint (vehicle paths: their nodes lead nowhere else). */
+		bool SplineEndsFree(AActor* Actor)
+		{
+			if (const AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(Actor))
+			{
+				const AFGVehiclePathNode* A = Path->GetStartNode();
+				const AFGVehiclePathNode* B = Path->GetEndNode();
+				return (!A || A->GetArrivingConnections().Num() + A->GetLeavingConnections().Num() <= 1)
+					&& (!B || B->GetArrivingConnections().Num() + B->GetLeavingConnections().Num() <= 1);
+			}
+			if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(Actor))
+			{
+				return EndFree(Spline->GetSplineConnection0()) && EndFree(Spline->GetSplineConnection1());
+			}
+			return false;
 		}
 
 		void CopyLook(const UPrimitiveComponent* From, UPrimitiveComponent* To)
@@ -606,9 +642,13 @@ namespace RMRoadTemplate
 								R.bSplineBend = true;
 								R.SplineLen = FVector::Dist(A, B);
 								R.SplinePoints = Pts;
+								// The whole blueprint length, both ends free: rebuilt over the whole curve, not tiled.
+								R.bSplineFull = FMath::Min(A.X, B.X) <= S.X0 + 100.f && FMath::Max(A.X, B.X) >= S.X0 + S.L - 100.f
+									&& SplineEndsFree(Pair.Key.Get());
 							}
 							UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: spline %s, %d points, %.0f cm: %s"), *Pair.Key->GetName(), Pts.Num(),
-								FVector::Dist(A, B), bStraight ? TEXT("straight along the arrow, bent with the curve") : TEXT("repeated as it is"));
+								FVector::Dist(A, B), !bStraight ? TEXT("repeated as it is") : R.bSplineFull ? TEXT("rebuilt over the whole curve")
+								: TEXT("straight along the arrow, bent with the curve per tile"));
 						}
 					}
 					S.RigidMaxX = FMath::Max(S.RigidMaxX, R.Rel.GetLocation().X - S.X0);
@@ -817,9 +857,9 @@ namespace RMRoadTemplate
 		}
 
 		/** A road-space point of tile K on the curve, offset level across and straight up (like the level objects). */
-		FVector MapPointLevel(const FState& S, const FVector& P, int32 K, FRMFrame& OutF)
+		FVector MapPointLevel(const FState& S, const FVector& P, int32 K, FRMFrame& OutF, float Scale = 1.f)
 		{
-			OutF = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+			OutF = FrameAt(S.Frames, ((P.X - S.X0) + K * S.L) * Scale);
 			const FVector Right = FVector(OutF.Right.X, OutF.Right.Y, 0.f).GetSafeNormal();
 			return OutF.Pos + Right * (P.Y - S.Yc) + FVector::UpVector * (P.Z - S.Zb);
 		}
@@ -867,6 +907,64 @@ namespace RMRoadTemplate
 				OutTan.Add(Fwd[I] * Seg);
 			}
 			return Len;
+		}
+
+		/** Longest piece of a game spline built in one go; longer ones are split and joined. */
+		constexpr float MaxSplinePiece = 5000.f;
+
+		/**
+		 * A full-length game spline over the whole curve: points every ~4 m in the way it runs (world), split into
+		 * pieces of at most MaxSplinePiece. Returns its total length.
+		 */
+		float PlanFullSpline(const FState& S, const FRigid& R, TArray<TArray<FVector>>& OutPos, TArray<TArray<FVector>>& OutTan)
+		{
+			OutPos.Reset();
+			OutTan.Reset();
+			if (S.Frames.Num() < 2 || R.SplinePoints.Num() < 2)
+			{
+				return 0.f;
+			}
+			const FVector A = R.Rel.TransformPosition(R.SplinePoints[0].Location);
+			const FVector B = R.Rel.TransformPosition(R.SplinePoints.Last().Location);
+			const bool bForward = B.X >= A.X;
+			const float Len = S.Frames.Last().Dist;
+			const int32 N = FMath::Clamp(FMath::CeilToInt(Len / 400.f), 1, 4096);
+			TArray<FVector> Pos, Fwd;
+			for (int32 I = 0; I <= N; ++I)
+			{
+				const float Along = static_cast<float>(I) / N;               // in the way it runs
+				const float D = (bForward ? Along : 1.f - Along) * Len;       // along the curve
+				const FVector Off = FMath::Lerp(A, B, Along);                 // its offset across / up there
+				const FRMFrame F = FrameAt(S.Frames, D);
+				const FVector Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+				Pos.Add(F.Pos + Right * (Off.Y - S.Yc) + FVector::UpVector * (Off.Z - S.Zb));
+				Fwd.Add(bForward ? F.Fwd : -F.Fwd);
+			}
+			float Total = 0.f;
+			for (int32 I = 0; I < N; ++I)
+			{
+				Total += FVector::Dist(Pos[I], Pos[I + 1]);
+			}
+			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(Total / MaxSplinePiece));
+			for (int32 P = 0; P < Pieces; ++P)
+			{
+				const int32 First = FMath::RoundToInt(static_cast<float>(N) * P / Pieces);
+				const int32 Last = FMath::Max(First + 1, FMath::RoundToInt(static_cast<float>(N) * (P + 1) / Pieces));
+				TArray<FVector>& PP = OutPos.AddDefaulted_GetRef();
+				TArray<FVector>& TT = OutTan.AddDefaulted_GetRef();
+				for (int32 I = First; I <= Last && I <= N; ++I)
+				{
+					PP.Add(Pos[I]);
+				}
+				for (int32 I = 0; I < PP.Num(); ++I)
+				{
+					const float Before = I > 0 ? FVector::Dist(PP[I - 1], PP[I]) : 0.f;
+					const float After = I + 1 < PP.Num() ? FVector::Dist(PP[I], PP[I + 1]) : 0.f;
+					const float Seg = I == 0 ? After : I + 1 == PP.Num() ? Before : 0.5f * (Before + After);
+					TT.Add(Fwd[First + I] * Seg);
+				}
+			}
+			return Total;
 		}
 
 		/** How many copies of a shorter piece fit on a curve Len long (each tile L further on). */
@@ -1106,6 +1204,10 @@ namespace RMRoadTemplate
 						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
 						for (const FInventoryStack& Stack : Refund)
 						{
+							if (R.bSplineFull)
+							{
+								continue; // paid below, by its length over the whole curve
+							}
 							if (R.bSplineBend && R.SplineLen > 1.f)
 							{
 								// Bent splines are paid by their bent length, tile by tile.
@@ -1124,11 +1226,40 @@ namespace RMRoadTemplate
 					}
 				}
 			}
+			// Full-length game splines, rebuilt over the whole curve: paid by their length there.
+			for (const FRigid& R : S.Rigids)
+			{
+				AFGBuildable* B = R.Buildable.Get();
+				if (!B || !R.bSplineFull || R.SplineLen <= 1.f)
+				{
+					continue;
+				}
+				TArray<TArray<FVector>> Pos, Tan;
+				const float Total = PlanFullSpline(S, R, Pos, Tan);
+				TArray<FInventoryStack> Refund;
+				IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
+				for (const FInventoryStack& Stack : Refund)
+				{
+					Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * Total / R.SplineLen - 0.01f);
+				}
+			}
 			return Tiles;
 		}
 
+		bool HasFullSplines(const FState& S)
+		{
+			for (const FRigid& R : S.Rigids)
+			{
+				if (R.bSplineFull && R.Buildable.IsValid())
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/** Preview of a bent spline: per tile, its spline meshes copied and laid on the curve (other parts are not shown). */
-		void UpdateSplineTiles(AFGBlueprintHologram* Self, const FState& S, FRigid& R, USceneComponent* Src, int32 Count)
+		void UpdateSplineTiles(AFGBlueprintHologram* Self, const FState& S, FRigid& R, USceneComponent* Src, int32 Count, float Scale = 1.f)
 		{
 			for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
 			{
@@ -1184,8 +1315,8 @@ namespace RMRoadTemplate
 					}
 					const FTransform SrcRoad = SrcMesh->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					FRMFrame F0, F1;
-					const FVector P0 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetStartPosition()), K, F0);
-					const FVector P1 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetEndPosition()), K, F1);
+					const FVector P0 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetStartPosition()), K, F0, Scale);
+					const FVector P1 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetEndPosition()), K, F1, Scale);
 					const FVector T0 = MapDirLevel(F0, SrcRoad.TransformVector(SrcMesh->GetStartTangent()));
 					const FVector T1 = MapDirLevel(F1, SrcRoad.TransformVector(SrcMesh->GetEndTangent()));
 					const FTransform CopyT = Copy->GetComponentTransform();
@@ -1299,7 +1430,8 @@ namespace RMRoadTemplate
 				}
 				if (R.bSplineBend)
 				{
-					UpdateSplineTiles(Self, S, R, Src, Count);
+					// Full-length ones run over the whole curve (like our stretched roads), the others tile by tile.
+					UpdateSplineTiles(Self, S, R, Src, R.bSplineFull ? NFull : Count, R.bSplineFull ? FullScale : 1.f);
 					continue;
 				}
 				for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
@@ -1396,7 +1528,7 @@ namespace RMRoadTemplate
 			TArray<FPlan> Plans;
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
 			const int32 Tiles = MakePlans(Self, S, Plans, Cost);
-			if (!World || (Plans.Num() == 0 && Tiles == 0))
+			if (!World || (Plans.Num() == 0 && Tiles == 0 && !HasFullSplines(S)))
 			{
 				return false;
 			}
@@ -1434,7 +1566,7 @@ namespace RMRoadTemplate
 			TArray<FPlan> Plans;
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
 			const int32 Tiles = MakePlans(Self, S, Plans, Cost);
-			if (Plans.Num() == 0 && Tiles == 0)
+			if (Plans.Num() == 0 && Tiles == 0 && !HasFullSplines(S))
 			{
 				return nullptr;
 			}
@@ -1511,6 +1643,71 @@ namespace RMRoadTemplate
 					Proxy->RegisterBuildable(New);
 				}
 				Built += New ? 1 : 0;
+			}
+
+			// Full-length belts, pipes, rails, hypertubes and vehicle paths: built over the whole curve, in pieces of at
+			// most MaxSplinePiece, each joined to the one before it (before it begins play).
+			for (const FRigid& R : S.Rigids)
+			{
+				AFGBuildable* Source = R.Buildable.Get();
+				if (!Source || !R.bSplineFull)
+				{
+					continue;
+				}
+				TArray<TArray<FVector>> PiecePos, PieceTan;
+				PlanFullSpline(S, R, PiecePos, PieceTan);
+				AFGBuildable* Prev = nullptr;
+				for (int32 P = 0; P < PiecePos.Num(); ++P)
+				{
+					const TArray<FVector>& Pos = PiecePos[P];
+					const TArray<FVector>& Tan = PieceTan[P];
+					if (Pos.Num() < 2)
+					{
+						continue;
+					}
+					const FTransform T(FRotator(0.f, Tan[0].Rotation().Yaw, 0.f), Pos[0]);
+					AFGBuildable* New = World->SpawnActorDeferred<AFGBuildable>(Source->GetClass(), T, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+					if (!New)
+					{
+						continue;
+					}
+					New->SetBuiltWithRecipe(Source->GetBuiltWithRecipe());
+					New->SetCustomizationData_Native(Source->GetCustomizationData_Native());
+					TArray<FSplinePointData> Pts;
+					for (int32 I = 0; I < Pos.Num(); ++I)
+					{
+						FSplinePointData Pt;
+						Pt.Location = T.InverseTransformPosition(Pos[I]);
+						Pt.ArriveTangent = T.InverseTransformVector(Tan[I]);
+						Pt.LeaveTangent = Pt.ArriveTangent;
+						Pts.Add(Pt);
+					}
+					if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(New))
+					{
+						Path->SetSplinePointsAndValidatePath(Pts);
+						const AFGVehiclePathSegment* PrevPath = Cast<AFGVehiclePathSegment>(Prev);
+						Path->SetNodeConnections(PrevPath ? PrevPath->GetEndNode() : nullptr, nullptr);
+					}
+					else if (TArray<FSplinePointData>* Data = SplinePointsOf(New))
+					{
+						*Data = Pts;
+						IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(New);
+						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
+						if (Cur && Before)
+						{
+							JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+						}
+					}
+					UGameplayStatics::FinishSpawningActor(New, T);
+					if (Proxy)
+					{
+						New->SetBlueprintProxy(Proxy);
+						Proxy->RegisterBuildable(New);
+					}
+					Prev = New;
+					++Built;
+				}
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s rebuilt over the whole curve in %d pieces"), *Source->GetName(), PiecePos.Num());
 			}
 
 			// Everything else: the blueprint placed once per tile by the game's own loader, each piece moved onto the
@@ -1643,6 +1840,11 @@ namespace RMRoadTemplate
 									Match = &R;
 									break;
 								}
+							}
+							if (Match && Match->bSplineFull)
+							{
+								Drop.Add(B); // rebuilt over the whole curve instead
+								return;
 							}
 							const bool bHasParent = Match && Match->bHasParent;
 							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
