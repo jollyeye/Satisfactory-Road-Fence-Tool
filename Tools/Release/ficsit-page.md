@@ -115,6 +115,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Gap Fill: fills the gap between roads with road surface, at their height. Click road, walking path and intersection edges around the area in any order; they are cut where they cross or joined by straight lines, then click inside the shape to build. Takes the look of the first edge's road; fence walls snap to its sides.
 
+- Road Mode for blueprints: a new build mode on any blueprint. Click twice like a road and the blueprint is laid along the curve you draw, its arrow pointing the way. Roads, walking paths, fences, fence walls, lane markings, belts, pipes, rails, hypertubes and vehicle paths running straight along the arrow bend with the curve (the ones running the whole blueprint stretch over it); everything else repeats tile after tile, each piece at its own distance from the centre, so the outer side of a curve spreads more. Buildings, machines and poles stay level; signs and wall attachments on a bent fence wall follow it. Belts, pipes, rails and hypertubes are joined from tile to tile, and power poles and single wall outlets with no wire in the blueprint are wired to their copy on the next tile. Paid by what is built (bent pieces by length); the whole placement dismantles as one blueprint. Host / single player for now.
+
 **Fixed**
 - Map: until the map has been opened once, Road Maker looks for it once a second instead of four times, and afterwards only checks the map's own widgets (thanks scotthowson, issue #3).
 - Blueprints: Road Maker pieces now show in the blueprint hologram (with their paint; the sign gantry complete), lane markings are saved in blueprints, and sign walls keep their design.
