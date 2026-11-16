@@ -17,6 +17,8 @@
 #include "FGCentralStorageSubsystem.h"
 #include "Algo/Reverse.h"
 #include "FGBlueprintProxy.h"
+#include "FGBlueprintSubsystem.h"
+#include "FGDismantleInterface.h"
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -115,6 +117,7 @@ namespace RMRoadTemplate
 			TWeakObjectPtr<USceneComponent> Src;
 			FTransform Rel; // source root, relative to the hologram at the first click
 			TArray<TWeakObjectPtr<USceneComponent>> Tiles;
+			TWeakObjectPtr<AFGBuildable> Buildable; // in the blueprint's own world (for its cost)
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -127,6 +130,7 @@ namespace RMRoadTemplate
 			bool bReversed = false; // runs against the arrow
 			bool bFull = false;     // runs the blueprint's whole length: stretched; otherwise repeated per tile
 			float XMin = 0.f, XMax = 0.f; // where it runs along the blueprint, from its back edge
+			FVector RootLoc = FVector::ZeroVector; // its actor in road space (to find it among a placed blueprint's pieces)
 		};
 
 		struct FState
@@ -139,6 +143,8 @@ namespace RMRoadTemplate
 			TArray<FBent> Bents;
 			TArray<FRigid> Rigids;
 			TArray<FStretch> Stretches;
+			float RigidMaxX = -1.f; // furthest repeated object from the back edge (-1: none)
+			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
 		};
@@ -351,6 +357,8 @@ namespace RMRoadTemplate
 			S.X0 = Box.Min.X;
 			S.L = Box.GetSize().X;
 			S.Yc = Box.GetCenter().Y;
+			S.HalfW = Box.GetExtent().Y;
+			S.Height = Box.GetSize().Z;
 			S.Zb = Box.Min.Z;
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: blueprint box X %.0f..%.0f, Y %.0f..%.0f, floor %.0f (descriptor %dx%dx%d = %.0f cm long)"),
 				Box.Min.X, Box.Max.X, Box.Min.Y, Box.Max.Y, Box.Min.Z, Dim.X, Dim.Y, Dim.Z, DescL);
@@ -393,6 +401,7 @@ namespace RMRoadTemplate
 					Piece->GetWorldFrames(Own, 100.f);
 					FStretch St;
 					St.Piece = Piece;
+					St.RootLoc = RootRel.GetLocation();
 					St.Length = Own.Num() > 1 ? Own.Last().Dist : 0.f;
 					float FwdX = 0.f, MinAlign = 1.f, MinY = TNumericLimits<float>::Max(), MaxY = -TNumericLimits<float>::Max();
 					St.XMin = TNumericLimits<float>::Max();
@@ -446,6 +455,8 @@ namespace RMRoadTemplate
 					FRigid& R = S.Rigids.AddDefaulted_GetRef();
 					R.Src = Root;
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+					R.Buildable = Pair.Key.Get();
+					S.RigidMaxX = FMath::Max(S.RigidMaxX, R.Rel.GetLocation().X - S.X0);
 					++Repeated;
 				}
 				// The blueprint's own rigid preview goes away while drawing.
@@ -515,6 +526,17 @@ namespace RMRoadTemplate
 		{
 			int32 N = 0;
 			while (N < MaxTiles && St.XMax + N * S.L <= Len + 50.f)
+			{
+				++N;
+			}
+			return N;
+		}
+
+		/** How many tiles of the repeated objects fit whole on a curve Len long. */
+		int32 RigidTiles(const FState& S, float Len)
+		{
+			int32 N = 0;
+			while (S.RigidMaxX >= 0.f && N < MaxTiles && S.RigidMaxX + N * S.L <= Len + 50.f)
 			{
 				++N;
 			}
@@ -609,8 +631,9 @@ namespace RMRoadTemplate
 				}
 			}
 
-			// Repeated: each object stays rigid, placed at its own distance along and across the curve, tile after tile.
-			const int32 Count = FMath::Clamp(FMath::CeilToInt(Len / S.L), 1, MaxTiles);
+			// Repeated: each object stays rigid, placed at its own distance along and across the curve, tile after
+			// tile, whole tiles only (what gets built).
+			const int32 Count = RigidTiles(S, Len);
 			for (FRigid& R : S.Rigids)
 			{
 				USceneComponent* Src = R.Src.Get();
@@ -622,7 +645,7 @@ namespace RMRoadTemplate
 				for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
 				{
 					const float D = (P.X - S.X0) + K * S.L;
-					const bool bShow = K < Count && D <= Len + 1.f;
+					const bool bShow = K < Count;
 					if (K >= R.Tiles.Num())
 					{
 						if (!bShow)
@@ -766,7 +789,24 @@ namespace RMRoadTemplate
 					}
 				}
 			}
-			if (Plans.Num() == 0)
+			// The repeated objects: what each costs (its refund), once per tile.
+			const int32 Tiles = RigidTiles(S, Len);
+			if (Tiles > 0)
+			{
+				for (const FRigid& R : S.Rigids)
+				{
+					if (AFGBuildable* B = R.Buildable.Get())
+					{
+						TArray<FInventoryStack> Refund;
+						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
+						for (const FInventoryStack& Stack : Refund)
+						{
+							Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
+						}
+					}
+				}
+			}
+			if (Plans.Num() == 0 && Tiles == 0)
 			{
 				return false;
 			}
@@ -797,58 +837,109 @@ namespace RMRoadTemplate
 			const FVector StartPos = S.Frames[0].Pos;
 			const FTransform ProxyT(FRotator(0.f, S.Frames[0].Fwd.Rotation().Yaw, 0.f), StartPos);
 			FBox LocalBounds(ForceInit);
-			TArray<AFGBuildable*> Built;
+			for (const FRMFrame& F : S.Frames)
+			{
+				LocalBounds += ProxyT.InverseTransformPosition(F.Pos + F.Right * S.HalfW);
+				LocalBounds += ProxyT.InverseTransformPosition(F.Pos - F.Right * S.HalfW);
+			}
+			LocalBounds.Min.Z -= 100.f;
+			LocalBounds.Max.Z += FMath::Max(S.Height, 400.f);
+			AFGBlueprintProxy* Proxy = World->SpawnActorDeferred<AFGBlueprintProxy>(AFGBlueprintProxy::StaticClass(), ProxyT, nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (Proxy)
+			{
+				UClass* ProxyClass = AFGBlueprintProxy::StaticClass();
+				if (FProperty* NameProp = ProxyClass->FindPropertyByName(TEXT("mBlueprintName")))
+				{
+					*NameProp->ContainerPtrToValuePtr<FText>(Proxy) = Self->mBlueprintDescriptor
+						? FText::FromString(Self->mBlueprintDescriptor->GetBlueprintNameAsString()) : FText::FromString(TEXT("Road"));
+				}
+				if (FObjectProperty* DescProp = FindFProperty<FObjectProperty>(ProxyClass, TEXT("mBlueprintDescriptor")))
+				{
+					DescProp->SetObjectPropertyValue_InContainer(Proxy, Self->mBlueprintDescriptor);
+				}
+				if (FProperty* BoundsProp = ProxyClass->FindPropertyByName(TEXT("mLocalBounds")))
+				{
+					*BoundsProp->ContainerPtrToValuePtr<FBox>(Proxy) = LocalBounds;
+				}
+				UGameplayStatics::FinishSpawningActor(Proxy, ProxyT);
+				if (UBoxComponent* BoxComp = Proxy->GetBoundingBox())
+				{
+					BoxComp->SetRelativeLocation(LocalBounds.GetCenter());
+					BoxComp->SetBoxExtent(LocalBounds.GetExtent());
+				}
+			}
+
+			// Our pieces along the arrow: built along the curve.
+			int32 Built = 0;
 			for (FPlan& P : Plans)
 			{
 				ARMBuildableSpline* New = P.Piece->SpawnLike(P.Piece->GetClass(), P.Piece->GetBuiltWithRecipe(), P.Points, P.Mult,
 					ERMRevealFrom::Start, FVector::ZeroVector, World);
 				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: built %s (%d points, cost x%d)"), New ? *New->GetName() : TEXT("nothing"), P.Points.Num(), P.Mult);
-				if (New)
+				if (New && Proxy)
 				{
-					Built.Add(New);
-					for (const FRMSplinePoint& Pt : P.Points)
-					{
-						LocalBounds += ProxyT.InverseTransformPosition(Pt.Location);
-					}
+					New->SetBlueprintProxy(Proxy);
+					Proxy->RegisterBuildable(New);
 				}
+				Built += New ? 1 : 0;
 			}
-			if (Built.Num() > 0 && LocalBounds.IsValid)
+
+			// Everything else: the blueprint placed once per tile by the game's own loader, each piece moved onto the
+			// curve before it begins play (its distance along and across, turned with the curve). Our pieces along the
+			// arrow come along too and go again (built above, bent).
+			AFGBlueprintSubsystem* Blueprints = AFGBlueprintSubsystem::Get(World);
+			if (Tiles > 0 && Blueprints && Self->mBlueprintDescriptor)
 			{
-				LocalBounds = LocalBounds.ExpandBy(FVector(100.f, 500.f, 0.f));
-				LocalBounds.Min.Z -= 100.f;
-				LocalBounds.Max.Z += 400.f;
-				AFGBlueprintProxy* Proxy = World->SpawnActorDeferred<AFGBlueprintProxy>(AFGBlueprintProxy::StaticClass(), ProxyT, nullptr, nullptr,
-					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
-				if (Proxy)
+				for (int32 K = 0; K < Tiles; ++K)
 				{
-					UClass* ProxyClass = AFGBlueprintProxy::StaticClass();
-					if (FProperty* NameProp = ProxyClass->FindPropertyByName(TEXT("mBlueprintName")))
+					TArray<AFGBuildable*> Spawned;
+					TArray<AFGBuildable*> Drop;
+					int32 Logged = 0;
+					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
+						[&S, &Drop, &Logged, K](AFGBuildable* B, int32 Index)
+						{
+							if (!B)
+							{
+								return;
+							}
+							const FTransform Rel = B->GetActorTransform().GetRelativeTransform(S.RoadT);
+							const FVector P = Rel.GetLocation();
+							if (B->IsA<ARMBuildableRoad>() || B->IsA<ARMBuildableFence>())
+							{
+								for (const FStretch& St : S.Stretches)
+								{
+									if (St.Piece.IsValid() && St.Piece->GetClass() == B->GetClass() && FVector::DistSquared(St.RootLoc, P) < 2500.f)
+									{
+										Drop.Add(B);
+										return;
+									}
+								}
+							}
+							const float D = (P.X - S.X0) + K * S.L;
+							const FRMFrame F = FrameAt(S.Frames, D);
+							const FVector WorldPos = F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb);
+							const FQuat FrameRot = FMatrix(F.Fwd, F.Right, F.Up, FVector::ZeroVector).ToQuat();
+							if (Logged++ < 3)
+							{
+								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *WorldPos.ToString());
+							}
+							B->SetActorTransform(FTransform(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D()));
+						});
+					for (AFGBuildable* B : Drop)
 					{
-						*NameProp->ContainerPtrToValuePtr<FText>(Proxy) = Self->mBlueprintDescriptor
-							? FText::FromString(Self->mBlueprintDescriptor->GetBlueprintNameAsString()) : FText::FromString(TEXT("Road"));
+						if (Proxy)
+						{
+							Proxy->UnregisterBuildable(B);
+						}
+						B->SetBlueprintProxy(nullptr);
+						B->Destroy();
 					}
-					if (FObjectProperty* DescProp = FindFProperty<FObjectProperty>(ProxyClass, TEXT("mBlueprintDescriptor")))
-					{
-						DescProp->SetObjectPropertyValue_InContainer(Proxy, Self->mBlueprintDescriptor);
-					}
-					if (FProperty* BoundsProp = ProxyClass->FindPropertyByName(TEXT("mLocalBounds")))
-					{
-						*BoundsProp->ContainerPtrToValuePtr<FBox>(Proxy) = LocalBounds;
-					}
-					UGameplayStatics::FinishSpawningActor(Proxy, ProxyT);
-					if (UBoxComponent* BoxComp = Proxy->GetBoundingBox())
-					{
-						BoxComp->SetRelativeLocation(LocalBounds.GetCenter());
-						BoxComp->SetBoxExtent(LocalBounds.GetExtent());
-					}
-					for (AFGBuildable* B : Built)
-					{
-						B->SetBlueprintProxy(Proxy);
-						Proxy->RegisterBuildable(B);
-					}
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces under blueprint proxy %s"), Built.Num(), *Proxy->GetName());
+					Built += Spawned.Num() - Drop.Num();
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out)"), K, Spawned.Num() - Drop.Num(), Drop.Num());
 				}
 			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s"), Built, Proxy ? *Proxy->GetName() : TEXT("none"));
 			return true;
 		}
 
