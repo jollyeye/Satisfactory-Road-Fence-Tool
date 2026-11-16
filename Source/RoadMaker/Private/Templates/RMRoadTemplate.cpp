@@ -18,6 +18,7 @@
 #include "FGCentralStorageSubsystem.h"
 #include "Algo/Reverse.h"
 #include "Components/SplineComponent.h"
+#include "FGSplineBuildableInterface.h"
 #include "FGBlueprintProxy.h"
 #include "FGBlueprintSubsystem.h"
 #include "FGDismantleInterface.h"
@@ -108,6 +109,11 @@ namespace RMRoadTemplate
 			FTransform ParentRel;     // that road, in road space
 			bool bLevel = true;       // kept level (buildings, machines, poles); splines and our road pieces tilt with the curve
 			bool bOnWall = false;     // a sign / wall attachment on a fence wall along the arrow (bLevel set by the wall rules)
+			bool bSplineBend = false; // a belt / pipe / rail / hypertube running straight along the arrow: bent with the curve
+			float SplineLen = 0.f;    // its length in the blueprint
+			TArray<FSplinePointData> SplinePoints; // its points (its actor's space)
+			/** Preview: per tile, the copies of its spline meshes and their sources. */
+			TArray<TArray<TPair<TWeakObjectPtr<USplineMeshComponent>, TWeakObjectPtr<USplineMeshComponent>>>> SplineCopies;
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -508,6 +514,36 @@ namespace RMRoadTemplate
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					R.Buildable = Pair.Key.Get();
 					R.bLevel = !TiltsWithCurve(Pair.Key.Get());
+					// A game spline (belt, pipe, rail, hypertube) running straight along the arrow: bent with the curve.
+					if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(Pair.Key.Get()))
+					{
+						const TArray<FSplinePointData>& Pts = Spline->GetSplinePointData();
+						if (Pts.Num() >= 2)
+						{
+							const FVector A = R.Rel.TransformPosition(Pts[0].Location);
+							const FVector B = R.Rel.TransformPosition(Pts.Last().Location);
+							bool bStraight = FMath::Abs(B.X - A.X) > 50.f;
+							for (const FSplinePointData& Pt : Pts)
+							{
+								const FVector P = R.Rel.TransformPosition(Pt.Location);
+								const FVector T1 = R.Rel.TransformVector(Pt.ArriveTangent).GetSafeNormal();
+								const FVector T2 = R.Rel.TransformVector(Pt.LeaveTangent).GetSafeNormal();
+								if (FMath::Abs(P.Y - A.Y) > 30.f || FMath::Abs(P.Z - A.Z) > 30.f
+									|| (!T1.IsNearlyZero() && FMath::Abs(T1.X) < 0.98f) || (!T2.IsNearlyZero() && FMath::Abs(T2.X) < 0.98f))
+								{
+									bStraight = false;
+								}
+							}
+							if (bStraight)
+							{
+								R.bSplineBend = true;
+								R.SplineLen = FVector::Dist(A, B);
+								R.SplinePoints = Pts;
+							}
+							UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: spline %s, %d points, %.0f cm: %s"), *Pair.Key->GetName(), Pts.Num(),
+								FVector::Dist(A, B), bStraight ? TEXT("straight along the arrow, bent with the curve") : TEXT("repeated as it is"));
+						}
+					}
 					S.RigidMaxX = FMath::Max(S.RigidMaxX, R.Rel.GetLocation().X - S.X0);
 					// A marking lying along the arrow bends with the curve like the roads (shown bent; built in place
 					// with the road surface under it bent).
@@ -713,6 +749,59 @@ namespace RMRoadTemplate
 			return bHasParent ? Rel.GetRelativeTransform(ParentRel) * MapRigid(S, ParentRel, K, false) : MapRigid(S, Rel, K, bLevel);
 		}
 
+		/** A road-space point of tile K on the curve, offset level across and straight up (like the level objects). */
+		FVector MapPointLevel(const FState& S, const FVector& P, int32 K, FRMFrame& OutF)
+		{
+			OutF = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+			const FVector Right = FVector(OutF.Right.X, OutF.Right.Y, 0.f).GetSafeNormal();
+			return OutF.Pos + Right * (P.Y - S.Yc) + FVector::UpVector * (P.Z - S.Zb);
+		}
+
+		/** A road-space direction at frame F (along = the curve's direction, across level, up straight up). */
+		FVector MapDirLevel(const FRMFrame& F, const FVector& V)
+		{
+			const FVector Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
+			return F.Fwd * V.X + Right * V.Y + FVector::UpVector * V.Z;
+		}
+
+		/**
+		 * A straight game spline (points in its actor's space, Rel: its actor in road space) laid on tile K of the curve:
+		 * resampled every 4 m, tangents along the curve. World space. Returns its new length.
+		 */
+		float BendSpline(const FState& S, const FTransform& Rel, const TArray<FSplinePointData>& In, int32 K, TArray<FVector>& OutPos, TArray<FVector>& OutTan)
+		{
+			OutPos.Reset();
+			OutTan.Reset();
+			if (In.Num() < 2)
+			{
+				return 0.f;
+			}
+			const FVector A = Rel.TransformPosition(In[0].Location);
+			const FVector B = Rel.TransformPosition(In.Last().Location);
+			const int32 N = FMath::Clamp(FMath::CeilToInt(FVector::Dist(A, B) / 400.f), 1, 64);
+			const float Sign = B.X >= A.X ? 1.f : -1.f;
+			TArray<FVector> Fwd;
+			for (int32 I = 0; I <= N; ++I)
+			{
+				FRMFrame F;
+				OutPos.Add(MapPointLevel(S, FMath::Lerp(A, B, static_cast<float>(I) / N), K, F));
+				Fwd.Add(F.Fwd * Sign);
+			}
+			float Len = 0.f;
+			for (int32 I = 0; I < N; ++I)
+			{
+				Len += FVector::Dist(OutPos[I], OutPos[I + 1]);
+			}
+			for (int32 I = 0; I <= N; ++I)
+			{
+				const float Before = I > 0 ? FVector::Dist(OutPos[I - 1], OutPos[I]) : 0.f;
+				const float After = I < N ? FVector::Dist(OutPos[I], OutPos[I + 1]) : 0.f;
+				const float Seg = I == 0 ? After : I == N ? Before : 0.5f * (Before + After);
+				OutTan.Add(Fwd[I] * Seg);
+			}
+			return Len;
+		}
+
 		/** How many copies of a shorter piece fit on a curve Len long (each tile L further on). */
 		int32 TilesFitting(const FState& S, const FStretch& St, float Len)
 		{
@@ -833,12 +922,93 @@ namespace RMRoadTemplate
 						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
 						for (const FInventoryStack& Stack : Refund)
 						{
-							Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
+							if (R.bSplineBend && R.SplineLen > 1.f)
+							{
+								// Bent splines are paid by their bent length, tile by tile.
+								for (int32 K = 0; K < Tiles; ++K)
+								{
+									TArray<FVector> Pos, Tan;
+									const float Len = BendSpline(S, R.Rel, R.SplinePoints, K, Pos, Tan);
+									Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * Len / R.SplineLen - 0.01f);
+								}
+							}
+							else
+							{
+								Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
+							}
 						}
 					}
 				}
 			}
 			return Tiles;
+		}
+
+		/** Preview of a bent spline: per tile, its spline meshes copied and laid on the curve (other parts are not shown). */
+		void UpdateSplineTiles(AFGBlueprintHologram* Self, const FState& S, FRigid& R, USceneComponent* Src, int32 Count)
+		{
+			for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
+			{
+				const bool bShow = K < Count;
+				if (K >= R.Tiles.Num())
+				{
+					if (!bShow)
+					{
+						break;
+					}
+					USceneComponent* TileRoot = NewObject<USceneComponent>(Self);
+					TileRoot->SetupAttachment(Self->GetRootComponent());
+					TileRoot->RegisterComponent();
+					TileRoot->SetWorldTransform(FTransform::Identity);
+					auto& Pairs = R.SplineCopies.AddDefaulted_GetRef();
+					TArray<USceneComponent*> Children;
+					Src->GetChildrenComponents(true, Children);
+					for (USceneComponent* C : Children)
+					{
+						USplineMeshComponent* SrcMesh = Cast<USplineMeshComponent>(C);
+						if (!SrcMesh)
+						{
+							continue;
+						}
+						USplineMeshComponent* Copy = Cast<USplineMeshComponent>(CopyMesh(Self, SrcMesh));
+						if (Copy)
+						{
+							Copy->SetupAttachment(TileRoot);
+							Copy->SetRelativeTransform(FTransform::Identity);
+							Copy->RegisterComponent();
+							Pairs.Emplace(SrcMesh, Copy);
+						}
+					}
+					R.Tiles.Add(TileRoot);
+				}
+				USceneComponent* Tile = R.Tiles[K].Get();
+				if (!Tile)
+				{
+					continue;
+				}
+				Tile->SetVisibility(bShow, true);
+				if (!bShow || !R.SplineCopies.IsValidIndex(K))
+				{
+					continue;
+				}
+				for (const TPair<TWeakObjectPtr<USplineMeshComponent>, TWeakObjectPtr<USplineMeshComponent>>& Pair : R.SplineCopies[K])
+				{
+					USplineMeshComponent* SrcMesh = Pair.Key.Get();
+					USplineMeshComponent* Copy = Pair.Value.Get();
+					if (!SrcMesh || !Copy)
+					{
+						continue;
+					}
+					const FTransform SrcRoad = SrcMesh->GetComponentTransform().GetRelativeTransform(S.RoadT);
+					FRMFrame F0, F1;
+					const FVector P0 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetStartPosition()), K, F0);
+					const FVector P1 = MapPointLevel(S, SrcRoad.TransformPosition(SrcMesh->GetEndPosition()), K, F1);
+					const FVector T0 = MapDirLevel(F0, SrcRoad.TransformVector(SrcMesh->GetStartTangent()));
+					const FVector T1 = MapDirLevel(F1, SrcRoad.TransformVector(SrcMesh->GetEndTangent()));
+					const FTransform CopyT = Copy->GetComponentTransform();
+					Copy->SetStartAndEnd(CopyT.InverseTransformPosition(P0), CopyT.InverseTransformVector(T0),
+						CopyT.InverseTransformPosition(P1), CopyT.InverseTransformVector(T1), true);
+				}
+			}
 		}
 
 		void Update(AFGBlueprintHologram* Self, FState& S, const FVector& End)
@@ -937,6 +1107,11 @@ namespace RMRoadTemplate
 				USceneComponent* Src = R.Src.Get();
 				if (!Src || R.bBentPreview)
 				{
+					continue;
+				}
+				if (R.bSplineBend)
+				{
+					UpdateSplineTiles(Self, S, R, Src, Count);
 					continue;
 				}
 				for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
@@ -1189,6 +1364,27 @@ namespace RMRoadTemplate
 							if (Logged++ < 3)
 							{
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
+							}
+							// A straight game spline: its points laid on the curve (before it begins play, which builds its mesh).
+							if (Match && Match->bSplineBend)
+							{
+								if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(B))
+								{
+									if (TArray<FSplinePointData>* Pts = Spline->GetMutableSplinePointData())
+									{
+										TArray<FVector> Pos, Tan;
+										BendSpline(S, Rel, *Pts, K, Pos, Tan);
+										Pts->Reset();
+										for (int32 I = 0; I < Pos.Num(); ++I)
+										{
+											FSplinePointData Pt;
+											Pt.Location = Target.InverseTransformPosition(Pos[I]);
+											Pt.ArriveTangent = Target.InverseTransformVector(Tan[I]);
+											Pt.LeaveTangent = Pt.ArriveTangent;
+											Pts->Add(Pt);
+										}
+									}
+								}
 							}
 							// A marking along the arrow: the road surface under it follows the curve too.
 							if (ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(B))
