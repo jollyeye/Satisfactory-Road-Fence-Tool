@@ -18,6 +18,7 @@
 #include "FGGameState.h"
 #include "FGCentralStorageSubsystem.h"
 #include "Algo/Reverse.h"
+#include "EngineUtils.h"
 #include "Components/SplineComponent.h"
 #include "FGSplineBuildableInterface.h"
 #include "FGFactoryConnectionComponent.h"
@@ -1670,6 +1671,83 @@ namespace RMRoadTemplate
 			}
 		}
 
+		/**
+		 * Free spline ends already in the world near the curve's start and end (other placements' belts, pipes, rails,
+		 * hypertubes and vehicle paths): the new placement's pieces whose free ends meet them (within 20 cm, same kind)
+		 * are linked to them, like pieces between tiles.
+		 */
+		void GatherOuterEnds(UWorld* World, const FState& S, TArray<FSplineEnd>& OutEnds, TArray<FPathEnd>& OutPaths)
+		{
+			if (!World || S.Frames.Num() < 2)
+			{
+				return;
+			}
+			const FVector Junctions[2] = { S.Frames[0].Pos, S.Frames.Last().Pos };
+			const float Reach = S.HalfW + 1000.f;
+			auto Near = [&](const FVector& P)
+			{
+				return FVector::DistSquared(P, Junctions[0]) < Reach * Reach || FVector::DistSquared(P, Junctions[1]) < Reach * Reach;
+			};
+			for (TActorIterator<AFGBuildable> It(World); It; ++It)
+			{
+				AFGBuildable* B = *It;
+				if (B->IsActorBeingDestroyed() || B->GetIsDismantled())
+				{
+					continue;
+				}
+				if (AFGVehiclePathSegment* Path = Cast<AFGVehiclePathSegment>(B))
+				{
+					const USplineComponent* Spline = Path->GetSplineComponent();
+					if (!Spline || Spline->GetNumberOfSplinePoints() < 2)
+					{
+						continue;
+					}
+					const FVector A = Spline->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
+					const FVector E = Spline->GetLocationAtSplinePoint(Spline->GetNumberOfSplinePoints() - 1, ESplineCoordinateSpace::World);
+					if (Near(A))
+					{
+						OutPaths.Add({ Path, A, true });
+					}
+					if (Near(E))
+					{
+						OutPaths.Add({ Path, E, false });
+					}
+					continue;
+				}
+				IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(B);
+				const USplineComponent* Comp = Spline ? Spline->GetSplineComponent() : nullptr;
+				if (!Comp || Comp->GetNumberOfSplinePoints() < 2)
+				{
+					continue;
+				}
+				const FVector A = Comp->GetLocationAtSplinePoint(0, ESplineCoordinateSpace::World);
+				const FVector E = Comp->GetLocationAtSplinePoint(Comp->GetNumberOfSplinePoints() - 1, ESplineCoordinateSpace::World);
+				if (Near(A) && EndFree(Spline->GetSplineConnection0()))
+				{
+					OutEnds.Add({ Spline->GetSplineConnection0(), A });
+				}
+				if (Near(E) && EndFree(Spline->GetSplineConnection1()))
+				{
+					OutEnds.Add({ Spline->GetSplineConnection1(), E });
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d free spline ends and %d vehicle path ends of other placements near the ends"), OutEnds.Num(), OutPaths.Num());
+		}
+
+		/** The outer end at Pos (within 20 cm) a connection of the new placement can link to, else null. */
+		UFGConnectionComponent* OuterAt(const TArray<FSplineEnd>& Outer, const FVector& Pos, const UFGConnectionComponent* Mine)
+		{
+			for (const FSplineEnd& O : Outer)
+			{
+				UFGConnectionComponent* C = O.Conn.Get();
+				if (C && Mine && C->GetClass() == Mine->GetClass() && FVector::DistSquared(O.Pos, Pos) < 400.f && EndFree(C))
+				{
+					return C;
+				}
+			}
+			return nullptr;
+		}
+
 		/** A marking moved onto the curve (Rel: where it was, in road space; Target: where it goes): its drape bent along the curve. */
 		void BendMarking(const FState& S, int32 K, ARMBuildableMarking* Marking, const FTransform& Rel, const FTransform& Target)
 		{
@@ -1814,6 +1892,12 @@ namespace RMRoadTemplate
 				}
 			}
 
+			// Other placements' free ends at this one's ends (gathered before anything new is spawned).
+			TArray<FSplineEnd> OuterEnds;
+			TArray<FPathEnd> OuterPaths;
+			GatherOuterEnds(World, S, OuterEnds, OuterPaths);
+			int32 OuterJoined = 0;
+
 			// The Blueprint Road: the placement's centre line, as wide as the blueprint, hidden (Road Mode / dismantle only).
 			int32 Built = 0;
 			{
@@ -1906,7 +1990,28 @@ namespace RMRoadTemplate
 					{
 						Path->SetSplinePointsAndValidatePath(Pts);
 						const AFGVehiclePathSegment* PrevPath = Cast<AFGVehiclePathSegment>(Prev);
-						Path->SetNodeConnections(PrevPath ? PrevPath->GetEndNode() : nullptr, nullptr);
+						// Another placement's path ending where this one starts / starting where it ends: shared node.
+						AFGVehiclePathNode* StartNode = PrevPath ? PrevPath->GetEndNode() : nullptr;
+						AFGVehiclePathNode* EndNode = nullptr;
+						for (const FPathEnd& O : OuterPaths)
+						{
+							const AFGVehiclePathSegment* OSeg = O.Seg.Get();
+							if (!OSeg)
+							{
+								continue;
+							}
+							if (P == 0 && !StartNode && !O.bStart && FVector::DistSquared(O.Pos, Pos[0]) < 400.f)
+							{
+								StartNode = OSeg->GetEndNode();
+								++OuterJoined;
+							}
+							else if (P == PiecePos.Num() - 1 && !EndNode && O.bStart && FVector::DistSquared(O.Pos, Pos.Last()) < 400.f)
+							{
+								EndNode = OSeg->GetStartNode();
+								++OuterJoined;
+							}
+						}
+						Path->SetNodeConnections(StartNode, EndNode);
 					}
 					else if (TArray<FSplinePointData>* Data = SplinePointsOf(New))
 					{
@@ -1928,7 +2033,42 @@ namespace RMRoadTemplate
 							}
 						}
 					}
+					// Another placement's free end at this piece's first / last point: linked (pipes, rails, hypertubes before
+					// they begin play; belts once built, like between pieces).
+					IFGSplineBuildableInterface* AsSpline = Cast<IFGSplineBuildableInterface>(New);
+					const bool bBelt = AsSpline && Cast<UFGFactoryConnectionComponent>(AsSpline->GetSplineConnection0()) != nullptr;
+					auto JoinOuter = [&]()
+					{
+						if (!AsSpline)
+						{
+							return;
+						}
+						if (P == 0)
+						{
+							UFGConnectionComponent* Mine = AsSpline->GetSplineConnection0();
+							if (UFGConnectionComponent* Outer = OuterAt(OuterEnds, Pos[0], Mine))
+							{
+								OuterJoined += JoinEnds(Mine, Outer) ? 1 : 0;
+							}
+						}
+						if (P == PiecePos.Num() - 1)
+						{
+							UFGConnectionComponent* Mine = AsSpline->GetSplineConnection1();
+							if (UFGConnectionComponent* Outer = OuterAt(OuterEnds, Pos.Last(), Mine))
+							{
+								OuterJoined += JoinEnds(Mine, Outer) ? 1 : 0;
+							}
+						}
+					};
+					if (!bBelt && AsSpline && AsSpline->GetSplineConnection0())
+					{
+						JoinOuter();
+					}
 					UGameplayStatics::FinishSpawningActor(New, T);
+					if (bBelt || (AsSpline && !AsSpline->GetSplineConnection0()))
+					{
+						JoinOuter();
+					}
 					if (bJoinAfter)
 					{
 						IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(New);
@@ -1969,7 +2109,7 @@ namespace RMRoadTemplate
 					int32 Logged = 0;
 					// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
 					// made again just before they begin play.
-					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &CurPaths, &PrevPaths, &Orphans, &Joined, K]()
+					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &CurPaths, &PrevPaths, &Orphans, &Joined, &OuterEnds, &OuterPaths, &OuterJoined, K]()
 					{
 						// Vehicle paths: a segment starting where the previous tile's one ends (or ending where it starts)
 						// takes over that node; its own node there is left without segments and goes after.
@@ -1980,7 +2120,9 @@ namespace RMRoadTemplate
 							{
 								continue;
 							}
-							for (const FPathEnd& Prev : PrevPaths)
+							TArray<FPathEnd> Candidates = PrevPaths;
+							Candidates.Append(OuterPaths);
+							for (const FPathEnd& Prev : Candidates)
 							{
 								AFGVehiclePathSegment* PrevSeg = Prev.Seg.Get();
 								if (!PrevSeg || Prev.bStart == Cur.bStart || FVector::DistSquared(Cur.Pos, Prev.Pos) >= 400.f)
@@ -2023,12 +2165,25 @@ namespace RMRoadTemplate
 						// belt onto an existing one).
 						for (const FSplineEnd& Cur : CurEnds)
 						{
+							bool bDone = false;
 							for (const FSplineEnd& Prev : PrevEnds)
 							{
 								if (FVector::DistSquared(Cur.Pos, Prev.Pos) < 400.f && JoinEnds(Cur.Conn.Get(), Prev.Conn.Get()))
 								{
 									++Joined;
+									bDone = true;
 									break;
+								}
+							}
+							// Or another placement's free end there.
+							if (!bDone)
+							{
+								if (UFGConnectionComponent* Outer = OuterAt(OuterEnds, Cur.Pos, Cur.Conn.Get()))
+								{
+									if (JoinEnds(Cur.Conn.Get(), Outer))
+									{
+										++OuterJoined;
+									}
 								}
 							}
 						}
@@ -2235,7 +2390,8 @@ namespace RMRoadTemplate
 						K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s"), Built, Proxy ? *Proxy->GetName() : TEXT("none"));
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
+				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
 			return Proxy;
 		}
 
