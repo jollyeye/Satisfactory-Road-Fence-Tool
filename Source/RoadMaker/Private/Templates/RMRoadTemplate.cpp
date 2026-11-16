@@ -529,26 +529,44 @@ namespace RMRoadTemplate
 					continue;
 				}
 				const FVector At = Marking->GetActorLocation();
-				const FRigid* Best = nullptr;
-				float BestD = TNumericLimits<float>::Max();
-				for (const FRigid& Other : S.Rigids)
+				// The road it lies on: the nearest road surface under it (within the road's width, beside a frame).
+				auto Under = [&At](const ARMBuildableRoad* Road, float& InOutBestD) -> bool
 				{
-					const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Other.Buildable.Get());
 					if (!Road)
 					{
-						continue;
+						return false;
 					}
+					bool bCloser = false;
 					TArray<FRMFrame> Frames;
 					Road->GetWorldFrames(Frames, 50.f);
 					for (const FRMFrame& F : Frames)
 					{
 						const FVector Off = At - F.Pos;
-						if (FMath::Abs(FVector::DotProduct(Off, F.Right)) <= Road->GetRoadWidth() * 0.5f + 20.f && FMath::Abs(Off.Z) < 150.f
-							&& Off.SizeSquared() < BestD)
+						if (FMath::Abs(FVector::DotProduct(Off, F.Fwd)) <= 40.f
+							&& FMath::Abs(FVector::DotProduct(Off, F.Right)) <= Road->GetRoadWidth() * 0.5f + 20.f
+							&& FMath::Abs(Off.Z) < 150.f && Off.SizeSquared() < InOutBestD)
 						{
-							BestD = Off.SizeSquared();
-							Best = &Other;
+							InOutBestD = Off.SizeSquared();
+							bCloser = true;
 						}
+					}
+					return bCloser;
+				};
+				const FRigid* Best = nullptr;
+				float BestD = TNumericLimits<float>::Max();
+				for (const FRigid& Other : S.Rigids)
+				{
+					if (Under(Cast<ARMBuildableRoad>(Other.Buildable.Get()), BestD))
+					{
+						Best = &Other;
+					}
+				}
+				// On a road along the arrow (bent with the curve): it bends with it, no parent.
+				for (const FStretch& St : S.Stretches)
+				{
+					if (Under(Cast<ARMBuildableRoad>(St.Piece.Get()), BestD))
+					{
+						Best = nullptr;
 					}
 				}
 				if (Best)
