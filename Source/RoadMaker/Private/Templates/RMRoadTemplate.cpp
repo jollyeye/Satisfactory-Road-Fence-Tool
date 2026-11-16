@@ -2076,6 +2076,18 @@ namespace RMRoadTemplate
 				// grid, like the start. Anywhere it did not move it (or put it far from the aim), the aim point.
 				const FVector Placed = Self->GetActorLocation();
 				const bool bPlaced = !Placed.Equals(S->StartT.GetLocation(), 1.f) && FVector::Dist2D(Placed, Hit.Location) < 2000.f;
+				{
+					// Diagnostics, once a second while drawing: what the aim hits and where the game placed the blueprint.
+					static double LastLog = 0.0;
+					const double Now = FPlatformTime::Seconds();
+					if (Now - LastLog > 1.0)
+					{
+						LastLog = Now;
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: aim hits %s (%s) at %s, blocking %d; game placed it at %s (start %s), used: %s"),
+							*GetNameSafe(Hit.GetActor()), Hit.GetActor() ? *Hit.GetActor()->GetClass()->GetName() : TEXT("-"), *Hit.Location.ToString(),
+							Hit.bBlockingHit ? 1 : 0, *Placed.ToString(), *S->StartT.GetLocation().ToString(), bPlaced ? TEXT("placed") : TEXT("aim"));
+					}
+				}
 				Self->SetActorTransform(S->StartT);
 				RMRoadMode::Update(Self, *S, bPlaced ? Placed : Hit.Location);
 			});
