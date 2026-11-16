@@ -1730,13 +1730,16 @@ namespace RMRoadTemplate
 						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
 						if (Cur && Before)
 						{
-							if (Cur->GetSplineConnection0())
+							// Belts are joined just before they begin play (their connections are set up by their Blueprint during
+							// construction, which would undo an earlier join); the others right away.
+							UFGConnectionComponent* Conn0 = Cur->GetSplineConnection0();
+							if (Conn0 && !Cast<UFGFactoryConnectionComponent>(Conn0))
 							{
-								JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+								JoinEnds(Conn0, Before->GetSplineConnection1());
 							}
 							else
 							{
-								GPendingJoins.Add(New, Prev); // joined once its components exist, before it begins play
+								GPendingJoins.Add(New, Prev);
 							}
 						}
 					}
@@ -2313,8 +2316,15 @@ namespace RMRoadTemplate
 				{
 					IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(Self);
 					IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev.Get());
-					const bool bJoined = Cur && Before && RMRoadMode::JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s before begin play: %d"), *Self->GetName(), *GetNameSafe(Prev.Get()), bJoined ? 1 : 0);
+					UFGConnectionComponent* A = Cur ? Cur->GetSplineConnection0() : nullptr;
+					UFGConnectionComponent* B = Before ? Before->GetSplineConnection1() : nullptr;
+					const UFGFactoryConnectionComponent* FA = Cast<UFGFactoryConnectionComponent>(A);
+					const UFGFactoryConnectionComponent* FB = Cast<UFGFactoryConnectionComponent>(B);
+					const bool bJoined = RMRoadMode::JoinEnds(A, B);
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s before begin play: %d (%s %s dir %d connected %d / %s %s dir %d connected %d)"),
+						*Self->GetName(), *GetNameSafe(Prev.Get()), bJoined ? 1 : 0,
+						*GetNameSafe(A), A ? *A->GetClass()->GetName() : TEXT("-"), FA ? static_cast<int32>(FA->GetDirection()) : -1, FA && FA->IsConnected() ? 1 : 0,
+						*GetNameSafe(B), B ? *B->GetClass()->GetName() : TEXT("-"), FB ? static_cast<int32>(FB->GetDirection()) : -1, FB && FB->IsConnected() ? 1 : 0);
 				}
 			});
 		// Road Mode placing a tile: each piece finishes spawning (and is drawn) where it goes on the curve.
