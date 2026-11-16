@@ -107,6 +107,7 @@ namespace RMRoadTemplate
 			TWeakObjectPtr<UProceduralMeshComponent> Src;
 			FTransform Rel; // source mesh, relative to the hologram at the first click
 			TArray<TWeakObjectPtr<UProceduralMeshComponent>> Tiles;
+			int32 Stretch = INDEX_NONE; // its piece in FState::Stretches
 		};
 
 		struct FRigid
@@ -116,7 +117,7 @@ namespace RMRoadTemplate
 			TArray<TWeakObjectPtr<USceneComponent>> Tiles;
 		};
 
-		/** One of our pieces running the blueprint's whole length: built along the drawn curve at its own offset. */
+		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
 		struct FStretch
 		{
 			TWeakObjectPtr<ARMBuildableSpline> Piece;
@@ -124,6 +125,8 @@ namespace RMRoadTemplate
 			float Z = 0.f;      // up, from the blueprint's floor
 			float Length = 0.f; // its length in the blueprint
 			bool bReversed = false; // runs against the arrow
+			bool bFull = false;     // runs the blueprint's whole length: stretched; otherwise repeated per tile
+			float XMin = 0.f, XMax = 0.f; // where it runs along the blueprint, from its back edge
 		};
 
 		struct FState
@@ -366,7 +369,6 @@ namespace RMRoadTemplate
 			S.StartT = Self->GetActorTransform();
 			MeasureBox(Self, S);
 
-			const FRMRoadTemplate T = RMRoadTemplate::Read(Self);
 			int32 Stretched = 0, Repeated = 0;
 			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
 			{
@@ -378,52 +380,54 @@ namespace RMRoadTemplate
 				TArray<USceneComponent*> Children;
 				Root->GetChildrenComponents(true, Children);
 
-				// Ours, running the blueprint's whole length: bent along the curve.
-				bool bStretch = false;
-				if (T.Sources.Contains(Pair.Key.Get()))
+				// Our roads, paths and fences running straight along the arrow bend with the curve: stretched over it
+				// when they run the blueprint's whole length, repeated tile after tile (and bent) when shorter.
+				int32 StretchIndex = INDEX_NONE;
+				ARMBuildableSpline* Piece = Cast<ARMBuildableSpline>(Pair.Key.Get());
+				if (Piece && (Piece->IsA<ARMBuildableRoad>() || Piece->IsA<ARMBuildableFence>()))
 				{
-					FBox Span(ForceInit);
-					for (USceneComponent* C : Children)
+					// Its course in road space: the root stands for the piece's actor.
+					const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+					const FTransform PieceT = Piece->GetActorTransform();
+					TArray<FRMFrame> Own;
+					Piece->GetWorldFrames(Own, 100.f);
+					FStretch St;
+					St.Piece = Piece;
+					St.Length = Own.Num() > 1 ? Own.Last().Dist : 0.f;
+					float FwdX = 0.f, MinAlign = 1.f, MinY = TNumericLimits<float>::Max(), MaxY = -TNumericLimits<float>::Max();
+					St.XMin = TNumericLimits<float>::Max();
+					St.XMax = -TNumericLimits<float>::Max();
+					for (const FRMFrame& F : Own)
 					{
-						if (UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C))
-						{
-							Span += Proc->CalcBounds(Proc->GetComponentTransform().GetRelativeTransform(S.RoadT)).GetBox();
-						}
+						const FVector P = RootRel.TransformPosition(PieceT.InverseTransformPosition(F.Pos));
+						const float Fx = RootRel.TransformVectorNoScale(PieceT.InverseTransformVectorNoScale(F.Fwd)).X;
+						St.Y += P.Y - S.Yc;
+						St.Z += P.Z - S.Zb;
+						FwdX += Fx;
+						MinAlign = FMath::Min(MinAlign, FMath::Abs(Fx));
+						MinY = FMath::Min(MinY, P.Y);
+						MaxY = FMath::Max(MaxY, P.Y);
+						St.XMin = FMath::Min(St.XMin, P.X - S.X0);
+						St.XMax = FMath::Max(St.XMax, P.X - S.X0);
 					}
-					bStretch = Span.IsValid && Span.Min.X <= S.X0 + 100.f && Span.Max.X >= S.X0 + S.L - 100.f;
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s spans X %.0f..%.0f: %s"), *Pair.Key->GetName(),
-						Span.IsValid ? Span.Min.X : 0.f, Span.IsValid ? Span.Max.X : 0.f, bStretch ? TEXT("stretched") : TEXT("repeated"));
-				}
-				if (bStretch)
-				{
-					if (ARMBuildableSpline* Piece = Cast<ARMBuildableSpline>(Pair.Key.Get()))
+					if (Own.Num() > 1)
 					{
-						// Its course in road space: the root stands for the piece's actor.
-						const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
-						const FTransform PieceT = Piece->GetActorTransform();
-						TArray<FRMFrame> Own;
-						Piece->GetWorldFrames(Own, 100.f);
-						FStretch St;
-						St.Piece = Piece;
-						St.Length = Own.Num() > 1 ? Own.Last().Dist : 0.f;
-						float FwdX = 0.f;
-						for (const FRMFrame& F : Own)
-						{
-							const FVector P = RootRel.TransformPosition(PieceT.InverseTransformPosition(F.Pos));
-							St.Y += P.Y - S.Yc;
-							St.Z += P.Z - S.Zb;
-							FwdX += RootRel.TransformVectorNoScale(PieceT.InverseTransformVectorNoScale(F.Fwd)).X;
-						}
-						if (Own.Num() > 0)
-						{
-							St.Y /= Own.Num();
-							St.Z /= Own.Num();
-						}
+						St.Y /= Own.Num();
+						St.Z /= Own.Num();
 						St.bReversed = FwdX < 0.f;
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   %s %.0f cm across, %.0f cm up, %.0f cm long%s"), *Piece->GetName(),
-							St.Y, St.Z, St.Length, St.bReversed ? TEXT(", runs against the arrow") : TEXT(""));
-						S.Stretches.Add(St);
+						const bool bAlong = MinAlign > 0.98f && MaxY - MinY <= 50.f;
+						St.bFull = bAlong && St.XMin <= 100.f && St.XMax >= S.L - 100.f;
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s %.0f cm across, %.0f cm up, X %.0f..%.0f of %.0f%s: %s"), *Piece->GetName(),
+							St.Y, St.Z, St.XMin, St.XMax, S.L, St.bReversed ? TEXT(", runs against the arrow") : TEXT(""),
+							!bAlong ? TEXT("not along the arrow, repeated as it is") : St.bFull ? TEXT("stretched") : TEXT("repeated, bent with the curve"));
+						if (bAlong)
+						{
+							StretchIndex = S.Stretches.Add(St);
+						}
 					}
+				}
+				if (StretchIndex != INDEX_NONE)
+				{
 					for (USceneComponent* C : Children)
 					{
 						UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C);
@@ -432,6 +436,7 @@ namespace RMRoadTemplate
 							FBent& B = S.Bents.AddDefaulted_GetRef();
 							B.Src = Proc;
 							B.Rel = Proc->GetComponentTransform().GetRelativeTransform(S.RoadT);
+							B.Stretch = StretchIndex;
 						}
 					}
 					++Stretched;
@@ -505,6 +510,17 @@ namespace RMRoadTemplate
 			return TileRoot;
 		}
 
+		/** How many copies of a shorter piece fit on a curve Len long (each tile L further on). */
+		int32 TilesFitting(const FState& S, const FStretch& St, float Len)
+		{
+			int32 N = 0;
+			while (N < MaxTiles && St.XMax + N * S.L <= Len + 50.f)
+			{
+				++N;
+			}
+			return N;
+		}
+
 		void Update(AFGBlueprintHologram* Self, FState& S, const FVector& End)
 		{
 			if (FVector::DistSquared(End, S.LastEnd) < 25.f)
@@ -533,15 +549,19 @@ namespace RMRoadTemplate
 			};
 
 			// Stretched: whole tiles bent along the curve, scaled a little so they end exactly at the aim.
-			const int32 N = FMath::Clamp(FMath::RoundToInt(Len / S.L), 1, MaxTiles);
-			const float Scale = Len / (N * S.L);
+			// Shorter ones: one per tile, bent, not scaled, as many as fit.
+			const int32 NFull = FMath::Clamp(FMath::RoundToInt(Len / S.L), 1, MaxTiles);
+			const float FullScale = Len / (NFull * S.L);
 			for (FBent& B : S.Bents)
 			{
 				UProceduralMeshComponent* Src = B.Src.Get();
-				if (!Src)
+				if (!Src || !S.Stretches.IsValidIndex(B.Stretch))
 				{
 					continue;
 				}
+				const FStretch& St = S.Stretches[B.Stretch];
+				const int32 N = St.bFull ? NFull : TilesFitting(S, St, Len);
+				const float Scale = St.bFull ? FullScale : 1.f;
 				for (int32 K = 0; K < FMath::Max(N, B.Tiles.Num()); ++K)
 				{
 					if (K >= B.Tiles.Num())
@@ -677,6 +697,24 @@ namespace RMRoadTemplate
 			};
 			TArray<FPlan> Plans;
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+			// A stretch of the curve from D0 to D1 (cm along it), its frames re-counted from 0.
+			auto SubFrames = [&S](float D0, float D1, TArray<FRMFrame>& Out)
+			{
+				Out.Reset();
+				Out.Add(FrameAt(S.Frames, D0));
+				for (const FRMFrame& F : S.Frames)
+				{
+					if (F.Dist > D0 + 1.f && F.Dist < D1 - 1.f)
+					{
+						Out.Add(F);
+					}
+				}
+				Out.Add(FrameAt(S.Frames, D1));
+				for (FRMFrame& F : Out)
+				{
+					F.Dist -= D0;
+				}
+			};
 			for (const FStretch& St : S.Stretches)
 			{
 				ARMBuildableSpline* Piece = St.Piece.Get();
@@ -684,28 +722,47 @@ namespace RMRoadTemplate
 				{
 					continue;
 				}
-				FPlan& P = Plans.AddDefaulted_GetRef();
-				P.Piece = Piece;
-				RMGeometry::OffsetCurve(S.Frames, St.Y, 400.f, P.Points);
-				for (FRMSplinePoint& Pt : P.Points)
+				TArray<TPair<float, float>> Spans;
+				if (St.bFull)
 				{
-					Pt.Location.Z += St.Z;
+					Spans.Emplace(0.f, Len);
 				}
-				if (St.bReversed)
+				else
 				{
-					Algo::Reverse(P.Points);
-					for (FRMSplinePoint& Pt : P.Points)
+					const int32 N = TilesFitting(S, St, Len);
+					for (int32 K = 0; K < N; ++K)
 					{
-						Pt.Tangent = -Pt.Tangent;
+						Spans.Emplace(St.XMin + K * S.L, FMath::Min(St.XMax + K * S.L, Len));
 					}
 				}
-				// Paid like the piece in the blueprint, by length.
-				P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * Len / FMath::Max(St.Length, 1.f) - 0.01f));
-				if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
+				for (const TPair<float, float>& Span : Spans)
 				{
-					for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
+					TArray<FRMFrame> Sub;
+					SubFrames(Span.Key, Span.Value, Sub);
+					FPlan& P = Plans.AddDefaulted_GetRef();
+					P.Piece = Piece;
+					RMGeometry::OffsetCurve(Sub, St.Y, 400.f, P.Points);
+					for (FRMSplinePoint& Pt : P.Points)
 					{
-						Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
+						Pt.Location.Z += St.Z;
+					}
+					if (St.bReversed)
+					{
+						Algo::Reverse(P.Points);
+						for (FRMSplinePoint& Pt : P.Points)
+						{
+							Pt.Tangent = -Pt.Tangent;
+						}
+					}
+					// Paid like the piece in the blueprint, by length.
+					const float SpanLen = Span.Value - Span.Key;
+					P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * SpanLen / FMath::Max(St.Length, 1.f) - 0.01f));
+					if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
+					{
+						for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
+						{
+							Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
+						}
 					}
 				}
 			}
