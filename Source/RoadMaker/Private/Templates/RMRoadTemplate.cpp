@@ -151,6 +151,10 @@ namespace RMRoadTemplate
 
 		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FState> GStates;
 
+		/** While Road Mode places a tile: where each spawned piece goes. The game's loader finishes spawning every piece at
+		 *  its blueprint place (which also draws it there); the hook on AActor::FinishSpawning swaps in these. */
+		TMap<AActor*, FTransform> GPendingMoves;
+
 		constexpr int32 MaxTiles = 48;
 
 		FRMFrame FrameAt(const TArray<FRMFrame>& Frames, float D)
@@ -928,9 +932,6 @@ namespace RMRoadTemplate
 									*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
 							}
 							M.Key->SetActorTransform(M.Value);
-							// Their meshes were handed to the game's instance managers when they registered, at the
-							// blueprint place: registered again, at the new one.
-							M.Key->ReregisterAllComponents();
 						}
 					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
@@ -963,9 +964,15 @@ namespace RMRoadTemplate
 							}
 							const FTransform Target(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D());
 							Moves.Emplace(B, Target);
+							GPendingMoves.Add(B, Target);
 							B->SetActorTransform(Target);
 						},
 						ApplyMoves);
+					GPendingMoves.Reset();
+					if (Moves.Num() > 0 && IsValid(Moves[0].Key))
+					{
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
+					}
 					for (AFGBuildable* B : Drop)
 					{
 						if (Proxy)
@@ -1140,6 +1147,22 @@ namespace RMRoadTemplate
 					{
 						RMRoadMode::Stop(Self);
 					}
+				}
+			});
+		// Road Mode placing a tile: each piece finishes spawning (and is drawn) where it goes on the curve.
+		SUBSCRIBE_METHOD(AActor::FinishSpawning,
+			[](auto& Scope, AActor* Self, const FTransform& Transform, bool bIsDefaultTransform,
+				const FComponentInstanceDataCache* InstanceDataCache, ESpawnActorScaleMethod ScaleMethod)
+			{
+				if (RMRoadMode::GPendingMoves.Num() == 0)
+				{
+					return;
+				}
+				if (const FTransform* Target = RMRoadMode::GPendingMoves.Find(Self))
+				{
+					const FTransform Moved = *Target;
+					RMRoadMode::GPendingMoves.Remove(Self);
+					Scope(Self, Moved, false, InstanceDataCache, ScaleMethod);
 				}
 			});
 		// While drawing, the hologram's cost grows with the drawn curve: the blueprint's cost once per tile of length
