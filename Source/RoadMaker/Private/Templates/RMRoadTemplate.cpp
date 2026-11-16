@@ -1874,7 +1874,10 @@ namespace RMRoadTemplate
 					{
 						continue;
 					}
-					const FTransform T(FRotator(0.f, Tan[0].Rotation().Yaw, 0.f), Pos[0]);
+					// Anchored at its middle: the game hides a spline piece by the distance to its anchor, so one anchored at
+					// its start vanished early when walked towards from its far end.
+					const int32 Mid = Pos.Num() / 2;
+					const FTransform T(FRotator(0.f, Tan[Mid].Rotation().Yaw, 0.f), Pos[Mid]);
 					AFGBuildable* New = World->SpawnActorDeferred<AFGBuildable>(Source->GetClass(), T, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 					if (!New)
 					{
