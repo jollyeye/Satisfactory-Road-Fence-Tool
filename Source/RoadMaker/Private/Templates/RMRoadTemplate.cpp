@@ -2404,6 +2404,28 @@ namespace RMRoadTemplate
 				Area.Min.Z -= 1000.f;
 				Area.Max.Z += FMath::Max(S.Height, 400.f) + 1000.f;
 				Vehicles->InvalidateVehiclePathsInVolume(Area);
+				// And checked right away (a few seconds on, once the pieces' collision is ready) for the paths of this
+				// placement: a blueprint keeps the result made in the designer (e.g. red from the designer's own terminal
+				// next to the path), which the background re-check may not redo.
+				TArray<TWeakObjectPtr<AFGVehiclePathSegment>> Paths;
+				for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
+				{
+					if (Area.IsInside(It->GetActorLocation()))
+					{
+						Paths.Add(*It);
+					}
+				}
+				FTimerHandle Handle;
+				World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([Paths]()
+				{
+					for (const TWeakObjectPtr<AFGVehiclePathSegment>& Path : Paths)
+					{
+						if (Path.IsValid() && !Path->IsActorBeingDestroyed())
+						{
+							Path->ImmediateRebuildPathValidationData();
+						}
+					}
+				}), 4.f, false);
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
 				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
