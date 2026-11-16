@@ -223,6 +223,52 @@ namespace RMRoadTemplate
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
 
+		/** Timing of one tile's loading by kind of work and class (logged after the tile, the slowest first). */
+		bool GProfiling = false;
+		double GProfLast = 0.0;
+		TMap<FString, double> GProfTimes;
+		void ProfAdd(const FString& Key, double Seconds)
+		{
+			GProfTimes.FindOrAdd(Key) += Seconds;
+		}
+		/** In the loader's callback: the time since the last one went into spawning this piece; its own time is ours. */
+		struct FProfCallback
+		{
+			double Start;
+			explicit FProfCallback(const AActor* B)
+			{
+				Start = FPlatformTime::Seconds();
+				if (GProfiling && B)
+				{
+					ProfAdd(FString(TEXT("spawn ")) + B->GetClass()->GetName(), Start - GProfLast);
+				}
+			}
+			~FProfCallback()
+			{
+				GProfLast = FPlatformTime::Seconds();
+				if (GProfiling)
+				{
+					ProfAdd(TEXT("our callback"), GProfLast - Start);
+				}
+			}
+		};
+		void ProfLog(int32 K)
+		{
+			GProfTimes.ValueSort([](double A, double B) { return A > B; });
+			FString Line;
+			int32 N = 0;
+			for (const TPair<FString, double>& P : GProfTimes)
+			{
+				if (N++ >= 12)
+				{
+					break;
+				}
+				Line += FString::Printf(TEXT("%s%s %.1f"), Line.IsEmpty() ? TEXT("") : TEXT(", "), *P.Key, P.Value * 1000.0);
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d time (ms): %s"), K, *Line);
+			GProfTimes.Reset();
+		}
+
 		/** Moves a placed building. Its components are static (buildings never move), which makes a plain move do
 		 *  nothing once they are registered: made movable for the move, static again after. */
 		void MoveBuilding(AActor* Actor, const FTransform& T)
@@ -2015,9 +2061,13 @@ namespace RMRoadTemplate
 				}
 			};
 			const double LoadStart = FPlatformTime::Seconds();
+			GProfiling = true;
+			GProfLast = LoadStart;
+			GProfTimes.Reset();
 			Blueprints->LoadStoredBlueprint(Descriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
 				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
 				{
+					const FProfCallback Prof(B);
 					if (!B)
 					{
 						return;
@@ -2122,9 +2172,19 @@ namespace RMRoadTemplate
 					GPendingMoves.Add(B, Target);
 					MoveBuilding(B, Target);
 				},
-				ApplyMoves);
+				[&ApplyMoves]()
+				{
+					ProfAdd(TEXT("loader before begin play (after the last piece)"), FPlatformTime::Seconds() - GProfLast);
+					const double T0 = FPlatformTime::Seconds();
+					ApplyMoves();
+					ProfAdd(TEXT("our joins and moves"), FPlatformTime::Seconds() - T0);
+					GProfLast = FPlatformTime::Seconds();
+				});
+			ProfAdd(TEXT("loader after begin play"), FPlatformTime::Seconds() - GProfLast);
+			GProfiling = false;
 			GPendingMoves.Reset();
 			const double LoadMs = (FPlatformTime::Seconds() - LoadStart) * 1000.0;
+			ProfLog(K);
 			if (Moves.Num() > 0 && IsValid(Moves[0].Key))
 			{
 				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
@@ -2952,6 +3012,14 @@ namespace RMRoadTemplate
 					Scope.Cancel(); // a suppressed tile copy never begins play
 					return;
 				}
+				if (RMRoadMode::GProfiling)
+				{
+					// Timed (inside the loader's own time, and inside finish spawning if it begins play there: also counted there).
+					const double T0 = FPlatformTime::Seconds();
+					Scope(Self, bFromLevelStreaming);
+					RMRoadMode::ProfAdd(FString(TEXT("  (begin play ")) + Self->GetClass()->GetName() + TEXT(")"), FPlatformTime::Seconds() - T0);
+					return;
+				}
 				if (RMRoadMode::GPendingJoins.Num() == 0)
 				{
 					return;
@@ -2979,9 +3047,26 @@ namespace RMRoadTemplate
 			{
 				if (RMRoadMode::GSuppressed.Num() > 0 && RMRoadMode::GSuppressed.Contains(Self))
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s not spawned (rebuilt over the whole curve)"), *Self->GetName());
+					const double T0 = FPlatformTime::Seconds();
 					Scope.Cancel();
 					Self->Destroy();
+					if (RMRoadMode::GProfiling)
+					{
+						RMRoadMode::ProfAdd(TEXT("  (destroying left-out copies)"), FPlatformTime::Seconds() - T0);
+					}
+					return;
+				}
+				if (RMRoadMode::GProfiling)
+				{
+					const double T0 = FPlatformTime::Seconds();
+					const FTransform* Target = RMRoadMode::GPendingMoves.Find(Self);
+					const FTransform Use = Target ? *Target : Transform;
+					if (Target)
+					{
+						RMRoadMode::GPendingMoves.Remove(Self);
+					}
+					Scope(Self, Use, Target ? false : bIsDefaultTransform, InstanceDataCache, ScaleMethod);
+					RMRoadMode::ProfAdd(FString(TEXT("  (finish spawning ")) + Self->GetClass()->GetName() + TEXT(")"), FPlatformTime::Seconds() - T0);
 					return;
 				}
 				if (RMRoadMode::GPendingMoves.Num() == 0)
