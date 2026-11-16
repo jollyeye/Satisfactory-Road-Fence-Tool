@@ -16,7 +16,7 @@ namespace
 {
 	TWeakObjectPtr<AActor> GWireActor;
 
-	bool AimPoint(UWorld* World, FVector& Out)
+	bool WireAimPoint(UWorld* World, FVector& Out)
 	{
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 		if (!PC)
@@ -34,7 +34,7 @@ namespace
 	}
 
 	/** A line as two thin crossing strips (seen from any side). */
-	void AddLine(const FVector& A, const FVector& B, float Half, const FLinearColor& Color,
+	void AddWireLine(const FVector& A, const FVector& B, float Half, const FLinearColor& Color,
 		TArray<FVector>& V, TArray<int32>& T, TArray<FLinearColor>& C)
 	{
 		const FVector Dir = (B - A).GetSafeNormal();
@@ -79,7 +79,7 @@ namespace
 				return;
 			}
 			FVector At;
-			if (!World || !AimPoint(World, At))
+			if (!World || !WireAimPoint(World, At))
 			{
 				return;
 			}
@@ -145,7 +145,7 @@ namespace
 								{
 									continue;
 								}
-								AddLine(PA, PB, Half, Colors[M.Value], V, T, C);
+								AddWireLine(PA, PB, Half, Colors[M.Value], V, T, C);
 								if (++Edges >= 60000)
 								{
 									bCapped = true;
