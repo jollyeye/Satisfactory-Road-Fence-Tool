@@ -155,6 +155,27 @@ namespace RMRoadTemplate
 		 *  its blueprint place (which also draws it there); the hook on AActor::FinishSpawning swaps in these. */
 		TMap<AActor*, FTransform> GPendingMoves;
 
+		/** Moves a placed building. Its components are static (buildings never move), which makes a plain move do
+		 *  nothing once they are registered: made movable for the move, static again after. */
+		void MoveBuilding(AActor* Actor, const FTransform& T)
+		{
+			TArray<USceneComponent*> Statics;
+			TInlineComponentArray<USceneComponent*> Comps(Actor);
+			for (USceneComponent* C : Comps)
+			{
+				if (C->Mobility == EComponentMobility::Static)
+				{
+					C->SetMobility(EComponentMobility::Movable);
+					Statics.Add(C);
+				}
+			}
+			Actor->SetActorTransform(T);
+			for (USceneComponent* C : Statics)
+			{
+				C->SetMobility(EComponentMobility::Static);
+			}
+		}
+
 		constexpr int32 MaxTiles = 48;
 
 		FRMFrame FrameAt(const TArray<FRMFrame>& Frames, float D)
@@ -931,7 +952,7 @@ namespace RMRoadTemplate
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
 									*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
 							}
-							M.Key->SetActorTransform(M.Value);
+							MoveBuilding(M.Key, M.Value);
 						}
 					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
@@ -965,7 +986,7 @@ namespace RMRoadTemplate
 							const FTransform Target(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D());
 							Moves.Emplace(B, Target);
 							GPendingMoves.Add(B, Target);
-							B->SetActorTransform(Target);
+							MoveBuilding(B, Target);
 						},
 						ApplyMoves);
 					GPendingMoves.Reset();
