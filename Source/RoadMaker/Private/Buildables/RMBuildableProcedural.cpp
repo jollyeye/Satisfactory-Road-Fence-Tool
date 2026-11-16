@@ -2,6 +2,7 @@
 #include "Hologram/FGBlueprintHologram.h"
 #include "Buildables/FGBuildableBlueprintDesigner.h"
 #include "Holograms/RMHologramLook.h"
+#include "Templates/RMRoadTemplate.h"
 #include "RMSound.h"
 #include "RoadMakerModule.h"
 #include "FGFactoryColoringTypes.h"
@@ -102,6 +103,7 @@ void ARMBuildableProcedural::ShowInBlueprintHologram(AFGBlueprintHologram* Holog
 	{
 		Piece->RebuildMesh();
 	}
+	RMRoadTemplate::NotePiece(Hologram, Piece); // for Road Mode (the blueprint read as a road template)
 	const FTransform ActorT = Piece->GetActorTransform();
 	TArray<UProceduralMeshComponent*> Sources;
 	for (int32 Chunk = 0; Chunk < Piece->GetBuiltChunkCount(); ++Chunk)

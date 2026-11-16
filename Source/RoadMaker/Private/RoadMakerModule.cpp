@@ -70,6 +70,7 @@ struct FRMHologramAccess : public AFGHologram
 
 #if !WITH_EDITOR
 namespace RMMapLayer { void InstallHooks(); }
+#include "Templates/RMRoadTemplate.h"
 #endif
 
 void FRoadMakerModule::StartupModule()
@@ -90,6 +91,7 @@ void FRoadMakerModule::StartupModule()
 
 	// Road layer on the game map (1.3.0).
 	RMMapLayer::InstallHooks();
+	RMRoadTemplate::InstallHooks();
 
 	// Our sign icons (chevrons...) in the game's icon database.
 	URMIconLibraryTools::RegisterLibrary();

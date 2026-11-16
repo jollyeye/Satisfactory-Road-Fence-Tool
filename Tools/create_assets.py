@@ -340,6 +340,12 @@ setp(cdo(bm_cut_fences), text("Cut also fences"), "m_display_name", "mDisplayNam
 setp(cdo(bm_cut_fences), text("Also cuts this road's fences at the same place: road fences standing on it and fence walls on its edges (stacked walls too). Other roads and their fences are left alone. Train tracks and vehicle paths on the road are always cut."), "m_description", "mDescription")
 finish(bm_cut_fences)
 
+# Road Mode for blueprints holding a Road Maker road (RMRoadTemplate.cpp adds it to the game's blueprint hologram).
+bm_road_mode = make_bp("Holograms", "BM_RoadMode", BuildModeDescriptor)
+setp(cdo(bm_road_mode), text("Road Mode"), "m_display_name", "mDisplayName")
+setp(cdo(bm_road_mode), text("Builds this blueprint's road along a road you draw (start, end, curves, like the road tool), with the blueprint's fences, fence walls and walking paths beside it all the way."), "m_description", "mDescription")
+finish(bm_road_mode)
+
 holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)
 setp(cdo(holo_cut), bm_cut_fences.generated_class(), "m_build_mode_with_fences", "mBuildModeWithFences")
 finish(holo_cut)
