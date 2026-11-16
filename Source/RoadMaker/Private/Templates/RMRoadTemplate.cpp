@@ -17,6 +17,7 @@
 #include "FGGameState.h"
 #include "FGCentralStorageSubsystem.h"
 #include "Algo/Reverse.h"
+#include "Components/SplineComponent.h"
 #include "FGBlueprintProxy.h"
 #include "FGBlueprintSubsystem.h"
 #include "FGDismantleInterface.h"
@@ -44,24 +45,6 @@ namespace RMRoadTemplate
 				}
 			}
 			return Cached.Get();
-		}
-
-		bool HasRoad(const AFGBlueprintHologram* Hologram)
-		{
-			const TArray<TWeakObjectPtr<ARMBuildableProcedural>>* Pieces = GPieces.Find(const_cast<AFGBlueprintHologram*>(Hologram));
-			if (!Pieces)
-			{
-				return false;
-			}
-			for (const TWeakObjectPtr<ARMBuildableProcedural>& P : *Pieces)
-			{
-				const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(P.Get());
-				if (Road && !Road->IsWalkingPath())
-				{
-					return true;
-				}
-			}
-			return false;
 		}
 
 		/** Signed distance of P from the road's centre line (+ = the road's right) and height above it. */
@@ -123,6 +106,7 @@ namespace RMRoadTemplate
 			int32 MarkStretch = INDEX_NONE; // its preview entry in FState::Stretches (bent markings)
 			bool bHasParent = false;  // a marking on a road that is repeated as it is: it goes where that road goes
 			FTransform ParentRel;     // that road, in road space
+			bool bLevel = true;       // kept level (buildings, machines, poles); splines and our road pieces tilt with the curve
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -216,6 +200,14 @@ namespace RMRoadTemplate
 			F.Up = FMath::Lerp(A.Up, B.Up, T).GetSafeNormal();
 			F.Dist = D;
 			return F;
+		}
+
+		/** Objects that tilt with the curve: splines (belts, pipes, rails...) and our road pieces and markings. Everything
+		 *  else (foundations, machines, poles...) stays level. */
+		bool TiltsWithCurve(const AActor* Actor)
+		{
+			return Actor && (Actor->IsA<ARMBuildableSpline>() || Actor->IsA<ARMBuildableMarking>()
+				|| Actor->FindComponentByClass<USplineComponent>() != nullptr);
 		}
 
 		void CopyLook(const UPrimitiveComponent* From, UPrimitiveComponent* To)
@@ -487,6 +479,7 @@ namespace RMRoadTemplate
 					R.Src = Root;
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					R.Buildable = Pair.Key.Get();
+					R.bLevel = !TiltsWithCurve(Pair.Key.Get());
 					S.RigidMaxX = FMath::Max(S.RigidMaxX, R.Rel.GetLocation().X - S.X0);
 					// A marking lying along the arrow bends with the curve like the roads (shown bent; built in place
 					// with the road surface under it bent).
@@ -642,19 +635,29 @@ namespace RMRoadTemplate
 		}
 
 		/** Where an object of tile K goes (Rel: where it is in the blueprint, road space): at its own distance along and
-		 *  across the curve, turned with it. */
-		FTransform MapRigid(const FState& S, const FTransform& Rel, int32 K)
+		 *  across the curve, turned with it; bLevel: only turned (yaw), standing upright, offset level across. */
+		FTransform MapRigid(const FState& S, const FTransform& Rel, int32 K, bool bLevel)
 		{
 			const FVector P = Rel.GetLocation();
-			const FRMFrame F = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+			FRMFrame F = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+			if (bLevel)
+			{
+				FVector Fwd(F.Fwd.X, F.Fwd.Y, 0.f);
+				if (Fwd.Normalize())
+				{
+					F.Fwd = Fwd;
+					F.Right = FVector::CrossProduct(FVector::UpVector, Fwd);
+					F.Up = FVector::UpVector;
+				}
+			}
 			const FQuat FrameRot = FMatrix(F.Fwd, F.Right, F.Up, FVector::ZeroVector).ToQuat();
 			return FTransform(FrameRot * Rel.GetRotation(), F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb), Rel.GetScale3D());
 		}
 
 		/** The same for one of the blueprint's repeated objects, following its road when it lies on one. */
-		FTransform MapObject(const FState& S, const FTransform& Rel, int32 K, bool bHasParent, const FTransform& ParentRel)
+		FTransform MapObject(const FState& S, const FTransform& Rel, int32 K, bool bHasParent, const FTransform& ParentRel, bool bLevel)
 		{
-			return bHasParent ? Rel.GetRelativeTransform(ParentRel) * MapRigid(S, ParentRel, K) : MapRigid(S, Rel, K);
+			return bHasParent ? Rel.GetRelativeTransform(ParentRel) * MapRigid(S, ParentRel, K, false) : MapRigid(S, Rel, K, bLevel);
 		}
 
 		/** How many copies of a shorter piece fit on a curve Len long (each tile L further on). */
@@ -904,7 +907,7 @@ namespace RMRoadTemplate
 					{
 						continue;
 					}
-					Tile->SetWorldTransform(MapObject(S, R.Rel, K, R.bHasParent, R.ParentRel));
+					Tile->SetWorldTransform(MapObject(S, R.Rel, K, R.bHasParent, R.ParentRel, R.bLevel));
 				}
 			}
 		}
@@ -1127,7 +1130,7 @@ namespace RMRoadTemplate
 								}
 							}
 							const bool bHasParent = Match && Match->bHasParent;
-							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity);
+							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity, !TiltsWithCurve(B));
 							if (Logged++ < 3)
 							{
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
@@ -1278,7 +1281,7 @@ namespace RMRoadTemplate
 			[](const AFGBlueprintHologram* Self, TArray<TSubclassOf<UFGBuildGunModeDescriptor>>& OutModes)
 			{
 				UClass* Mode = RoadModeClass();
-				if (Mode && HasRoad(Self))
+				if (Mode)
 				{
 					OutModes.AddUnique(Mode);
 				}
