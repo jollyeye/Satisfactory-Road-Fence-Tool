@@ -16,6 +16,7 @@
 #include "Buildables/FGBuildableRailroadTrack.h"
 #include "Buildables/RMBuildableMarking.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "FGDismantleInterface.h"
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
@@ -188,6 +189,26 @@ void ARMBuildableProcedural::BeginPlay()
 	mMesh->bUseAsyncCooking = bJustBuilt;
 	RebuildMesh();
 	mMesh->bUseAsyncCooking = true;
+	if (bJustBuilt && HasAuthority())
+	{
+		// Vehicle paths built at the same time (a blueprint, Road Mode) check whether vehicles fit before this piece's
+		// collision is ready (it is worked out in the background) and stay red: the paths around it are checked again
+		// once it is (the game does the check itself, in the background).
+		TWeakObjectPtr<ARMBuildableProcedural> Weak(this);
+		for (const float Delay : { 2.f, 6.f })
+		{
+			FTimerHandle Handle;
+			GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]()
+			{
+				ARMBuildableProcedural* Piece = Weak.Get();
+				AFGVehicleSubsystem* Vehicles = Piece ? AFGVehicleSubsystem::Get(Piece->GetWorld()) : nullptr;
+				if (Vehicles && !Piece->IsActorBeingDestroyed())
+				{
+					Vehicles->InvalidateVehiclePathsInVolume(Piece->GetComponentsBoundingBox(true).ExpandBy(500.f));
+				}
+			}), Delay, false);
+		}
+	}
 	if (bJustBuilt && ShowsBuildAnimation())
 	{
 		StartRiseAnimation();
