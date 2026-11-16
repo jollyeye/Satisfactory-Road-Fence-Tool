@@ -2,6 +2,7 @@
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
+#include "Buildables/RMBuildableMarking.h"
 #include "Hologram/FGBlueprintHologram.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Patching/NativeHookManager.h"
@@ -118,6 +119,7 @@ namespace RMRoadTemplate
 			FTransform Rel; // source root, relative to the hologram at the first click
 			TArray<TWeakObjectPtr<USceneComponent>> Tiles;
 			TWeakObjectPtr<AFGBuildable> Buildable; // in the blueprint's own world (for its cost)
+			bool bBentPreview = false; // a marking along the arrow: previewed bent (FBent), built rigid with its drape bent
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -131,6 +133,7 @@ namespace RMRoadTemplate
 			bool bFull = false;     // runs the blueprint's whole length: stretched; otherwise repeated per tile
 			float XMin = 0.f, XMax = 0.f; // where it runs along the blueprint, from its back edge
 			FVector RootLoc = FVector::ZeroVector; // its actor in road space (to find it among a placed blueprint's pieces)
+			bool bRigidCount = false; // a marking (no piece of its own): as many as the repeated objects' whole tiles
 		};
 
 		struct FState
@@ -482,6 +485,26 @@ namespace RMRoadTemplate
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					R.Buildable = Pair.Key.Get();
 					S.RigidMaxX = FMath::Max(S.RigidMaxX, R.Rel.GetLocation().X - S.X0);
+					// A marking lying along the arrow bends with the curve like the roads (shown bent; built in place
+					// with the road surface under it bent).
+					if (Cast<ARMBuildableMarking>(Pair.Key.Get()) && FMath::Abs(R.Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
+					{
+						R.bBentPreview = true;
+						FStretch Mark;
+						Mark.bRigidCount = true;
+						const int32 MarkIndex = S.Stretches.Add(Mark);
+						for (USceneComponent* C : Children)
+						{
+							UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C);
+							if (Proc && Proc->IsVisible() && Proc->GetNumSections() > 0)
+							{
+								FBent& B = S.Bents.AddDefaulted_GetRef();
+								B.Src = Proc;
+								B.Rel = Proc->GetComponentTransform().GetRelativeTransform(S.RoadT);
+								B.Stretch = MarkIndex;
+							}
+						}
+					}
 					++Repeated;
 				}
 				// The blueprint's own rigid preview goes away while drawing.
@@ -713,7 +736,7 @@ namespace RMRoadTemplate
 					continue;
 				}
 				const FStretch& St = S.Stretches[B.Stretch];
-				const int32 N = St.bFull ? NFull : TilesFitting(S, St, Len);
+				const int32 N = St.bFull ? NFull : St.bRigidCount ? RigidTiles(S, Len) : TilesFitting(S, St, Len);
 				const float Scale = St.bFull ? FullScale : 1.f;
 				for (int32 K = 0; K < FMath::Max(N, B.Tiles.Num()); ++K)
 				{
@@ -768,7 +791,7 @@ namespace RMRoadTemplate
 			for (FRigid& R : S.Rigids)
 			{
 				USceneComponent* Src = R.Src.Get();
-				if (!Src)
+				if (!Src || R.bBentPreview)
 				{
 					continue;
 				}
@@ -827,6 +850,41 @@ namespace RMRoadTemplate
 					Central->TryRemoveItemsFromCentralStorage(Item, Num - FromInventory);
 				}
 			}
+		}
+
+		/** A marking moved onto the curve (Rel: where it was, in road space; Target: where it goes): its drape bent along the curve. */
+		void BendMarking(const FState& S, int32 K, ARMBuildableMarking* Marking, const FTransform& Rel, const FTransform& Target)
+		{
+			FRMMarkingDrape Drape = Marking->GetDrape();
+			if (!Drape.IsValid())
+			{
+				// A flat marking: a straight drape over its length.
+				const float Half = ARMBuildableMarking::HalfLength(Marking->mKind, Marking->GetLaneWidth()) + 25.f;
+				const int32 Count = FMath::Max(2, FMath::CeilToInt(2.f * Half / 50.f) + 1);
+				Drape = FRMMarkingDrape();
+				Drape.Start = -Half;
+				Drape.Step = 2.f * Half / (Count - 1);
+				for (int32 I = 0; I < Count; ++I)
+				{
+					Drape.Pos.Add(FVector(Drape.Start + I * Drape.Step, 0.f, 0.f));
+					Drape.Right.Add(FVector::RightVector);
+					Drape.Up.Add(FVector::UpVector);
+				}
+			}
+			for (int32 I = 0; I < Drape.Pos.Num(); ++I)
+			{
+				const FVector P = Rel.TransformPosition(Drape.Pos[I]);
+				const FRMFrame F = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+				auto Bend = [&](const FVector& Dir)
+				{
+					const FVector V = Rel.TransformVectorNoScale(Dir);
+					return Target.InverseTransformVectorNoScale(F.Fwd * V.X + F.Right * V.Y + F.Up * V.Z);
+				};
+				Drape.Right[I] = Bend(Drape.Right[I]);
+				Drape.Up[I] = Bend(Drape.Up[I]);
+				Drape.Pos[I] = Target.InverseTransformPosition(F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb));
+			}
+			Marking->SetDrape(Drape);
 		}
 
 		/** Second click: our stretched pieces built along the drawn curve, paid from the player's inventory. */
@@ -984,6 +1042,14 @@ namespace RMRoadTemplate
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *WorldPos.ToString());
 							}
 							const FTransform Target(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D());
+							// A marking along the arrow: the road surface under it follows the curve too.
+							if (ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(B))
+							{
+								if (FMath::Abs(Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
+								{
+									BendMarking(S, K, Marking, Rel, Target);
+								}
+							}
 							Moves.Emplace(B, Target);
 							GPendingMoves.Add(B, Target);
 							MoveBuilding(B, Target);

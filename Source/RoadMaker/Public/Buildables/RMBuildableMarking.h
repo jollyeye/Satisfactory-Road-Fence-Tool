@@ -103,6 +103,17 @@ public:
 
 	/** Stores the road surface under it (set before it is spawned). */
 	void SetDrape(const FRMMarkingDrape& Drape);
+	/** The road surface under it as stored (empty for flat markings). */
+	FRMMarkingDrape GetDrape() const
+	{
+		FRMMarkingDrape D;
+		D.Start = mDrapeStart;
+		D.Step = mDrapeStep;
+		D.Pos = mDrapePos;
+		D.Right = mDrapeRight;
+		D.Up = mDrapeUp;
+		return D;
+	}
 
 	/**
 	 * Server: a road is replaced by a reshaped one (Adjust Curvature). The markings on From are painted again
