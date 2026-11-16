@@ -156,6 +156,10 @@ namespace RMRoadTemplate
 			FVector LoaderToPreview = FVector::ZeroVector;
 			/** Second click done: the game's construct goes ahead (cost 0 for the game), Road Mode builds in Construct. */
 			bool bFinal = false;
+			/** The end's direction, turned with the mouse wheel from the start-to-end line (degrees), and the wheel then. */
+			float EndYaw = 0.f;
+			int32 ScrollAtStart = 0;
+			float LastYaw = TNumericLimits<float>::Max();
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
@@ -168,7 +172,13 @@ namespace RMRoadTemplate
 		TMap<AActor*, FTransform> GPendingMoves;
 
 		/** On the server: Road Mode placements received in a construct message (start transform, end point), per hologram. */
-		using FRemote = TPair<FTransform, FVector>; // (one name: a comma inside a hook macro would split its arguments)
+		/** A placement received from a client: its start, its end and how far the end direction was turned. */
+		struct FRemote
+		{
+			FTransform StartT;
+			FVector End = FVector::ZeroVector;
+			float EndYaw = 0.f;
+		};
 		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FRemote> GRemote;
 
 		/** Spline pieces to join to the piece before them just before they begin play: belts get their connection
@@ -495,6 +505,7 @@ namespace RMRoadTemplate
 			FState& S = GStates.Add(Self);
 			S.Step = 1;
 			S.StartT = Self->GetActorTransform();
+			S.ScrollAtStart = Self->GetScrollRotateValue();
 			MeasureBox(Self, S);
 
 			int32 Stretched = 0, Repeated = 0;
@@ -1365,15 +1376,28 @@ namespace RMRoadTemplate
 
 		void Update(AFGBlueprintHologram* Self, FState& S, const FVector& End)
 		{
-			if (FVector::DistSquared(End, S.LastEnd) < 25.f)
+			// The end's direction: along the start-to-end line, turned by the mouse wheel (like our roads). A placement
+			// received on the server keeps the yaw it came with.
+			if (!GNoPreview)
+			{
+				S.EndYaw = static_cast<float>(Self->GetScrollRotateValue() - S.ScrollAtStart);
+			}
+			if (FVector::DistSquared(End, S.LastEnd) < 25.f && FMath::IsNearlyEqual(S.EndYaw, S.LastYaw))
 			{
 				return;
 			}
 			S.LastEnd = End;
+			S.LastYaw = S.EndYaw;
 			const FVector Start = S.RoadT.TransformPosition(FVector(S.X0, S.Yc, S.Zb));
 			const FVector StartDir = S.RoadT.GetUnitAxis(EAxis::X);
+			FVector EndDir = FVector(End.X - Start.X, End.Y - Start.Y, 0.f).GetSafeNormal();
+			if (EndDir.IsNearlyZero())
+			{
+				EndDir = StartDir;
+			}
+			EndDir = EndDir.RotateAngleAxis(S.EndYaw, FVector::UpVector);
 			TArray<FRMSplinePoint> Points;
-			RMGeometry::MakeArc(Start, StartDir, End, Points);
+			RMGeometry::MakeQuadratic(Start, StartDir, End, EndDir, Points);
 			TArray<FRMFrame> Frames;
 			RMGeometry::SampleSpline(Points, 25.f, Frames);
 			if (Frames.Num() < 2 || S.L < 1.f)
@@ -2257,6 +2281,7 @@ namespace RMRoadTemplate
 				uint8 bRoad = 0;
 				FTransform StartT;
 				FVector End = FVector::ZeroVector;
+				float EndYaw = 0.f;
 				if (Ar.IsSaving())
 				{
 					if (const RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self))
@@ -2266,6 +2291,7 @@ namespace RMRoadTemplate
 							bRoad = 1;
 							StartT = S->StartT;
 							End = S->LastEnd;
+							EndYaw = S->EndYaw;
 						}
 					}
 				}
@@ -2274,9 +2300,14 @@ namespace RMRoadTemplate
 				{
 					Ar << StartT;
 					Ar << End;
+					Ar << EndYaw;
 					if (Ar.IsLoading())
 					{
-						RMRoadMode::GRemote.Add(Self, RMRoadMode::FRemote(StartT, End));
+						RMRoadMode::FRemote Remote;
+						Remote.StartT = StartT;
+						Remote.End = End;
+						Remote.EndYaw = EndYaw;
+						RMRoadMode::GRemote.Add(Self, Remote);
 						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: placement received (start %s, end %s)"), *StartT.GetLocation().ToString(), *End.ToString());
 					}
 				}
@@ -2294,8 +2325,9 @@ namespace RMRoadTemplate
 					{
 						return;
 					}
-					const FTransform StartT = Remote->Key;
-					const FVector End = Remote->Value;
+					const FTransform StartT = Remote->StartT;
+					const FVector End = Remote->End;
+					const float EndYaw = Remote->EndYaw;
 					RMRoadMode::GRemote.Remove(Self);
 					Self->SetActorTransform(StartT);
 					RMRoadMode::GNoPreview = true;
@@ -2303,6 +2335,7 @@ namespace RMRoadTemplate
 					S = RMRoadMode::GStates.Find(Self);
 					if (S)
 					{
+						S->EndYaw = EndYaw;
 						RMRoadMode::Update(Self, *S, End);
 						S->bFinal = true;
 					}
