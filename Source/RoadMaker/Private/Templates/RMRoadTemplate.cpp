@@ -1708,6 +1708,7 @@ namespace RMRoadTemplate
 					}
 					New->SetBuiltWithRecipe(Source->GetBuiltWithRecipe());
 					New->SetCustomizationData_Native(Source->GetCustomizationData_Native());
+					bool bJoinAfter = false;
 					TArray<FSplinePointData> Pts;
 					for (int32 I = 0; I < Pos.Num(); ++I)
 					{
@@ -1730,8 +1731,8 @@ namespace RMRoadTemplate
 						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
 						if (Cur && Before)
 						{
-							// Belts are joined just before they begin play (their connections are set up by their Blueprint during
-							// construction, which would undo an earlier join); the others right away.
+							// Belts are joined once they are built (below), like the game's belt placement does it: joined
+							// before, the belt's chain never took the join. The others right away.
 							UFGConnectionComponent* Conn0 = Cur->GetSplineConnection0();
 							if (Conn0 && !Cast<UFGFactoryConnectionComponent>(Conn0))
 							{
@@ -1739,11 +1740,18 @@ namespace RMRoadTemplate
 							}
 							else
 							{
-								GPendingJoins.Add(New, Prev);
+								bJoinAfter = true;
 							}
 						}
 					}
 					UGameplayStatics::FinishSpawningActor(New, T);
+					if (bJoinAfter)
+					{
+						IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(New);
+						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
+						const bool bJoined = Cur && Before && JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s after it was built: %d"), *New->GetName(), *GetNameSafe(Prev), bJoined ? 1 : 0);
+					}
 					if (Proxy)
 					{
 						New->SetBlueprintProxy(Proxy);
