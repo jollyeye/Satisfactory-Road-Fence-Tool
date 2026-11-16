@@ -1881,7 +1881,10 @@ namespace RMRoadTemplate
 					// Anchored at its middle: the game hides a spline piece by the distance to its anchor, so one anchored at
 					// its start vanished early when walked towards from its far end.
 					const int32 Mid = Pos.Num() / 2;
-					const FTransform T(FRotator(0.f, Tan[Mid].Rotation().Yaw, 0.f), Pos[Mid]);
+					// Not turned: the game draws a belt's segments turned by the spline alone (not by the actor), and boxes them
+					// for drawing that way; a turned actor put every segment's box to the side of the belt, so segments
+					// vanished near the screen edge. The game's own belts are built unturned the same way.
+					const FTransform T(FQuat::Identity, Pos[Mid]);
 					AFGBuildable* New = World->SpawnActorDeferred<AFGBuildable>(Source->GetClass(), T, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 					if (!New)
 					{
@@ -2083,8 +2086,12 @@ namespace RMRoadTemplate
 								return;
 							}
 							const bool bHasParent = Match && Match->bHasParent;
-							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
+							FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity,
 								Match ? Match->bLevel : !TiltsWithCurve(B));
+							if (Match && Match->bSplineBend)
+							{
+								Target.SetRotation(FQuat::Identity); // its points are laid anew below; unturned (see the whole-curve pieces)
+							}
 							if (Logged++ < 3)
 							{
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
