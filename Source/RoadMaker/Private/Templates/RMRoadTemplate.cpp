@@ -120,6 +120,9 @@ namespace RMRoadTemplate
 			TArray<TWeakObjectPtr<USceneComponent>> Tiles;
 			TWeakObjectPtr<AFGBuildable> Buildable; // in the blueprint's own world (for its cost)
 			bool bBentPreview = false; // a marking along the arrow: previewed bent (FBent), built rigid with its drape bent
+			int32 MarkStretch = INDEX_NONE; // its preview entry in FState::Stretches (bent markings)
+			bool bHasParent = false;  // a marking on a road that is repeated as it is: it goes where that road goes
+			FTransform ParentRel;     // that road, in road space
 		};
 
 		/** One of our pieces running straight along the arrow: built along the drawn curve at its own offset (whole length or per tile). */
@@ -493,6 +496,7 @@ namespace RMRoadTemplate
 						FStretch Mark;
 						Mark.bRigidCount = true;
 						const int32 MarkIndex = S.Stretches.Add(Mark);
+						R.MarkStretch = MarkIndex;
 						for (USceneComponent* C : Children)
 						{
 							UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C);
@@ -514,6 +518,56 @@ namespace RMRoadTemplate
 				{
 					S.Hidden.Emplace(C, C->IsVisible());
 					C->SetVisibility(false, false);
+				}
+			}
+			// Markings on a road that is repeated as it is (a curved road in the blueprint) stay on it: they go where it goes.
+			for (FRigid& R : S.Rigids)
+			{
+				const ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(R.Buildable.Get());
+				if (!Marking)
+				{
+					continue;
+				}
+				const FVector At = Marking->GetActorLocation();
+				const FRigid* Best = nullptr;
+				float BestD = TNumericLimits<float>::Max();
+				for (const FRigid& Other : S.Rigids)
+				{
+					const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Other.Buildable.Get());
+					if (!Road)
+					{
+						continue;
+					}
+					TArray<FRMFrame> Frames;
+					Road->GetWorldFrames(Frames, 50.f);
+					for (const FRMFrame& F : Frames)
+					{
+						const FVector Off = At - F.Pos;
+						if (FMath::Abs(FVector::DotProduct(Off, F.Right)) <= Road->GetRoadWidth() * 0.5f + 20.f && FMath::Abs(Off.Z) < 150.f
+							&& Off.SizeSquared() < BestD)
+						{
+							BestD = Off.SizeSquared();
+							Best = &Other;
+						}
+					}
+				}
+				if (Best)
+				{
+					R.bHasParent = true;
+					R.ParentRel = Best->Rel;
+					if (R.bBentPreview)
+					{
+						// Not bent after all: shown as it is, with its road.
+						R.bBentPreview = false;
+						for (FBent& B : S.Bents)
+						{
+							if (B.Stretch == R.MarkStretch)
+							{
+								B.Stretch = INDEX_NONE;
+							}
+						}
+					}
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s lies on %s (repeated as it is): it goes with it"), *Marking->GetName(), *Best->Buildable->GetName());
 				}
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: start fixed, %d pieces stretched along the road, %d repeated"), Stretched, Repeated);
@@ -567,6 +621,22 @@ namespace RMRoadTemplate
 				}
 			}
 			return TileRoot;
+		}
+
+		/** Where an object of tile K goes (Rel: where it is in the blueprint, road space): at its own distance along and
+		 *  across the curve, turned with it. */
+		FTransform MapRigid(const FState& S, const FTransform& Rel, int32 K)
+		{
+			const FVector P = Rel.GetLocation();
+			const FRMFrame F = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+			const FQuat FrameRot = FMatrix(F.Fwd, F.Right, F.Up, FVector::ZeroVector).ToQuat();
+			return FTransform(FrameRot * Rel.GetRotation(), F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb), Rel.GetScale3D());
+		}
+
+		/** The same for one of the blueprint's repeated objects, following its road when it lies on one. */
+		FTransform MapObject(const FState& S, const FTransform& Rel, int32 K, bool bHasParent, const FTransform& ParentRel)
+		{
+			return bHasParent ? Rel.GetRelativeTransform(ParentRel) * MapRigid(S, ParentRel, K) : MapRigid(S, Rel, K);
 		}
 
 		/** How many copies of a shorter piece fit on a curve Len long (each tile L further on). */
@@ -795,10 +865,8 @@ namespace RMRoadTemplate
 				{
 					continue;
 				}
-				const FVector P = R.Rel.GetLocation();
 				for (int32 K = 0; K < FMath::Max(Count, R.Tiles.Num()); ++K)
 				{
-					const float D = (P.X - S.X0) + K * S.L;
 					const bool bShow = K < Count;
 					if (K >= R.Tiles.Num())
 					{
@@ -818,10 +886,7 @@ namespace RMRoadTemplate
 					{
 						continue;
 					}
-					FRMFrame F;
-					const FVector World = Place(P, D, F);
-					const FQuat FrameRot = FMatrix(F.Fwd, F.Right, F.Up, FVector::ZeroVector).ToQuat();
-					Tile->SetWorldTransform(FTransform(FrameRot * R.Rel.GetRotation(), World, R.Rel.GetScale3D()));
+					Tile->SetWorldTransform(MapObject(S, R.Rel, K, R.bHasParent, R.ParentRel));
 				}
 			}
 		}
@@ -1033,19 +1098,26 @@ namespace RMRoadTemplate
 									}
 								}
 							}
-							const float D = (P.X - S.X0) + K * S.L;
-							const FRMFrame F = FrameAt(S.Frames, D);
-							const FVector WorldPos = F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb);
-							const FQuat FrameRot = FMatrix(F.Fwd, F.Right, F.Up, FVector::ZeroVector).ToQuat();
+							// Which of the blueprint's objects this is (a marking may follow its road).
+							const FRigid* Match = nullptr;
+							for (const FRigid& R : S.Rigids)
+							{
+								if (R.Buildable.IsValid() && R.Buildable->GetClass() == B->GetClass() && FVector::DistSquared(R.Rel.GetLocation(), P) < 2500.f)
+								{
+									Match = &R;
+									break;
+								}
+							}
+							const bool bHasParent = Match && Match->bHasParent;
+							const FTransform Target = MapObject(S, Rel, K, bHasParent, bHasParent ? Match->ParentRel : FTransform::Identity);
 							if (Logged++ < 3)
 							{
-								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *WorldPos.ToString());
+								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
 							}
-							const FTransform Target(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D());
 							// A marking along the arrow: the road surface under it follows the curve too.
 							if (ARMBuildableMarking* Marking = Cast<ARMBuildableMarking>(B))
 							{
-								if (FMath::Abs(Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
+								if (!bHasParent && FMath::Abs(Rel.GetUnitAxis(EAxis::X).X) > 0.98f)
 								{
 									BendMarking(S, K, Marking, Rel, Target);
 								}
