@@ -1013,11 +1013,13 @@ namespace RMRoadTemplate
 			return N;
 		}
 
-		/** How many tiles of the repeated objects fit whole on a curve Len long. */
+		/** How many whole tiles of the repeated objects fit on a curve Len long (the last one ends at or before the end). */
 		int32 RigidTiles(const FState& S, float Len)
 		{
 			int32 N = 0;
-			while (S.RigidMaxX >= 0.f && N < MaxTiles && S.RigidMaxX + N * S.L <= Len + 50.f)
+			// A tile counts once the curve reaches its far edge (the aim is the end edge of the last tile), not just its
+			// furthest object.
+			while (S.RigidMaxX >= 0.f && N < MaxTiles && (N + 1) * S.L <= Len + 50.f)
 			{
 				++N;
 			}
