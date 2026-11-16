@@ -206,6 +206,41 @@ void ARMBuildableBlueprintRoad::GetChildDismantleActors_Implementation(TArray<AA
 	}
 }
 
+bool ARMBuildableBlueprintRoad::FindEnd(const FVector& Aim, FVector& OutPos, FVector& OutOutward, float& OutWidth)
+{
+	float Best = TNumericLimits<float>::Max();
+	for (const TWeakObjectPtr<ARMBuildableBlueprintRoad>& Weak : RMBlueprintRoad::GAll)
+	{
+		const ARMBuildableBlueprintRoad* Road = Weak.Get();
+		if (!Road || Road->GetIsDismantled() || Road->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 200.f);
+		if (Frames.Num() < 2)
+		{
+			continue;
+		}
+		const float Reach = Road->mWidthCm * 0.5f + 400.f;
+		for (int32 End = 0; End < 2; ++End)
+		{
+			const FRMFrame& F = End == 0 ? Frames[0] : Frames.Last();
+			const float D = FVector::Dist2D(F.Pos, Aim);
+			if (D > Reach || FMath::Abs(F.Pos.Z - Aim.Z) > 400.f || D >= Best)
+			{
+				continue;
+			}
+			Best = D;
+			OutPos = F.Pos;
+			const FVector Along = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
+			OutOutward = End == 0 ? -Along : Along;
+			OutWidth = Road->mWidthCm;
+		}
+	}
+	return Best < TNumericLimits<float>::Max();
+}
+
 void ARMBuildableBlueprintRoad::InstallVisibility()
 {
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)

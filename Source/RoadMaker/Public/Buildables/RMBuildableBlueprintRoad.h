@@ -38,6 +38,12 @@ public:
 	static UMaterialInterface* WireMaterial();
 	static TArray<FLinearColor> WireColors(const FRMMesh& Wire);
 
+	/**
+	 * Road Mode snapping: the Blueprint Road end nearest Aim (within its half width plus 4 m across the ground, 4 m in
+	 * height). OutPos: the middle of that end, at the floor; OutOutward: the level direction leaving the road there.
+	 */
+	static bool FindEnd(const FVector& Aim, FVector& OutPos, FVector& OutOutward, float& OutWidth);
+
 	/** Shows / hides every Blueprint Road for the local player (the module's ticker: dismantle tool or Road Mode in hand). */
 	static void InstallVisibility();
 
