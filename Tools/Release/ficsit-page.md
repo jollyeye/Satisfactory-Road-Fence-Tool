@@ -113,6 +113,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Cyberpunk road on Low graphics quality: the circuit grooves are back (from a small baked texture, ~1.3 MB), instead of plain plastic. High quality is unchanged.
 
+- Gap Fill: fills the gap between roads with road surface, at their height. Click road, walking path and intersection edges around the area in any order; they are cut where they cross or joined by straight lines, then click inside the shape to build. Takes the look of the first edge's road; fence walls snap to its sides.
+
 **Fixed**
 - Map: until the map has been opened once, Road Maker looks for it once a second instead of four times, and afterwards only checks the map's own widgets (thanks scotthowson, issue #3).
 - Blueprints: Road Maker pieces now show in the blueprint hologram (with their paint; the sign gantry complete), lane markings are saved in blueprints, and sign walls keep their design.

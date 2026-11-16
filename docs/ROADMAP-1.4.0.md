@@ -43,7 +43,8 @@ Status words: **DONE** (tested in game), **built, awaiting test**, otherwise to 
 
 ## To do
 - **Gap Fill** (built 2026-11-15, picking and building tested; asset Build_RoadFill, ARMBuildableFill + ARMFillHologram): fills the gap between roads at their height. Pick road / walking path edges and intersection curbs in any order: up to 7 edges every order is scored by the gaps between neighbours round the loop (0 where they cross or touch), the best few are built with every way of keeping each cut edge (usable: no crossing / touching / doubling back; then the shortest closing line; then the clicked sides); the closing line goes at the widest gap. Click inside a valid shape to build; click a picked edge again to drop it. Slab from RMGeometry::BuildSlab (the intersection's smooth top), look and paint from the first edge's piece, Material tab and paint work, free. Icon: a traffic cone for now (render_icons.py gapfill; the cement mixer drawing kept as cementmixer), a better idea may come.
-  - Still to do: show fills on the map, fences snapping to a fill's straight sides, changelog entry.
+  - Fence walls on fills (DONE, tested 2026-11-16): with the snap key, a fence wall aimed at a fill takes the side nearest the aim (outline split at turns over 35 degrees), set in onto the slab, scroll flips it; other fences do not snap to fills (a fill is no road).
+  - Still to do: show fills on the map.
 - **Boom barrier** (added 2026-11-12; postponed 2026-11-13, too many iterations for this release, concept image `docs/concepts/boom-barrier-concept.png`): the striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it, snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe opening for vehicles on a path through it (same detection idea as the traffic lights).
 
 
