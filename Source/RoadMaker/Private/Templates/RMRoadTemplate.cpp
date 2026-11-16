@@ -29,6 +29,9 @@
 #include "Buildables/FGBuildableWire.h"
 #include "Buildables/FGBuildablePowerPole.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
+#include "Buildables/FGBuildableConveyorBelt.h"
+#include "Buildables/FGBuildablePipeBase.h"
+#include "Buildables/FGBuildableRailroadTrack.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "FGBlueprintProxy.h"
@@ -1722,9 +1725,23 @@ namespace RMRoadTemplate
 			{
 				return FVector::DistSquared(P, Junctions[0]) < Reach * Reach || FVector::DistSquared(P, Junctions[1]) < Reach * Reach;
 			};
-			for (TActorIterator<AFGBuildable> It(World); It; ++It)
+			// Only the kinds that can link (not every building in the world: that made the click hitch in big saves), and
+			// only those whose actor is within a piece's length of an end.
+			TArray<AFGBuildable*> Candidates;
+			auto Collect = [&](AFGBuildable* B)
 			{
-				AFGBuildable* B = *It;
+				const float Far = Reach + 11000.f;
+				if (FVector::DistSquared(B->GetActorLocation(), Junctions[0]) < Far * Far || FVector::DistSquared(B->GetActorLocation(), Junctions[1]) < Far * Far)
+				{
+					Candidates.Add(B);
+				}
+			};
+			for (TActorIterator<AFGBuildableConveyorBelt> It(World); It; ++It) { Collect(*It); }
+			for (TActorIterator<AFGBuildablePipeBase> It(World); It; ++It) { Collect(*It); }
+			for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It) { Collect(*It); }
+			for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It) { Collect(*It); }
+			for (AFGBuildable* B : Candidates)
+			{
 				if (B->IsActorBeingDestroyed() || B->GetIsDismantled())
 				{
 					continue;
