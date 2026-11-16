@@ -171,6 +171,10 @@ namespace RMRoadTemplate
 		using FRemote = TPair<FTransform, FVector>; // (one name: a comma inside a hook macro would split its arguments)
 		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FRemote> GRemote;
 
+		/** Spline pieces to join to the piece before them just before they begin play: belts get their connection
+		 *  components from their Blueprint, which only exist once construction ran (inside FinishSpawning). */
+		TMap<AActor*, TWeakObjectPtr<AActor>> GPendingJoins;
+
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
 
@@ -1726,7 +1730,14 @@ namespace RMRoadTemplate
 						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
 						if (Cur && Before)
 						{
-							JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+							if (Cur->GetSplineConnection0())
+							{
+								JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+							}
+							else
+							{
+								GPendingJoins.Add(New, Prev); // joined once its components exist, before it begins play
+							}
 						}
 					}
 					UGameplayStatics::FinishSpawningActor(New, T);
@@ -2286,6 +2297,24 @@ namespace RMRoadTemplate
 				else
 				{
 					UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: could not build the placement; the blueprint is placed as it is"));
+				}
+			});
+		// Road Mode building a long belt in pieces: each piece joined to the one before it once its components exist,
+		// just before it begins play.
+		SUBSCRIBE_METHOD(AActor::DispatchBeginPlay,
+			[](auto& Scope, AActor* Self, bool bFromLevelStreaming)
+			{
+				if (RMRoadMode::GPendingJoins.Num() == 0)
+				{
+					return;
+				}
+				TWeakObjectPtr<AActor> Prev;
+				if (RMRoadMode::GPendingJoins.RemoveAndCopyValue(Self, Prev))
+				{
+					IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(Self);
+					IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev.Get());
+					const bool bJoined = Cur && Before && RMRoadMode::JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s before begin play: %d"), *Self->GetName(), *GetNameSafe(Prev.Get()), bJoined ? 1 : 0);
 				}
 			});
 		// Road Mode placing a tile: each piece finishes spawning (and is drawn) where it goes on the curve.
