@@ -23,6 +23,7 @@ public:
 
 	// Dismantle: shown as "Blueprint Road (N wide)", takes the whole placement along.
 	virtual FText GetDismantleDisplayName_Implementation(AFGCharacterPlayer* byCharacter) const override;
+	virtual void Dismantle_Implementation() override;
 	virtual void GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const override;
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override {}
 

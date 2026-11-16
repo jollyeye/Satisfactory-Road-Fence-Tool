@@ -8,6 +8,8 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Buildables/FGBuildable.h"
+#include "FGBlueprintProxy.h"
 
 namespace
 {
@@ -40,6 +42,19 @@ namespace
 			}
 			constexpr float Radius = 600.f;
 			UE_LOG(LogRoadMaker, Display, TEXT("RM.WhatIsHere at %s"), *At.ToString());
+			// Buildings nearby and the blueprint placement each belongs to (registered in it or only pointing at it).
+			for (TActorIterator<AFGBuildable> It(World); It; ++It)
+			{
+				AFGBuildable* B = *It;
+				if (FVector::Dist(B->GetActorLocation(), At) > Radius)
+				{
+					continue;
+				}
+				AFGBlueprintProxy* Proxy = B->GetBlueprintProxy();
+				const bool bRegistered = Proxy && Proxy->GetBuildables().Contains(B);
+				UE_LOG(LogRoadMaker, Display, TEXT("  building %s at %s, blueprint %s (%s), dismantled %d"), *B->GetName(), *B->GetActorLocation().ToString(),
+					*GetNameSafe(Proxy), Proxy ? (bRegistered ? TEXT("registered") : TEXT("NOT registered")) : TEXT("none"), B->GetIsDismantled() ? 1 : 0);
+			}
 			for (TActorIterator<AActor> It(World); It; ++It)
 			{
 				AActor* Actor = *It;

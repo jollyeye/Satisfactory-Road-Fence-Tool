@@ -1,4 +1,6 @@
 #include "Buildables/RMBuildableBlueprintRoad.h"
+#include "FGDismantleInterface.h"
+#include "EngineUtils.h"
 #include "RoadMakerModule.h"
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -211,6 +213,63 @@ void ARMBuildableBlueprintRoad::GetChildDismantleActors_Implementation(TArray<AA
 			}
 		}
 	}
+}
+
+void ARMBuildableBlueprintRoad::Dismantle_Implementation()
+{
+	AFGBlueprintProxy* Proxy = GetBlueprintProxy();
+	UWorld* World = GetWorld();
+	if (Proxy && World && HasAuthority())
+	{
+		TMap<FString, int32> Classes;
+		for (AFGBuildable* B : Proxy->GetBuildables())
+		{
+			if (IsValid(B))
+			{
+				Classes.FindOrAdd(B->GetClass()->GetName())++;
+			}
+		}
+		FString List;
+		for (const TPair<FString, int32>& C : Classes)
+		{
+			List += FString::Printf(TEXT("%s%s x%d"), List.IsEmpty() ? TEXT("") : TEXT(", "), *C.Key, C.Value);
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: %s dismantled with blueprint %s: %s"), *GetName(), *Proxy->GetName(), *List);
+		// A moment later (once the dismantle is done): whatever of the placement was left behind, still pointing at
+		// its blueprint, goes too.
+		const void* ProxyKey = Proxy;
+		FBox Area(ForceInit);
+		for (const FRMSplinePoint& P : mSplinePoints)
+		{
+			Area += GetActorTransform().TransformPosition(P.Location);
+		}
+		Area = Area.ExpandBy(mWidthCm + 3000.f);
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		FTimerHandle Handle;
+		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, ProxyKey, Area]()
+		{
+			UWorld* W = WeakWorld.Get();
+			if (!W)
+			{
+				return;
+			}
+			int32 Left = 0;
+			for (TActorIterator<AFGBuildable> It(W); It; ++It)
+			{
+				AFGBuildable* B = *It;
+				if (static_cast<const void*>(B->GetBlueprintProxy()) != ProxyKey || B->GetIsDismantled() || B->IsActorBeingDestroyed()
+					|| !Area.IsInside(B->GetActorLocation()))
+				{
+					continue;
+				}
+				UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   %s was left behind: dismantled"), *B->GetName());
+				IFGDismantleInterface::Execute_Dismantle(B);
+				++Left;
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   %d pieces left behind by the dismantle"), Left);
+		}), 0.5f, false);
+	}
+	Super::Dismantle_Implementation();
 }
 
 bool ARMBuildableBlueprintRoad::FindEnd(const FVector& Aim, FVector& OutPos, FVector& OutOutward, float& OutWidth, bool* OutIsStart)
