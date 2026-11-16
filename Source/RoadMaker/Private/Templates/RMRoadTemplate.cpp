@@ -909,19 +909,62 @@ namespace RMRoadTemplate
 				OutPos.Add(MapPointLevel(S, FMath::Lerp(A, B, static_cast<float>(I) / N), K, F));
 				Fwd.Add(F.Fwd * Sign);
 			}
+			DropFolds(OutPos, Fwd);
+			const int32 M = OutPos.Num() - 1;
 			float Len = 0.f;
-			for (int32 I = 0; I < N; ++I)
+			for (int32 I = 0; I < M; ++I)
 			{
 				Len += FVector::Dist(OutPos[I], OutPos[I + 1]);
 			}
-			for (int32 I = 0; I <= N; ++I)
+			for (int32 I = 0; I <= M; ++I)
 			{
 				const float Before = I > 0 ? FVector::Dist(OutPos[I - 1], OutPos[I]) : 0.f;
-				const float After = I < N ? FVector::Dist(OutPos[I], OutPos[I + 1]) : 0.f;
-				const float Seg = I == 0 ? After : I == N ? Before : 0.5f * (Before + After);
+				const float After = I < M ? FVector::Dist(OutPos[I], OutPos[I + 1]) : 0.f;
+				const float Seg = I == 0 ? After : I == M ? Before : 0.5f * (Before + After);
 				OutTan.Add(Fwd[I] * Seg);
 			}
 			return Len;
+		}
+
+		/**
+		 * Points of a spline laid at an offset from the curve (in the way it runs), without the loops an offset makes on
+		 * the inside of a curve tighter than the offset: a point that does not move on along the curve from the last
+		 * one kept is dropped (the inside then turns in a corner instead of looping back).
+		 */
+		void DropFolds(TArray<FVector>& Pos, TArray<FVector>& Fwd)
+		{
+			if (Pos.Num() < 3)
+			{
+				return;
+			}
+			TArray<FVector> KeptPos = { Pos[0] };
+			TArray<FVector> KeptFwd = { Fwd[0] };
+			for (int32 I = 1; I < Pos.Num(); ++I)
+			{
+				const bool bLast = I == Pos.Num() - 1;
+				const float Ahead = FVector::DotProduct(Pos[I] - KeptPos.Last(), Fwd[I]);
+				if (Ahead > 50.f)
+				{
+					KeptPos.Add(Pos[I]);
+					KeptFwd.Add(Fwd[I]);
+				}
+				else if (bLast)
+				{
+					// The end stays where it is (it meets the next piece / the curve's end).
+					if (KeptPos.Num() > 1)
+					{
+						KeptPos.Last() = Pos[I];
+						KeptFwd.Last() = Fwd[I];
+					}
+					else
+					{
+						KeptPos.Add(Pos[I]);
+						KeptFwd.Add(Fwd[I]);
+					}
+				}
+			}
+			Pos = MoveTemp(KeptPos);
+			Fwd = MoveTemp(KeptFwd);
 		}
 
 		/**
@@ -986,19 +1029,25 @@ namespace RMRoadTemplate
 				Pos.Add(F.Pos + Right * (Off.Y - S.Yc) + FVector::UpVector * (Off.Z - S.Zb));
 				Fwd.Add(bForward ? F.Fwd : -F.Fwd);
 			}
+			DropFolds(Pos, Fwd);
+			const int32 NKept = Pos.Num() - 1;
+			if (NKept < 1)
+			{
+				return 0.f;
+			}
 			float Total = 0.f;
-			for (int32 I = 0; I < N; ++I)
+			for (int32 I = 0; I < NKept; ++I)
 			{
 				Total += FVector::Dist(Pos[I], Pos[I + 1]);
 			}
 			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(Total / MaxSplinePiece(R.Buildable.IsValid() ? R.Buildable->GetClass() : nullptr)));
 			for (int32 P = 0; P < Pieces; ++P)
 			{
-				const int32 First = FMath::RoundToInt(static_cast<float>(N) * P / Pieces);
-				const int32 Last = FMath::Max(First + 1, FMath::RoundToInt(static_cast<float>(N) * (P + 1) / Pieces));
+				const int32 First = FMath::RoundToInt(static_cast<float>(NKept) * P / Pieces);
+				const int32 Last = FMath::Max(First + 1, FMath::RoundToInt(static_cast<float>(NKept) * (P + 1) / Pieces));
 				TArray<FVector>& PP = OutPos.AddDefaulted_GetRef();
 				TArray<FVector>& TT = OutTan.AddDefaulted_GetRef();
-				for (int32 I = First; I <= Last && I <= N; ++I)
+				for (int32 I = First; I <= Last && I <= NKept; ++I)
 				{
 					PP.Add(Pos[I]);
 				}
