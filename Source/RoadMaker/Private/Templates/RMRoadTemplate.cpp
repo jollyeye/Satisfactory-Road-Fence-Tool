@@ -208,6 +208,10 @@ namespace RMRoadTemplate
 		/** Before the first click: whether the start is snapped on a Blueprint Road's start (taken by Begin). */
 		TMap<TWeakObjectPtr<AFGBlueprintHologram>, bool> GStartOnRoadStart;
 
+		/** Tile copies of the splines rebuilt over the whole curve: never finish spawning (removing them after left parts
+		 *  of them behind, e.g. a pipe's end caps). */
+		TSet<AActor*> GSuppressed;
+
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
 
@@ -2073,7 +2077,9 @@ namespace RMRoadTemplate
 							}
 							if (Match && Match->bSplineFull)
 							{
-								Drop.Add(B); // rebuilt over the whole curve instead
+								// Rebuilt over the whole curve instead: this copy never finishes spawning.
+								GSuppressed.Add(B);
+								Drop.Add(B);
 								return;
 							}
 							const bool bHasParent = Match && Match->bHasParent;
@@ -2152,6 +2158,14 @@ namespace RMRoadTemplate
 						if (Proxy)
 						{
 							Proxy->UnregisterBuildable(B);
+						}
+						if (GSuppressed.Remove(B) > 0 && (!IsValid(B) || B->IsActorBeingDestroyed()))
+						{
+							continue; // never spawned
+						}
+						if (!IsValid(B))
+						{
+							continue;
 						}
 						B->SetBlueprintProxy(nullptr);
 						// Dismantled, not just destroyed: the game's pieces leave parts behind otherwise (a hypertube's
@@ -2579,6 +2593,11 @@ namespace RMRoadTemplate
 		SUBSCRIBE_METHOD(AActor::DispatchBeginPlay,
 			[](auto& Scope, AActor* Self, bool bFromLevelStreaming)
 			{
+				if (RMRoadMode::GSuppressed.Num() > 0 && RMRoadMode::GSuppressed.Contains(Self))
+				{
+					Scope.Cancel(); // a suppressed tile copy never begins play
+					return;
+				}
 				if (RMRoadMode::GPendingJoins.Num() == 0)
 				{
 					return;
@@ -2604,6 +2623,13 @@ namespace RMRoadTemplate
 			[](auto& Scope, AActor* Self, const FTransform& Transform, bool bIsDefaultTransform,
 				const FComponentInstanceDataCache* InstanceDataCache, ESpawnActorScaleMethod ScaleMethod)
 			{
+				if (RMRoadMode::GSuppressed.Num() > 0 && RMRoadMode::GSuppressed.Contains(Self))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s not spawned (rebuilt over the whole curve)"), *Self->GetName());
+					Scope.Cancel();
+					Self->Destroy();
+					return;
+				}
 				if (RMRoadMode::GPendingMoves.Num() == 0)
 				{
 					return;
