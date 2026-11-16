@@ -206,7 +206,7 @@ void ARMBuildableBlueprintRoad::GetChildDismantleActors_Implementation(TArray<AA
 	}
 }
 
-bool ARMBuildableBlueprintRoad::FindEnd(const FVector& Aim, FVector& OutPos, FVector& OutOutward, float& OutWidth)
+bool ARMBuildableBlueprintRoad::FindEnd(const FVector& Aim, FVector& OutPos, FVector& OutOutward, float& OutWidth, bool* OutIsStart)
 {
 	float Best = TNumericLimits<float>::Max();
 	for (const TWeakObjectPtr<ARMBuildableBlueprintRoad>& Weak : RMBlueprintRoad::GAll)
@@ -236,6 +236,10 @@ bool ARMBuildableBlueprintRoad::FindEnd(const FVector& Aim, FVector& OutPos, FVe
 			const FVector Along = FVector(F.Fwd.X, F.Fwd.Y, 0.f).GetSafeNormal();
 			OutOutward = End == 0 ? -Along : Along;
 			OutWidth = Road->mWidthCm;
+			if (OutIsStart)
+			{
+				*OutIsStart = End == 0;
+			}
 		}
 	}
 	return Best < TNumericLimits<float>::Max();

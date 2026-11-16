@@ -164,6 +164,14 @@ namespace RMRoadTemplate
 			/** The end snapped on a Blueprint Road end: the direction it arrives in (zero = not snapped). */
 			FVector EndSnapDir = FVector::ZeroVector;
 			FVector LastSnapDir = FVector(1e9f);
+			/**
+			 * Built from the curve's far end back to the start: when it meets a Blueprint Road head-on (started on a
+			 * road's start, or ended on a road's end), so its sides match that road's (a blueprint is not symmetric).
+			 */
+			bool bStartOnRoadStart = false;
+			bool bEndOnRoadEnd = false;
+			bool bReverse = false;
+			bool LastReverse = false;
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			/** The Blueprint Road being drawn: a wireframe along the curve, as wide as the blueprint. */
@@ -185,12 +193,16 @@ namespace RMRoadTemplate
 			FVector End = FVector::ZeroVector;
 			float EndYaw = 0.f;
 			FVector EndSnapDir = FVector::ZeroVector;
+			bool bReverse = false;
 		};
 		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FRemote> GRemote;
 
 		/** Spline pieces to join to the piece before them just before they begin play: belts get their connection
 		 *  components from their Blueprint, which only exist once construction ran (inside FinishSpawning). */
 		TMap<AActor*, TWeakObjectPtr<AActor>> GPendingJoins;
+
+		/** Before the first click: whether the start is snapped on a Blueprint Road's start (taken by Begin). */
+		TMap<TWeakObjectPtr<AFGBlueprintHologram>, bool> GStartOnRoadStart;
 
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
@@ -517,6 +529,7 @@ namespace RMRoadTemplate
 			S.Step = 1;
 			S.StartT = Self->GetActorTransform();
 			S.ScrollAtStart = Self->GetScrollRotateValue();
+			S.bStartOnRoadStart = GStartOnRoadStart.FindRef(Self);
 			MeasureBox(Self, S);
 
 			int32 Stretched = 0, Repeated = 0;
@@ -1442,10 +1455,16 @@ namespace RMRoadTemplate
 			{
 				S.EndYaw = static_cast<float>(Self->GetScrollRotateValue() - S.ScrollAtStart);
 			}
-			if (FVector::DistSquared(End, S.LastEnd) < 25.f && FMath::IsNearlyEqual(S.EndYaw, S.LastYaw) && S.EndSnapDir.Equals(S.LastSnapDir))
+			if (!GNoPreview)
+			{
+				S.bReverse = S.bStartOnRoadStart || S.bEndOnRoadEnd;
+			}
+			if (FVector::DistSquared(End, S.LastEnd) < 25.f && FMath::IsNearlyEqual(S.EndYaw, S.LastYaw) && S.EndSnapDir.Equals(S.LastSnapDir)
+				&& S.bReverse == S.LastReverse)
 			{
 				return;
 			}
+			S.LastReverse = S.bReverse;
 			S.LastSnapDir = S.EndSnapDir;
 			S.LastEnd = End;
 			S.LastYaw = S.EndYaw;
@@ -1468,6 +1487,18 @@ namespace RMRoadTemplate
 			if (Frames.Num() < 2 || S.L < 1.f)
 			{
 				return;
+			}
+			if (S.bReverse)
+			{
+				// Laid from the far end: the frames run the other way (right turns to the other side with them).
+				const float Total = Frames.Last().Dist;
+				Algo::Reverse(Frames);
+				for (FRMFrame& F : Frames)
+				{
+					F.Fwd = -F.Fwd;
+					F.Right = -F.Right;
+					F.Dist = Total - F.Dist;
+				}
 			}
 			S.Frames = Frames;
 			if (GNoPreview)
@@ -2196,7 +2227,10 @@ namespace RMRoadTemplate
 					MeasureBox(Self, Probe, false);
 					FVector SnapPos, SnapOut;
 					float SnapWidth = 0.f;
-					if (ARMBuildableBlueprintRoad::FindEnd(Hit.Location, SnapPos, SnapOut, SnapWidth))
+					bool bAtStart = false;
+					const bool bSnapped = ARMBuildableBlueprintRoad::FindEnd(Hit.Location, SnapPos, SnapOut, SnapWidth, &bAtStart);
+					GStartOnRoadStart.Add(Self, bSnapped && bAtStart);
+					if (bSnapped)
 					{
 						// On a Blueprint Road end (before foundations): the road starts there and carries on out of it.
 						const FTransform Turn = Probe.RoadT.GetRelativeTransform(Probe.StartT);
@@ -2237,13 +2271,16 @@ namespace RMRoadTemplate
 			FVector SnapPos, SnapOut;
 			float SnapWidth = 0.f;
 			const FVector Start = S->RoadT.TransformPosition(FVector(S->X0, S->Yc, S->Zb));
-			if (ARMBuildableBlueprintRoad::FindEnd(Hit.Location, SnapPos, SnapOut, SnapWidth) && FVector::Dist2D(SnapPos, Start) > 100.f)
+			bool bAtStart = false;
+			if (ARMBuildableBlueprintRoad::FindEnd(Hit.Location, SnapPos, SnapOut, SnapWidth, &bAtStart) && FVector::Dist2D(SnapPos, Start) > 100.f)
 			{
 				S->EndSnapDir = -SnapOut;
+				S->bEndOnRoadEnd = !bAtStart;
 				Update(Self, *S, SnapPos);
 				return;
 			}
 			S->EndSnapDir = FVector::ZeroVector;
+			S->bEndOnRoadEnd = false;
 			Update(Self, *S, bPlaced ? Placed : Hit.Location);
 		}
 
@@ -2425,6 +2462,7 @@ namespace RMRoadTemplate
 				FVector End = FVector::ZeroVector;
 				float EndYaw = 0.f;
 				FVector EndSnapDir = FVector::ZeroVector;
+				uint8 bReverse = 0;
 				if (Ar.IsSaving())
 				{
 					if (const RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self))
@@ -2436,6 +2474,7 @@ namespace RMRoadTemplate
 							End = S->LastEnd;
 							EndYaw = S->EndYaw;
 							EndSnapDir = S->EndSnapDir;
+							bReverse = S->bReverse ? 1 : 0;
 						}
 					}
 				}
@@ -2446,10 +2485,12 @@ namespace RMRoadTemplate
 					Ar << End;
 					Ar << EndYaw;
 					Ar << EndSnapDir;
+					Ar << bReverse;
 					if (Ar.IsLoading())
 					{
 						RMRoadMode::FRemote Remote;
 						Remote.EndSnapDir = EndSnapDir;
+						Remote.bReverse = bReverse != 0;
 						Remote.StartT = StartT;
 						Remote.End = End;
 						Remote.EndYaw = EndYaw;
@@ -2475,6 +2516,7 @@ namespace RMRoadTemplate
 					const FVector End = Remote->End;
 					const float EndYaw = Remote->EndYaw;
 					const FVector EndSnapDir = Remote->EndSnapDir;
+					const bool bReverse = Remote->bReverse;
 					RMRoadMode::GRemote.Remove(Self);
 					Self->SetActorTransform(StartT);
 					RMRoadMode::GNoPreview = true;
@@ -2484,6 +2526,7 @@ namespace RMRoadTemplate
 					{
 						S->EndYaw = EndYaw;
 						S->EndSnapDir = EndSnapDir;
+						S->bReverse = bReverse;
 						RMRoadMode::Update(Self, *S, End);
 						S->bFinal = true;
 					}
