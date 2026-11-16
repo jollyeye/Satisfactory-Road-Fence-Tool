@@ -3,6 +3,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableMarking.h"
+#include "Buildables/RMBuildableBlueprintRoad.h"
 #include "Hologram/FGBlueprintHologram.h"
 #include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Patching/NativeHookManager.h"
@@ -162,6 +163,8 @@ namespace RMRoadTemplate
 			float LastYaw = TNumericLimits<float>::Max();
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
+			/** The Blueprint Road being drawn: a wireframe along the curve, as wide as the blueprint. */
+			TWeakObjectPtr<UProceduralMeshComponent> GhostPreview;
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
 		};
 
@@ -418,7 +421,11 @@ namespace RMRoadTemplate
 					}
 				}
 			}
-			for (TPair<TWeakObjectPtr<USceneComponent>, bool>& H : S->Hidden)
+			if (UProceduralMeshComponent* Ghost = S->GhostPreview.Get())
+		{
+			Ghost->DestroyComponent();
+		}
+		for (TPair<TWeakObjectPtr<USceneComponent>, bool>& H : S->Hidden)
 			{
 				if (H.Key.IsValid()) { H.Key->SetVisibility(H.Value, false); }
 			}
@@ -1458,6 +1465,25 @@ namespace RMRoadTemplate
 			{
 				return;
 			}
+			// The Blueprint Road being drawn (world space, on a component kept at the world origin).
+			{
+				UProceduralMeshComponent* Ghost = S.GhostPreview.Get();
+				if (!Ghost)
+				{
+					Ghost = NewObject<UProceduralMeshComponent>(Self);
+					Ghost->SetupAttachment(Self->GetRootComponent());
+					Ghost->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					Ghost->SetCastShadow(false);
+					Ghost->RegisterComponent();
+					S.GhostPreview = Ghost;
+				}
+				Ghost->SetWorldTransform(FTransform::Identity);
+				FRMMesh Wire;
+				ARMBuildableBlueprintRoad::BuildWire(Frames, S.HalfW * 2.f, Wire);
+				const TArray<FLinearColor> Colors = ARMBuildableBlueprintRoad::WireColors(Wire);
+				Wire.ApplyToSection(Ghost, 0, false, &Colors);
+				Ghost->SetMaterial(0, ARMBuildableBlueprintRoad::WireMaterial());
+			}
 			const float Len = FMath::Min(Frames.Last().Dist, S.L * MaxTiles);
 
 			// Where a hologram-space point of tile K goes (D = distance along the curve).
@@ -1740,8 +1766,37 @@ namespace RMRoadTemplate
 				}
 			}
 
-			// Our pieces along the arrow: built along the curve.
+			// The Blueprint Road: the placement's centre line, as wide as the blueprint, hidden (Road Mode / dismantle only).
 			int32 Built = 0;
+			{
+				TArray<FRMSplinePoint> Centre;
+				RMGeometry::OffsetCurve(S.Frames, 0.f, 400.f, Centre);
+				if (Centre.Num() >= 2)
+				{
+					const FTransform GhostT(FRotator(0.f, S.Frames[0].Fwd.Rotation().Yaw, 0.f), Centre[0].Location);
+					TArray<FRMSplinePoint> Local;
+					for (const FRMSplinePoint& P : Centre)
+					{
+						Local.Add(FRMSplinePoint(GhostT.InverseTransformPosition(P.Location), GhostT.InverseTransformVectorNoScale(P.Tangent)));
+					}
+					ARMBuildableBlueprintRoad* Ghost = World->SpawnActorDeferred<ARMBuildableBlueprintRoad>(ARMBuildableBlueprintRoad::StaticClass(),
+						GhostT, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+					if (Ghost)
+					{
+						Ghost->SetSplinePoints(Local);
+						Ghost->SetWidth(S.HalfW * 2.f);
+						UGameplayStatics::FinishSpawningActor(Ghost, GhostT);
+						if (Proxy)
+						{
+							Ghost->SetBlueprintProxy(Proxy);
+							Proxy->RegisterBuildable(Ghost);
+						}
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: Blueprint Road (%d wide) laid, %.0f m"), Ghost->GetWidthUnits(), S.Frames.Last().Dist / 100.f);
+					}
+				}
+			}
+
+			// Our pieces along the arrow: built along the curve.
 			for (FPlan& P : Plans)
 			{
 				ARMBuildableSpline* New = P.Piece->SpawnLike(P.Piece->GetClass(), P.Piece->GetBuiltWithRecipe(), P.Points, P.Mult,
@@ -2161,6 +2216,11 @@ namespace RMRoadTemplate
 
 	}
 	
+
+	bool IsRoadModeHologram(const AFGHologram* Hologram)
+	{
+		return RMRoadMode::IsRoadMode(Cast<AFGBlueprintHologram>(Hologram));
+	}
 
 	void NotePiece(AFGBlueprintHologram* Hologram, ARMBuildableProcedural* Piece)
 	{

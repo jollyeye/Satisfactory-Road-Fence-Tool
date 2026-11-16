@@ -93,6 +93,8 @@ protected:
 	 * were just built: not restored from a save, not part of the world that loads or replicates in at the start).
 	 */
 	virtual void StartRiseAnimation();
+	/** Whether a just-built piece plays the build animation and sound (not the hidden Blueprint Road). */
+	virtual bool ShowsBuildAnimation() const { return true; }
 
 	/**
 	 * Build animation by reveal (roads, intersections) instead of the rise: the surface appears in order

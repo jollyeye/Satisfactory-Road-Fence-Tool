@@ -40,4 +40,6 @@ namespace RMRoadTemplate
 	void NotePiece(AFGBlueprintHologram* Hologram, ARMBuildableProcedural* Piece);
 	/** The template of a blueprint hologram's pieces (its main road and the pieces along it). */
 	FRMRoadTemplate Read(AFGBlueprintHologram* Hologram);
+	/** Whether this hologram is a blueprint being placed in Road Mode. */
+	bool IsRoadModeHologram(const class AFGHologram* Hologram);
 }

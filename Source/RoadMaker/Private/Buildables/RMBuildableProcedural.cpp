@@ -188,7 +188,7 @@ void ARMBuildableProcedural::BeginPlay()
 	mMesh->bUseAsyncCooking = bJustBuilt;
 	RebuildMesh();
 	mMesh->bUseAsyncCooking = true;
-	if (bJustBuilt)
+	if (bJustBuilt && ShowsBuildAnimation())
 	{
 		StartRiseAnimation();
 		// The game's build sound is played by its build effect, which Road Maker pieces skip (see the
