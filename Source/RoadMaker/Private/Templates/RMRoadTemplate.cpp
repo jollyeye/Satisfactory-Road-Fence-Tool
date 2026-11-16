@@ -167,7 +167,8 @@ namespace RMRoadTemplate
 		TMap<AActor*, FTransform> GPendingMoves;
 
 		/** On the server: Road Mode placements received in a construct message (start transform, end point), per hologram. */
-		TMap<TWeakObjectPtr<AFGBlueprintHologram>, TPair<FTransform, FVector>> GRemote;
+		using FRemote = TPair<FTransform, FVector>; // (one name: a comma inside a hook macro would split its arguments)
+		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FRemote> GRemote;
 
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
@@ -1975,7 +1976,7 @@ namespace RMRoadTemplate
 					Ar << End;
 					if (Ar.IsLoading())
 					{
-						RMRoadMode::GRemote.Add(Self, TPair<FTransform, FVector>(StartT, End));
+						RMRoadMode::GRemote.Add(Self, RMRoadMode::FRemote(StartT, End));
 						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: placement received (start %s, end %s)"), *StartT.GetLocation().ToString(), *End.ToString());
 					}
 				}
@@ -1988,7 +1989,7 @@ namespace RMRoadTemplate
 				if (!S || !S->bFinal)
 				{
 					// Received from a client: worked out again here from its start and end.
-					const TPair<FTransform, FVector>* Remote = RMRoadMode::GRemote.Find(Self);
+					const RMRoadMode::FRemote* Remote = RMRoadMode::GRemote.Find(Self);
 					if (!Remote)
 					{
 						return;
