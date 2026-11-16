@@ -928,6 +928,9 @@ namespace RMRoadTemplate
 									*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
 							}
 							M.Key->SetActorTransform(M.Value);
+							// Their meshes were handed to the game's instance managers when they registered, at the
+							// blueprint place: registered again, at the new one.
+							M.Key->ReregisterAllComponents();
 						}
 					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
