@@ -28,6 +28,8 @@ struct FRMRoadTemplate
 	float RoadWidth = 0.f;
 	uint8 Look = 0;
 	TArray<FRMTemplatePiece> Pieces;
+	/** The blueprint-world buildables read: the main road first, then the pieces along it. */
+	TArray<class AFGBuildable*> Sources;
 	bool IsValid() const { return RoadClass != nullptr; }
 };
 
