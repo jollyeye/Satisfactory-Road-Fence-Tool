@@ -1062,24 +1062,48 @@ namespace RMMapLayer
 				NextHiddenRescan = Now + 5.0;
 				static TWeakObjectPtr<UClass> PainterClass;
 				UUserWidget* Found = nullptr;
-				for (TObjectIterator<UUserWidget> It; It; ++It)
+				auto Consider = [&](UUserWidget* W)
 				{
-					UUserWidget* W = *It;
 					if (!W || W->IsTemplate() || W->GetWorld() != World)
 					{
-						continue;
+						return false;
 					}
-					UClass* C = W->GetClass();
-					if (PainterClass.IsValid() ? C != PainterClass.Get() : !C->GetName().Contains(TEXT("MapAreaPainter")))
-					{
-						continue;
-					}
-					PainterClass = C;
 					Found = W;
-					if (W->IsVisible())
+					return W->IsVisible(); // a visible one ends the search
+				};
+				if (PainterClass.IsValid())
+				{
+					// Class known: only its widgets (no walk over every widget, no names built).
+					TArray<UObject*> Objects;
+					GetObjectsOfClass(PainterClass.Get(), Objects, false);
+					for (UObject* O : Objects)
 					{
-						break;
+						if (Consider(Cast<UUserWidget>(O)))
+						{
+							break;
+						}
 					}
+				}
+				else
+				{
+					for (TObjectIterator<UUserWidget> It; It; ++It)
+					{
+						UUserWidget* W = *It;
+						if (!W || W->IsTemplate() || W->GetWorld() != World || !W->GetClass()->GetName().Contains(TEXT("MapAreaPainter")))
+						{
+							continue;
+						}
+						PainterClass = W->GetClass();
+						if (Consider(W))
+						{
+							break;
+						}
+					}
+				}
+				// None yet (the map widget is made the first time the map opens): look again in 1 s, not 0.25 s.
+				if (!Found)
+				{
+					NextScan = Now + 1.0;
 				}
 				Painter = Found;
 				CachedPainter = Painter;
