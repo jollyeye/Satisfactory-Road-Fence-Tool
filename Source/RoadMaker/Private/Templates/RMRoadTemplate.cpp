@@ -16,6 +16,9 @@
 #include "FGGameState.h"
 #include "FGCentralStorageSubsystem.h"
 #include "Algo/Reverse.h"
+#include "FGBlueprintProxy.h"
+#include "Components/BoxComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace RMRoadTemplate
 {
@@ -30,6 +33,12 @@ namespace RMRoadTemplate
 			if (!Cached.IsValid())
 			{
 				Cached = LoadClass<UFGHologramBuildModeDescriptor>(nullptr, TEXT("/RoadMaker/Holograms/BM_RoadMode.BM_RoadMode_C"));
+				// Kept loaded for good: the build gun remembers the last mode per hologram in a map the garbage
+				// collector does not see, and an unloaded mode there crashes the next time the build gun comes out.
+				if (UClass* Mode = Cached.Get())
+				{
+					Mode->AddToRoot();
+				}
 			}
 			return Cached.Get();
 		}
@@ -727,11 +736,61 @@ namespace RMRoadTemplate
 					Spend(Self, Inventory, C.Key, C.Value);
 				}
 			}
+			// One blueprint proxy for everything built, like a placed blueprint: the blueprint dismantle mode takes it all.
+			const FVector StartPos = S.Frames[0].Pos;
+			const FTransform ProxyT(FRotator(0.f, S.Frames[0].Fwd.Rotation().Yaw, 0.f), StartPos);
+			FBox LocalBounds(ForceInit);
+			TArray<AFGBuildable*> Built;
 			for (FPlan& P : Plans)
 			{
 				ARMBuildableSpline* New = P.Piece->SpawnLike(P.Piece->GetClass(), P.Piece->GetBuiltWithRecipe(), P.Points, P.Mult,
 					ERMRevealFrom::Start, FVector::ZeroVector, World);
 				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: built %s (%d points, cost x%d)"), New ? *New->GetName() : TEXT("nothing"), P.Points.Num(), P.Mult);
+				if (New)
+				{
+					Built.Add(New);
+					for (const FRMSplinePoint& Pt : P.Points)
+					{
+						LocalBounds += ProxyT.InverseTransformPosition(Pt.Location);
+					}
+				}
+			}
+			if (Built.Num() > 0 && LocalBounds.IsValid)
+			{
+				LocalBounds = LocalBounds.ExpandBy(FVector(100.f, 500.f, 0.f));
+				LocalBounds.Min.Z -= 100.f;
+				LocalBounds.Max.Z += 400.f;
+				AFGBlueprintProxy* Proxy = World->SpawnActorDeferred<AFGBlueprintProxy>(AFGBlueprintProxy::StaticClass(), ProxyT, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (Proxy)
+				{
+					UClass* ProxyClass = AFGBlueprintProxy::StaticClass();
+					if (FProperty* NameProp = ProxyClass->FindPropertyByName(TEXT("mBlueprintName")))
+					{
+						*NameProp->ContainerPtrToValuePtr<FText>(Proxy) = Self->mBlueprintDescriptor
+							? FText::FromString(Self->mBlueprintDescriptor->GetBlueprintNameAsString()) : FText::FromString(TEXT("Road"));
+					}
+					if (FObjectProperty* DescProp = FindFProperty<FObjectProperty>(ProxyClass, TEXT("mBlueprintDescriptor")))
+					{
+						DescProp->SetObjectPropertyValue_InContainer(Proxy, Self->mBlueprintDescriptor);
+					}
+					if (FProperty* BoundsProp = ProxyClass->FindPropertyByName(TEXT("mLocalBounds")))
+					{
+						*BoundsProp->ContainerPtrToValuePtr<FBox>(Proxy) = LocalBounds;
+					}
+					UGameplayStatics::FinishSpawningActor(Proxy, ProxyT);
+					if (UBoxComponent* BoxComp = Proxy->GetBoundingBox())
+					{
+						BoxComp->SetRelativeLocation(LocalBounds.GetCenter());
+						BoxComp->SetBoxExtent(LocalBounds.GetExtent());
+					}
+					for (AFGBuildable* B : Built)
+					{
+						B->SetBlueprintProxy(Proxy);
+						Proxy->RegisterBuildable(B);
+					}
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces under blueprint proxy %s"), Built.Num(), *Proxy->GetName());
+				}
 			}
 			return true;
 		}
