@@ -871,6 +871,47 @@ namespace RMRoadTemplate
 			return bHasParent ? Rel.GetRelativeTransform(ParentRel) * MapRigid(S, ParentRel, K, false) : MapRigid(S, Rel, K, bLevel);
 		}
 
+		/**
+		 * Points of a spline laid at an offset from the curve (in the way it runs), without the loops an offset makes on
+		 * the inside of a curve tighter than the offset: a point that does not move on along the curve from the last
+		 * one kept is dropped (the inside then turns in a corner instead of looping back).
+		 */
+		void DropFolds(TArray<FVector>& Pos, TArray<FVector>& Fwd)
+		{
+			if (Pos.Num() < 3)
+			{
+				return;
+			}
+			TArray<FVector> KeptPos = { Pos[0] };
+			TArray<FVector> KeptFwd = { Fwd[0] };
+			for (int32 I = 1; I < Pos.Num(); ++I)
+			{
+				const bool bLast = I == Pos.Num() - 1;
+				const float Ahead = FVector::DotProduct(Pos[I] - KeptPos.Last(), Fwd[I]);
+				if (Ahead > 50.f)
+				{
+					KeptPos.Add(Pos[I]);
+					KeptFwd.Add(Fwd[I]);
+				}
+				else if (bLast)
+				{
+					// The end stays where it is (it meets the next piece / the curve's end).
+					if (KeptPos.Num() > 1)
+					{
+						KeptPos.Last() = Pos[I];
+						KeptFwd.Last() = Fwd[I];
+					}
+					else
+					{
+						KeptPos.Add(Pos[I]);
+						KeptFwd.Add(Fwd[I]);
+					}
+				}
+			}
+			Pos = MoveTemp(KeptPos);
+			Fwd = MoveTemp(KeptFwd);
+		}
+
 		/** A road-space point of tile K on the curve, offset level across and straight up (like the level objects). */
 		FVector MapPointLevel(const FState& S, const FVector& P, int32 K, FRMFrame& OutF, float Scale = 1.f)
 		{
@@ -924,47 +965,6 @@ namespace RMRoadTemplate
 				OutTan.Add(Fwd[I] * Seg);
 			}
 			return Len;
-		}
-
-		/**
-		 * Points of a spline laid at an offset from the curve (in the way it runs), without the loops an offset makes on
-		 * the inside of a curve tighter than the offset: a point that does not move on along the curve from the last
-		 * one kept is dropped (the inside then turns in a corner instead of looping back).
-		 */
-		void DropFolds(TArray<FVector>& Pos, TArray<FVector>& Fwd)
-		{
-			if (Pos.Num() < 3)
-			{
-				return;
-			}
-			TArray<FVector> KeptPos = { Pos[0] };
-			TArray<FVector> KeptFwd = { Fwd[0] };
-			for (int32 I = 1; I < Pos.Num(); ++I)
-			{
-				const bool bLast = I == Pos.Num() - 1;
-				const float Ahead = FVector::DotProduct(Pos[I] - KeptPos.Last(), Fwd[I]);
-				if (Ahead > 50.f)
-				{
-					KeptPos.Add(Pos[I]);
-					KeptFwd.Add(Fwd[I]);
-				}
-				else if (bLast)
-				{
-					// The end stays where it is (it meets the next piece / the curve's end).
-					if (KeptPos.Num() > 1)
-					{
-						KeptPos.Last() = Pos[I];
-						KeptFwd.Last() = Fwd[I];
-					}
-					else
-					{
-						KeptPos.Add(Pos[I]);
-						KeptFwd.Add(Fwd[I]);
-					}
-				}
-			}
-			Pos = MoveTemp(KeptPos);
-			Fwd = MoveTemp(KeptFwd);
 		}
 
 		/**
