@@ -172,6 +172,10 @@ namespace RMRoadTemplate
 			bool bEndOnRoadEnd = false;
 			bool bReverse = false;
 			bool LastReverse = false;
+			/** Flipped by hand: the mouse wheel while the end is snapped (each notch flips; on top of the automatic rule). */
+			bool bFlipByHand = false;
+			int32 SnapScroll = 0;
+			bool bWasSnapped = false;
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			/** The Blueprint Road being drawn: a wireframe along the curve, as wide as the blueprint. */
@@ -1457,7 +1461,7 @@ namespace RMRoadTemplate
 			}
 			if (!GNoPreview)
 			{
-				S.bReverse = S.bStartOnRoadStart || S.bEndOnRoadEnd;
+				S.bReverse = (S.bStartOnRoadStart || S.bEndOnRoadEnd) != S.bFlipByHand;
 			}
 			if (FVector::DistSquared(End, S.LastEnd) < 25.f && FMath::IsNearlyEqual(S.EndYaw, S.LastYaw) && S.EndSnapDir.Equals(S.LastSnapDir)
 				&& S.bReverse == S.LastReverse)
@@ -2276,11 +2280,26 @@ namespace RMRoadTemplate
 			{
 				S->EndSnapDir = -SnapOut;
 				S->bEndOnRoadEnd = !bAtStart;
+				// The wheel flips the layout while snapped (the end direction is the road's then); the turn it would
+				// give the free end is taken back out, so the end does not jump when it leaves the snap.
+				const int32 Scroll = Self->GetScrollRotateValue();
+				if (!S->bWasSnapped)
+				{
+					S->SnapScroll = Scroll;
+					S->bWasSnapped = true;
+				}
+				else if (Scroll != S->SnapScroll)
+				{
+					S->bFlipByHand = !S->bFlipByHand;
+					S->ScrollAtStart += Scroll - S->SnapScroll;
+					S->SnapScroll = Scroll;
+				}
 				Update(Self, *S, SnapPos);
 				return;
 			}
 			S->EndSnapDir = FVector::ZeroVector;
 			S->bEndOnRoadEnd = false;
+			S->bWasSnapped = false;
 			Update(Self, *S, bPlaced ? Placed : Hit.Location);
 		}
 
