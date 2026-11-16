@@ -19,6 +19,12 @@
 #include "Algo/Reverse.h"
 #include "Components/SplineComponent.h"
 #include "FGSplineBuildableInterface.h"
+#include "FGFactoryConnectionComponent.h"
+#include "FGPipeConnectionComponent.h"
+#include "FGRailroadTrackConnectionComponent.h"
+#include "FGCircuitConnectionComponent.h"
+#include "Buildables/FGBuildableWire.h"
+#include "Buildables/FGBuildablePowerPole.h"
 #include "FGBlueprintProxy.h"
 #include "FGBlueprintSubsystem.h"
 #include "FGDismantleInterface.h"
@@ -112,6 +118,7 @@ namespace RMRoadTemplate
 			bool bSplineBend = false; // a belt / pipe / rail / hypertube running straight along the arrow: bent with the curve
 			float SplineLen = 0.f;    // its length in the blueprint
 			TArray<FSplinePointData> SplinePoints; // its points (its actor's space)
+			bool bChainPower = false; // a power pole / single wall outlet with no wire in the blueprint: wired to its copy on the next tile
 			/** Preview: per tile, the copies of its spline meshes and their sources. */
 			TArray<TArray<TPair<TWeakObjectPtr<USplineMeshComponent>, TWeakObjectPtr<USplineMeshComponent>>>> SplineCopies;
 		};
@@ -543,6 +550,22 @@ namespace RMRoadTemplate
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					R.Buildable = Pair.Key.Get();
 					R.bLevel = !TiltsWithCurve(Pair.Key.Get());
+					// A power pole or single wall outlet without any wire in the blueprint: wired to its copy on the next tile.
+					if (const AFGBuildablePowerPole* Pole = Cast<AFGBuildablePowerPole>(Pair.Key.Get()))
+					{
+						if (!Pole->GetClass()->GetName().Contains(TEXT("Double")))
+						{
+							int32 Wires = 0;
+							TInlineComponentArray<UFGCircuitConnectionComponent*> Circuits(Pole);
+							for (const UFGCircuitConnectionComponent* C : Circuits)
+							{
+								Wires += C->GetNumConnections();
+							}
+							R.bChainPower = Wires == 0 && Circuits.Num() > 0;
+							UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: power %s, %d connections in the blueprint: %s"), *Pole->GetName(), Wires,
+								R.bChainPower ? TEXT("wired to the next tile") : TEXT("left as it is"));
+						}
+					}
 					// A game spline (belt, pipe, rail, hypertube) running straight along the arrow: bent with the curve.
 					if (const TArray<FSplinePointData>* PtsPtr = SplinePointsOf(Pair.Key.Get()))
 					{
@@ -857,6 +880,99 @@ namespace RMRoadTemplate
 			return N;
 		}
 
+		/** The wire the game builds between power poles, and its recipe (loaded once, kept). */
+		UClass* WireClass()
+		{
+			static TWeakObjectPtr<UClass> Cached;
+			if (!Cached.IsValid())
+			{
+				Cached = LoadClass<AFGBuildableWire>(nullptr, TEXT("/Game/FactoryGame/Buildable/Factory/PowerLine/Build_PowerLine.Build_PowerLine_C"));
+				UE_CLOG(!Cached.IsValid(), LogRoadMaker, Warning, TEXT("Road Mode: power line class not found"));
+			}
+			return Cached.Get();
+		}
+
+		TSubclassOf<UFGRecipe> WireRecipe()
+		{
+			static TWeakObjectPtr<UClass> Cached;
+			if (!Cached.IsValid())
+			{
+				Cached = LoadClass<UFGRecipe>(nullptr, TEXT("/Game/FactoryGame/Recipes/Buildings/Recipe_PowerLine.Recipe_PowerLine_C"));
+				UE_CLOG(!Cached.IsValid(), LogRoadMaker, Warning, TEXT("Road Mode: power line recipe not found"));
+			}
+			return Cached.Get();
+		}
+
+		/** How many wire recipe units a wire this long costs. */
+		int32 WireUnits(float Length)
+		{
+			const AFGBuildableWire* Cdo = WireClass() ? GetDefault<AFGBuildableWire>(WireClass()) : nullptr;
+			const float Per = Cdo && Cdo->mLengthPerCost > 0.f ? Cdo->mLengthPerCost : 0.f;
+			return Per > 0.f ? FMath::Max(1, FMath::CeilToInt(Length / Per)) : 1;
+		}
+
+		/** The connection a wire goes on: the one taking the most wires. */
+		UFGCircuitConnectionComponent* WireConnectionOf(AActor* Actor)
+		{
+			UFGCircuitConnectionComponent* Best = nullptr;
+			TInlineComponentArray<UFGCircuitConnectionComponent*> Circuits(Actor);
+			for (UFGCircuitConnectionComponent* C : Circuits)
+			{
+				if (!Best || C->GetMaxNumConnections() > Best->GetMaxNumConnections())
+				{
+					Best = C;
+				}
+			}
+			return Best;
+		}
+
+		/** Joins two spline ends of the same kind (belt, pipe, hypertube, rail) if both are free. */
+		bool JoinEnds(UFGConnectionComponent* A, UFGConnectionComponent* B)
+		{
+			if (!A || !B || A == B || A->GetClass() != B->GetClass())
+			{
+				return false;
+			}
+			if (UFGFactoryConnectionComponent* FA = Cast<UFGFactoryConnectionComponent>(A))
+			{
+				UFGFactoryConnectionComponent* FB = Cast<UFGFactoryConnectionComponent>(B);
+				if (FA->IsConnected() || FB->IsConnected() || FA->GetDirection() == FB->GetDirection())
+				{
+					return false;
+				}
+				FA->SetConnection(FB);
+				return true;
+			}
+			if (UFGPipeConnectionComponentBase* PA = Cast<UFGPipeConnectionComponentBase>(A))
+			{
+				UFGPipeConnectionComponentBase* PB = Cast<UFGPipeConnectionComponentBase>(B);
+				if (PA->IsConnected() || PB->IsConnected())
+				{
+					return false;
+				}
+				PA->SetConnection(PB);
+				return true;
+			}
+			if (UFGRailroadTrackConnectionComponent* RA = Cast<UFGRailroadTrackConnectionComponent>(A))
+			{
+				UFGRailroadTrackConnectionComponent* RB = Cast<UFGRailroadTrackConnectionComponent>(B);
+				if (RA->GetConnection() || RB->GetConnection())
+				{
+					return false;
+				}
+				RA->AddConnection(RB);
+				return true;
+			}
+			return false;
+		}
+
+		/** A free spline end of a placed tile: where it is (world) and its connection. */
+		struct FSplineEnd
+		{
+			TWeakObjectPtr<UFGConnectionComponent> Conn;
+			FVector Pos = FVector::ZeroVector;
+		};
+
 		struct FPlan
 		{
 			ARMBuildableSpline* Piece = nullptr;
@@ -947,6 +1063,22 @@ namespace RMRoadTemplate
 			const int32 Tiles = RigidTiles(S, Len);
 			if (Tiles > 0)
 			{
+				// Wires between the tiles' copies of the chained power poles.
+				if (TSubclassOf<UFGRecipe> Recipe = WireRecipe())
+				{
+					for (const FRigid& R : S.Rigids)
+					{
+						for (int32 K = 1; R.bChainPower && K < Tiles; ++K)
+						{
+							const float WireLen = FVector::Dist(MapObject(S, R.Rel, K - 1, false, FTransform::Identity, R.bLevel).GetLocation(),
+								MapObject(S, R.Rel, K, false, FTransform::Identity, R.bLevel).GetLocation());
+							for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
+							{
+								Cost.FindOrAdd(A.ItemClass) += A.Amount * WireUnits(WireLen);
+							}
+						}
+					}
+				}
 				for (const FRigid& R : S.Rigids)
 				{
 					if (AFGBuildable* B = R.Buildable.Get())
@@ -1335,16 +1467,34 @@ namespace RMRoadTemplate
 			AFGBlueprintSubsystem* Blueprints = AFGBlueprintSubsystem::Get(World);
 			if (Tiles > 0 && Blueprints && Self->mBlueprintDescriptor)
 			{
+				TArray<FSplineEnd> PrevEnds;
+				TMap<const FRigid*, AFGBuildable*> PrevPower;
+				int32 Joined = 0, Wired = 0;
 				for (int32 K = 0; K < Tiles; ++K)
 				{
+					TArray<FSplineEnd> CurEnds;
+					TMap<const FRigid*, AFGBuildable*> CurPower;
 					TArray<AFGBuildable*> Spawned;
 					TArray<AFGBuildable*> Drop;
 					TArray<TPair<AFGBuildable*, FTransform>> Moves;
 					int32 Logged = 0;
 					// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
 					// made again just before they begin play.
-					auto ApplyMoves = [&Moves, K]()
+					auto ApplyMoves = [&Moves, &CurEnds, &PrevEnds, &Joined, K]()
 					{
+						// Spline ends meeting the previous tile's free ends: joined before they begin play (like building a
+						// belt onto an existing one).
+						for (const FSplineEnd& Cur : CurEnds)
+						{
+							for (const FSplineEnd& Prev : PrevEnds)
+							{
+								if (FVector::DistSquared(Cur.Pos, Prev.Pos) < 400.f && JoinEnds(Cur.Conn.Get(), Prev.Conn.Get()))
+								{
+									++Joined;
+									break;
+								}
+							}
+						}
 						int32 Checked = 0;
 						for (const TPair<AFGBuildable*, FTransform>& M : Moves)
 						{
@@ -1361,7 +1511,7 @@ namespace RMRoadTemplate
 						}
 					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
-						[&S, &Drop, &Moves, &Logged, K](AFGBuildable* B, int32 Index)
+						[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPower, K](AFGBuildable* B, int32 Index)
 						{
 							if (!B)
 							{
@@ -1406,6 +1556,14 @@ namespace RMRoadTemplate
 									{
 										TArray<FVector> Pos, Tan;
 										BendSpline(S, Rel, *Pts, K, Pos, Tan);
+										if (IFGSplineBuildableInterface* Ends = Cast<IFGSplineBuildableInterface>(B))
+										{
+											if (Pos.Num() >= 2)
+											{
+												CurEnds.Add({ Ends->GetSplineConnection0(), Pos[0] });
+												CurEnds.Add({ Ends->GetSplineConnection1(), Pos.Last() });
+											}
+										}
 										Pts->Reset();
 										for (int32 I = 0; I < Pos.Num(); ++I)
 										{
@@ -1426,6 +1584,10 @@ namespace RMRoadTemplate
 									BendMarking(S, K, Marking, Rel, Target);
 								}
 							}
+							if (Match && Match->bChainPower)
+							{
+								CurPower.Add(Match, B);
+							}
 							Moves.Emplace(B, Target);
 							GPendingMoves.Add(B, Target);
 							MoveBuilding(B, Target);
@@ -1445,8 +1607,43 @@ namespace RMRoadTemplate
 						B->SetBlueprintProxy(nullptr);
 						B->Destroy();
 					}
+					// Power: each chained pole wired to its copy on the previous tile.
+					for (const TPair<const FRigid*, AFGBuildable*>& Cur : CurPower)
+					{
+						AFGBuildable* const* Prev = PrevPower.Find(Cur.Key);
+						UFGCircuitConnectionComponent* A = Prev && IsValid(*Prev) ? WireConnectionOf(*Prev) : nullptr;
+						UFGCircuitConnectionComponent* B2 = IsValid(Cur.Value) ? WireConnectionOf(Cur.Value) : nullptr;
+						UClass* Wire = WireClass();
+						if (!A || !B2 || !Wire)
+						{
+							continue;
+						}
+						const FTransform WireT(A->GetComponentLocation());
+						AFGBuildableWire* NewWire = World->SpawnActorDeferred<AFGBuildableWire>(Wire, WireT, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+						if (NewWire)
+						{
+							NewWire->SetBuiltWithRecipe(WireRecipe());
+							UGameplayStatics::FinishSpawningActor(NewWire, WireT);
+							if (NewWire->Connect(A, B2))
+							{
+								++Wired;
+								if (Proxy)
+								{
+									NewWire->SetBlueprintProxy(Proxy);
+									Proxy->RegisterBuildable(NewWire);
+								}
+							}
+							else
+							{
+								NewWire->Destroy();
+							}
+						}
+					}
+					PrevPower = MoveTemp(CurPower);
+					PrevEnds = MoveTemp(CurEnds);
 					Built += Spawned.Num() - Drop.Num();
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out)"), K, Spawned.Num() - Drop.Num(), Drop.Num());
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far"),
+						K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
 				}
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s"), Built, Proxy ? *Proxy->GetName() : TEXT("none"));
