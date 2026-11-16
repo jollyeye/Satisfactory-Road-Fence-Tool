@@ -928,8 +928,8 @@ namespace RMRoadTemplate
 								for (int32 K = 0; K < Tiles; ++K)
 								{
 									TArray<FVector> Pos, Tan;
-									const float Len = BendSpline(S, R.Rel, R.SplinePoints, K, Pos, Tan);
-									Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * Len / R.SplineLen - 0.01f);
+									const float BentLen = BendSpline(S, R.Rel, R.SplinePoints, K, Pos, Tan);
+									Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * BentLen / R.SplineLen - 0.01f);
 								}
 							}
 							else
