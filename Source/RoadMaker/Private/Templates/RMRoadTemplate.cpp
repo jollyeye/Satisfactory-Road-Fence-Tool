@@ -1786,6 +1786,38 @@ namespace RMRoadTemplate
 			UClass* Mode = RoadModeClass();
 			return Mode && Self && Self->IsCurrentBuildMode(Mode);
 		}
+
+		/** While drawing: the blueprint stays at its start and the curve follows where the game put it for this aim. */
+		void Follow(AFGBlueprintHologram* Self, const FHitResult& Hit)
+		{
+			FState* S = GStates.Find(Self);
+			if (!S || S->Step != 1)
+			{
+				return;
+			}
+			if (!IsRoadMode(Self))
+			{
+				Stop(Self);
+				return;
+			}
+			// The end goes where the game just put the blueprint for this aim: on foundations that is on top, on their
+			// grid, like the start. Anywhere it did not move it (or put it far from the aim), the aim point.
+			const FVector Placed = Self->GetActorLocation();
+			const bool bPlaced = !Placed.Equals(S->StartT.GetLocation(), 1.f) && FVector::Dist2D(Placed, Hit.Location) < 2000.f;
+			// Diagnostics, once a second while drawing: what the aim hits and where the game placed the blueprint.
+			static double LastLog = 0.0;
+			const double Now = FPlatformTime::Seconds();
+			if (Now - LastLog > 1.0)
+			{
+				LastLog = Now;
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: aim hits %s (%s) at %s, blocking %d; game placed it at %s (start %s), used: %s"),
+					*GetNameSafe(Hit.GetActor()), Hit.GetActor() ? *Hit.GetActor()->GetClass()->GetName() : TEXT("-"), *Hit.Location.ToString(),
+					Hit.bBlockingHit ? 1 : 0, *Placed.ToString(), *S->StartT.GetLocation().ToString(), bPlaced ? TEXT("placed") : TEXT("aim"));
+			}
+			Self->SetActorTransform(S->StartT);
+			Update(Self, *S, bPlaced ? Placed : Hit.Location);
+		}
+
 	}
 	
 
@@ -2058,38 +2090,20 @@ namespace RMRoadTemplate
 					Scope.Override(FMath::Max(1, FMath::RoundToInt(S->Frames.Last().Dist / S->L)));
 				}
 			});
-		// While drawing, the blueprint stays at its start and the curve follows the aim.
+		// While drawing, the blueprint stays at its start and the curve follows the aim. On foundations the game snaps the
+		// blueprint in TrySnapToActor and skips SetHologramLocationAndRotation: both are followed.
 		SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBlueprintHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBlueprintHologram>(),
 			[](AFGBlueprintHologram* Self, const FHitResult& Hit)
 			{
-				RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self);
-				if (!S || S->Step != 1)
+				RMRoadMode::Follow(Self, Hit);
+			});
+		SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBlueprintHologram::TrySnapToActor, GetMutableDefault<AFGBlueprintHologram>(),
+			[](bool bSnapped, AFGBlueprintHologram* Self, const FHitResult& Hit)
+			{
+				if (bSnapped)
 				{
-					return;
+					RMRoadMode::Follow(Self, Hit);
 				}
-				if (!RMRoadMode::IsRoadMode(Self))
-				{
-					RMRoadMode::Stop(Self);
-					return;
-				}
-				// The end goes where the game just put the blueprint for this aim: on foundations that is on top, on their
-				// grid, like the start. Anywhere it did not move it (or put it far from the aim), the aim point.
-				const FVector Placed = Self->GetActorLocation();
-				const bool bPlaced = !Placed.Equals(S->StartT.GetLocation(), 1.f) && FVector::Dist2D(Placed, Hit.Location) < 2000.f;
-				{
-					// Diagnostics, once a second while drawing: what the aim hits and where the game placed the blueprint.
-					static double LastLog = 0.0;
-					const double Now = FPlatformTime::Seconds();
-					if (Now - LastLog > 1.0)
-					{
-						LastLog = Now;
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: aim hits %s (%s) at %s, blocking %d; game placed it at %s (start %s), used: %s"),
-							*GetNameSafe(Hit.GetActor()), Hit.GetActor() ? *Hit.GetActor()->GetClass()->GetName() : TEXT("-"), *Hit.Location.ToString(),
-							Hit.bBlockingHit ? 1 : 0, *Placed.ToString(), *S->StartT.GetLocation().ToString(), bPlaced ? TEXT("placed") : TEXT("aim"));
-					}
-				}
-				Self->SetActorTransform(S->StartT);
-				RMRoadMode::Update(Self, *S, bPlaced ? Placed : Hit.Location);
 			});
 #endif
 	}
