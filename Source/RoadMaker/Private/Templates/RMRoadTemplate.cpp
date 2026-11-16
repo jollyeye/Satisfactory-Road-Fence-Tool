@@ -145,7 +145,6 @@ namespace RMRoadTemplate
 			TArray<FStretch> Stretches;
 			float RigidMaxX = -1.f; // furthest repeated object from the back edge (-1: none)
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
-			TArray<FItemAmount> Cost; // what the drawn curve costs (shown by the hologram)
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
 		};
@@ -668,16 +667,6 @@ namespace RMRoadTemplate
 				return;
 			}
 			S.Frames = Frames;
-			{
-				TArray<FPlan> Plans;
-				TMap<TSubclassOf<UFGItemDescriptor>, int32> CostMap;
-				MakePlans(Self, S, Plans, CostMap);
-				S.Cost.Reset();
-				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : CostMap)
-				{
-					S.Cost.Add(FItemAmount(C.Key, C.Value));
-				}
-			}
 			const float Len = FMath::Min(Frames.Last().Dist, S.L * MaxTiles);
 
 			// Where a hologram-space point of tile K goes (D = distance along the curve).
@@ -1150,14 +1139,17 @@ namespace RMRoadTemplate
 					}
 				}
 			});
-		// While drawing, the hologram shows what the drawn curve costs.
-		SUBSCRIBE_METHOD_VIRTUAL(AFGBlueprintHologram::GetBaseCost, GetMutableDefault<AFGBlueprintHologram>(),
-			[](auto& Scope, const AFGBlueprintHologram* Self)
+		// While drawing, the hologram's cost grows with the drawn curve: the blueprint's cost once per tile of length
+		// (rounded). Hooking GetBaseCost itself (an array returned by value) crashes, so the multiplier it is.
+		// What is paid on the second click is the exact plan (our bent pieces by length, the rest per whole tile).
+		SUBSCRIBE_METHOD_VIRTUAL(AFGHologram::GetBaseCostMultiplier, GetMutableDefault<AFGBlueprintHologram>(),
+			[](auto& Scope, const AFGHologram* Self)
 			{
-				const RMRoadMode::FState* S = RMRoadMode::GStates.Find(const_cast<AFGBlueprintHologram*>(Self));
-				if (S && S->Step == 1 && S->Frames.Num() > 1)
+				const AFGBlueprintHologram* Blueprint = Cast<AFGBlueprintHologram>(Self);
+				const RMRoadMode::FState* S = Blueprint ? RMRoadMode::GStates.Find(const_cast<AFGBlueprintHologram*>(Blueprint)) : nullptr;
+				if (S && S->Step == 1 && S->Frames.Num() > 1 && S->L > 1.f)
 				{
-					Scope.Override(S->Cost);
+					Scope.Override(FMath::Max(1, FMath::RoundToInt(S->Frames.Last().Dist / S->L)));
 				}
 			});
 		// While drawing, the blueprint stays at its start and the curve follows the aim.
