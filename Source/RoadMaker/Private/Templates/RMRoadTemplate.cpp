@@ -420,7 +420,7 @@ namespace RMRoadTemplate
 		}
 
 		/** The blueprint's box in hologram space: back edge X0, length L along the arrow, centre Yc, floor Zb. */
-		void MeasureBox(AFGBlueprintHologram* Self, FState& S)
+		void MeasureBox(AFGBlueprintHologram* Self, FState& S, bool bLog = true)
 		{
 			const FTransform ActorT = Self->GetActorTransform();
 			FBox Box(ForceInit);
@@ -467,20 +467,20 @@ namespace RMRoadTemplate
 				{
 					Arrow = FMath::Abs(Pick.X) >= FMath::Abs(Pick.Y) ? FVector(FMath::Sign(Pick.X), 0.f, 0.f) : FVector(0.f, FMath::Sign(Pick.Y), 0.f);
 				}
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: arrow mesh at %s (box centre %s), rotation %s"),
+				UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: arrow mesh at %s (box centre %s), rotation %s"),
 					*DirT.GetLocation().ToString(), *Box.GetCenter().ToString(), *DirT.Rotator().ToString());
 			}
 			const FTransform Turn(FRotationMatrix::MakeFromXZ(Arrow, FVector::UpVector).ToQuat());
 			S.RoadT = Turn * ActorT;
 			Box = Box.TransformBy(Turn.Inverse());
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: forward = hologram %s (from the %s)"), *Arrow.ToString(), *ArrowFrom);
+			UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: forward = hologram %s (from the %s)"), *Arrow.ToString(), *ArrowFrom);
 			S.X0 = Box.Min.X;
 			S.L = Box.GetSize().X;
 			S.Yc = Box.GetCenter().Y;
 			S.HalfW = Box.GetExtent().Y;
 			S.Height = Box.GetSize().Z;
 			S.Zb = Box.Min.Z;
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: blueprint box X %.0f..%.0f, Y %.0f..%.0f, floor %.0f (descriptor %dx%dx%d = %.0f cm long)"),
+			UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: blueprint box X %.0f..%.0f, Y %.0f..%.0f, floor %.0f (descriptor %dx%dx%d = %.0f cm long)"),
 				Box.Min.X, Box.Max.X, Box.Min.Y, Box.Max.Y, Box.Min.Z, Dim.X, Dim.Y, Dim.Z, DescL);
 		}
 
@@ -2048,6 +2048,17 @@ namespace RMRoadTemplate
 			FState* S = GStates.Find(Self);
 			if (!S || S->Step != 1)
 			{
+				// Before the first click: the point aimed at is where the road starts, the middle of the blueprint's back
+				// edge, so the blueprint is shifted forward from where the game put its middle.
+				if (!S && IsRoadMode(Self))
+				{
+					FState Probe;
+					Probe.StartT = Self->GetActorTransform();
+					MeasureBox(Self, Probe, false);
+					const FVector BackEdge = Probe.RoadT.TransformPosition(FVector(Probe.X0, Probe.Yc, Probe.Zb));
+					const FVector Middle = Probe.RoadT.TransformPosition(FVector(Probe.X0 + Probe.L * 0.5f, Probe.Yc, Probe.Zb));
+					Self->SetActorLocation(Self->GetActorLocation() + (Middle - BackEdge));
+				}
 				return;
 			}
 			if (!IsRoadMode(Self))
