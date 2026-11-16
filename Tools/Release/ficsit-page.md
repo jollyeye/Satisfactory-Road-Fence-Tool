@@ -114,6 +114,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Cyberpunk road on Low graphics quality: the circuit grooves are back (from a small baked texture, ~1.3 MB), instead of plain plastic. High quality is unchanged.
 
 **Fixed**
+- Map: until the map has been opened once, Road Maker looks for it once a second instead of four times, and afterwards only checks the map's own widgets (thanks scotthowson, issue #3).
 - Blueprints: Road Maker pieces now show in the blueprint hologram (with their paint; the sign gantry complete), lane markings are saved in blueprints, and sign walls keep their design.
 - Roads and walking paths aimed at the middle of a foundation (or the blueprint designer's floor) stand on top of it, on the foundation grid; near an edge they still snap flush to the edge.
 - Middle click on a road or walking path also copies its look (Concrete Blocks, Asphalt, Cyberpunk) and its lines, not only the paint.
