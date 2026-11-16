@@ -220,6 +220,35 @@ namespace RMRoadTemplate
 				|| Actor->FindComponentByClass<USplineComponent>() != nullptr);
 		}
 
+		/**
+		 * The spline points of a game spline (belt, pipe, rail, hypertube through the game's spline interface; vehicle
+		 * paths through their own saved points), in its actor's space. Writable before it begins play. Null otherwise.
+		 */
+		TArray<FSplinePointData>* SplinePointsOf(AActor* Actor)
+		{
+			if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(Actor))
+			{
+				if (TArray<FSplinePointData>* Pts = Spline->GetMutableSplinePointData())
+				{
+					return Pts;
+				}
+			}
+			if (!Actor)
+			{
+				return nullptr;
+			}
+			for (const TCHAR* Name : { TEXT("mSplinePoints"), TEXT("mSplineData") })
+			{
+				FArrayProperty* Prop = FindFProperty<FArrayProperty>(Actor->GetClass(), Name);
+				FStructProperty* Inner = Prop ? CastField<FStructProperty>(Prop->Inner) : nullptr;
+				if (Inner && Inner->Struct == FSplinePointData::StaticStruct())
+				{
+					return Prop->ContainerPtrToValuePtr<TArray<FSplinePointData>>(Actor);
+				}
+			}
+			return nullptr;
+		}
+
 		void CopyLook(const UPrimitiveComponent* From, UPrimitiveComponent* To)
 		{
 			for (int32 I = 0; I < From->GetNumMaterials(); ++I)
@@ -515,21 +544,25 @@ namespace RMRoadTemplate
 					R.Buildable = Pair.Key.Get();
 					R.bLevel = !TiltsWithCurve(Pair.Key.Get());
 					// A game spline (belt, pipe, rail, hypertube) running straight along the arrow: bent with the curve.
-					if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(Pair.Key.Get()))
+					if (const TArray<FSplinePointData>* PtsPtr = SplinePointsOf(Pair.Key.Get()))
 					{
-						const TArray<FSplinePointData>& Pts = Spline->GetSplinePointData();
+						const TArray<FSplinePointData>& Pts = *PtsPtr;
 						if (Pts.Num() >= 2)
 						{
+							// Straight along the arrow: its ends' line runs along X (it may climb or shift a little, like a
+							// hypertube onto its entrance), every point on that line, tangents along it.
 							const FVector A = R.Rel.TransformPosition(Pts[0].Location);
 							const FVector B = R.Rel.TransformPosition(Pts.Last().Location);
-							bool bStraight = FMath::Abs(B.X - A.X) > 50.f;
+							const FVector Dir = (B - A).GetSafeNormal();
+							bool bStraight = FMath::Abs(B.X - A.X) > 50.f && FMath::Abs(Dir.X) > 0.98f;
 							for (const FSplinePointData& Pt : Pts)
 							{
 								const FVector P = R.Rel.TransformPosition(Pt.Location);
 								const FVector T1 = R.Rel.TransformVector(Pt.ArriveTangent).GetSafeNormal();
 								const FVector T2 = R.Rel.TransformVector(Pt.LeaveTangent).GetSafeNormal();
-								if (FMath::Abs(P.Y - A.Y) > 30.f || FMath::Abs(P.Z - A.Z) > 30.f
-									|| (!T1.IsNearlyZero() && FMath::Abs(T1.X) < 0.98f) || (!T2.IsNearlyZero() && FMath::Abs(T2.X) < 0.98f))
+								const FVector OffLine = (P - A) - Dir * FVector::DotProduct(P - A, Dir);
+								if (OffLine.Size() > 30.f
+									|| (!T1.IsNearlyZero() && FMath::Abs(T1.X) < 0.95f) || (!T2.IsNearlyZero() && FMath::Abs(T2.X) < 0.95f))
 								{
 									bStraight = false;
 								}
@@ -1368,9 +1401,8 @@ namespace RMRoadTemplate
 							// A straight game spline: its points laid on the curve (before it begins play, which builds its mesh).
 							if (Match && Match->bSplineBend)
 							{
-								if (IFGSplineBuildableInterface* Spline = Cast<IFGSplineBuildableInterface>(B))
 								{
-									if (TArray<FSplinePointData>* Pts = Spline->GetMutableSplinePointData())
+									if (TArray<FSplinePointData>* Pts = SplinePointsOf(B))
 									{
 										TArray<FVector> Pos, Tan;
 										BendSpline(S, Rel, *Pts, K, Pos, Tan);
