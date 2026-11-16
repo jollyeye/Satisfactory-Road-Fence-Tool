@@ -5,6 +5,7 @@
 #include "ProceduralMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "FGBlueprintProxy.h"
+#include "FGLightweightBuildableSubsystem.h"
 #include "FGCharacterPlayer.h"
 #include "Equipment/FGBuildGun.h"
 #include "Equipment/FGBuildGunBuild.h"
@@ -212,6 +213,17 @@ void ARMBuildableBlueprintRoad::GetChildDismantleActors_Implementation(TArray<AA
 				out_ChildDismantleActors.AddUnique(B);
 			}
 		}
+		// And its lightweight buildings (e.g. a large vent: no actor of their own, only an instance the blueprint keeps
+		// by index): the blueprint hands out stand-in actors for them, as for the game's blueprint dismantle.
+		TArray<AActor*> FromProxy;
+		IFGDismantleInterface::Execute_GetChildDismantleActors(const_cast<AFGBlueprintProxy*>(Proxy), FromProxy);
+		for (AActor* A : FromProxy)
+		{
+			if (IsValid(A) && A != this && !A->IsActorBeingDestroyed())
+			{
+				out_ChildDismantleActors.AddUnique(A);
+			}
+		}
 	}
 }
 
@@ -234,6 +246,10 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 		{
 			List += FString::Printf(TEXT("%s%s x%d"), List.IsEmpty() ? TEXT("") : TEXT(", "), *C.Key, C.Value);
 		}
+		for (const FBuildableClassLightweightIndices& Entry : Proxy->GetLightweightClassAndIndices())
+		{
+			List += FString::Printf(TEXT(", %s x%d (lightweight)"), *GetNameSafe(Entry.BuildableClass.Get()), Entry.Indices.Num());
+		}
 		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: %s dismantled with blueprint %s: %s"), *GetName(), *Proxy->GetName(), *List);
 		// A moment later (once the dismantle is done): whatever of the placement was left behind, still pointing at
 		// its blueprint, goes too.
@@ -245,8 +261,9 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 		}
 		Area = Area.ExpandBy(mWidthCm + 3000.f);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
+		TWeakObjectPtr<AFGBlueprintProxy> WeakProxy(Proxy);
 		FTimerHandle Handle;
-		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, ProxyKey, Area]()
+		World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakWorld, WeakProxy, ProxyKey, Area]()
 		{
 			UWorld* W = WeakWorld.Get();
 			if (!W)
@@ -254,6 +271,24 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 				return;
 			}
 			int32 Left = 0;
+			// Lightweight buildings the blueprint still holds.
+			if (AFGBlueprintProxy* P = WeakProxy.Get())
+			{
+				if (AFGLightweightBuildableSubsystem* Lightweights = AFGLightweightBuildableSubsystem::Get(W))
+				{
+					const TArray<FBuildableClassLightweightIndices> Held = P->GetLightweightClassAndIndices();
+					for (const FBuildableClassLightweightIndices& Entry : Held)
+					{
+						for (const int32 Index : Entry.Indices)
+						{
+							UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   lightweight %s #%d was left behind: removed"), *GetNameSafe(Entry.BuildableClass.Get()), Index);
+							P->UnregisterLightweightInstance(Entry.BuildableClass, Index);
+							Lightweights->RemoveByInstanceIndex(Entry.BuildableClass, Index);
+							++Left;
+						}
+					}
+				}
+			}
 			for (TActorIterator<AFGBuildable> It(W); It; ++It)
 			{
 				AFGBuildable* B = *It;
