@@ -53,11 +53,12 @@ public:
 
 	/**
 	 * Server: a new piece of Class (built with Recipe) following World points (world space), with this
-	 * one's paint and cut settings. Null on failure.
+	 * one's paint and cut settings. Null on failure. InWorld: spawn there instead of this piece's world
+	 * (Road Mode builds from pieces living in a blueprint's own world).
 	 */
 	ARMBuildableSpline* SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<class UFGRecipe> Recipe,
 		const TArray<FRMSplinePoint>& World, int32 CostMultiplier,
-		ERMRevealFrom RevealFrom = ERMRevealFrom::Start, const FVector& RevealPoint = FVector::ZeroVector) const;
+		ERMRevealFrom RevealFrom = ERMRevealFrom::Start, const FVector& RevealPoint = FVector::ZeroVector, UWorld* InWorld = nullptr) const;
 
 	/** Where the build animation starts (server, before the piece finishes spawning). */
 	void SetRevealFrom(ERMRevealFrom From, const FVector& Point = FVector::ZeroVector) { mRevealFrom = From; mRevealPoint = Point; }

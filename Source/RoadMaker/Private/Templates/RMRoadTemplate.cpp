@@ -10,6 +10,12 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/SplineMeshComponent.h"
 #include "FGFactoryBlueprintTypes.h"
+#include "FGRecipe.h"
+#include "FGCharacterPlayer.h"
+#include "FGInventoryComponent.h"
+#include "FGGameState.h"
+#include "FGCentralStorageSubsystem.h"
+#include "Algo/Reverse.h"
 
 namespace RMRoadTemplate
 {
@@ -101,6 +107,16 @@ namespace RMRoadTemplate
 			TArray<TWeakObjectPtr<USceneComponent>> Tiles;
 		};
 
+		/** One of our pieces running the blueprint's whole length: built along the drawn curve at its own offset. */
+		struct FStretch
+		{
+			TWeakObjectPtr<ARMBuildableSpline> Piece;
+			float Y = 0.f;      // across, from the blueprint's centre line (road space)
+			float Z = 0.f;      // up, from the blueprint's floor
+			float Length = 0.f; // its length in the blueprint
+			bool bReversed = false; // runs against the arrow
+		};
+
 		struct FState
 		{
 			int32 Step = 0;
@@ -110,6 +126,8 @@ namespace RMRoadTemplate
 			TArray<TPair<TWeakObjectPtr<USceneComponent>, bool>> Hidden;
 			TArray<FBent> Bents;
 			TArray<FRigid> Rigids;
+			TArray<FStretch> Stretches;
+			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
 		};
 
@@ -278,19 +296,17 @@ namespace RMRoadTemplate
 			}
 			const FIntVector Dim = Self->mBlueprintDescriptor ? Self->mBlueprintDescriptor->mDimensions : FIntVector::ZeroValue;
 			const float DescL = Dim.X * RM::FoundationSize;
-			if (!Box.IsValid || Box.GetSize().X < 100.f)
+			if (Dim.X > 0 && Dim.Y > 0)
 			{
-				// No bounds mesh: the designer's size from the descriptor, centred on the hologram, floor at the lowest piece.
-				float MinZ = TNumericLimits<float>::Max();
-				for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
-				{
-					if (Pair.Value)
-					{
-						MinZ = FMath::Min(MinZ, Pair.Value->GetComponentTransform().GetRelativeTransform(ActorT).GetLocation().Z);
-					}
-				}
-				const float HalfL = FMath::Max(DescL, RM::FoundationSize) * 0.5f;
-				Box = FBox(FVector(-HalfL, -HalfL, MinZ < TNumericLimits<float>::Max() ? MinZ : 0.f), FVector(HalfL, HalfL, 0.f));
+				// The designer's size from the descriptor, centred on the hologram, floor at the hologram (the bounds
+				// mesh is a 1 m cube scaled by its material, so its bounds say nothing).
+				const float HalfX = Dim.X * RM::FoundationSize * 0.5f;
+				const float HalfY = Dim.Y * RM::FoundationSize * 0.5f;
+				Box = FBox(FVector(-HalfX, -HalfY, 0.f), FVector(HalfX, HalfY, FMath::Max(Dim.Z, 1) * 400.f));
+			}
+			else if (!Box.IsValid || FMath::Min(Box.GetSize().X, Box.GetSize().Y) < 400.f)
+			{
+				Box = FBox(FVector(-1600.f, -1600.f, 0.f), FVector(1600.f, 1600.f, 400.f));
 			}
 			// The blueprint's arrow: the direction mesh sits at the box's front edge. Snapped to the box's sides.
 			FVector Arrow = FVector::YAxisVector;
@@ -371,6 +387,34 @@ namespace RMRoadTemplate
 				}
 				if (bStretch)
 				{
+					if (ARMBuildableSpline* Piece = Cast<ARMBuildableSpline>(Pair.Key.Get()))
+					{
+						// Its course in road space: the root stands for the piece's actor.
+						const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+						const FTransform PieceT = Piece->GetActorTransform();
+						TArray<FRMFrame> Own;
+						Piece->GetWorldFrames(Own, 100.f);
+						FStretch St;
+						St.Piece = Piece;
+						St.Length = Own.Num() > 1 ? Own.Last().Dist : 0.f;
+						float FwdX = 0.f;
+						for (const FRMFrame& F : Own)
+						{
+							const FVector P = RootRel.TransformPosition(PieceT.InverseTransformPosition(F.Pos));
+							St.Y += P.Y - S.Yc;
+							St.Z += P.Z - S.Zb;
+							FwdX += RootRel.TransformVectorNoScale(PieceT.InverseTransformVectorNoScale(F.Fwd)).X;
+						}
+						if (Own.Num() > 0)
+						{
+							St.Y /= Own.Num();
+							St.Z /= Own.Num();
+						}
+						St.bReversed = FwdX < 0.f;
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   %s %.0f cm across, %.0f cm up, %.0f cm long%s"), *Piece->GetName(),
+							St.Y, St.Z, St.Length, St.bReversed ? TEXT(", runs against the arrow") : TEXT(""));
+						S.Stretches.Add(St);
+					}
 					for (USceneComponent* C : Children)
 					{
 						UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C);
@@ -469,6 +513,7 @@ namespace RMRoadTemplate
 			{
 				return;
 			}
+			S.Frames = Frames;
 			const float Len = FMath::Min(Frames.Last().Dist, S.L * MaxTiles);
 
 			// Where a hologram-space point of tile K goes (D = distance along the curve).
@@ -573,6 +618,122 @@ namespace RMRoadTemplate
 					Tile->SetWorldTransform(FTransform(FrameRot * R.Rel.GetRotation(), World, R.Rel.GetScale3D()));
 				}
 			}
+		}
+
+		int32 Available(const UObject* Context, UFGInventoryComponent* Inventory, TSubclassOf<UFGItemDescriptor> Item)
+		{
+			int32 Count = Inventory ? Inventory->GetNumItems(Item) : 0;
+			if (AFGCentralStorageSubsystem* Central = AFGCentralStorageSubsystem::Get(const_cast<UObject*>(Context)))
+			{
+				Count += Central->GetNumItemsFromCentralStorage(Item);
+			}
+			return Count;
+		}
+
+		void Spend(const UObject* Context, UFGInventoryComponent* Inventory, TSubclassOf<UFGItemDescriptor> Item, int32 Num)
+		{
+			const int32 FromInventory = Inventory ? FMath::Min(Num, Inventory->GetNumItems(Item)) : 0;
+			if (FromInventory > 0)
+			{
+				Inventory->Remove(Item, FromInventory);
+			}
+			if (Num - FromInventory > 0)
+			{
+				if (AFGCentralStorageSubsystem* Central = AFGCentralStorageSubsystem::Get(const_cast<UObject*>(Context)))
+				{
+					Central->TryRemoveItemsFromCentralStorage(Item, Num - FromInventory);
+				}
+			}
+		}
+
+		/** Second click: our stretched pieces built along the drawn curve, paid from the player's inventory. */
+		bool Build(AFGBlueprintHologram* Self, const FState& S)
+		{
+			UWorld* World = Self->GetWorld();
+			if (!World || S.Frames.Num() < 2)
+			{
+				return false;
+			}
+			if (!Self->HasAuthority())
+			{
+				UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: building is host only for now"));
+				return false;
+			}
+			const float Len = S.Frames.Last().Dist;
+			struct FPlan
+			{
+				ARMBuildableSpline* Piece = nullptr;
+				TArray<FRMSplinePoint> Points;
+				int32 Mult = 1;
+			};
+			TArray<FPlan> Plans;
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+			for (const FStretch& St : S.Stretches)
+			{
+				ARMBuildableSpline* Piece = St.Piece.Get();
+				if (!Piece)
+				{
+					continue;
+				}
+				FPlan& P = Plans.AddDefaulted_GetRef();
+				P.Piece = Piece;
+				RMGeometry::OffsetCurve(S.Frames, St.Y, 400.f, P.Points);
+				for (FRMSplinePoint& Pt : P.Points)
+				{
+					Pt.Location.Z += St.Z;
+				}
+				if (St.bReversed)
+				{
+					Algo::Reverse(P.Points);
+					for (FRMSplinePoint& Pt : P.Points)
+					{
+						Pt.Tangent = -Pt.Tangent;
+					}
+				}
+				// Paid like the piece in the blueprint, by length.
+				P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * Len / FMath::Max(St.Length, 1.f) - 0.01f));
+				if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
+				{
+					for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
+					{
+						Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
+					}
+				}
+			}
+			if (Plans.Num() == 0)
+			{
+				return false;
+			}
+			const AFGGameState* GameState = World->GetGameState<AFGGameState>();
+			const bool bFree = GameState && GameState->GetCheatNoCost();
+			AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(Self->GetConstructionInstigator());
+			if (!Player)
+			{
+				Player = Cast<AFGCharacterPlayer>(Self->GetInstigator());
+			}
+			UFGInventoryComponent* Inventory = Player && !bFree ? Player->GetInventory() : nullptr;
+			if (Inventory)
+			{
+				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+				{
+					if (Available(Self, Inventory, C.Key) < C.Value)
+					{
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
+						return false;
+					}
+				}
+				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+				{
+					Spend(Self, Inventory, C.Key, C.Value);
+				}
+			}
+			for (FPlan& P : Plans)
+			{
+				ARMBuildableSpline* New = P.Piece->SpawnLike(P.Piece->GetClass(), P.Piece->GetBuiltWithRecipe(), P.Points, P.Mult,
+					ERMRevealFrom::Start, FVector::ZeroVector, World);
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: built %s (%d points, cost x%d)"), New ? *New->GetName() : TEXT("nothing"), P.Points.Num(), P.Mult);
+			}
+			return true;
 		}
 
 		bool IsRoadMode(const AFGBlueprintHologram* Self)
@@ -728,8 +889,10 @@ namespace RMRoadTemplate
 				}
 				else
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: end clicked at %s (building it comes in the next step)"), *S->LastEnd.ToString());
-					RMRoadMode::Stop(Self);
+					if (RMRoadMode::Build(Self, *S))
+					{
+						RMRoadMode::Stop(Self);
+					}
 				}
 			});
 		// While drawing, the blueprint stays at its start and the curve follows the aim.

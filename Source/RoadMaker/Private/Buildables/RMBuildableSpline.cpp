@@ -311,9 +311,9 @@ float ARMBuildableSpline::GetBuildAnimDuration() const
 }
 
 ARMBuildableSpline* ARMBuildableSpline::SpawnLike(TSubclassOf<ARMBuildableSpline> Class, TSubclassOf<UFGRecipe> Recipe,
-	const TArray<FRMSplinePoint>& World, int32 CostMultiplier, ERMRevealFrom RevealFrom, const FVector& RevealPoint) const
+	const TArray<FRMSplinePoint>& World, int32 CostMultiplier, ERMRevealFrom RevealFrom, const FVector& RevealPoint, UWorld* InWorld) const
 {
-	UWorld* W = GetWorld();
+	UWorld* W = InWorld ? InWorld : GetWorld();
 	if (!W || World.Num() < 2 || !Class)
 	{
 		return nullptr;
