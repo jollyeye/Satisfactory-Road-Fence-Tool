@@ -556,10 +556,47 @@ void ARMBuildableProcedural::ApplyNearSection(const FRMMesh& Data, int32 Section
 	}
 }
 
+int32 ARMBuildableProcedural::sForcedLOD = -1;
+
+void ARMBuildableProcedural::GetMeshesByLevel(TArray<TPair<UProceduralMeshComponent*, int32>>& Out) const
+{
+	for (int32 Chunk = 0; Chunk < GetBuiltChunkCount(); ++Chunk)
+	{
+		for (int32 L = 0; L < 3; ++L)
+		{
+			if (UProceduralMeshComponent* M = GetChunkMesh(Chunk, L))
+			{
+				Out.Emplace(M, L);
+			}
+		}
+	}
+}
+
 void ARMBuildableProcedural::UpdateLODsForCamera(UWorld* World, const FVector& Camera)
 {
 	if (!World)
 	{
+		return;
+	}
+	if (sForcedLOD >= 0)
+	{
+		for (TActorIterator<ARMBuildableProcedural> It(World); It; ++It)
+		{
+			ARMBuildableProcedural* Piece = *It;
+			if (!Piece || !Piece->mMesh)
+			{
+				continue;
+			}
+			for (int32 Chunk = 0; Chunk < Piece->GetBuiltChunkCount(); ++Chunk)
+			{
+				int32 Level = sForcedLOD;
+				while (Level > 0 && (!Piece->GetChunkMesh(Chunk, Level) || Piece->GetChunkMesh(Chunk, Level)->GetNumSections() == 0))
+				{
+					--Level; // not made for this piece: the next more detailed one
+				}
+				Piece->SetChunkShownLOD(Chunk, Level);
+			}
+		}
 		return;
 	}
 	for (TActorIterator<ARMBuildableProcedural> It(World); It; ++It)

@@ -233,6 +233,12 @@ public:
 	 */
 	static void UpdateLODsForCamera(UWorld* World, const FVector& Camera);
 
+	/** Console RM.ShowLOD: every piece shows this level (0 detailed, 1 far, 2 second far), -1 = by distance. */
+	static int32 sForcedLOD;
+
+	/** Debugging (RM.Wireframe): each mesh component of the piece with its level (0..2) and whether it is shown. */
+	void GetMeshesByLevel(TArray<TPair<UProceduralMeshComponent*, int32>>& Out) const;
+
 protected:
 	/** 0 = detailed, 1 = far mesh, 2 = second far mesh (every chunk). */
 	void SetShownLOD(int32 Level);
