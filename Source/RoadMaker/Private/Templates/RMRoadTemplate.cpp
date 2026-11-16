@@ -2081,6 +2081,9 @@ namespace RMRoadTemplate
 						{
 							if (St.Piece.IsValid() && St.Piece->GetClass() == B->GetClass() && FVector::DistSquared(St.RootLoc, P) < 2500.f)
 							{
+								// Built over the whole curve instead: this copy never finishes spawning (beginning play
+								// made its whole mesh, about 60 ms a tile, only for it to be dismantled again).
+								GSuppressed.Add(B);
 								Drop.Add(B);
 								return;
 							}
