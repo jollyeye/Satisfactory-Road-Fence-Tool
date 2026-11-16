@@ -2154,7 +2154,11 @@ namespace RMRoadTemplate
 							Proxy->UnregisterBuildable(B);
 						}
 						B->SetBlueprintProxy(nullptr);
-						B->Destroy();
+						// Dismantled, not just destroyed: the game's pieces leave parts behind otherwise (a hypertube's
+						// end caps stayed in the air, saved). Hidden first: no dismantle effect to see.
+						B->SetActorHiddenInGame(true);
+						B->SetActorEnableCollision(false);
+						IFGDismantleInterface::Execute_Dismantle(B);
 					}
 					// Power: each chained pole wired to its copy on the previous tile.
 					for (const TPair<const FRigid*, AFGBuildable*>& Cur : CurPower)
@@ -2198,7 +2202,8 @@ namespace RMRoadTemplate
 								Proxy->UnregisterBuildable(Node);
 							}
 							Node->SetBlueprintProxy(nullptr);
-							Node->Destroy();
+							Node->SetActorHiddenInGame(true);
+							IFGDismantleInterface::Execute_Dismantle(Node);
 						}
 					}
 					PrevPaths = MoveTemp(CurPaths);
