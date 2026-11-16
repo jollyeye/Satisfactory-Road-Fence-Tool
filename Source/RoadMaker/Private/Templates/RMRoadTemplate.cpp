@@ -2269,14 +2269,16 @@ namespace RMRoadTemplate
 				{
 					return false;
 				}
+				// One tile per frame, and only in a frame nothing else heavy ran in (the click, a queued mesh): a tile
+				// is the game loading the whole blueprint once, about a tenth of a second for a big one.
+				if (Job->Next < Job->Tiles && !FRMDeferMeshes::ClaimFrame())
+				{
+					return true;
+				}
 				const double T0 = FPlatformTime::Seconds();
-				while (Job->Next < Job->Tiles)
+				if (Job->Next < Job->Tiles)
 				{
 					RunTile(*Job, Job->Next++);
-					if (FPlatformTime::Seconds() - T0 > 0.004)
-					{
-						break;
-					}
 				}
 				Job->Busy += FPlatformTime::Seconds() - T0;
 				if (Job->Next < Job->Tiles)
@@ -2579,6 +2581,7 @@ namespace RMRoadTemplate
 			Job->OuterJoined = OuterJoined;
 			Job->Built = Built;
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
+			FRMDeferMeshes::ClaimFrame(); // the click's frame is taken: the first tile comes in a later one
 			StartJob(Job);
 			return Proxy;
 		}

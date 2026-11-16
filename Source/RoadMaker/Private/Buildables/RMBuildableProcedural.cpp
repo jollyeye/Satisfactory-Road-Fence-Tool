@@ -75,6 +75,17 @@ FRMDeferMeshes::~FRMDeferMeshes()
 	--GDeferMeshes;
 }
 
+bool FRMDeferMeshes::ClaimFrame()
+{
+	static uint64 Claimed = MAX_uint64;
+	if (Claimed == GFrameCounter)
+	{
+		return false;
+	}
+	Claimed = GFrameCounter;
+	return true;
+}
+
 void ARMBuildableProcedural::PostInitProperties()
 {
 	Super::PostInitProperties();
@@ -260,6 +271,10 @@ void ARMBuildableProcedural::BeginPlay()
 
 bool ARMBuildableProcedural::BuildQueuedMeshes()
 {
+	if (GMeshHead < GMeshQueue.Num() && !FRMDeferMeshes::ClaimFrame())
+	{
+		return true; // this frame already had its heavy step
+	}
 	const double Start = FPlatformTime::Seconds();
 	int32 Done = 0;
 	while (GMeshHead < GMeshQueue.Num())

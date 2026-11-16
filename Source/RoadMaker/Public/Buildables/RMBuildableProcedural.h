@@ -20,6 +20,10 @@ struct ROADMAKER_API FRMDeferMeshes
 {
 	FRMDeferMeshes();
 	~FRMDeferMeshes();
+
+	/** One heavy step per frame (a queued mesh, a Road Mode tile, the click itself): true if this frame is still free,
+	 *  and takes it. Spread like this the game runs slower for a moment instead of freezing. */
+	static bool ClaimFrame();
 };
 
 UCLASS(Abstract)
