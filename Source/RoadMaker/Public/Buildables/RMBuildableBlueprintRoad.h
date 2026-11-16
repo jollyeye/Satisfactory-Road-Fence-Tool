@@ -53,7 +53,7 @@ protected:
 	virtual bool UsesReveal() const override { return false; }
 	virtual int32 GetChunkCount() const override { return 1; }
 
-	void SetShown(bool bShown);
+	void SetShown(bool bShown, bool bSolid);
 
 	UPROPERTY(SaveGame, Replicated)
 	float mWidthCm = 3200.f;

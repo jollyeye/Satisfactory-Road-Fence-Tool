@@ -17,10 +17,16 @@ namespace RMBlueprintRoad
 {
 	TSet<TWeakObjectPtr<ARMBuildableBlueprintRoad>> GAll;
 	bool GShown = false;
+	bool GSolid = false;
 
-	/** Whether the local player holds the dismantle tool or draws in Road Mode. */
-	bool WantShown()
+	/**
+	 * Whether the local player holds the dismantle tool or draws in Road Mode (shown); solid (can be aimed at) only with
+	 * the dismantle tool: in Road Mode its collision got in the way of the vehicle paths being checked as they were
+	 * placed (red), and Road Mode snaps by the aim point anyway.
+	 */
+	bool WantShown(bool& bOutSolid)
 	{
+		bOutSolid = false;
 		if (!GEngine)
 		{
 			return false;
@@ -41,6 +47,7 @@ namespace RMBlueprintRoad
 			}
 			if (Cast<UFGBuildGunStateDismantle>(Gun->GetCurrentState()))
 			{
+				bOutSolid = true;
 				return true;
 			}
 			if (const UFGBuildGunStateBuild* Build = Cast<UFGBuildGunStateBuild>(Gun->GetCurrentState()))
@@ -81,7 +88,7 @@ void ARMBuildableBlueprintRoad::BeginPlay()
 {
 	Super::BeginPlay();
 	RMBlueprintRoad::GAll.Add(this);
-	SetShown(RMBlueprintRoad::GShown);
+	SetShown(RMBlueprintRoad::GShown, RMBlueprintRoad::GSolid);
 }
 
 void ARMBuildableBlueprintRoad::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -90,11 +97,11 @@ void ARMBuildableBlueprintRoad::EndPlay(const EEndPlayReason::Type EndPlayReason
 	Super::EndPlay(EndPlayReason);
 }
 
-void ARMBuildableBlueprintRoad::SetShown(bool bShown)
+void ARMBuildableBlueprintRoad::SetShown(bool bShown, bool bSolid)
 {
 	mShown = bShown;
 	SetActorHiddenInGame(!bShown);
-	SetActorEnableCollision(bShown);
+	SetActorEnableCollision(bShown && bSolid);
 }
 
 UMaterialInterface* ARMBuildableBlueprintRoad::WireMaterial()
@@ -249,15 +256,17 @@ void ARMBuildableBlueprintRoad::InstallVisibility()
 {
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
 	{
-		const bool bWant = RMBlueprintRoad::WantShown();
-		if (bWant != RMBlueprintRoad::GShown)
+		bool bSolid = false;
+		const bool bWant = RMBlueprintRoad::WantShown(bSolid);
+		if (bWant != RMBlueprintRoad::GShown || bSolid != RMBlueprintRoad::GSolid)
 		{
 			RMBlueprintRoad::GShown = bWant;
+			RMBlueprintRoad::GSolid = bSolid;
 			for (auto It = RMBlueprintRoad::GAll.CreateIterator(); It; ++It)
 			{
 				if (ARMBuildableBlueprintRoad* Road = It->Get())
 				{
-					Road->SetShown(bWant);
+					Road->SetShown(bWant, bSolid);
 				}
 				else
 				{
