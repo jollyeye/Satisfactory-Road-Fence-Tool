@@ -153,6 +153,8 @@ namespace RMRoadTemplate
 			/** Where the game's loader puts a piece vs where the hologram shows it (road space): the hologram centres
 			 *  its preview on the blueprint's bounds, the loader does not. Added to what the loader spawns. */
 			FVector LoaderToPreview = FVector::ZeroVector;
+			/** Second click done: the game's construct goes ahead (cost 0 for the game), Road Mode builds in Construct. */
+			bool bFinal = false;
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
@@ -163,6 +165,12 @@ namespace RMRoadTemplate
 		/** While Road Mode places a tile: where each spawned piece goes. The game's loader finishes spawning every piece at
 		 *  its blueprint place (which also draws it there); the hook on AActor::FinishSpawning swaps in these. */
 		TMap<AActor*, FTransform> GPendingMoves;
+
+		/** On the server: Road Mode placements received in a construct message (start transform, end point), per hologram. */
+		TMap<TWeakObjectPtr<AFGBlueprintHologram>, TPair<FTransform, FVector>> GRemote;
+
+		/** Working out a received placement on the server: no preview components. */
+		bool GNoPreview = false;
 
 		/** Moves a placed building. Its components are static (buildings never move), which makes a plain move do
 		 *  nothing once they are registered: made movable for the move, static again after. */
@@ -1204,6 +1212,10 @@ namespace RMRoadTemplate
 				return;
 			}
 			S.Frames = Frames;
+			if (GNoPreview)
+			{
+				return;
+			}
 			const float Len = FMath::Min(Frames.Last().Dist, S.L * MaxTiles);
 
 			// Where a hologram-space point of tile K goes (D = distance along the curve).
@@ -1376,25 +1388,54 @@ namespace RMRoadTemplate
 			Marking->SetDrape(Drape);
 		}
 
+		/** Whether the player can pay for the drawn placement (checked on the click, before the game sends it to the server). */
+		bool CanAffordPlan(AFGBlueprintHologram* Self, const FState& S)
+		{
+			UWorld* World = Self->GetWorld();
+			TArray<FPlan> Plans;
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+			const int32 Tiles = MakePlans(Self, S, Plans, Cost);
+			if (!World || (Plans.Num() == 0 && Tiles == 0))
+			{
+				return false;
+			}
+			const AFGGameState* GameState = World->GetGameState<AFGGameState>();
+			AFGCharacterPlayer* Player = Cast<AFGCharacterPlayer>(Self->GetConstructionInstigator());
+			if (!Player)
+			{
+				Player = Cast<AFGCharacterPlayer>(Self->GetInstigator());
+			}
+			UFGInventoryComponent* Inventory = Player && !(GameState && GameState->GetCheatNoCost()) ? Player->GetInventory() : nullptr;
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+			{
+				if (Inventory && Available(Self, Inventory, C.Key) < C.Value)
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
+					return false;
+				}
+			}
+			return true;
+		}
+
 		/** Second click: our stretched pieces built along the drawn curve, paid from the player's inventory. */
-		bool Build(AFGBlueprintHologram* Self, const FState& S)
+		AActor* Build(AFGBlueprintHologram* Self, const FState& S)
 		{
 			UWorld* World = Self->GetWorld();
 			if (!World || S.Frames.Num() < 2)
 			{
-				return false;
+				return nullptr;
 			}
 			if (!Self->HasAuthority())
 			{
-				UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: building is host only for now"));
-				return false;
+				UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: building runs on the server"));
+				return nullptr;
 			}
 			TArray<FPlan> Plans;
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
 			const int32 Tiles = MakePlans(Self, S, Plans, Cost);
 			if (Plans.Num() == 0 && Tiles == 0)
 			{
-				return false;
+				return nullptr;
 			}
 			const AFGGameState* GameState = World->GetGameState<AFGGameState>();
 			const bool bFree = GameState && GameState->GetCheatNoCost();
@@ -1411,7 +1452,7 @@ namespace RMRoadTemplate
 					if (Available(Self, Inventory, C.Key) < C.Value)
 					{
 						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
-						return false;
+						return nullptr;
 					}
 				}
 				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
@@ -1736,7 +1777,7 @@ namespace RMRoadTemplate
 				}
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s"), Built, Proxy ? *Proxy->GetName() : TEXT("none"));
-			return true;
+			return Proxy;
 		}
 
 		bool IsRoadMode(const AFGBlueprintHologram* Self)
@@ -1885,17 +1926,100 @@ namespace RMRoadTemplate
 				{
 					return;
 				}
-				const RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self);
+				RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self);
 				if (!S || S->Step == 0)
 				{
 					RMRoadMode::Begin(Self);
 				}
+				else if (!S->bFinal && S->Frames.Num() > 1 && RMRoadMode::CanAffordPlan(Self, *S))
+				{
+					// Done: the game constructs it the usual way (sent to the server with the Road Mode data added to its
+					// construct message), and Road Mode builds it in Construct, on the server.
+					S->bFinal = true;
+					Scope.Override(true);
+					// A client keeps no state once the message is sent (the host's Construct ran meanwhile and cleared it).
+					TWeakObjectPtr<AFGBlueprintHologram> Weak(Self);
+					FTimerHandle Handle;
+					Self->GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([Weak]()
+					{
+						if (AFGBlueprintHologram* H = Weak.Get())
+						{
+							RMRoadMode::Stop(H);
+						}
+					}), 1.f, false);
+				}
+			});
+		// The construct message (client to server): whether it is a Road Mode placement, and its start and end.
+		SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBlueprintHologram::SerializeConstructMessage, GetMutableDefault<AFGBlueprintHologram>(),
+			[](AFGBlueprintHologram* Self, FArchive& Ar, FNetConstructionID Id)
+			{
+				uint8 bRoad = 0;
+				FTransform StartT;
+				FVector End = FVector::ZeroVector;
+				if (Ar.IsSaving())
+				{
+					if (const RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self))
+					{
+						if (S->bFinal)
+						{
+							bRoad = 1;
+							StartT = S->StartT;
+							End = S->LastEnd;
+						}
+					}
+				}
+				Ar << bRoad;
+				if (bRoad)
+				{
+					Ar << StartT;
+					Ar << End;
+					if (Ar.IsLoading())
+					{
+						RMRoadMode::GRemote.Add(Self, TPair<FTransform, FVector>(StartT, End));
+						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: placement received (start %s, end %s)"), *StartT.GetLocation().ToString(), *End.ToString());
+					}
+				}
+			});
+		// Construct (server): a Road Mode placement builds along its curve instead of the blueprint as it is.
+		SUBSCRIBE_METHOD_VIRTUAL(AFGBlueprintHologram::Construct, GetMutableDefault<AFGBlueprintHologram>(),
+			[](auto& Scope, AFGBlueprintHologram* Self, TArray<AActor*>& OutChildren, FNetConstructionID Id)
+			{
+				RMRoadMode::FState* S = RMRoadMode::GStates.Find(Self);
+				if (!S || !S->bFinal)
+				{
+					// Received from a client: worked out again here from its start and end.
+					const TPair<FTransform, FVector>* Remote = RMRoadMode::GRemote.Find(Self);
+					if (!Remote)
+					{
+						return;
+					}
+					const FTransform StartT = Remote->Key;
+					const FVector End = Remote->Value;
+					RMRoadMode::GRemote.Remove(Self);
+					Self->SetActorTransform(StartT);
+					RMRoadMode::GNoPreview = true;
+					RMRoadMode::Begin(Self);
+					S = RMRoadMode::GStates.Find(Self);
+					if (S)
+					{
+						RMRoadMode::Update(Self, *S, End);
+						S->bFinal = true;
+					}
+					RMRoadMode::GNoPreview = false;
+					if (!S)
+					{
+						return;
+					}
+				}
+				AActor* Built = RMRoadMode::Build(Self, *S);
+				RMRoadMode::Stop(Self);
+				if (Built)
+				{
+					Scope.Override(Built);
+				}
 				else
 				{
-					if (RMRoadMode::Build(Self, *S))
-					{
-						RMRoadMode::Stop(Self);
-					}
+					UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: could not build the placement; the blueprint is placed as it is"));
 				}
 			});
 		// Road Mode placing a tile: each piece finishes spawning (and is drawn) where it goes on the curve.
@@ -1922,6 +2046,12 @@ namespace RMRoadTemplate
 			{
 				const AFGBlueprintHologram* Blueprint = Cast<AFGBlueprintHologram>(Self);
 				const RMRoadMode::FState* S = Blueprint ? RMRoadMode::GStates.Find(const_cast<AFGBlueprintHologram*>(Blueprint)) : nullptr;
+				// Sent / received for building: Road Mode pays the exact plan itself, the game charges nothing.
+				if ((S && S->bFinal) || (Blueprint && RMRoadMode::GRemote.Contains(const_cast<AFGBlueprintHologram*>(Blueprint))))
+				{
+					Scope.Override(0);
+					return;
+				}
 				if (S && S->Step == 1 && S->Frames.Num() > 1 && S->L > 1.f)
 				{
 					Scope.Override(FMath::Max(1, FMath::RoundToInt(S->Frames.Last().Dist / S->L)));
