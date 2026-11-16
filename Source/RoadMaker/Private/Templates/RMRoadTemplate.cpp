@@ -3,7 +3,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Hologram/FGBlueprintHologram.h"
-#include "FGHologramBuildModeDescriptor.h"
+#include "Hologram/FGHologramBuildModeDescriptor.h"
 #include "Patching/NativeHookManager.h"
 #include "RMGeometry.h"
 
