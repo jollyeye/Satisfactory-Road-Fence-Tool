@@ -197,6 +197,26 @@ void ARMBuildableProcedural::BeginPlay()
 	}
 }
 
+void ARMBuildableProcedural::Dismantle_Implementation()
+{
+	// The build animation ends now: its reveal mesh would be destroyed at its end, while the dismantle effect
+	// still holds it; the rise animation scales the actor under the effect.
+	if (mRevealing)
+	{
+		EndReveal();
+	}
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetTimerManager().IsTimerActive(mRiseTimer))
+		{
+			World->GetTimerManager().ClearTimer(mRiseTimer);
+			SetActorScale3D(FVector::OneVector);
+		}
+	}
+	mDismantling = true;
+	Super::Dismantle_Implementation();
+}
+
 void ARMBuildableProcedural::StartRiseAnimation()
 {
 	if (UsesReveal())
@@ -297,8 +317,8 @@ void ARMBuildableProcedural::PrepareChunks()
 {
 	const int32 Wanted = FMath::Max(1, GetChunkCount());
 	const int32 WantedExtra = (Wanted - 1) * 3;
-	// Fewer chunks than before: the extra components go.
-	while (mChunkMeshes.Num() > WantedExtra)
+	// Fewer chunks than before: the extra components go (not once dismantled: the dismantle effect holds them).
+	while (!mDismantling && mChunkMeshes.Num() > WantedExtra)
 	{
 		if (UProceduralMeshComponent* M = mChunkMeshes.Pop())
 		{

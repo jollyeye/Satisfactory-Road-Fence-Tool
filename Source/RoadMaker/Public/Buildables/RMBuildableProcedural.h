@@ -48,6 +48,11 @@ public:
 
 	// Scale the refund by how big this piece is (the recipe holds the cost of one unit).
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
+	/**
+	 * Finishes the build animation first: the game's dismantle effect takes the piece's mesh components, and the
+	 * temporary reveal mesh (or chunk meshes) going away under it crashed the game (issue #5: merging roads quickly).
+	 */
+	virtual void Dismantle_Implementation() override;
 
 	/** Roads and intersections take the vehicle paths and railway tracks lying on them along when dismantled. */
 	virtual void GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const override;
@@ -102,6 +107,8 @@ protected:
 	void StepReveal();
 	void EndReveal();
 	bool mRevealing = false;
+	/** Dismantled: its mesh components stay as they are (the dismantle effect holds them). */
+	bool mDismantling = false;
 	TArray<FProcMeshSection> mRevealSections;
 	/** Where each revealed section comes from (chunk's detailed mesh, section). */
 	TArray<TPair<UProceduralMeshComponent*, int32>> mRevealSources;
