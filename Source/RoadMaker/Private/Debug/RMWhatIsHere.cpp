@@ -59,8 +59,17 @@ namespace
 							FTransform T;
 							if (ISM->GetInstanceTransform(I, T, true) && FVector::Dist(T.GetLocation(), At) < Radius)
 							{
-								UE_LOG(LogRoadMaker, Display, TEXT("  instance %d of %s (%s) on %s (%s), mesh %s at %s"), I, *P->GetName(), *P->GetClass()->GetName(),
-									*Actor->GetName(), *Actor->GetClass()->GetName(), *Mesh, *T.GetLocation().ToString());
+								// Rotation, scale and the instance's drawing box (what the game culls it by) too.
+								FString Custom;
+								const int32 NumCustom = ISM->NumCustomDataFloats;
+								for (int32 C = 0; C < NumCustom && ISM->PerInstanceSMCustomData.IsValidIndex(I * NumCustom + C); ++C)
+								{
+									Custom += FString::Printf(TEXT("%.0f "), ISM->PerInstanceSMCustomData[I * NumCustom + C]);
+								}
+								const FBox Box = SM && SM->GetStaticMesh() ? SM->GetStaticMesh()->GetBoundingBox().TransformBy(T) : FBox(ForceInit);
+								UE_LOG(LogRoadMaker, Display, TEXT("  instance %d of %s (%s) on %s (%s), mesh %s at %s rot %s scale %s box %s..%s custom [%s]"), I, *P->GetName(),
+									*P->GetClass()->GetName(), *Actor->GetName(), *Actor->GetClass()->GetName(), *Mesh, *T.GetLocation().ToString(),
+									*T.Rotator().ToString(), *T.GetScale3D().ToString(), *Box.Min.ToString(), *Box.Max.ToString(), *Custom);
 							}
 						}
 						continue;
