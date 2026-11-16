@@ -2,6 +2,7 @@
 // (why it is red and where), checks it again on the spot, and lists what stands in the vehicle's box there.
 #include "RoadMakerModule.h"
 #include "Engine/World.h"
+#include "Engine/OverlapResult.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/SplineComponent.h"
