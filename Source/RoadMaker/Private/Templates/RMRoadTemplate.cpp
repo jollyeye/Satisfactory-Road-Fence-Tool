@@ -104,7 +104,8 @@ namespace RMRoadTemplate
 		struct FState
 		{
 			int32 Step = 0;
-			FTransform StartT;
+			FTransform StartT; // the hologram at the first click
+			FTransform RoadT;  // the same, turned so X = the blueprint's arrow (the road space everything is measured in)
 			float X0 = 0.f, L = 0.f, Yc = 0.f, Zb = 0.f; // the blueprint box, hologram-local
 			TArray<TPair<TWeakObjectPtr<USceneComponent>, bool>> Hidden;
 			TArray<FBent> Bents;
@@ -291,6 +292,34 @@ namespace RMRoadTemplate
 				const float HalfL = FMath::Max(DescL, RM::FoundationSize) * 0.5f;
 				Box = FBox(FVector(-HalfL, -HalfL, MinZ < TNumericLimits<float>::Max() ? MinZ : 0.f), FVector(HalfL, HalfL, 0.f));
 			}
+			// The blueprint's arrow: the direction mesh sits at the box's front edge. Snapped to the box's sides.
+			FVector Arrow = FVector::YAxisVector;
+			static FObjectProperty* DirProp = FindFProperty<FObjectProperty>(AFGBlueprintHologram::StaticClass(), TEXT("mBlueprintDirectionMesh"));
+			USceneComponent* DirMesh = DirProp ? Cast<USceneComponent>(DirProp->GetObjectPropertyValue_InContainer(Self)) : nullptr;
+			FString ArrowFrom = TEXT("default");
+			if (DirMesh)
+			{
+				const FTransform DirT = DirMesh->GetComponentTransform().GetRelativeTransform(ActorT);
+				const FVector Off = DirT.GetLocation() - Box.GetCenter();
+				FVector Pick = FVector(Off.X, Off.Y, 0.f);
+				ArrowFrom = TEXT("arrow position");
+				if (Pick.Size() < 100.f)
+				{
+					Pick = DirT.GetUnitAxis(EAxis::X);
+					Pick.Z = 0.f;
+					ArrowFrom = TEXT("arrow rotation");
+				}
+				if (Pick.Size() > 0.01f)
+				{
+					Arrow = FMath::Abs(Pick.X) >= FMath::Abs(Pick.Y) ? FVector(FMath::Sign(Pick.X), 0.f, 0.f) : FVector(0.f, FMath::Sign(Pick.Y), 0.f);
+				}
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: arrow mesh at %s (box centre %s), rotation %s"),
+					*DirT.GetLocation().ToString(), *Box.GetCenter().ToString(), *DirT.Rotator().ToString());
+			}
+			const FTransform Turn(FRotationMatrix::MakeFromXZ(Arrow, FVector::UpVector).ToQuat());
+			S.RoadT = Turn * ActorT;
+			Box = Box.TransformBy(Turn.Inverse());
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: forward = hologram %s (from the %s)"), *Arrow.ToString(), *ArrowFrom);
 			S.X0 = Box.Min.X;
 			S.L = Box.GetSize().X;
 			S.Yc = Box.GetCenter().Y;
@@ -333,7 +362,7 @@ namespace RMRoadTemplate
 					{
 						if (UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C))
 						{
-							Span += Proc->CalcBounds(Proc->GetComponentTransform().GetRelativeTransform(S.StartT)).GetBox();
+							Span += Proc->CalcBounds(Proc->GetComponentTransform().GetRelativeTransform(S.RoadT)).GetBox();
 						}
 					}
 					bStretch = Span.IsValid && Span.Min.X <= S.X0 + 100.f && Span.Max.X >= S.X0 + S.L - 100.f;
@@ -349,7 +378,7 @@ namespace RMRoadTemplate
 						{
 							FBent& B = S.Bents.AddDefaulted_GetRef();
 							B.Src = Proc;
-							B.Rel = Proc->GetComponentTransform().GetRelativeTransform(S.StartT);
+							B.Rel = Proc->GetComponentTransform().GetRelativeTransform(S.RoadT);
 						}
 					}
 					++Stretched;
@@ -358,7 +387,7 @@ namespace RMRoadTemplate
 				{
 					FRigid& R = S.Rigids.AddDefaulted_GetRef();
 					R.Src = Root;
-					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.StartT);
+					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					++Repeated;
 				}
 				// The blueprint's own rigid preview goes away while drawing.
@@ -430,8 +459,8 @@ namespace RMRoadTemplate
 				return;
 			}
 			S.LastEnd = End;
-			const FVector Start = S.StartT.TransformPosition(FVector(S.X0, S.Yc, S.Zb));
-			const FVector StartDir = S.StartT.GetUnitAxis(EAxis::X);
+			const FVector Start = S.RoadT.TransformPosition(FVector(S.X0, S.Yc, S.Zb));
+			const FVector StartDir = S.RoadT.GetUnitAxis(EAxis::X);
 			TArray<FRMSplinePoint> Points;
 			RMGeometry::MakeArc(Start, StartDir, End, Points);
 			TArray<FRMFrame> Frames;
