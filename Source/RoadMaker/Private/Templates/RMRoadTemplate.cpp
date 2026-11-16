@@ -2072,8 +2072,12 @@ namespace RMRoadTemplate
 					RMRoadMode::Stop(Self);
 					return;
 				}
+				// The end goes where the game just put the blueprint for this aim: on foundations that is on top, on their
+				// grid, like the start. Anywhere it did not move it (or put it far from the aim), the aim point.
+				const FVector Placed = Self->GetActorLocation();
+				const bool bPlaced = !Placed.Equals(S->StartT.GetLocation(), 1.f) && FVector::Dist2D(Placed, Hit.Location) < 2000.f;
 				Self->SetActorTransform(S->StartT);
-				RMRoadMode::Update(Self, *S, Hit.Location);
+				RMRoadMode::Update(Self, *S, bPlaced ? Placed : Hit.Location);
 			});
 #endif
 	}
