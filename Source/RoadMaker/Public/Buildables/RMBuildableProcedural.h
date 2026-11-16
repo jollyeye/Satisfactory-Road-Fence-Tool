@@ -14,6 +14,14 @@ class UProceduralMeshComponent;
 class UMaterialInterface;
 class UFGFactoryCustomizationDescriptor_Swatch;
 
+/** While one is alive (on the server), Road Maker pieces that begin play just built queue their mesh instead of
+ *  building it at once: the queue builds a few each frame (Road Mode lays dozens of long pieces with one click). */
+struct ROADMAKER_API FRMDeferMeshes
+{
+	FRMDeferMeshes();
+	~FRMDeferMeshes();
+};
+
 UCLASS(Abstract)
 class ROADMAKER_API ARMBuildableProcedural : public AFGBuildable
 {
@@ -255,6 +263,11 @@ protected:
 	float mUVScale = 400.f;
 
 private:
+	/** Waiting in the mesh queue (see FRMDeferMeshes). */
+	bool mMeshQueued = false;
+	/** Builds queued meshes for up to a few ms (at least one); false once the queue is empty. */
+	static bool BuildQueuedMeshes();
+
 	/** Paths and tracks found on this piece, kept for a moment (the dismantle highlight asks every frame). */
 	mutable TArray<TWeakObjectPtr<AActor>> mRiderCache;
 	mutable double mRiderCacheTime = -1.0;

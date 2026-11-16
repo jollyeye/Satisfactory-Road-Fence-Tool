@@ -20,6 +20,7 @@
 #include "FGDismantleInterface.h"
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
+#include "Containers/Ticker.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -54,6 +55,24 @@ ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectI
 
 	// No game build effect (it would hide the piece for the whole animation and show nothing); see StartRiseAnimation.
 	mSkipBuildEffect = true;
+}
+
+namespace
+{
+	int32 GDeferMeshes = 0;
+	TArray<TWeakObjectPtr<ARMBuildableProcedural>> GMeshQueue;
+	int32 GMeshHead = 0;
+	FTSTicker::FDelegateHandle GMeshTicker;
+}
+
+FRMDeferMeshes::FRMDeferMeshes()
+{
+	++GDeferMeshes;
+}
+
+FRMDeferMeshes::~FRMDeferMeshes()
+{
+	--GDeferMeshes;
 }
 
 void ARMBuildableProcedural::PostInitProperties()
@@ -187,7 +206,28 @@ void ARMBuildableProcedural::BeginPlay()
 	// rebuilt; the old collision stays until the new one is ready), except for pieces arriving with the
 	// world: someone may be standing on them as the save loads.
 	mMesh->bUseAsyncCooking = bJustBuilt;
-	RebuildMesh();
+	if (bJustBuilt && GDeferMeshes > 0)
+	{
+		// Built a moment later by the mesh queue (see FRMDeferMeshes), the rise animation with it.
+		mMeshQueued = true;
+		GMeshQueue.Add(this);
+		if (!GMeshTicker.IsValid())
+		{
+			GMeshTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+			{
+				const bool bMore = ARMBuildableProcedural::BuildQueuedMeshes();
+				if (!bMore)
+				{
+					GMeshTicker.Reset();
+				}
+				return bMore;
+			}));
+		}
+	}
+	else
+	{
+		RebuildMesh();
+	}
 	mMesh->bUseAsyncCooking = true;
 	if (bJustBuilt && HasAuthority())
 	{
@@ -209,13 +249,63 @@ void ARMBuildableProcedural::BeginPlay()
 			}), Delay, false);
 		}
 	}
-	if (bJustBuilt && ShowsBuildAnimation())
+	if (bJustBuilt && ShowsBuildAnimation() && !mMeshQueued)
 	{
 		StartRiseAnimation();
 		// The game's build sound is played by its build effect, which Road Maker pieces skip (see the
 		// constructor): play the same sound ourselves.
 		RMSound::PlayBuild(this, GetBuildAnimDuration());
 	}
+}
+
+bool ARMBuildableProcedural::BuildQueuedMeshes()
+{
+	const double Start = FPlatformTime::Seconds();
+	int32 Done = 0;
+	while (GMeshHead < GMeshQueue.Num())
+	{
+		ARMBuildableProcedural* Piece = GMeshQueue[GMeshHead++].Get();
+		if (!IsValid(Piece) || Piece->IsActorBeingDestroyed() || !Piece->mMeshQueued)
+		{
+			continue;
+		}
+		Piece->mMeshQueued = false;
+		if (Piece->mDismantling)
+		{
+			continue;
+		}
+		const double T0 = FPlatformTime::Seconds();
+		Piece->mMesh->bUseAsyncCooking = true; // collision in the background, as for any piece just built
+		Piece->RebuildMesh();
+		if (Piece->ShowsBuildAnimation())
+		{
+			Piece->StartRiseAnimation();
+			// One build sound for pieces appearing together (not one per frame of the queue).
+			static double LastSound = -10.0;
+			if (T0 - LastSound > 0.5)
+			{
+				LastSound = T0;
+				RMSound::PlayBuild(Piece, Piece->GetBuildAnimDuration());
+			}
+		}
+		++Done;
+		const double Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
+		if (Ms > 10.0)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Mesh queue: %s built in %.1f ms (%d waiting)"), *Piece->GetName(), Ms, GMeshQueue.Num() - GMeshHead);
+		}
+		if (FPlatformTime::Seconds() - Start > 0.006)
+		{
+			break;
+		}
+	}
+	if (GMeshHead >= GMeshQueue.Num())
+	{
+		GMeshQueue.Reset();
+		GMeshHead = 0;
+		return false;
+	}
+	return true;
 }
 
 void ARMBuildableProcedural::Dismantle_Implementation()

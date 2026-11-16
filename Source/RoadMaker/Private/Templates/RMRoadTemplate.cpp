@@ -1889,6 +1889,8 @@ namespace RMRoadTemplate
 
 		void RunTile(FTileJob& Job, int32 K)
 		{
+			const FRMDeferMeshes DeferMeshes; // our pieces' meshes built over the next frames
+			const double TileStart = FPlatformTime::Seconds();
 			const FState& S = Job.S;
 			UWorld* World = Job.World.Get();
 			AFGBlueprintProxy* Proxy = Job.Proxy.Get();
@@ -2012,6 +2014,7 @@ namespace RMRoadTemplate
 					MoveBuilding(M.Key, M.Value);
 				}
 			};
+			const double LoadStart = FPlatformTime::Seconds();
 			Blueprints->LoadStoredBlueprint(Descriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
 				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
 				{
@@ -2121,6 +2124,7 @@ namespace RMRoadTemplate
 				},
 				ApplyMoves);
 			GPendingMoves.Reset();
+			const double LoadMs = (FPlatformTime::Seconds() - LoadStart) * 1000.0;
 			if (Moves.Num() > 0 && IsValid(Moves[0].Key))
 			{
 				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
@@ -2196,8 +2200,8 @@ namespace RMRoadTemplate
 			PrevPower = MoveTemp(CurPower);
 			PrevEnds = MoveTemp(CurEnds);
 			Built += Spawned.Num() - Drop.Num();
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far"),
-				K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired);
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far (%.1f ms, loading %.1f ms)"),
+				K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired, (FPlatformTime::Seconds() - TileStart) * 1000.0, LoadMs);
 		}
 
 		/** After the last tile: the checks that need the whole placement. */
@@ -2288,6 +2292,7 @@ namespace RMRoadTemplate
 		AActor* Build(AFGBlueprintHologram* Self, const FState& S)
 		{
 			const double ClickStart = FPlatformTime::Seconds();
+			const FRMDeferMeshes DeferMeshes; // our pieces' meshes built over the next frames
 			UWorld* World = Self->GetWorld();
 			if (!World || S.Frames.Num() < 2)
 			{
