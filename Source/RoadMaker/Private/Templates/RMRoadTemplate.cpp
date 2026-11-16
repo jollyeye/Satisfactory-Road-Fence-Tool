@@ -145,6 +145,7 @@ namespace RMRoadTemplate
 			TArray<FStretch> Stretches;
 			float RigidMaxX = -1.f; // furthest repeated object from the back edge (-1: none)
 			float HalfW = 1600.f, Height = 400.f; // the blueprint's half width and height
+			TArray<FItemAmount> Cost; // what the drawn curve costs (shown by the hologram)
 			TArray<FRMFrame> Frames; // the drawn curve (world), full length
 			FVector LastEnd = FVector(TNumericLimits<float>::Max());
 		};
@@ -543,6 +544,112 @@ namespace RMRoadTemplate
 			return N;
 		}
 
+		struct FPlan
+		{
+			ARMBuildableSpline* Piece = nullptr;
+			TArray<FRMSplinePoint> Points;
+			int32 Mult = 1;
+		};
+
+		/** What the drawn curve builds: our pieces along it (Plans) and the whole tiles of the rest (returned), with the cost. */
+		int32 MakePlans(AFGBlueprintHologram* Self, const FState& S, TArray<FPlan>& Plans, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Cost)
+		{
+			Plans.Reset();
+			Cost.Reset();
+			if (S.Frames.Num() < 2)
+			{
+				return 0;
+			}
+			const float Len = S.Frames.Last().Dist;
+			// A stretch of the curve from D0 to D1 (cm along it), its frames re-counted from 0.
+			auto SubFrames = [&S](float D0, float D1, TArray<FRMFrame>& Out)
+			{
+				Out.Reset();
+				Out.Add(FrameAt(S.Frames, D0));
+				for (const FRMFrame& F : S.Frames)
+				{
+					if (F.Dist > D0 + 1.f && F.Dist < D1 - 1.f)
+					{
+						Out.Add(F);
+					}
+				}
+				Out.Add(FrameAt(S.Frames, D1));
+				for (FRMFrame& F : Out)
+				{
+					F.Dist -= D0;
+				}
+			};
+			for (const FStretch& St : S.Stretches)
+			{
+				ARMBuildableSpline* Piece = St.Piece.Get();
+				if (!Piece)
+				{
+					continue;
+				}
+				TArray<TPair<float, float>> Spans;
+				if (St.bFull)
+				{
+					Spans.Emplace(0.f, Len);
+				}
+				else
+				{
+					const int32 N = TilesFitting(S, St, Len);
+					for (int32 K = 0; K < N; ++K)
+					{
+						Spans.Emplace(St.XMin + K * S.L, FMath::Min(St.XMax + K * S.L, Len));
+					}
+				}
+				for (const TPair<float, float>& Span : Spans)
+				{
+					TArray<FRMFrame> Sub;
+					SubFrames(Span.Key, Span.Value, Sub);
+					FPlan& P = Plans.AddDefaulted_GetRef();
+					P.Piece = Piece;
+					RMGeometry::OffsetCurve(Sub, St.Y, 400.f, P.Points);
+					for (FRMSplinePoint& Pt : P.Points)
+					{
+						Pt.Location.Z += St.Z;
+					}
+					if (St.bReversed)
+					{
+						Algo::Reverse(P.Points);
+						for (FRMSplinePoint& Pt : P.Points)
+						{
+							Pt.Tangent = -Pt.Tangent;
+						}
+					}
+					// Paid like the piece in the blueprint, by length.
+					const float SpanLen = Span.Value - Span.Key;
+					P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * SpanLen / FMath::Max(St.Length, 1.f) - 0.01f));
+					if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
+					{
+						for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
+						{
+							Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
+						}
+					}
+				}
+			}
+			// The repeated objects: what each costs (its refund), once per tile.
+			const int32 Tiles = RigidTiles(S, Len);
+			if (Tiles > 0)
+			{
+				for (const FRigid& R : S.Rigids)
+				{
+					if (AFGBuildable* B = R.Buildable.Get())
+					{
+						TArray<FInventoryStack> Refund;
+						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
+						for (const FInventoryStack& Stack : Refund)
+						{
+							Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
+						}
+					}
+				}
+			}
+			return Tiles;
+		}
+
 		void Update(AFGBlueprintHologram* Self, FState& S, const FVector& End)
 		{
 			if (FVector::DistSquared(End, S.LastEnd) < 25.f)
@@ -561,6 +668,16 @@ namespace RMRoadTemplate
 				return;
 			}
 			S.Frames = Frames;
+			{
+				TArray<FPlan> Plans;
+				TMap<TSubclassOf<UFGItemDescriptor>, int32> CostMap;
+				MakePlans(Self, S, Plans, CostMap);
+				S.Cost.Reset();
+				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : CostMap)
+				{
+					S.Cost.Add(FItemAmount(C.Key, C.Value));
+				}
+			}
 			const float Len = FMath::Min(Frames.Last().Dist, S.L * MaxTiles);
 
 			// Where a hologram-space point of tile K goes (D = distance along the curve).
@@ -711,101 +828,9 @@ namespace RMRoadTemplate
 				UE_LOG(LogRoadMaker, Warning, TEXT("Road Mode: building is host only for now"));
 				return false;
 			}
-			const float Len = S.Frames.Last().Dist;
-			struct FPlan
-			{
-				ARMBuildableSpline* Piece = nullptr;
-				TArray<FRMSplinePoint> Points;
-				int32 Mult = 1;
-			};
 			TArray<FPlan> Plans;
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
-			// A stretch of the curve from D0 to D1 (cm along it), its frames re-counted from 0.
-			auto SubFrames = [&S](float D0, float D1, TArray<FRMFrame>& Out)
-			{
-				Out.Reset();
-				Out.Add(FrameAt(S.Frames, D0));
-				for (const FRMFrame& F : S.Frames)
-				{
-					if (F.Dist > D0 + 1.f && F.Dist < D1 - 1.f)
-					{
-						Out.Add(F);
-					}
-				}
-				Out.Add(FrameAt(S.Frames, D1));
-				for (FRMFrame& F : Out)
-				{
-					F.Dist -= D0;
-				}
-			};
-			for (const FStretch& St : S.Stretches)
-			{
-				ARMBuildableSpline* Piece = St.Piece.Get();
-				if (!Piece)
-				{
-					continue;
-				}
-				TArray<TPair<float, float>> Spans;
-				if (St.bFull)
-				{
-					Spans.Emplace(0.f, Len);
-				}
-				else
-				{
-					const int32 N = TilesFitting(S, St, Len);
-					for (int32 K = 0; K < N; ++K)
-					{
-						Spans.Emplace(St.XMin + K * S.L, FMath::Min(St.XMax + K * S.L, Len));
-					}
-				}
-				for (const TPair<float, float>& Span : Spans)
-				{
-					TArray<FRMFrame> Sub;
-					SubFrames(Span.Key, Span.Value, Sub);
-					FPlan& P = Plans.AddDefaulted_GetRef();
-					P.Piece = Piece;
-					RMGeometry::OffsetCurve(Sub, St.Y, 400.f, P.Points);
-					for (FRMSplinePoint& Pt : P.Points)
-					{
-						Pt.Location.Z += St.Z;
-					}
-					if (St.bReversed)
-					{
-						Algo::Reverse(P.Points);
-						for (FRMSplinePoint& Pt : P.Points)
-						{
-							Pt.Tangent = -Pt.Tangent;
-						}
-					}
-					// Paid like the piece in the blueprint, by length.
-					const float SpanLen = Span.Value - Span.Key;
-					P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * SpanLen / FMath::Max(St.Length, 1.f) - 0.01f));
-					if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
-					{
-						for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
-						{
-							Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
-						}
-					}
-				}
-			}
-			// The repeated objects: what each costs (its refund), once per tile.
-			const int32 Tiles = RigidTiles(S, Len);
-			if (Tiles > 0)
-			{
-				for (const FRigid& R : S.Rigids)
-				{
-					if (AFGBuildable* B = R.Buildable.Get())
-					{
-						TArray<FInventoryStack> Refund;
-						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
-						for (const FInventoryStack& Stack : Refund)
-						{
-							Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
-						}
-					}
-				}
-			}
+			const int32 Tiles = MakePlans(Self, S, Plans, Cost);
 			if (Plans.Num() == 0 && Tiles == 0)
 			{
 				return false;
@@ -895,9 +920,29 @@ namespace RMRoadTemplate
 				{
 					TArray<AFGBuildable*> Spawned;
 					TArray<AFGBuildable*> Drop;
+					TArray<TPair<AFGBuildable*, FTransform>> Moves;
 					int32 Logged = 0;
+					// The loader finishes spawning each piece at its blueprint place after this callback: the moves are
+					// made again just before they begin play.
+					auto ApplyMoves = [&Moves, K]()
+					{
+						int32 Checked = 0;
+						for (const TPair<AFGBuildable*, FTransform>& M : Moves)
+						{
+							if (!IsValid(M.Key))
+							{
+								continue;
+							}
+							if (Checked++ < 1)
+							{
+								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
+									*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
+							}
+							M.Key->SetActorTransform(M.Value);
+						}
+					};
 					Blueprints->LoadStoredBlueprint(Self->mBlueprintDescriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
-						[&S, &Drop, &Logged, K](AFGBuildable* B, int32 Index)
+						[&S, &Drop, &Moves, &Logged, K](AFGBuildable* B, int32 Index)
 						{
 							if (!B)
 							{
@@ -924,8 +969,11 @@ namespace RMRoadTemplate
 							{
 								UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *WorldPos.ToString());
 							}
-							B->SetActorTransform(FTransform(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D()));
-						});
+							const FTransform Target(FrameRot * Rel.GetRotation(), WorldPos, Rel.GetScale3D());
+							Moves.Emplace(B, Target);
+							B->SetActorTransform(Target);
+						},
+						ApplyMoves);
 					for (AFGBuildable* B : Drop)
 					{
 						if (Proxy)
@@ -1100,6 +1148,16 @@ namespace RMRoadTemplate
 					{
 						RMRoadMode::Stop(Self);
 					}
+				}
+			});
+		// While drawing, the hologram shows what the drawn curve costs.
+		SUBSCRIBE_METHOD_VIRTUAL(AFGBlueprintHologram::GetBaseCost, GetMutableDefault<AFGBlueprintHologram>(),
+			[](auto& Scope, const AFGBlueprintHologram* Self)
+			{
+				const RMRoadMode::FState* S = RMRoadMode::GStates.Find(const_cast<AFGBlueprintHologram*>(Self));
+				if (S && S->Step == 1 && S->Frames.Num() > 1)
+				{
+					Scope.Override(S->Cost);
 				}
 			});
 		// While drawing, the blueprint stays at its start and the curve follows the aim.
