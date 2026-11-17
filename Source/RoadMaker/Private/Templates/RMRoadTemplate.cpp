@@ -1312,6 +1312,38 @@ namespace RMRoadTemplate
 		};
 
 		/** What the drawn curve builds: our pieces along it (Plans) and the whole tiles of the rest (returned), with the cost. */
+		/**
+		 * What one piece of the blueprint costs (and gives back once built). Not its dismantle refund: a piece in the
+		 * blueprint's own world gives back nothing there (the game's refund needs the real world), so every tile and
+		 * every rebuilt spline was free while their dismantle paid out. The game's own blueprint cost for the game's
+		 * pieces (by length for belts, pipes, rails), our recipe times our multiplier for ours, asked in the real world.
+		 */
+		void PieceCost(const UObject* Context, AFGBuildable* B, TArray<FItemAmount>& Out)
+		{
+			Out.Reset();
+			if (!B || !Context)
+			{
+				return;
+			}
+			if (const ARMBuildableProcedural* Ours = Cast<ARMBuildableProcedural>(B))
+			{
+				if (TSubclassOf<UFGRecipe> Recipe = Ours->GetRefundRecipe())
+				{
+					for (const FItemAmount& A : UFGRecipe::GetIngredients(Context, Recipe))
+					{
+						Out.Add(FItemAmount(A.ItemClass, A.Amount * FMath::Max(1, Ours->GetCostMultiplier())));
+					}
+				}
+				return;
+			}
+			if (AFGBlueprintSubsystem* Blueprints = AFGBlueprintSubsystem::Get(Context->GetWorld()))
+			{
+				TArray<AFGBuildable*> One;
+				One.Add(B);
+				Blueprints->CalculateBlueprintCost(One, Out);
+			}
+		}
+
 		int32 MakePlans(AFGBlueprintHologram* Self, const FState& S, TArray<FPlan>& Plans, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Cost)
 		{
 			Plans.Reset();
@@ -1383,12 +1415,12 @@ namespace RMRoadTemplate
 					P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * SpanLen / FMath::Max(St.Length, 1.f) - 0.01f));
 					// What the new piece gives back when dismantled (its look's recipe for a switched wall, not just the
 					// base recipe): the piece in the blueprint's refund per unit of length, times the new multiplier.
-					TArray<FInventoryStack> Refund;
-					IFGDismantleInterface::Execute_GetDismantleRefund(Piece, Refund, false);
+					TArray<FItemAmount> PieceAmounts;
+					PieceCost(Self, Piece, PieceAmounts);
 					const int32 Units = FMath::Max(1, Piece->GetCostMultiplier());
-					for (const FInventoryStack& Stack : Refund)
+					for (const FItemAmount& A : PieceAmounts)
 					{
-						Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(float(Stack.NumItems) / Units * P.Mult - 0.01f);
+						Cost.FindOrAdd(A.ItemClass) += FMath::CeilToInt(float(A.Amount) / Units * P.Mult - 0.01f);
 					}
 				}
 			}
@@ -1416,9 +1448,9 @@ namespace RMRoadTemplate
 				{
 					if (AFGBuildable* B = R.Buildable.Get())
 					{
-						TArray<FInventoryStack> Refund;
-						IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
-						for (const FInventoryStack& Stack : Refund)
+						TArray<FItemAmount> Amounts;
+						PieceCost(Self, B, Amounts);
+						for (const FItemAmount& Stack : Amounts)
 						{
 							if (R.bSplineFull)
 							{
@@ -1431,12 +1463,12 @@ namespace RMRoadTemplate
 								{
 									TArray<FVector> Pos, Tan;
 									const float BentLen = BendSpline(S, R.Rel, R.SplinePoints, K, Pos, Tan);
-									Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * BentLen / R.SplineLen - 0.01f);
+									Cost.FindOrAdd(Stack.ItemClass) += FMath::CeilToInt(Stack.Amount * BentLen / R.SplineLen - 0.01f);
 								}
 							}
 							else
 							{
-								Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems * Tiles;
+								Cost.FindOrAdd(Stack.ItemClass) += Stack.Amount * Tiles;
 							}
 						}
 					}
@@ -1452,11 +1484,11 @@ namespace RMRoadTemplate
 				}
 				TArray<TArray<FVector>> Pos, Tan;
 				const float Total = PlanFullSpline(S, R, Pos, Tan);
-				TArray<FInventoryStack> Refund;
-				IFGDismantleInterface::Execute_GetDismantleRefund(B, Refund, false);
-				for (const FInventoryStack& Stack : Refund)
+				TArray<FItemAmount> Amounts;
+				PieceCost(Self, B, Amounts);
+				for (const FItemAmount& A : Amounts)
 				{
-					Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(Stack.NumItems * Total / R.SplineLen - 0.01f);
+					Cost.FindOrAdd(A.ItemClass) += FMath::CeilToInt(A.Amount * Total / R.SplineLen - 0.01f);
 				}
 			}
 			return Tiles;

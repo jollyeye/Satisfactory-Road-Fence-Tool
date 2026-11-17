@@ -82,6 +82,7 @@ public:
 	/** True if the player can pay for switching to this look (or nothing has to be paid). */
 	bool CanAffordLook(uint8 Look, class AFGCharacterPlayer* Payer) const;
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
+	virtual TSubclassOf<class UFGRecipe> GetRefundRecipe() const override;
 	void SetPreviewWallLook(uint8 Look);
 	uint8 GetWallLook() const { return mWallLook; }
 	ERMFenceType GetEffectiveType() const;

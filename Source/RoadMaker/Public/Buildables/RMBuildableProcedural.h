@@ -60,6 +60,8 @@ public:
 
 	// Scale the refund by how big this piece is (the recipe holds the cost of one unit).
 	virtual void GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const override;
+	/** The recipe one unit of this piece costs and gives back (a switched wall: its look's recipe); times the cost multiplier. */
+	virtual TSubclassOf<class UFGRecipe> GetRefundRecipe() const { return GetBuiltWithRecipe(); }
 	/**
 	 * Finishes the build animation first: the game's dismantle effect takes the piece's mesh components, and the
 	 * temporary reveal mesh (or chunk meshes) going away under it crashed the game (issue #5: merging roads quickly).

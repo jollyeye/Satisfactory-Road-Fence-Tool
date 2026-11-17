@@ -243,6 +243,16 @@ namespace
 	}
 }
 
+TSubclassOf<UFGRecipe> ARMBuildableFence::GetRefundRecipe() const
+{
+	const uint8 Look = GetShownLook();
+	if (HasLooks() && mWallLook != 0 && mWallLookRecipes.IsValidIndex(Look - 1) && mWallLookRecipes[Look - 1])
+	{
+		return mWallLookRecipes[Look - 1];
+	}
+	return Super::GetRefundRecipe();
+}
+
 void ARMBuildableFence::GetDismantleRefund_Implementation(TArray<FInventoryStack>& out_refund, bool noBuildCostEnabled) const
 {
 	const uint8 Look = GetShownLook();
