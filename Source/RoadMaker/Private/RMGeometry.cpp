@@ -570,6 +570,33 @@ namespace
 	}
 }
 
+void RMGeometry::SimplifyFrames(TArray<FRMFrame>& Frames, float MaxTurnDeg, float MaxGap)
+{
+	if (Frames.Num() < 3)
+	{
+		return;
+	}
+	const float CosTurn = FMath::Cos(FMath::DegreesToRadians(MaxTurnDeg));
+	TArray<FRMFrame> Kept;
+	Kept.Add(Frames[0]);
+	int32 Last = 0;
+	for (int32 K = 1; K < Frames.Num() - 1; ++K)
+	{
+		// Would a quad from the last kept frame to the next one still be within the tolerance? If not, keep this one.
+		const FRMFrame& Next = Frames[K + 1];
+		const bool bTurned = FVector::DotProduct(Next.Fwd, Frames[Last].Fwd) < CosTurn
+			|| FVector::DotProduct(Next.Right, Frames[Last].Right) < CosTurn;
+		const bool bFar = Next.Dist - Frames[Last].Dist > MaxGap;
+		if (bTurned || bFar)
+		{
+			Kept.Add(Frames[K]);
+			Last = K;
+		}
+	}
+	Kept.Add(Frames.Last());
+	Frames = MoveTemp(Kept);
+}
+
 void RMGeometry::ThinFramesThreeQuarters(TArray<FRMFrame>& Frames)
 {
 	if (Frames.Num() < 3)

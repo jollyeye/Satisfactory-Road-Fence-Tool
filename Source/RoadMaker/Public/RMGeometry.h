@@ -157,6 +157,12 @@ namespace RMGeometry
 {
 	/** Keeps every other frame (and always the last): half the quads of anything extruded along them. */
 	ROADMAKER_API void HalveFrames(TArray<FRMFrame>& Frames);
+	/**
+	 * Keeps only the frames the shape needs: a frame wherever the direction (sideways or up / down) has turned by
+	 * more than MaxTurnDeg since the last one kept, and at least every MaxGap cm on straight stretches. The first
+	 * and last frames are always kept; distances along stay as they were.
+	 */
+	ROADMAKER_API void SimplifyFrames(TArray<FRMFrame>& Frames, float MaxTurnDeg, float MaxGap);
 	/** Drops every fourth frame (keeps the last): three quarters of the quads. */
 	ROADMAKER_API void ThinFramesThreeQuarters(TArray<FRMFrame>& Frames);
 	/** A road's detailed cross-sections: half of the 1 m samples for roads, three quarters for walking paths. */

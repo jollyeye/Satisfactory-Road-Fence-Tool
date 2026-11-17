@@ -34,6 +34,13 @@ void ARMBuildableFence::RebuildMesh()
 	UpdateChunkLayout();
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
+	const ERMFenceType Type = GetEffectiveType();
+	if (Type == ERMFenceType::GridFence || Type == ERMFenceType::GridFenceTall)
+	{
+		// Cross-sections only where the fence bends (3 degrees), every 4 m on straight stretches. The posts keep
+		// their spacing (placed by distance along).
+		RMGeometry::SimplifyFrames(Frames, 3.f, 400.f);
+	}
 	AddChunkBoundaries(Frames);
 	mMesh->ClearAllMeshSections();
 	PrepareChunks();
@@ -44,7 +51,6 @@ void ARMBuildableFence::RebuildMesh()
 	}
 
 	FRMMesh Main, Panel;
-	const ERMFenceType Type = GetEffectiveType();
 	UMaterialInterface* MainMaterial = GetEffectiveMainMaterial();
 	BuildFenceMesh(Type, Frames, mUVScale, mInwardSign, Main, Panel, GetWallLayout());
 
