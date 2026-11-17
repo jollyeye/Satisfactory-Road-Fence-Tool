@@ -443,6 +443,7 @@ void ARMRoadAdjustHologram::RebuildRoadPreviews()
 	{
 		TArray<FRMFrame> Frames;
 		RMGeometry::SampleSpline(Points, 100.f, Frames);
+		RMGeometry::HalveFrames(Frames); // as the built road
 		if (Frames.Num() < 2)
 		{
 			return;

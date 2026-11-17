@@ -570,6 +570,25 @@ namespace
 	}
 }
 
+void RMGeometry::HalveFrames(TArray<FRMFrame>& Frames)
+{
+	if (Frames.Num() < 3)
+	{
+		return;
+	}
+	TArray<FRMFrame> Kept;
+	Kept.Reserve(Frames.Num() / 2 + 2);
+	for (int32 I = 0; I < Frames.Num(); I += 2)
+	{
+		Kept.Add(Frames[I]);
+	}
+	if ((Frames.Num() - 1) % 2 != 0)
+	{
+		Kept.Add(Frames.Last());
+	}
+	Frames = MoveTemp(Kept);
+}
+
 void RMGeometry::SampleSpline(const TArray<FRMSplinePoint>& Points, float Step, TArray<FRMFrame>& OutFrames)
 {
 	OutFrames.Reset();

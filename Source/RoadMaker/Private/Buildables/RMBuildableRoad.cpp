@@ -57,6 +57,7 @@ void ARMBuildableRoad::RebuildMesh()
 	UpdateChunkLayout();
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
+	RMGeometry::HalveFrames(Frames); // half the quads (the road is a flat strip: the curve stays round enough)
 	if (Frames.Num() < 2)
 	{
 		mMesh->ClearAllMeshSections();
