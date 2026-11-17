@@ -105,7 +105,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Road fences (guard rail, cement blocks, grid fence) and fence walls snapped to a road edge or an intersection curb turn round with the scroll wheel, to face away from the road, like the street lights. The Metal Grid Fence and the Steel Mesh Fence Wall now stand centred on their line (3 cm over), so they stay in place when turned.
 
-- Sign wall: a 4 m fence wall showing a sign design along its whole length, following its curve. Press E on it to edit the design in the game's sign editor (same layouts, backgrounds and animations as the 8 x 4 m small billboard); copy / paste settings between sign walls, and middle click a sign wall to build more with the same design. Visible from as far as a billboard.
+- Sign wall: a 4 m fence wall showing a sign design along its whole length, following its curve. Press E on it to edit the design in the game's sign editor (same layouts, backgrounds and animations as the 8 x 4 m small billboard); copy / paste settings between sign walls, and middle click a sign wall to build more with the same design. Visible from as far as a billboard. Costs what a Small Billboard does (3 encased industrial beams, 4 copper sheets, 1 crystal oscillator) per 8 m.
 
 - Fences fill gaps: snapped to a road edge that already has fences on it, a new fence fills just the free stretch you aim at, end to end with its neighbours. Cut a wall, dismantle a piece and put a sign wall in its place.
 

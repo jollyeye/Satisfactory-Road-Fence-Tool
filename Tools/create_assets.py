@@ -151,6 +151,10 @@ VanillaFicsitWall = load_game_class("Build_Wall_8x4_01") or load_game_class("Bui
 VanillaSteelWall = load_game_class("Build_SteelWall_8x4")
 VanillaBeam = load_game_class("Build_Beam_Painted") or load_game_class("Build_Beam")
 Desc_SteelBeam = load_game_class("Desc_SteelPlate")
+# Sign Wall: costs what the game's Small Billboard (8 x 4 m) does, per 8 m.
+Desc_EncasedBeam = load_game_class("Desc_SteelPlateReinforced")
+Desc_CopperSheet = load_game_class("Desc_CopperSheet")
+Desc_CrystalOscillator = load_game_class("Desc_CrystalOscillator")
 Desc_SteelPipe = load_game_class("Desc_SteelPipe") or load_game_class("Desc_Pipe")
 if Desc_SteelPipe:
     log("  steel pipe item: " + Desc_SteelPipe.get_name())
@@ -521,8 +525,8 @@ TOOLS = [
      {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Ficsit", RMBuildableFence, holo_fence, "FICSIT Fence Wall", "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 1)], fence_icons, {"m_main_material": mat_concrete}),
-    ("FenceWall_Sign", RMBuildableSignWall, holo_fence, "Sign Wall", "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 4 m.",
-     {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 2), (Desc_Wire, 2)], fence_icons, {}),
+    ("FenceWall_Sign", RMBuildableSignWall, holo_fence, "Sign Wall", "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 8 m, like a Small Billboard.",
+     {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0}, [(Desc_EncasedBeam, 3), (Desc_CopperSheet, 4), (Desc_CrystalOscillator, 1)], fence_icons, {}),
     ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
     ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel.",

@@ -52,7 +52,8 @@ public:
 protected:
 	/** Aiming at a road: follow its edge on the side you look at. */
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
-	virtual float GetCostUnitLength() const override { return 400.f; }
+	/** 4 m; the sign wall 8 m (it costs a Small Billboard per 8 m design). */
+	virtual float GetCostUnitLength() const override;
 	virtual void RebuildPreview() override;
 
 	/** The real fence: its materials (look) and paint, with the game's valid / invalid tint on top. */

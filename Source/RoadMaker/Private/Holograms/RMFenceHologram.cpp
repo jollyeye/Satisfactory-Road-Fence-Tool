@@ -1,4 +1,5 @@
 #include "Holograms/RMFenceHologram.h"
+#include "Buildables/RMBuildableSignWall.h"
 #include "Holograms/RMHologramLook.h"
 #include "Holograms/RMDisqualifiers.h"
 #include "Buildables/RMBuildableFence.h"
@@ -832,4 +833,9 @@ bool ARMFenceHologram::SnapToIntersectionCurb(ARMBuildableIntersection* Intersec
 	mOnRoadOrCurb = true;
 	SetWorldPoints(Points);
 	return true;
+}
+
+float ARMFenceHologram::GetCostUnitLength() const
+{
+	return mBuildClass && mBuildClass->IsChildOf(ARMBuildableSignWall::StaticClass()) ? 800.f : 400.f;
 }
