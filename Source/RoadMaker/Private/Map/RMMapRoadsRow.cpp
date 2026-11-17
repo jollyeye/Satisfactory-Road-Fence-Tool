@@ -43,7 +43,7 @@ namespace
 			UFunction* F = *It;
 			if (!bLogged && F->GetOuter() == Box->GetClass())
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Map: check box function %s (%d params)"), *F->GetName(), F->NumParms);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Map: check box function %s (%d params)"), *F->GetName(), F->NumParms);
 			}
 			const FString Name = F->GetName();
 			if (!Setter && F->NumParms == 1 && Name.StartsWith(TEXT("Set")) && Name.Contains(TEXT("Check")))
@@ -59,7 +59,7 @@ namespace
 		{
 			if (!bLogged)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Map: check box bool %s"), *It->GetName());
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Map: check box bool %s"), *It->GetName());
 			}
 			if (!Flag && It->GetName().Contains(TEXT("Check")))
 			{
@@ -242,7 +242,7 @@ void RMMapRoads::EnsureRow(UWorld* World)
 				OtherLayout.Offsets.Bottom -= Height; // its height
 			}
 			OtherSlot->SetLayout(OtherLayout);
-			UE_LOG(LogRoadMaker, Display, TEXT("Map: %s (%s) made %.0f shorter for the roads row"), *Other->GetName(), *Other->GetClass()->GetName(), Height);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Map: %s (%s) made %.0f shorter for the roads row"), *Other->GetName(), *Other->GetClass()->GetName(), Height);
 		}
 	}
 	To->SetLayout(Layout);
@@ -251,7 +251,7 @@ void RMMapRoads::EnsureRow(UWorld* World)
 	Row->CopyBackground(StampsRow, StampsButton);
 	Row->CopyLook(StampsButton, StampsText, Tick);
 	GMapRoadsRow = Row;
-	UE_LOG(LogRoadMaker, Display, TEXT("Map: \"Show Roads on Map\" row added above %s in %s (height %.0f, tick %s)"),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Map: \"Show Roads on Map\" row added above %s in %s (height %.0f, tick %s)"),
 		*StampsRow->GetName(), *Canvas->GetName(), Height, Tick ? *Tick->GetClass()->GetName() : TEXT("none"));
 }
 
@@ -419,7 +419,7 @@ void URMMapRoadsRow::SyncCheck()
 		static int32 Logs = 0;
 		if (Logs++ < 5)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Map: roads tick put back to %s"), RMMapRoads::IsShown() ? TEXT("on") : TEXT("off"));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Map: roads tick put back to %s"), RMMapRoads::IsShown() ? TEXT("on") : TEXT("off"));
 		}
 		Refresh();
 	}
@@ -465,7 +465,7 @@ void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
 			NewImage->SetColorAndOpacity(Image->GetColorAndOpacity());
 			Copy = NewImage;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Map: stamps row part %s (%s)%s"), *Child->GetName(), *Child->GetClass()->GetName(), Copy ? TEXT(" copied") : TEXT(""));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Map: stamps row part %s (%s)%s"), *Child->GetName(), *Child->GetClass()->GetName(), Copy ? TEXT(" copied") : TEXT(""));
 		if (Copy)
 		{
 			Copy->SetRenderOpacity(Child->GetRenderOpacity());
@@ -489,12 +489,12 @@ void URMMapRoadsRow::CopyBackground(UWidget* GameRow, UButton* GameButton)
 void URMMapRoadsRow::OnClicked()
 {
 	RMMapRoads::SetShown(!RMMapRoads::IsShown());
-	UE_LOG(LogRoadMaker, Display, TEXT("Map: roads %s"), RMMapRoads::IsShown() ? TEXT("shown") : TEXT("hidden"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Map: roads %s"), RMMapRoads::IsShown() ? TEXT("shown") : TEXT("hidden"));
 	Refresh();
 }
 
 void URMMapRoadsRow::OnCheckChanged(bool bIsChecked)
 {
 	RMMapRoads::SetShown(bIsChecked);
-	UE_LOG(LogRoadMaker, Display, TEXT("Map: roads %s"), bIsChecked ? TEXT("shown") : TEXT("hidden"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Map: roads %s"), bIsChecked ? TEXT("shown") : TEXT("hidden"));
 }

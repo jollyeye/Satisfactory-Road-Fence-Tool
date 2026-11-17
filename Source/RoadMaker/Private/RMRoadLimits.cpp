@@ -147,7 +147,7 @@ bool RMRoadLimits::HandleInput(APlayerController* PC)
 	}
 	GLimitsOff = !GLimitsOff;
 	SaveLimits();
-	UE_LOG(LogRoadMaker, Display, TEXT("Road limits %s"), GLimitsOff ? TEXT("off") : TEXT("on"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Road limits %s"), GLimitsOff ? TEXT("off") : TEXT("on"));
 	return true;
 }
 
@@ -290,7 +290,7 @@ void RMRoadLimits::UpdateHintBar(APlayerController* PC, bool bShow)
 		static int32 SearchLogs = 0;
 		if (SearchLogs++ < 5)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("HintBar: panel %s, sample %s"), Panel ? *Panel->GetName() : TEXT("none"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("HintBar: panel %s, sample %s"), Panel ? *Panel->GetName() : TEXT("none"),
 				Sample ? *Sample->GetClass()->GetName() : TEXT("none"));
 		}
 		if (!Panel || !Sample)

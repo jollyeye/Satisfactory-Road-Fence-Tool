@@ -452,7 +452,7 @@ namespace
 				GActiveMarking = nullptr;
 			}
 			EnsureHint(State);
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines: selected %s"), *Desc->GetName());
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Lines: selected %s"), *Desc->GetName());
 		}
 		else if (Desc)
 		{
@@ -613,7 +613,7 @@ namespace
 				Prop->SetObjectPropertyValue_InContainer(Option, Icon);
 			}
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Lane Vehicle icon: road tile %dx%d (%d of %d mips) + %s %dx%d (%s)"), Tile->GetSizeX(), Tile->GetSizeY(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Vehicle icon: road tile %dx%d (%d of %d mips) + %s %dx%d (%s)"), Tile->GetSizeX(), Tile->GetSizeY(),
 			Tile->GetNumResidentMips(), Tile->GetNumMips(), *Cart->GetName(), Cart->GetSizeX(), Cart->GetSizeY(), GPixelFormats[Cart->GetPixelFormat()].Name);
 	}
 
@@ -769,22 +769,22 @@ namespace
 				if (!GLoggedTileLayout)
 				{
 					GLoggedTileLayout = true;
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: drawing into %s.mIcon (was %s)"),
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Lines icons: drawing into %s.mIcon (was %s)"),
 						*Owner->GetClass()->GetName(),
 						New.OriginalBrush.GetResourceObject() ? *New.OriginalBrush.GetResourceObject()->GetName() : TEXT("none"));
 					if (const UMaterialInstance* MI = Cast<UMaterialInstance>(New.OriginalBrush.GetResourceObject()))
 					{
 						for (const FTextureParameterValue& P : MI->TextureParameterValues)
 						{
-							UE_LOG(LogRoadMaker, Display, TEXT("  icon material texture %s = %s"), *P.ParameterInfo.Name.ToString(), P.ParameterValue ? *P.ParameterValue->GetPathName() : TEXT("none"));
+							UE_LOG(LogRoadMaker, Verbose, TEXT("  icon material texture %s = %s"), *P.ParameterInfo.Name.ToString(), P.ParameterValue ? *P.ParameterValue->GetPathName() : TEXT("none"));
 						}
 						for (const FScalarParameterValue& P : MI->ScalarParameterValues)
 						{
-							UE_LOG(LogRoadMaker, Display, TEXT("  icon material scalar %s = %f"), *P.ParameterInfo.Name.ToString(), P.ParameterValue);
+							UE_LOG(LogRoadMaker, Verbose, TEXT("  icon material scalar %s = %f"), *P.ParameterInfo.Name.ToString(), P.ParameterValue);
 						}
 						for (const FVectorParameterValue& P : MI->VectorParameterValues)
 						{
-							UE_LOG(LogRoadMaker, Display, TEXT("  icon material vector %s = %s"), *P.ParameterInfo.Name.ToString(), *P.ParameterValue.ToString());
+							UE_LOG(LogRoadMaker, Verbose, TEXT("  icon material vector %s = %s"), *P.ParameterInfo.Name.ToString(), *P.ParameterValue.ToString());
 						}
 					}
 				}
@@ -976,7 +976,7 @@ namespace
 		if (!bLoggedLabels && Matches == 0 && RMRoadLinePaint::IsAnyLabelVisible(SeenLabels))
 		{
 			bLoggedLabels = true;
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: no tile matched. Labels: %s | Known: %s"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Lines icons: no tile matched. Labels: %s | Known: %s"),
 				*FString::Join(SeenLabels, TEXT(", ")), *FString::Join(GetKeysOf(GIconsByName), TEXT(", ")));
 		}
 		return true;
@@ -1002,7 +1002,7 @@ namespace
 					break;
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Lines hotbar: %s shortcut property = %s"), *Class->GetName(), Prop ? *Prop->GetName() : TEXT("none"));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Lines hotbar: %s shortcut property = %s"), *Class->GetName(), Prop ? *Prop->GetName() : TEXT("none"));
 			Found = &PropByClass.Add(Class, Prop);
 		}
 		return *Found ? Cast<UFGHotbarShortcut>((*Found)->GetObjectPropertyValue_InContainer(Entry)) : nullptr;
@@ -1167,7 +1167,7 @@ namespace
 		}
 		if (!Recipe)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: no customizer option for %s (option %s)"), *Marking->GetClass()->GetName(),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Marking sample: no customizer option for %s (option %s)"), *Marking->GetClass()->GetName(),
 				Option ? *Option->GetName() : TEXT("none"));
 			return false;
 		}
@@ -1188,7 +1188,7 @@ namespace
 			GSamplePendingRecipe = Recipe;
 			GSamplePendingFrames = 120;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: %s on %s, variant %d, recipe %s, build gun %s"), *Option->GetName(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Marking sample: %s on %s, variant %d, recipe %s, build gun %s"), *Option->GetName(),
 			*Marking->GetClass()->GetName(), GSampledVariant, *Recipe->GetName(), bGunInHand ? TEXT("in hand") : TEXT("taken out"));
 		return true;
 	}
@@ -1254,7 +1254,7 @@ namespace
 			}
 			if (Names.Num() > 0 || Searches == 1)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Marking sample: game sample actions: %s"), Names.Num() ? *FString::Join(Names, TEXT(", ")) : TEXT("none yet (middle mouse)"));
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Marking sample: game sample actions: %s"), Names.Num() ? *FString::Join(Names, TEXT(", ")) : TEXT("none yet (middle mouse)"));
 			}
 		}
 		if (Now >= NextRead)

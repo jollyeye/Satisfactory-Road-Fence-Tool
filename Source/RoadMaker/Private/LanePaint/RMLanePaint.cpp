@@ -244,7 +244,7 @@ void ARMLanePaintHologram::CheckValidPlacement()
 
 bool ARMLanePaintHologram::DoMultiStepPlacement(bool isInputFromARelease)
 {
-	UE_LOG(LogRoadMaker, Display, TEXT("Lane Paint: click, target %s, authority %d, lanes %d, side lines %d"),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Paint: click, target %s, authority %d, lanes %d, side lines %d"),
 		mTargetRoad.IsValid() ? *mTargetRoad->GetName() : TEXT("none"), HasAuthority() ? 1 : 0,
 		RMLanePaint::Settings().Lanes, RMLanePaint::Settings().bEdgeLines ? 1 : 0);
 	if (ARMBuildableRoad* Road = mTargetRoad.Get())

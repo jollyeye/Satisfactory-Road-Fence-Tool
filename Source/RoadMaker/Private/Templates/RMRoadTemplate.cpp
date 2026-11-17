@@ -223,51 +223,6 @@ namespace RMRoadTemplate
 		/** Working out a received placement on the server: no preview components. */
 		bool GNoPreview = false;
 
-		/** Timing of one tile's loading by kind of work and class (logged after the tile, the slowest first). */
-		bool GProfiling = false;
-		double GProfLast = 0.0;
-		TMap<FString, double> GProfTimes;
-		void ProfAdd(const FString& Key, double Seconds)
-		{
-			GProfTimes.FindOrAdd(Key) += Seconds;
-		}
-		/** In the loader's callback: the time since the last one went into spawning this piece; its own time is ours. */
-		struct FProfCallback
-		{
-			double Start;
-			explicit FProfCallback(const AActor* B)
-			{
-				Start = FPlatformTime::Seconds();
-				if (GProfiling && B)
-				{
-					ProfAdd(FString(TEXT("spawn ")) + B->GetClass()->GetName(), Start - GProfLast);
-				}
-			}
-			~FProfCallback()
-			{
-				GProfLast = FPlatformTime::Seconds();
-				if (GProfiling)
-				{
-					ProfAdd(TEXT("our callback"), GProfLast - Start);
-				}
-			}
-		};
-		void ProfLog(int32 K)
-		{
-			GProfTimes.ValueSort([](double A, double B) { return A > B; });
-			FString Line;
-			int32 N = 0;
-			for (const TPair<FString, double>& P : GProfTimes)
-			{
-				if (N++ >= 12)
-				{
-					break;
-				}
-				Line += FString::Printf(TEXT("%s%s %.1f"), Line.IsEmpty() ? TEXT("") : TEXT(", "), *P.Key, P.Value * 1000.0);
-			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d time (ms): %s"), K, *Line);
-			GProfTimes.Reset();
-		}
 
 		/** Moves a placed building. Its components are static (buildings never move), which makes a plain move do
 		 *  nothing once they are registered: made movable for the move, static again after. */
@@ -616,7 +571,7 @@ namespace RMRoadTemplate
 				if (Count > 0)
 				{
 					S.LoaderToPreview = Sum / Count;
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: loader to preview offset %s (spread %s)"), *S.LoaderToPreview.ToString(), *(Max - Min).ToString());
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: loader to preview offset %s (spread %s)"), *S.LoaderToPreview.ToString(), *(Max - Min).ToString());
 				}
 			}
 			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
@@ -667,7 +622,7 @@ namespace RMRoadTemplate
 						St.bReversed = FwdX < 0.f;
 						const bool bAlong = MinAlign > 0.98f && MaxY - MinY <= 50.f;
 						St.bFull = bAlong && St.XMin <= 100.f && St.XMax >= S.L - 100.f;
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s %.0f cm across, %.0f cm up, X %.0f..%.0f of %.0f%s: %s"), *Piece->GetName(),
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s %.0f cm across, %.0f cm up, X %.0f..%.0f of %.0f%s: %s"), *Piece->GetName(),
 							St.Y, St.Z, St.XMin, St.XMax, S.L, St.bReversed ? TEXT(", runs against the arrow") : TEXT(""),
 							!bAlong ? TEXT("not along the arrow, repeated as it is") : St.bFull ? TEXT("stretched") : TEXT("repeated, bent with the curve"));
 						if (bAlong)
@@ -731,7 +686,7 @@ namespace RMRoadTemplate
 								Wires += C->GetNumConnections();
 							}
 							R.bChainPower = Wires == 0 && Circuits.Num() > 0;
-							UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: power %s, %d connections in the blueprint: %s"), *Pole->GetName(), Wires,
+							UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: power %s, %d connections in the blueprint: %s"), *Pole->GetName(), Wires,
 								R.bChainPower ? TEXT("wired to the next tile") : TEXT("left as it is"));
 						}
 					}
@@ -768,7 +723,7 @@ namespace RMRoadTemplate
 								R.bSplineFull = FMath::Min(A.X, B.X) <= S.X0 + 100.f && FMath::Max(A.X, B.X) >= S.X0 + S.L - 100.f
 									&& SplineEndsFree(Pair.Key.Get());
 							}
-							UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: spline %s, %d points, %.0f cm: %s"), *Pair.Key->GetName(), Pts.Num(),
+							UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: spline %s, %d points, %.0f cm: %s"), *Pair.Key->GetName(), Pts.Num(),
 								FVector::Dist(A, B), !bStraight ? TEXT("repeated as it is") : R.bSplineFull ? TEXT("rebuilt over the whole curve")
 								: TEXT("straight along the arrow, bent with the curve per tile"));
 						}
@@ -826,7 +781,7 @@ namespace RMRoadTemplate
 						const FString Name = B->GetClass()->GetName();
 						R.bLevel = (Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")))) || Name.Contains(TEXT("Ladder"));
 						R.bOnWall = true;
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s is on the wall %s: follows it%s"), *B->GetName(), *Wall->GetName(), R.bLevel ? TEXT(" (level)") : TEXT(""));
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s is on the wall %s: follows it%s"), *B->GetName(), *Wall->GetName(), R.bLevel ? TEXT(" (level)") : TEXT(""));
 						break;
 					}
 				}
@@ -896,10 +851,10 @@ namespace RMRoadTemplate
 							}
 						}
 					}
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s lies on %s (repeated as it is): it goes with it"), *Marking->GetName(), *Best->Buildable->GetName());
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s lies on %s (repeated as it is): it goes with it"), *Marking->GetName(), *Best->Buildable->GetName());
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: start fixed, %d pieces stretched along the road, %d repeated"), Stretched, Repeated);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: start fixed, %d pieces stretched along the road, %d repeated"), Stretched, Repeated);
 		}
 
 		UProceduralMeshComponent* MakeBentTile(AFGBlueprintHologram* Self, UProceduralMeshComponent* Src, bool bHoloLook)
@@ -1113,7 +1068,7 @@ namespace RMRoadTemplate
 					}
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s pieces up to %.0f m (hologram %s)"), *GetNameSafe(BuildableClass), Max / 100.f, *GetNameSafe(Holo));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s pieces up to %.0f m (hologram %s)"), *GetNameSafe(BuildableClass), Max / 100.f, *GetNameSafe(Holo));
 			Cache.Add(BuildableClass, Max);
 			return Max;
 		}
@@ -1879,7 +1834,7 @@ namespace RMRoadTemplate
 					OutEnds.Add({ Spline->GetSplineConnection1(), E });
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d free spline ends and %d vehicle path ends of other placements near the ends"), OutEnds.Num(), OutPaths.Num());
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %d free spline ends and %d vehicle path ends of other placements near the ends"), OutEnds.Num(), OutPaths.Num());
 		}
 
 		/** The outer end at Pos (within 20 cm) a connection of the new placement can link to, else null. */
@@ -1954,7 +1909,7 @@ namespace RMRoadTemplate
 			{
 				if (Inventory && Available(Self, Inventory, C.Key) < C.Value)
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
 					return false;
 				}
 			}
@@ -2108,20 +2063,16 @@ namespace RMRoadTemplate
 					}
 					if (Checked++ < 1)
 					{
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode:   tile %d before begin play: %s at %s, moving to %s"), K, *M.Key->GetName(),
 							*M.Key->GetActorLocation().ToString(), *M.Value.GetLocation().ToString());
 					}
 					MoveBuilding(M.Key, M.Value);
 				}
 			};
 			const double LoadStart = FPlatformTime::Seconds();
-			GProfiling = true;
-			GProfLast = LoadStart;
-			GProfTimes.Reset();
 			Blueprints->LoadStoredBlueprint(Descriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
 				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
 				{
-					const FProfCallback Prof(B);
 					if (!B)
 					{
 						return;
@@ -2169,7 +2120,7 @@ namespace RMRoadTemplate
 					}
 					if (Logged++ < 3)
 					{
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode:   tile %d: %s at %s (road space) -> %s"), K, *B->GetName(), *P.ToString(), *Target.GetLocation().ToString());
 					}
 					// A straight game spline: its points laid on the curve (before it begins play, which builds its mesh).
 					if (Match && Match->bSplineBend)
@@ -2229,22 +2180,12 @@ namespace RMRoadTemplate
 					GPendingMoves.Add(B, Target);
 					MoveBuilding(B, Target);
 				},
-				[&ApplyMoves]()
-				{
-					ProfAdd(TEXT("loader before begin play (after the last piece)"), FPlatformTime::Seconds() - GProfLast);
-					const double T0 = FPlatformTime::Seconds();
-					ApplyMoves();
-					ProfAdd(TEXT("our joins and moves"), FPlatformTime::Seconds() - T0);
-					GProfLast = FPlatformTime::Seconds();
-				});
-			ProfAdd(TEXT("loader after begin play"), FPlatformTime::Seconds() - GProfLast);
-			GProfiling = false;
+				ApplyMoves);
 			GPendingMoves.Reset();
 			const double LoadMs = (FPlatformTime::Seconds() - LoadStart) * 1000.0;
-			ProfLog(K);
 			if (Moves.Num() > 0 && IsValid(Moves[0].Key))
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode:   tile %d after placing: %s at %s"), K, *Moves[0].Key->GetName(), *Moves[0].Key->GetActorLocation().ToString());
 			}
 			for (AFGBuildable* B : Drop)
 			{
@@ -2317,7 +2258,7 @@ namespace RMRoadTemplate
 			PrevPower = MoveTemp(CurPower);
 			PrevEnds = MoveTemp(CurEnds);
 			Built += Spawned.Num() - Drop.Num();
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far (%.1f ms, loading %.1f ms)"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: tile %d placed, %d pieces (%d along the arrow left out), %d ends joined and %d wires so far (%.1f ms, loading %.1f ms)"),
 				K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired, (FPlatformTime::Seconds() - TileStart) * 1000.0, LoadMs);
 		}
 
@@ -2360,7 +2301,7 @@ namespace RMRoadTemplate
 					Paid += FString::Printf(TEXT(" (of %d)"), C.Value);
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
 		}
 
 		/** After the last tile: the checks that need the whole placement. */
@@ -2413,9 +2354,9 @@ namespace RMRoadTemplate
 					}
 				}), 4.f, false);
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %d pieces built under blueprint proxy %s, %d ends linked to other placements"), Built,
 				Proxy ? *Proxy->GetName() : TEXT("none"), OuterJoined);
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %d tiles built over %.2f s (%.1f ms of work)"), Job.Tiles,
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %d tiles built over %.2f s (%.1f ms of work)"), Job.Tiles,
 				FPlatformTime::Seconds() - Job.Started, Job.Busy * 1000.0);
 		}
 
@@ -2488,7 +2429,7 @@ namespace RMRoadTemplate
 				{
 					if (Available(Self, Inventory, C.Key) < C.Value)
 					{
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: not enough %s (%d needed)"), *GetNameSafe(C.Key.Get()), C.Value);
 						return nullptr;
 					}
 				}
@@ -2562,7 +2503,7 @@ namespace RMRoadTemplate
 							Ghost->SetBlueprintProxy(Proxy);
 							Proxy->RegisterBuildable(Ghost);
 						}
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: Blueprint Road (%d wide) laid, %.0f m"), Ghost->GetWidthUnits(), S.Frames.Last().Dist / 100.f);
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: Blueprint Road (%d wide) laid, %.0f m"), Ghost->GetWidthUnits(), S.Frames.Last().Dist / 100.f);
 						PlacedGhost = Ghost;
 					}
 				}
@@ -2573,7 +2514,7 @@ namespace RMRoadTemplate
 			{
 				ARMBuildableSpline* New = P.Piece->SpawnLike(P.Piece->GetClass(), P.Piece->GetBuiltWithRecipe(), P.Points, P.Mult,
 					ERMRevealFrom::Start, FVector::ZeroVector, World);
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: built %s (%d points, cost x%d)"), New ? *New->GetName() : TEXT("nothing"), P.Points.Num(), P.Mult);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: built %s (%d points, cost x%d)"), New ? *New->GetName() : TEXT("nothing"), P.Points.Num(), P.Mult);
 				if (New && Proxy)
 				{
 					New->SetBlueprintProxy(Proxy);
@@ -2714,7 +2655,7 @@ namespace RMRoadTemplate
 						IFGSplineBuildableInterface* Cur = Cast<IFGSplineBuildableInterface>(New);
 						IFGSplineBuildableInterface* Before = Cast<IFGSplineBuildableInterface>(Prev);
 						const bool bJoined = Cur && Before && JoinEnds(Cur->GetSplineConnection0(), Before->GetSplineConnection1());
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s after it was built: %d"), *New->GetName(), *GetNameSafe(Prev), bJoined ? 1 : 0);
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s joined to %s after it was built: %d"), *New->GetName(), *GetNameSafe(Prev), bJoined ? 1 : 0);
 					}
 					if (Proxy)
 					{
@@ -2724,7 +2665,7 @@ namespace RMRoadTemplate
 					Prev = New;
 					++Built;
 				}
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s rebuilt over the whole curve in %d pieces"), *Source->GetName(), PiecePos.Num());
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s rebuilt over the whole curve in %d pieces"), *Source->GetName(), PiecePos.Num());
 			}
 			// Everything else: the blueprint placed once per tile by the game's own loader, each piece moved onto the
 			// curve before it begins play (its distance along and across, turned with the curve). Our pieces along the
@@ -2742,7 +2683,7 @@ namespace RMRoadTemplate
 			Job->Built = Built;
 			Job->Ghost = PlacedGhost;
 			Job->Inventory = Inventory;
-			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
 			FRMDeferMeshes::ClaimFrame(); // the click's frame is taken: the first tile comes in a later one
 			StartJob(Job);
 			return Proxy;
@@ -2804,7 +2745,7 @@ namespace RMRoadTemplate
 			if (Now - LastLog > 1.0)
 			{
 				LastLog = Now;
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: aim hits %s (%s) at %s, blocking %d; game placed it at %s (start %s), used: %s"),
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: aim hits %s (%s) at %s, blocking %d; game placed it at %s (start %s), used: %s"),
 					*GetNameSafe(Hit.GetActor()), Hit.GetActor() ? *Hit.GetActor()->GetClass()->GetName() : TEXT("-"), *Hit.Location.ToString(),
 					Hit.bBlockingHit ? 1 : 0, *Placed.ToString(), *S->StartT.GetLocation().ToString(), bPlaced ? TEXT("placed") : TEXT("aim"));
 			}
@@ -2919,7 +2860,7 @@ namespace RMRoadTemplate
 			}
 			if (Count < 2 || Max - Min > 50.f)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("Road template: %s is not along the road (spread %.0f cm), left out"), *Piece->GetName(), Count < 2 ? 0.f : Max - Min);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road template: %s is not along the road (spread %.0f cm), left out"), *Piece->GetName(), Count < 2 ? 0.f : Max - Min);
 				continue;
 			}
 			FRMTemplatePiece TP;
@@ -2966,11 +2907,11 @@ namespace RMRoadTemplate
 					return;
 				}
 				const FRMRoadTemplate T = Read(Self);
-				UE_LOG(LogRoadMaker, Display, TEXT("Road template: road %s, %.0f cm wide, look %d, %d pieces along it"),
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road template: road %s, %.0f cm wide, look %d, %d pieces along it"),
 					T.RoadClass ? *T.RoadClass->GetName() : TEXT("none"), T.RoadWidth, T.Look, T.Pieces.Num());
 				for (const FRMTemplatePiece& P : T.Pieces)
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Road template:   %s at %.0f cm (%s), %.0f cm up, facing %.0f, look %d"),
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road template:   %s at %.0f cm (%s), %.0f cm up, facing %.0f, look %d"),
 						P.Class ? *P.Class->GetName() : TEXT("?"), P.Offset, P.Offset >= 0.f ? TEXT("right") : TEXT("left"), P.Lift, P.InwardSign, P.Look);
 				}
 			});
@@ -3052,7 +2993,7 @@ namespace RMRoadTemplate
 						Remote.End = End;
 						Remote.EndYaw = EndYaw;
 						RMRoadMode::GRemote.Add(Self, Remote);
-						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: placement received (start %s, end %s)"), *StartT.GetLocation().ToString(), *End.ToString());
+						UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: placement received (start %s, end %s)"), *StartT.GetLocation().ToString(), *End.ToString());
 					}
 				}
 			});
@@ -3114,14 +3055,6 @@ namespace RMRoadTemplate
 					Scope.Cancel(); // a suppressed tile copy never begins play
 					return;
 				}
-				if (RMRoadMode::GProfiling)
-				{
-					// Timed (inside the loader's own time, and inside finish spawning if it begins play there: also counted there).
-					const double T0 = FPlatformTime::Seconds();
-					Scope(Self, bFromLevelStreaming);
-					RMRoadMode::ProfAdd(FString(TEXT("  (begin play ")) + Self->GetClass()->GetName() + TEXT(")"), FPlatformTime::Seconds() - T0);
-					return;
-				}
 				if (RMRoadMode::GPendingJoins.Num() == 0)
 				{
 					return;
@@ -3136,7 +3069,7 @@ namespace RMRoadTemplate
 					const UFGFactoryConnectionComponent* FA = Cast<UFGFactoryConnectionComponent>(A);
 					const UFGFactoryConnectionComponent* FB = Cast<UFGFactoryConnectionComponent>(B);
 					const bool bJoined = RMRoadMode::JoinEnds(A, B);
-					UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: %s joined to %s before begin play: %d (%s %s dir %d connected %d / %s %s dir %d connected %d)"),
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s joined to %s before begin play: %d (%s %s dir %d connected %d / %s %s dir %d connected %d)"),
 						*Self->GetName(), *GetNameSafe(Prev.Get()), bJoined ? 1 : 0,
 						*GetNameSafe(A), A ? *A->GetClass()->GetName() : TEXT("-"), FA ? static_cast<int32>(FA->GetDirection()) : -1, FA && FA->IsConnected() ? 1 : 0,
 						*GetNameSafe(B), B ? *B->GetClass()->GetName() : TEXT("-"), FB ? static_cast<int32>(FB->GetDirection()) : -1, FB && FB->IsConnected() ? 1 : 0);
@@ -3149,26 +3082,8 @@ namespace RMRoadTemplate
 			{
 				if (RMRoadMode::GSuppressed.Num() > 0 && RMRoadMode::GSuppressed.Contains(Self))
 				{
-					const double T0 = FPlatformTime::Seconds();
 					Scope.Cancel();
 					Self->Destroy();
-					if (RMRoadMode::GProfiling)
-					{
-						RMRoadMode::ProfAdd(TEXT("  (destroying left-out copies)"), FPlatformTime::Seconds() - T0);
-					}
-					return;
-				}
-				if (RMRoadMode::GProfiling)
-				{
-					const double T0 = FPlatformTime::Seconds();
-					const FTransform* Target = RMRoadMode::GPendingMoves.Find(Self);
-					const FTransform Use = Target ? *Target : Transform;
-					if (Target)
-					{
-						RMRoadMode::GPendingMoves.Remove(Self);
-					}
-					Scope(Self, Use, Target ? false : bIsDefaultTransform, InstanceDataCache, ScaleMethod);
-					RMRoadMode::ProfAdd(FString(TEXT("  (finish spawning ")) + Self->GetClass()->GetName() + TEXT(")"), FPlatformTime::Seconds() - T0);
 					return;
 				}
 				if (RMRoadMode::GPendingMoves.Num() == 0)

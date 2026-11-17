@@ -233,46 +233,6 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 	UWorld* World = GetWorld();
 	if (Proxy && World && HasAuthority())
 	{
-		TMap<FString, int32> Classes;
-		for (AFGBuildable* B : Proxy->GetBuildables())
-		{
-			if (IsValid(B))
-			{
-				Classes.FindOrAdd(B->GetClass()->GetName())++;
-			}
-		}
-		FString List;
-		for (const TPair<FString, int32>& C : Classes)
-		{
-			List += FString::Printf(TEXT("%s%s x%d"), List.IsEmpty() ? TEXT("") : TEXT(", "), *C.Key, C.Value);
-		}
-		for (const FBuildableClassLightweightIndices& Entry : Proxy->GetLightweightClassAndIndices())
-		{
-			List += FString::Printf(TEXT(", %s x%d (lightweight)"), *GetNameSafe(Entry.BuildableClass.Get()), Entry.Indices.Num());
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: %s dismantled with blueprint %s: %s"), *GetName(), *Proxy->GetName(), *List);
-		// What the dismantle gives back for the whole placement (to compare with "Road Mode: paid" when it was built).
-		TArray<AActor*> Placement;
-		IFGDismantleInterface::Execute_GetChildDismantleActors(this, Placement);
-		TMap<FString, int32> Back;
-		for (AActor* A : Placement)
-		{
-			if (IsValid(A) && A->Implements<UFGDismantleInterface>())
-			{
-				TArray<FInventoryStack> Refund;
-				IFGDismantleInterface::Execute_GetDismantleRefund(A, Refund, false);
-				for (const FInventoryStack& Stack : Refund)
-				{
-					Back.FindOrAdd(GetNameSafe(Stack.Item.GetItemClass())) += Stack.NumItems;
-				}
-			}
-		}
-		FString Given;
-		for (const TPair<FString, int32>& B : Back)
-		{
-			Given += FString::Printf(TEXT("%s%s %d"), Given.IsEmpty() ? TEXT("") : TEXT(", "), *B.Key, B.Value);
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: refund of the %d pieces: %s"), Placement.Num(), *Given);
 		// A moment later (once the dismantle is done): whatever of the placement was left behind, still pointing at
 		// its blueprint, goes too.
 		const void* ProxyKey = Proxy;
@@ -303,7 +263,7 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 					{
 						for (const int32 Index : Entry.Indices)
 						{
-							UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   lightweight %s #%d was left behind: removed"), *GetNameSafe(Entry.BuildableClass.Get()), Index);
+							UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint Road:   lightweight %s #%d was left behind: removed"), *GetNameSafe(Entry.BuildableClass.Get()), Index);
 							P->UnregisterLightweightInstance(Entry.BuildableClass, Index);
 							Lightweights->RemoveByInstanceIndex(Entry.BuildableClass, Index);
 							++Left;
@@ -319,11 +279,11 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 				{
 					continue;
 				}
-				UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   %s was left behind: dismantled"), *B->GetName());
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint Road:   %s was left behind: dismantled"), *B->GetName());
 				IFGDismantleInterface::Execute_Dismantle(B);
 				++Left;
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road:   %d pieces left behind by the dismantle"), Left);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint Road:   %d pieces left behind by the dismantle"), Left);
 		}), 0.5f, false);
 	}
 	Super::Dismantle_Implementation();

@@ -205,7 +205,7 @@ namespace RMMapLayer
 				return false;
 			}
 			GMapCapture = Capture;
-			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: mapping origin=%s axisX=%s axisY=%s %.5f units per metre"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: mapping origin=%s axisX=%s axisY=%s %.5f units per metre"),
 				*GMapOrigin.ToString(), *(GMapAxisX * D).ToString(), *(GMapAxisY * D).ToString(), GMapUnitsPerMetre);
 			return true;
 		}
@@ -649,7 +649,7 @@ namespace RMMapLayer
 					GMapIconHandles[V] = FSlateApplication::Get().GetRenderer()->GetResourceHandle(GMapIconBrushes[V]);
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: GPU map roads ready (material %s, white %s)"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: GPU map roads ready (material %s, white %s)"),
 				GMapHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"), GMapWhiteHandle.IsValid() ? TEXT("ok") : TEXT("FAILED"));
 			return GMapHandle.IsValid() && GMapWhiteHandle.IsValid();
 		}
@@ -828,7 +828,7 @@ namespace RMMapLayer
 					if (FMath::Abs(FMath::Loge(FMath::Max(Zoom, 0.01f) / FMath::Max(GMapZoom, 0.01f))) > 0.1f)
 					{
 						GMapZoom = Zoom;
-						UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: zoom %.2fx (%.2f px per metre)"), Zoom,
+						UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: zoom %.2fx (%.2f px per metre)"), Zoom,
 							PxPerMetre);
 					}
 					AppliedZoom = Zoom;
@@ -929,7 +929,7 @@ namespace RMMapLayer
 					if (W->GetFName() == FName(TEXT("mMapZoomContainer")))
 					{
 						GMapZoomWidget = W;
-						UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: zoom container found (%s)"), *W->GetClass()->GetName());
+						UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: zoom container found (%s)"), *W->GetClass()->GetName());
 						break;
 					}
 				}
@@ -1017,7 +1017,7 @@ namespace RMMapLayer
 				}
 				Stack.Add(FString::Printf(TEXT("%s(%d)"), *Name, static_cast<const SOverlay::FOverlaySlot&>(Children->GetSlotAt(I)).GetZOrder()));
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RMMapLayer: attached to %s above the map picture, bottom to top: %s"), *Parent->GetName(),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMMapLayer: attached to %s above the map picture, bottom to top: %s"), *Parent->GetName(),
 				*FString::Join(Stack, TEXT(", ")));
 		}
 

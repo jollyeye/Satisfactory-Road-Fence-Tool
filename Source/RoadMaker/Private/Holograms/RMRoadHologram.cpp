@@ -476,7 +476,7 @@ void ARMRoadHologram::SetUpLocalHolder(APlayerController* PC)
 	static int32 Logs = 0;
 	if (Logs++ < 20)
 	{
-		UE_LOG(LogRoadMaker, Display, TEXT("Road hologram %s: holder set up (%s), %s"), *GetName(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Road hologram %s: holder set up (%s), %s"), *GetName(),
 			HasActorBegunPlay() ? TEXT("tick") : TEXT("begin play"), RMRoadLimits::IsRoadHeld() ? TEXT("road held") : TEXT("-"));
 	}
 }
@@ -496,7 +496,7 @@ void ARMRoadHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		static int32 Logs = 0;
 		if (Logs++ < 20)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Road hologram %s: end, %s"), *GetName(), RMRoadLimits::IsRoadHeld() ? TEXT("another road held") : TEXT("no road held"));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road hologram %s: end, %s"), *GetName(), RMRoadLimits::IsRoadHeld() ? TEXT("another road held") : TEXT("no road held"));
 		}
 	}
 	mSetUpFor.Reset();

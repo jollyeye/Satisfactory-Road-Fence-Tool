@@ -83,7 +83,7 @@ void URMGameWorldModule::AddRecipesToGameSchematic()
 				}
 				if (Added > 0)
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Added %d recipe(s) to %s"), Added, *Entry.Key->GetName());
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Added %d recipe(s) to %s"), Added, *Entry.Key->GetName());
 				}
 				bDone = true;
 				break;
@@ -115,7 +115,7 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		}
 		if (Added > 0)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Fence walls: %s -> %s for %d variant(s)"), *Entry.Key->GetName(), *Entry.Value->GetName(), Added);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Fence walls: %s -> %s for %d variant(s)"), *Entry.Key->GetName(), *Entry.Value->GetName(), Added);
 		}
 	}
 }
@@ -136,7 +136,7 @@ void URMGameWorldModule::RegisterRoadMaterials()
 				Desc->AddType(Entry.Key, Entry.Value);
 			}
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Road material %s lists %d road pieces"), *DescClass->GetName(), Desc->GetBuildableMap().Num());
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Road material %s lists %d road pieces"), *DescClass->GetName(), Desc->GetBuildableMap().Num());
 	}
 }
 
@@ -179,7 +179,7 @@ void URMGameWorldModule::AddRecipesAlongsideGameRecipes()
 				continue;
 			}
 			List->Append(ToAdd);
-			UE_LOG(LogRoadMaker, Display, TEXT("%d recipe(s) now also unlock with %s"), ToAdd.Num(), *Schematic->GetName());
+			UE_LOG(LogRoadMaker, Verbose, TEXT("%d recipe(s) now also unlock with %s"), ToAdd.Num(), *Schematic->GetName());
 			if (Recipes && World->GetNetMode() != NM_Client && Schematics->IsSchematicPurchased(Schematic))
 			{
 				Recipes->AddAvailableRecipes(ToAdd);
@@ -207,7 +207,7 @@ void URMGameWorldModule::GrantExtraRecipesIfPurchased()
 		{
 			TArray<TSubclassOf<UFGRecipe>> ToAdd = Entry.Value;
 			Recipes->AddAvailableRecipes(ToAdd);
-			UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d extra recipe(s) of bought %s"), ToAdd.Num(), *Entry.Key->GetName());
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Ensured %d extra recipe(s) of bought %s"), ToAdd.Num(), *Entry.Key->GetName());
 		}
 	}
 }
@@ -238,7 +238,7 @@ void URMGameWorldModule::GrantRecipesOfPurchasedSchematics()
 			{
 				TArray<TSubclassOf<UFGRecipe>> ToAdd = RecipeUnlock->GetRecipesToUnlock();
 				Recipes->AddAvailableRecipes(ToAdd);
-				UE_LOG(LogRoadMaker, Display, TEXT("Ensured %d recipe(s) of bought schematic %s"), ToAdd.Num(), *Schematic->GetName());
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Ensured %d recipe(s) of bought schematic %s"), ToAdd.Num(), *Schematic->GetName());
 			}
 		}
 	}
@@ -273,7 +273,7 @@ void URMGameWorldModule::EnsureRoadSwatchGroup()
 	Roads.Swatch = mDefaultRoadSwatch;
 	Datum->Add(Roads);
 	GameState->ForceNetUpdate();
-	UE_LOG(LogRoadMaker, Display, TEXT("Added Roads swatch group (default %s)"), mDefaultRoadSwatch ? *mDefaultRoadSwatch->GetName() : TEXT("none"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Added Roads swatch group (default %s)"), mDefaultRoadSwatch ? *mDefaultRoadSwatch->GetName() : TEXT("none"));
 }
 
 void URMGameWorldModule::SetRoadToolsCategoryIcon()

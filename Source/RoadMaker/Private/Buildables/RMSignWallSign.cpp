@@ -31,7 +31,7 @@ UClass* ARMSignWallSign::GetGameSignClass()
 	if (!Cached.IsValid())
 	{
 		Cached = LoadClass<AFGBuildableWidgetSign>(nullptr, GGameSignPath);
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: game sign class %s"), *GetNameSafe(Cached.Get()));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: game sign class %s"), *GetNameSafe(Cached.Get()));
 	}
 	return Cached.Get();
 }
@@ -101,7 +101,7 @@ void ARMSignWallSign::CopyGameSignDefaults()
 	}
 	SetActorEnableCollision(false);
 	// The small billboard's own resolution (its draw size, copied above): one 8 x 4 m design looks the same on both.
-	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took %d settings from %s (plane mesh %s)"), *GetName(), Copied, *Game->GetName(),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s took %d settings from %s (plane mesh %s)"), *GetName(), Copied, *Game->GetName(),
 		GamePlane ? *GetNameSafe(GamePlane->GetStaticMesh()) : TEXT("none"));
 }
 
@@ -136,7 +136,7 @@ void ARMSignWallSign::BeginPlay()
 					return;
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s belongs to no wall, removed"), *GetName());
+			UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s belongs to no wall, removed"), *GetName());
 			Destroy();
 		}), 10.f, false);
 	}
@@ -210,7 +210,7 @@ void ARMSignWallSign::SetupMaterialInstanceForProxyPlane(UMaterialInstanceDynami
 		{
 			Parts.Add(FString::Printf(TEXT("%s=%s"), *V.ParameterInfo.Name.ToString(), *V.ParameterValue.ToString()));
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: design of %s: material %s, render target %s (%dx%d); %s"), *GetName(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: design of %s: material %s, render target %s (%dx%d); %s"), *GetName(),
 			*GetNameSafe(Instance->Parent), *GetNameSafe(RenderTarget), RenderTarget ? RenderTarget->SizeX : 0, RenderTarget ? RenderTarget->SizeY : 0,
 			*FString::Join(Parts, TEXT(", ")));
 	}

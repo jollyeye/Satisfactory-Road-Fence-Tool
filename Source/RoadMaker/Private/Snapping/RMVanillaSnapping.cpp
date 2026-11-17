@@ -664,7 +664,7 @@ namespace
 			Hologram->SetScrollRotateValue(FMath::RoundToInt(FRotator::NormalizeAxis(WantYaw + State.EndYawOffset)));
 			TGuardValue<bool> Guard(GInPathReplace, true);
 			Hologram->SetHologramLocationAndRotation(Placed);
-			UE_LOG(LogRoadMaker, Display, TEXT("Path end: heading offset now %.0f"), State.EndYawOffset);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Path end: heading offset now %.0f"), State.EndYawOffset);
 		}
 	}
 
@@ -1590,7 +1590,7 @@ namespace
 			if (Last != State)
 			{
 				Last = State;
-				UE_LOG(LogRoadMaker, Display, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("RMJunctionState %d connections: %s"), Cache.LinkHolograms.Num(), *State);
 			}
 		}
 		Cache.LinkOk.SetNum(Cache.LinkHolograms.Num());
@@ -1713,7 +1713,7 @@ namespace
 		{
 			if (ActiveFrames > 0 && CVarJunctionPerf.GetValueOnGameThread())
 			{
-				UE_LOG(LogRoadMaker, Display,
+				UE_LOG(LogRoadMaker, Verbose,
 					TEXT("RMJunctionPerf showing: %.1f fps (%.1f ms/frame) over %d frames; not showing in the same 3 s: %.1f fps over %d frames; "
 						 "ours %.2f ms/frame (finding %.2f, placing %.2f), %d scans, %d set-ups, %d connections, %d holograms, extra ones hidden %d"),
 					ActiveFrames / FMath::Max(ActiveDelta, 0.001), 1000.0 * ActiveDelta / ActiveFrames, ActiveFrames,
@@ -2553,7 +2553,7 @@ namespace
 				}
 				else if (D < 300.f)
 				{
-					UE_LOG(LogRoadMaker, Log, TEXT("Railway: track ends %.0f cm apart (facing %.2f), not joined"), D, Facing);
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Railway: track ends %.0f cm apart (facing %.2f), not joined"), D, Facing);
 				}
 			}
 		}
@@ -2569,7 +2569,7 @@ namespace
 			Used.Add(P.A);
 			Used.Add(P.B);
 			P.A->AddConnection(P.B);
-			UE_LOG(LogRoadMaker, Log, TEXT("Railway: joining track ends %.1f cm apart"), P.Dist);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Railway: joining track ends %.1f cm apart"), P.Dist);
 			Touched.AddUnique(Cast<AFGBuildableRailroadTrack>(P.A->GetOwner()));
 		}
 		if (Touched.Num() == 0)
@@ -2661,7 +2661,7 @@ namespace
 				}
 				if (Keep)
 				{
-					UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joining nodes %.1f cm apart"), FVector::Dist(Keep->GetActorLocation(), N->GetActorLocation()));
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle paths: joining nodes %.1f cm apart"), FVector::Dist(Keep->GetActorLocation(), N->GetActorLocation()));
 					N->MoveConnectionsToNode(Keep); // removes N
 					Nodes[I] = nullptr;
 					++Merged;
@@ -2694,7 +2694,7 @@ namespace
 				}
 				else if (D < 1000.f)
 				{
-					UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: nodes %.0f cm apart, too far to join"), D);
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle paths: nodes %.0f cm apart, too far to join"), D);
 				}
 			}
 		}
@@ -2708,13 +2708,13 @@ namespace
 			}
 			Used.Add(P.End);
 			Used.Add(P.Start);
-			UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joining nodes %.1f cm apart"), P.Dist);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle paths: joining nodes %.1f cm apart"), P.Dist);
 			P.Start->MoveConnectionsToNode(P.End); // removes P.Start
 			++Merged;
 		}
 		if (Merged > 0)
 		{
-			UE_LOG(LogRoadMaker, Log, TEXT("Vehicle paths: joined %d node(s) between paths built together"), Merged);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle paths: joined %d node(s) between paths built together"), Merged);
 		}
 	}
 
@@ -2741,11 +2741,11 @@ namespace
 				}
 				++Found;
 				const FVector At = It->GetActorLocation();
-				UE_LOG(LogRoadMaker, Display, TEXT("RM.ListTrains: %s (%s) at %.0f %.0f %.0f hidden=%d collision=%d pendingKill=%d"),
+				UE_LOG(LogRoadMaker, Verbose, TEXT("RM.ListTrains: %s (%s) at %.0f %.0f %.0f hidden=%d collision=%d pendingKill=%d"),
 					*It->GetName(), *ClassName, At.X, At.Y, At.Z, It->IsHidden() ? 1 : 0, It->GetActorEnableCollision() ? 1 : 0,
 					It->IsActorBeingDestroyed() ? 1 : 0);
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RM.ListTrains: %d actor(s)"), Found);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RM.ListTrains: %d actor(s)"), Found);
 		}));
 
 	/** Foundations snapped to a road end: quarter turns set with the scroll wheel (per hologram). */
@@ -2876,7 +2876,7 @@ namespace
 		{
 			return;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("RMSignLog %s: %s%s%s%s%s"), Event, *DescribeSign(H), Hit ? TEXT(" || ") : TEXT(""),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("RMSignLog %s: %s%s%s%s%s"), Event, *DescribeSign(H), Hit ? TEXT(" || ") : TEXT(""),
 			Hit ? *DescribeHit(*Hit) : TEXT(""), Extra ? TEXT(" || ") : TEXT(""), Extra ? Extra : TEXT(""));
 	}
 
@@ -2902,7 +2902,7 @@ namespace
 		{
 			return;
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog hologram %s buildClass=%s loc=%s rot=%s"), *Hologram->GetName(), Hologram->GetBuildClass() ? *Hologram->GetBuildClass()->GetName() : TEXT("none"), *Hologram->GetActorLocation().ToCompactString(), *Hologram->GetActorRotation().ToCompactString());
+		UE_LOG(LogRoadMaker, Verbose, TEXT("RMBeamLog hologram %s buildClass=%s loc=%s rot=%s"), *Hologram->GetName(), Hologram->GetBuildClass() ? *Hologram->GetBuildClass()->GetName() : TEXT("none"), *Hologram->GetActorLocation().ToCompactString(), *Hologram->GetActorRotation().ToCompactString());
 		TInlineComponentArray<UStaticMeshComponent*> Comps(Hologram);
 		for (UStaticMeshComponent* C : Comps)
 		{
@@ -2914,7 +2914,7 @@ namespace
 				Mats += (C->GetMaterial(i) ? C->GetMaterial(i)->GetPathName() : FString(TEXT("none"))) + TEXT(" ");
 			}
 			const UInstancedStaticMeshComponent* Inst = Cast<UInstancedStaticMeshComponent>(C);
-			UE_LOG(LogRoadMaker, Display, TEXT("RMBeamLog  comp %s (%s) mesh=%s relLoc=%s relRot=%s relScale=%s worldExtent=%s instances=%d mats=%s"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMBeamLog  comp %s (%s) mesh=%s relLoc=%s relRot=%s relScale=%s worldExtent=%s instances=%d mats=%s"),
 				*C->GetName(), *C->GetClass()->GetName(), M ? *M->GetPathName() : TEXT("none"), *C->GetRelativeLocation().ToCompactString(),
 				*C->GetRelativeRotation().ToCompactString(), *C->GetRelativeScale3D().ToCompactString(), *B.BoxExtent.ToCompactString(),
 				Inst ? Inst->GetInstanceCount() : 0, *Mats);
@@ -3103,7 +3103,7 @@ namespace
 			GAttachOnWall.Add(Hologram);
 			if (CVarSignLog.GetValueOnGameThread() != 0)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("RMWallLog: %s (%s) placed on %s, level=%d normal=%s"), *Hologram->GetName(),
+				UE_LOG(LogRoadMaker, Verbose, TEXT("RMWallLog: %s (%s) placed on %s, level=%d normal=%s"), *Hologram->GetName(),
 					Hologram->GetBuildClass() ? *Hologram->GetBuildClass()->GetName() : TEXT("?"), *GetNameSafe(Hit.GetActor()), bLevel ? 1 : 0, *Face.Normal.ToCompactString());
 			}
 		}
@@ -3127,7 +3127,7 @@ namespace
 			const bool bKeep = Name.Contains(TEXT("Clearance")) || Name.Contains(TEXT("Overlap")) || Name.Contains(TEXT("Encroach")) || Name.Contains(TEXT("Afford"));
 			if (CVarSignLog.GetValueOnGameThread() != 0 && SignLogDue(Hologram, 50, 1.0))
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("RMWallLog: disqualifier %s %s"), *Name, bKeep ? TEXT("kept") : TEXT("dropped (we place it on our wall)"));
+				UE_LOG(LogRoadMaker, Verbose, TEXT("RMWallLog: disqualifier %s %s"), *Name, bKeep ? TEXT("kept") : TEXT("dropped (we place it on our wall)"));
 			}
 			if (bKeep && D)
 			{

@@ -32,7 +32,7 @@ void URMIconLibraryTools::SetIcons(UFGIconLibrary* Library, const TArray<UObject
 		(bBackgrounds ? Library->mMaterialIconData : Library->mMonochromeIconData).Add(D);
 	}
 	Library->MarkPackageDirty();
-	UE_LOG(LogRoadMaker, Display, TEXT("Icon library %s: %d icons"), *Library->GetPathName(), Icons.Num());
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Icon library %s: %d icons"), *Library->GetPathName(), Icons.Num());
 }
 
 void URMIconLibraryTools::RegisterLibrary()
@@ -45,7 +45,7 @@ void URMIconLibraryTools::RegisterLibrary()
 		}
 		UAssetManager& AM = UAssetManager::Get();
 		const int32 Found = AM.ScanPathForPrimaryAssets(FPrimaryAssetType(TEXT("FGIconLibrary")), TEXT("/RoadMaker/Icons"), UFGIconLibrary::StaticClass(), false);
-		UE_LOG(LogRoadMaker, Display, TEXT("Sign icons: asset manager scan of /RoadMaker/Icons found %d icon librar%s"), Found, Found == 1 ? TEXT("y") : TEXT("ies"));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Sign icons: asset manager scan of /RoadMaker/Icons found %d icon librar%s"), Found, Found == 1 ? TEXT("y") : TEXT("ies"));
 	};
 	if (UAssetManager::IsInitialized())
 	{
@@ -91,7 +91,7 @@ void URMIconLibraryTools::EnsureOurIcons(UWorld* World)
 	if (HasOurIcons(Db, &Ours))
 	{
 		GDone = Db;
-		UE_LOG(LogRoadMaker, Display, TEXT("Sign icons: %s ours: %s"), GInjected.Get() == Db ? TEXT("added") : TEXT("the game found"),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Sign icons: %s ours: %s"), GInjected.Get() == Db ? TEXT("added") : TEXT("the game found"),
 			*FString::Join(Ours, TEXT(", ")));
 		return;
 	}
@@ -117,6 +117,6 @@ void URMIconLibraryTools::EnsureOurIcons(UWorld* World)
 		List->Add(Ours2);
 	}
 	Db->ProcessEvent(Rebuild, nullptr);
-	UE_LOG(LogRoadMaker, Display, TEXT("Sign icons: the game did not find our library; added it (%d libraries), database now %d icons, ours %s"),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Sign icons: the game did not find our library; added it (%d libraries), database now %d icons, ours %s"),
 		List->Num(), Db->GetAllIconData().Num(), HasOurIcons(Db) ? TEXT("in") : TEXT("still missing"));
 }

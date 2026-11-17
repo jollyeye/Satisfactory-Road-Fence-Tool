@@ -40,7 +40,7 @@ namespace RMSound
 				}
 				if (Object && !Object->IsA<UAkAudioEvent>() && Object->GetClass()->GetName().StartsWith(TEXT("Ak")))
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("RMSound: also uses %s %s (%s)"), *Object->GetClass()->GetName(), *Object->GetPathName(), *Where);
+					UE_LOG(LogRoadMaker, Verbose, TEXT("RMSound: also uses %s %s (%s)"), *Object->GetClass()->GetName(), *Object->GetPathName(), *Where);
 				}
 				if (UAkAudioEvent* Event = Cast<UAkAudioEvent>(Object))
 				{
@@ -78,7 +78,7 @@ namespace RMSound
 					}
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RMSound: build effect class %s"), *GetNameSafe(EffectClass));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMSound: build effect class %s"), *GetNameSafe(EffectClass));
 			TArray<TPair<FString, UAkAudioEvent*>> Found;
 			for (UClass* Class = EffectClass; Class && Class != AFGBuildEffectActor::StaticClass(); Class = Class->GetSuperClass())
 			{
@@ -98,7 +98,7 @@ namespace RMSound
 			}
 			for (const TPair<FString, UAkAudioEvent*>& P : Found)
 			{
-				UE_LOG(LogRoadMaker, Display, TEXT("RMSound: event %s (%s)"), *P.Value->GetPathName(), *P.Key);
+				UE_LOG(LogRoadMaker, Verbose, TEXT("RMSound: event %s (%s)"), *P.Value->GetPathName(), *P.Key);
 				const FString Name = P.Value->GetName();
 				UAkAudioEvent*& Slot = Name.Contains(TEXT("Swish")) ? GSwishEvent
 					: Name.Contains(TEXT("Rework")) ? GEndEvent
@@ -109,7 +109,7 @@ namespace RMSound
 					Slot->AddToRoot();
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("RMSound: start = %s, during = %s, end = %s"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("RMSound: start = %s, during = %s, end = %s"),
 				*GetNameSafe(GStartEvent), *GetNameSafe(GSwishEvent), *GetNameSafe(GEndEvent));
 			return GStartEvent;
 		}

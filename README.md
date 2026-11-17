@@ -6,13 +6,13 @@ tools to cut, split and reshape roads, road fences and fence walls, a sign gantr
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.3.0**, for Satisfactory 1.2 with SML 3.12 (1.3.1 with fixes coming).
+Manager). Current version: **1.4.0**, for Satisfactory 1.2 with SML 3.12.
 
-![An asphalt road with lane markings, a glowing cyberpunk road, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](docs/screenshots/intro-1.3.jpg)
+![An asphalt road with lane markings, a glowing cyberpunk road, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](docs/screenshots/intro-1.4.jpg)
 
 ## Features
 
-![Road Maker in the build menu](docs/screenshots/build-menu-1.2.png)
+![Road Maker in the build menu](docs/screenshots/build-menu-1.4.png)
 
 **Roads (build menu › Transport › Roads)**
 - Road 1, 2, 3 and 4 wide: two clicks, curves drawn as quadratic Bezier curves; build modes Default,
@@ -49,6 +49,12 @@ Manager). Current version: **1.3.0**, for Satisfactory 1.2 with SML 3.12 (1.3.1 
 - Sign backgrounds: Chevrons Left and Chevrons Right in the game's sign editor.
 
 **Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu. For map modders: the roads are drawn directly above the map picture (`mMap` in Widget_Map's `Overlay_0`), so anything you add to that overlay draws on top of them.
+
+**Road Mode for blueprints:** a build mode on any blueprint: two clicks lay it along a curve, the
+pieces along its arrow bending with it and the rest repeating; belts, pipes, rails and paths joined
+from tile to tile; costs what it gives back when dismantled.
+
+![A road blueprint laid along a curve with Road Mode](docs/screenshots/blueprint-road-mode.jpg)
 
 **Snapping for game buildings**
 - One-click vehicle paths and railway tracks along a lane, and all connections through an

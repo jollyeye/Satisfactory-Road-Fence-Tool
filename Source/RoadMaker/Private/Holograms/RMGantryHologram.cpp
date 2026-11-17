@@ -110,7 +110,7 @@ void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		}
 		if (!FMath::IsNearlyEqual(mShownBottom, mBeamBottom, 0.5f))
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Gantry height step: camera %s dir %s -> aim height %.0f, beam bottom %.0f"),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Gantry height step: camera %s dir %s -> aim height %.0f, beam bottom %.0f"),
 				*Start.ToCompactString(), *Dir.ToCompactString(), Height, mBeamBottom);
 		}
 	}
@@ -127,7 +127,7 @@ bool ARMGantryHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		}
 		mStep = 1;
 		mBeamBottom = ARMBuildableGantry::MinClearance;
-		UE_LOG(LogRoadMaker, Display, TEXT("Gantry: first click, now setting the height"));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Gantry: first click, now setting the height"));
 		return false;
 	}
 	return true;

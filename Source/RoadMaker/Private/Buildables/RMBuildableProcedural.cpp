@@ -118,7 +118,7 @@ void ARMBuildableProcedural::JoinDesignerAfter(AFGBuildable* New)
 	{
 		Designer->OnBuildableConstructedInsideDesigner(New);
 	}
-	UE_LOG(LogRoadMaker, Display, TEXT("Blueprint designer: %s %s (%d buildings in the designer)"), *New->GetName(),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Blueprint designer: %s %s (%d buildings in the designer)"), *New->GetName(),
 		bListed ? TEXT("was listed by its begin play") : TEXT("added"), Designer->GetBuildablesInBlueprintDesigner().Num());
 }
 
@@ -307,7 +307,7 @@ bool ARMBuildableProcedural::BuildQueuedMeshes()
 		const double Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
 		if (Ms > 10.0)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Mesh queue: %s built in %.1f ms (%d waiting)"), *Piece->GetName(), Ms, GMeshQueue.Num() - GMeshHead);
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Mesh queue: %s built in %.1f ms (%d waiting)"), *Piece->GetName(), Ms, GMeshQueue.Num() - GMeshHead);
 		}
 		if (FPlatformTime::Seconds() - Start > 0.006)
 		{

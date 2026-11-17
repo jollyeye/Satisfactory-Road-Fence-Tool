@@ -153,22 +153,22 @@ void ARMBuildableSignWall::EnsureSign()
 		Data.SignTypeDesc = mBlueprintSignType.IsEmpty() ? nullptr : TSubclassOf<UFGSignTypeDescriptor>(LoadClass<UFGSignTypeDescriptor>(nullptr, *mBlueprintSignType));
 		const bool bOk = RMSignData(Sign, Data, true);
 		ClearBlueprintDesign();
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took its design from the blueprint (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("failed"));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s took its design from the blueprint (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("failed"));
 	}
 	// A piece of a cut or a join: the design of the wall it came from.
 	else if (mPendingDesign)
 	{
 		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, mPendingDesign, nullptr);
 		mPendingDesign = nullptr;
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the design of the wall it was cut / joined from (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s took the design of the wall it was cut / joined from (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
 	}
 	// Middle click on a sign wall before building this one: its design.
 	else if (UFGFactoryClipboardSettings* Design = RMRoadSample::TakeSignDesign())
 	{
 		const bool bOk = IFGFactoryClipboardInterface::Execute_PasteSettings(Sign, Design, nullptr);
-		UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s took the sampled design (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
+		UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s took the sampled design (%s)"), *GetName(), bOk ? TEXT("ok") : TEXT("refused"));
 	}
-	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
+	UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s made its sign %s"), *GetName(), *Sign->GetName());
 	OnSignDesignChanged();
 }
 
@@ -244,7 +244,7 @@ void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const
 		Piece->mBlueprintGlossiness = mBlueprintGlossiness;
 		Piece->mBlueprintSignType = mBlueprintSignType;
 	}
-	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: %s passes its design to %s (%s)"), *GetName(), *Piece->GetName(),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: %s passes its design to %s (%s)"), *GetName(), *Piece->GetName(),
 		Piece->mPendingDesign ? TEXT("from its sign") : Piece->mBlueprintHasDesign ? TEXT("from the blueprint") : TEXT("none"));
 }
 
@@ -393,7 +393,7 @@ TSubclassOf<UObject> ARMBuildableSignWall::GetClipboardMappingClass_Implementati
 UFGFactoryClipboardSettings* ARMBuildableSignWall::CopySettings_Implementation()
 {
 	UFGFactoryClipboardSettings* Settings = mSign ? IFGFactoryClipboardInterface::Execute_CopySettings(mSign) : nullptr;
-	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: copy from %s: settings %s, clipboard class %s"), *GetName(), *GetNameSafe(Settings),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: copy from %s: settings %s, clipboard class %s"), *GetName(), *GetNameSafe(Settings),
 		*GetNameSafe(GetClipboardMappingClass_Implementation().Get()));
 	return Settings;
 }
@@ -401,7 +401,7 @@ UFGFactoryClipboardSettings* ARMBuildableSignWall::CopySettings_Implementation()
 bool ARMBuildableSignWall::PasteSettings_Implementation(UFGFactoryClipboardSettings* settings, AFGPlayerController* player)
 {
 	const bool bOk = mSign && IFGFactoryClipboardInterface::Execute_PasteSettings(mSign, settings, player);
-	UE_LOG(LogRoadMaker, Display, TEXT("SignWall: paste on %s: settings %s -> %s"), *GetName(), *GetNameSafe(settings), bOk ? TEXT("ok") : TEXT("refused"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("SignWall: paste on %s: settings %s -> %s"), *GetName(), *GetNameSafe(settings), bOk ? TEXT("ok") : TEXT("refused"));
 	OnSignDesignChanged();
 	return bOk;
 }

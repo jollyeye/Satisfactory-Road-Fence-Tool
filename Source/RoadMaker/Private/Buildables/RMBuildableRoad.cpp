@@ -270,7 +270,7 @@ namespace
 				}
 			}
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Cut Road: shortest %s piece = %.0f cm"), *Class->GetName(), Min);
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Cut Road: shortest %s piece = %.0f cm"), *Class->GetName(), Min);
 		Cache.Add(Class, Min);
 		return Min;
 	}

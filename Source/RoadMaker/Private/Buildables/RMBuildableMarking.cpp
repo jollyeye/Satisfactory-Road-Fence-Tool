@@ -807,7 +807,7 @@ namespace
 					}
 				}
 			}
-			UE_LOG(LogRoadMaker, Display, TEXT("Vehicle markings: sign icons with vehicle names: %s"), *FString::Join(Names, TEXT(", ")));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle markings: sign icons with vehicle names: %s"), *FString::Join(Names, TEXT(", ")));
 		}
 		UTexture2D* Best = nullptr;
 		for (const FIconData& D : Icons)
@@ -885,7 +885,7 @@ UTexture2D* ARMBuildableMarking::VehicleIcon(int32 Variant)
 	if (Icon)
 	{
 		Icons[Variant].Reset(Icon);
-		UE_LOG(LogRoadMaker, Display, TEXT("Vehicle marking %s: icon %s (%dx%d) from %s"), VehicleName(Variant), *Icon->GetPathName(),
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Vehicle marking %s: icon %s (%dx%d) from %s"), VehicleName(Variant), *Icon->GetPathName(),
 			Icon->GetSizeX(), Icon->GetSizeY(), From);
 	}
 	else
@@ -925,7 +925,7 @@ ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarkin
 	JoinDesignerBefore(New, Road);
 	UGameplayStatics::FinishSpawningActor(New, T);
 	JoinDesignerAfter(New);
-	UE_LOG(LogRoadMaker, Display, TEXT("Marking %s painted on %s (designer: %s)"), *New->GetName(), *Road->GetName(),
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Marking %s painted on %s (designer: %s)"), *New->GetName(), *Road->GetName(),
 		Road->GetBlueprintDesigner() ? *Road->GetBlueprintDesigner()->GetName() : TEXT("none"));
 	return New;
 }
@@ -1018,7 +1018,7 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 	}
 	if (Moved > 0)
 	{
-		UE_LOG(LogRoadMaker, Display, TEXT("Moved %d lane marking(s) from %s to %s"), Moved, *From->GetName(), *To->GetName());
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Moved %d lane marking(s) from %s to %s"), Moved, *From->GetName(), *To->GetName());
 	}
 	return Moved;
 }

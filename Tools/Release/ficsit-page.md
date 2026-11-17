@@ -15,9 +15,9 @@ Curved roads with lane lines and markings, intersections, road tools, fences, fe
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
-![An asphalt road with a lane arrow and a lane number, a glowing cyberpunk road with a vehicle marking, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.3.jpg)
+![An asphalt road with a lane arrow and a lane number, a glowing cyberpunk road with a vehicle marking, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.4.jpg)
 
-![Road Maker in the build menu: roads 1 to 4 wide, intersection, fences and the Sign Gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu-1.2.png)
+![Road Maker in the build menu: roads 1 to 4 wide, intersection, Gap Fill, walking paths, fences and the Sign Gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu-1.4.png)
 
 ### Roads (1, 2, 3 and 4 foundations wide)
 - Two clicks: start and end. The road curves like a vehicle path; the mouse wheel turns it.
@@ -66,7 +66,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Free placement anywhere, snapping to the foundation grid.
 
 ### Fence Walls — Walls › Fence Walls
-![Steel, Steel Mesh and FICSIT fence walls along a curved, sloped road](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/fence-walls.jpg)
+![A steel fence wall, a steel mesh fence wall and a sign wall along a curved road over a hill](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/fence-walls-1.4.jpg)
 
 4 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
 - **FICSIT**, **Concrete** and **Steel Fence Wall** use the game's own wall materials and paint exactly like the game's walls. The customizer's **Material** tab switches a fence wall between concrete, FICSIT and steel in place, with a preview while aiming; switching costs the difference, like the game's walls.
@@ -81,6 +81,15 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **One-click vehicle paths and railway tracks:** hold the snap key (Ctrl) and aim at a lane: the path or track runs the whole lane, click to build. Scroll flips the direction.
 - **Intersection connections:** hold a vehicle path or track and Ctrl and aim at an intersection: every connection through it is shown at once (paths by direction, tracks lane to lane), one click builds them all.
 - On long roads every section of the lane is laid at once, and paths and tracks built in one click are joined to each other and to the ones already there (no gaps for vehicles or trains).
+
+### Road Mode for blueprints
+![A road blueprint in the blueprint designer, and the same blueprint laid along a curve with Road Mode](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/blueprint-road-mode.jpg)
+
+- A new build mode on any blueprint: click twice like a road and the blueprint is laid along the curve you draw, its arrow pointing the way.
+- Roads, walking paths, fences, fence walls, lane markings, belts, pipes, rails, hypertubes and vehicle paths running along the arrow bend with the curve; everything else repeats along it, buildings and poles staying level.
+- Belts, pipes, rails, hypertubes and vehicle paths are joined from tile to tile and to the next placement; power poles without wires are wired along.
+- Each placement leaves a Blueprint Road (a wireframe shown in Road Mode and with the dismantle tool): new placements snap to its ends, and dismantling it removes the whole placement.
+- You pay exactly what the placement gives back when dismantled.
 
 ### Snapping for game buildings
 - **Power poles** (all tiers) and **street lights** snap to the road's fence lines while holding the snap key (Ctrl); street lights face the road, scroll flips them.
@@ -117,7 +126,7 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - Lighter meshes: roads, walking paths, fences and fence walls now have cross-sections only where they bend, and one every 4 m on straight stretches (was every 0.5–1 m everywhere). Far fewer triangles, faster to build, same look; posts, panels, block joints and sign designs stay where they were. Intersection curb lines are smooth curves with far fewer triangles.
 
-- Road Mode for blueprints: a new build mode on any blueprint. Click twice like a road and the blueprint is laid along the curve you draw, its arrow pointing the way. Roads, walking paths, fences, fence walls, lane markings, belts, pipes, rails, hypertubes and vehicle paths running straight along the arrow bend with the curve (the ones running the whole blueprint stretch over it); everything else repeats tile after tile, each piece at its own distance from the centre, so the outer side of a curve spreads more. Buildings, machines and poles stay level; signs and wall attachments on a bent fence wall follow it. Belts, pipes, rails and hypertubes are joined from tile to tile, and power poles and single wall outlets with no wire in the blueprint are wired to their copy on the next tile. Paid by what is built (bent pieces by length); the whole placement dismantles as one blueprint. Each placement lays a hidden Blueprint Road along its centre (as wide as the blueprint), shown as a wireframe in Road Mode and with the dismantle tool: new placements snap to its ends (meeting it head-on, the blueprint is laid the other way so its sides match; the mouse wheel flips it), and dismantling it removes the whole placement. Belts, pipes, rails, hypertubes and vehicle paths whose free ends meet another placement's are linked to it; vehicle paths are checked again after placing (a blueprint keeps a red result from the designer, e.g. a path starting next to the designer's terminal). Sign walls keep their design. The tiles are built over a few frames after the click, so the game doesn't stall on long placements. Works in multiplayer through the game's own construct message (not yet tested with a client).
+- Road Mode for blueprints: a new build mode on any blueprint. Click twice like a road and the blueprint is laid along the curve you draw, its arrow pointing the way. Roads, walking paths, fences, fence walls, lane markings, belts, pipes, rails, hypertubes and vehicle paths running straight along the arrow bend with the curve (the ones running the whole blueprint stretch over it); everything else repeats tile after tile, each piece at its own distance from the centre, so the outer side of a curve spreads more. Buildings, machines and poles stay level; signs and wall attachments on a bent fence wall follow it. Belts, pipes, rails and hypertubes are joined from tile to tile, and power poles and single wall outlets with no wire in the blueprint are wired to their copy on the next tile. Costs exactly what the placement gives back when dismantled; the whole placement dismantles as one blueprint. Each placement lays a hidden Blueprint Road along its centre (as wide as the blueprint), shown as a wireframe in Road Mode and with the dismantle tool: new placements snap to its ends (meeting it head-on, the blueprint is laid the other way so its sides match; the mouse wheel flips it), and dismantling it removes the whole placement. Belts, pipes, rails, hypertubes and vehicle paths whose free ends meet another placement's are linked to it; vehicle paths are checked again after placing (a blueprint keeps a red result from the designer, e.g. a path starting next to the designer's terminal). Sign walls keep their design. The tiles are built over a few frames after the click, so the game doesn't stall on long placements. Works in multiplayer through the game's own construct message (not yet tested with a client).
 
 **Fixed**
 - Crash when a road, walking path or intersection was dismantled or replaced while its build animation was still running, e.g. merging roads in quick succession (thanks Diquan360, issue #5).
