@@ -156,7 +156,7 @@ struct ROADMAKER_API FRMSplineStats
 namespace RMGeometry
 {
 	/** Keeps every other frame (and always the last): half the quads of anything extruded along them. */
-	void HalveFrames(TArray<FRMFrame>& Frames);
+	ROADMAKER_API void HalveFrames(TArray<FRMFrame>& Frames);
 
 	/** Samples a Hermite spline into frames roughly every Step cm. */
 	ROADMAKER_API void SampleSpline(const TArray<FRMSplinePoint>& Points, float Step, TArray<FRMFrame>& OutFrames);
