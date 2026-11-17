@@ -570,6 +570,36 @@ namespace
 	}
 }
 
+void RMGeometry::ThinFramesThreeQuarters(TArray<FRMFrame>& Frames)
+{
+	if (Frames.Num() < 3)
+	{
+		return;
+	}
+	TArray<FRMFrame> Kept;
+	Kept.Reserve(Frames.Num());
+	for (int32 I = 0; I < Frames.Num(); ++I)
+	{
+		if (I % 4 != 3 || I == Frames.Num() - 1)
+		{
+			Kept.Add(Frames[I]);
+		}
+	}
+	Frames = MoveTemp(Kept);
+}
+
+void RMGeometry::ReduceRoadFrames(TArray<FRMFrame>& Frames, bool bWalkingPath)
+{
+	if (bWalkingPath)
+	{
+		ThinFramesThreeQuarters(Frames); // narrow and tight bends: a bit more than roads
+	}
+	else
+	{
+		HalveFrames(Frames);
+	}
+}
+
 void RMGeometry::HalveFrames(TArray<FRMFrame>& Frames)
 {
 	if (Frames.Num() < 3)

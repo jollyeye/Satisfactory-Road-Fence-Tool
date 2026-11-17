@@ -321,7 +321,7 @@ void ARMRoadHologram::RebuildPreview()
 	const ARMBuildableRoad* Road = GetRoadDefaults();
 	TArray<FRMFrame> Frames;
 	GetPreviewFrames(Frames, 100.f);
-	RMGeometry::HalveFrames(Frames); // as the built road
+	RMGeometry::ReduceRoadFrames(Frames, Road->IsWalkingPath()); // as the built road
 	mPreviewMesh->ClearAllMeshSections();
 	if (Frames.Num() < 2)
 	{

@@ -157,6 +157,10 @@ namespace RMGeometry
 {
 	/** Keeps every other frame (and always the last): half the quads of anything extruded along them. */
 	ROADMAKER_API void HalveFrames(TArray<FRMFrame>& Frames);
+	/** Drops every fourth frame (keeps the last): three quarters of the quads. */
+	ROADMAKER_API void ThinFramesThreeQuarters(TArray<FRMFrame>& Frames);
+	/** A road's detailed cross-sections: half of the 1 m samples for roads, three quarters for walking paths. */
+	ROADMAKER_API void ReduceRoadFrames(TArray<FRMFrame>& Frames, bool bWalkingPath);
 
 	/** Samples a Hermite spline into frames roughly every Step cm. */
 	ROADMAKER_API void SampleSpline(const TArray<FRMSplinePoint>& Points, float Step, TArray<FRMFrame>& OutFrames);
