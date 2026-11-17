@@ -1344,6 +1344,22 @@ namespace RMRoadTemplate
 			}
 		}
 
+		/**
+		 * Before building: the blueprint's own cost (worked out by the game when it was saved) once per blueprint
+		 * length along the curve. Only to check the player can afford it: what is taken is what the placement gives
+		 * back when dismantled, counted once it is built (see FinishJob).
+		 */
+		void EstimateCost(AFGBlueprintHologram* Self, const FState& S, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out)
+		{
+			Out.Reset();
+			const float Len = S.Frames.Num() > 1 ? S.Frames.Last().Dist : 0.f;
+			const int32 Times = FMath::Max(1, FMath::RoundToInt(Len / FMath::Max(S.L, 1.f)));
+			for (const FItemAmount& A : Self->GetBaseCost())
+			{
+				Out.FindOrAdd(A.ItemClass) += A.Amount * Times;
+			}
+		}
+
 		int32 MakePlans(AFGBlueprintHologram* Self, const FState& S, TArray<FPlan>& Plans, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Cost)
 		{
 			Plans.Reset();
@@ -1933,6 +1949,7 @@ namespace RMRoadTemplate
 				Player = Cast<AFGCharacterPlayer>(Self->GetInstigator());
 			}
 			UFGInventoryComponent* Inventory = Player && !(GameState && GameState->GetCheatNoCost()) ? Player->GetInventory() : nullptr;
+			EstimateCost(Self, S, Cost);
 			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
 			{
 				if (Inventory && Available(Self, Inventory, C.Key) < C.Value)
@@ -1965,6 +1982,9 @@ namespace RMRoadTemplate
 			int32 Joined = 0, Wired = 0, Built = 0;
 			double Started = 0.0;
 			double Busy = 0.0;
+			/** Paid once everything is built: what the placement gives back when dismantled (its Blueprint Road's list). */
+			TWeakObjectPtr<ARMBuildableBlueprintRoad> Ghost;
+			TWeakObjectPtr<UFGInventoryComponent> Inventory;
 		};
 
 		void RunTile(FTileJob& Job, int32 K)
@@ -2301,9 +2321,52 @@ namespace RMRoadTemplate
 				K, Spawned.Num() - Drop.Num(), Drop.Num(), Joined, Wired, (FPlatformTime::Seconds() - TileStart) * 1000.0, LoadMs);
 		}
 
+		/** Takes what the finished placement gives back when dismantled (as much as there is). */
+		void ChargePlacement(FTileJob& Job)
+		{
+			ARMBuildableBlueprintRoad* Ghost = Job.Ghost.Get();
+			UFGInventoryComponent* Inventory = Job.Inventory.Get();
+			if (!Ghost)
+			{
+				return;
+			}
+			TArray<AActor*> Pieces;
+			IFGDismantleInterface::Execute_GetChildDismantleActors(Ghost, Pieces);
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+			for (AActor* A : Pieces)
+			{
+				if (IsValid(A) && A->Implements<UFGDismantleInterface>())
+				{
+					TArray<FInventoryStack> Refund;
+					IFGDismantleInterface::Execute_GetDismantleRefund(A, Refund, false);
+					for (const FInventoryStack& Stack : Refund)
+					{
+						Cost.FindOrAdd(Stack.Item.GetItemClass()) += Stack.NumItems;
+					}
+				}
+			}
+			FString Paid;
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+			{
+				int32 Take = C.Value;
+				if (Inventory)
+				{
+					Take = FMath::Min(Take, Available(Ghost, Inventory, C.Key));
+					Spend(Ghost, Inventory, C.Key, Take);
+				}
+				Paid += FString::Printf(TEXT("%s%s %d"), Paid.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(C.Key.Get()), Take);
+				if (Take < C.Value)
+				{
+					Paid += FString::Printf(TEXT(" (of %d)"), C.Value);
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
+		}
+
 		/** After the last tile: the checks that need the whole placement. */
 		void FinishJob(FTileJob& Job)
 		{
+			ChargePlacement(Job);
 			const FState& S = Job.S;
 			UWorld* World = Job.World.Get();
 			if (!World)
@@ -2419,7 +2482,9 @@ namespace RMRoadTemplate
 			UFGInventoryComponent* Inventory = Player && !bFree ? Player->GetInventory() : nullptr;
 			if (Inventory)
 			{
-				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+				TMap<TSubclassOf<UFGItemDescriptor>, int32> Estimate;
+				EstimateCost(Self, S, Estimate);
+				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Estimate)
 				{
 					if (Available(Self, Inventory, C.Key) < C.Value)
 					{
@@ -2427,19 +2492,8 @@ namespace RMRoadTemplate
 						return nullptr;
 					}
 				}
-				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
-				{
-					Spend(Self, Inventory, C.Key, C.Value);
-				}
 			}
-			{
-				FString Paid;
-				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
-				{
-					Paid += FString::Printf(TEXT("%s%s %d"), Paid.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(C.Key.Get()), C.Value);
-				}
-				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
-			}
+			ARMBuildableBlueprintRoad* PlacedGhost = nullptr;
 			// One blueprint proxy for everything built, like a placed blueprint: the blueprint dismantle mode takes it all.
 			const FVector StartPos = S.Frames[0].Pos;
 			const FTransform ProxyT(FRotator(0.f, S.Frames[0].Fwd.Rotation().Yaw, 0.f), StartPos);
@@ -2509,6 +2563,7 @@ namespace RMRoadTemplate
 							Proxy->RegisterBuildable(Ghost);
 						}
 						UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: Blueprint Road (%d wide) laid, %.0f m"), Ghost->GetWidthUnits(), S.Frames.Last().Dist / 100.f);
+						PlacedGhost = Ghost;
 					}
 				}
 			}
@@ -2685,6 +2740,8 @@ namespace RMRoadTemplate
 			Job->OuterPaths = MoveTemp(OuterPaths);
 			Job->OuterJoined = OuterJoined;
 			Job->Built = Built;
+			Job->Ghost = PlacedGhost;
+			Job->Inventory = Inventory;
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
 			FRMDeferMeshes::ClaimFrame(); // the click's frame is taken: the first tile comes in a later one
 			StartJob(Job);
