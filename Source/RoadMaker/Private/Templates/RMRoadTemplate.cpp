@@ -1381,12 +1381,14 @@ namespace RMRoadTemplate
 					// Paid like the piece in the blueprint, by length.
 					const float SpanLen = Span.Value - Span.Key;
 					P.Mult = FMath::Max(1, FMath::CeilToInt(Piece->GetCostMultiplier() * SpanLen / FMath::Max(St.Length, 1.f) - 0.01f));
-					if (TSubclassOf<UFGRecipe> Recipe = Piece->GetBuiltWithRecipe())
+					// What the new piece gives back when dismantled (its look's recipe for a switched wall, not just the
+					// base recipe): the piece in the blueprint's refund per unit of length, times the new multiplier.
+					TArray<FInventoryStack> Refund;
+					IFGDismantleInterface::Execute_GetDismantleRefund(Piece, Refund, false);
+					const int32 Units = FMath::Max(1, Piece->GetCostMultiplier());
+					for (const FInventoryStack& Stack : Refund)
 					{
-						for (const FItemAmount& A : UFGRecipe::GetIngredients(Self, Recipe))
-						{
-							Cost.FindOrAdd(A.ItemClass) += A.Amount * P.Mult;
-						}
+						Cost.FindOrAdd(Stack.Item.GetItemClass()) += FMath::CeilToInt(float(Stack.NumItems) / Units * P.Mult - 0.01f);
 					}
 				}
 			}
@@ -2397,6 +2399,14 @@ namespace RMRoadTemplate
 				{
 					Spend(Self, Inventory, C.Key, C.Value);
 				}
+			}
+			{
+				FString Paid;
+				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+				{
+					Paid += FString::Printf(TEXT("%s%s %d"), Paid.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(C.Key.Get()), C.Value);
+				}
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
 			}
 			// One blueprint proxy for everything built, like a placed blueprint: the blueprint dismantle mode takes it all.
 			const FVector StartPos = S.Frames[0].Pos;
