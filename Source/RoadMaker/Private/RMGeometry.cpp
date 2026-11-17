@@ -617,14 +617,9 @@ void RMGeometry::ThinFramesThreeQuarters(TArray<FRMFrame>& Frames)
 
 void RMGeometry::ReduceRoadFrames(TArray<FRMFrame>& Frames, bool bWalkingPath)
 {
-	if (bWalkingPath)
-	{
-		ThinFramesThreeQuarters(Frames); // narrow and tight bends: a bit more than roads
-	}
-	else
-	{
-		HalveFrames(Frames);
-	}
+	// Cross-sections only where the road bends (sideways or over a crest / dip), every 4 m on straight stretches.
+	// Walking paths: half again as many on bends (narrow, tight turns seen up close).
+	SimplifyFrames(Frames, bWalkingPath ? 3.f : 4.5f, 400.f);
 }
 
 void RMGeometry::HalveFrames(TArray<FRMFrame>& Frames)

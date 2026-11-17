@@ -165,7 +165,7 @@ namespace RMGeometry
 	ROADMAKER_API void SimplifyFrames(TArray<FRMFrame>& Frames, float MaxTurnDeg, float MaxGap);
 	/** Drops every fourth frame (keeps the last): three quarters of the quads. */
 	ROADMAKER_API void ThinFramesThreeQuarters(TArray<FRMFrame>& Frames);
-	/** A road's detailed cross-sections: half of the 1 m samples for roads, three quarters for walking paths. */
+	/** A road's detailed cross-sections (from 1 m samples): where it bends (4.5 deg, walking paths 3 deg), else every 4 m. */
 	ROADMAKER_API void ReduceRoadFrames(TArray<FRMFrame>& Frames, bool bWalkingPath);
 
 	/** Samples a Hermite spline into frames roughly every Step cm. */
