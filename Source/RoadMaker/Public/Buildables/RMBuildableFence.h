@@ -28,7 +28,7 @@ public:
 
 	virtual void RebuildMesh() override;
 
-	/** Detailed mesh with cross-sections only where it bends (see RMGeometry::SimplifyFrames): grid fences and walls. */
+	/** Detailed mesh with cross-sections only where it bends (see RMGeometry::SimplifyFrames): every fence type. */
 	static bool UsesSimplifiedFrames(ERMFenceType Type);
 	/** Turn between two cross-sections on bends, in degrees (4.5: a third fewer quads than 3). */
 	static constexpr float SimplifyTurnDeg = 4.5f;

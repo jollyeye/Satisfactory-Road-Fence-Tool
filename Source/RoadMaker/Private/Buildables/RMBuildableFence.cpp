@@ -29,18 +29,9 @@ void ARMBuildableFence::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 
 bool ARMBuildableFence::UsesSimplifiedFrames(ERMFenceType Type)
 {
-	switch (Type)
-	{
-	case ERMFenceType::GridFence:
-	case ERMFenceType::GridFenceTall:
-	case ERMFenceType::ConcreteWall:
-	case ERMFenceType::SteelWall:
-	case ERMFenceType::FicsitWall:
-	case ERMFenceType::SignWall:
-		return true;
-	default:
-		return false;
-	}
+	// Every type: the guard rail's posts and the cement blocks' joints are laid out by distance along too (the joints
+	// by the material from metres along), so neither needs cross-sections of its own.
+	return true;
 }
 
 void ARMBuildableFence::RebuildMesh()
