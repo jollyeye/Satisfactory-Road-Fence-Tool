@@ -50,6 +50,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void RebuildMesh() override;
+	virtual void BeginPlay() override;
 
 	virtual void ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData) override;
 	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
@@ -185,4 +186,15 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
 	TArray<FVector> mDrapeUp;
+
+private:
+	/**
+	 * Lays the drape on the road's actual top triangles (a moment after it begins play, and again later for a road
+	 * whose mesh is still being made). The road's surface is made of cross-sections only where it bends, so between
+	 * two of them it is flat triangles, not the ideal curve the drape was planned on (on a climbing curve the two
+	 * differ by a few cm: the marking sank into the road in slices).
+	 */
+	void DrapeOnRoadMesh();
+	FTimerHandle mDrapeTimer;
+	int32 mDrapeTries = 0;
 };

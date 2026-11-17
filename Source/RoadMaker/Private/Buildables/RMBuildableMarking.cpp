@@ -65,6 +65,129 @@ void ARMBuildableMarking::SetShape(uint8 Variant, float LaneWidth)
 	}
 }
 
+namespace
+{
+	/** Height of the top of a Road Maker road's detailed mesh under a world point (the one nearest NearZ, within 1 m). */
+	bool RoadTopZ(UWorld* World, const FVector& At, float& OutZ)
+	{
+		bool bFound = false;
+		float Best = 100.f;
+		for (TActorIterator<ARMBuildableRoad> It(World); It; ++It)
+		{
+			ARMBuildableRoad* Road = *It;
+			if (Road->IsActorBeingDestroyed())
+			{
+				continue;
+			}
+			TArray<TPair<UProceduralMeshComponent*, int32>> Meshes;
+			Road->GetMeshesByLevel(Meshes);
+			for (const TPair<UProceduralMeshComponent*, int32>& M : Meshes)
+			{
+				UProceduralMeshComponent* Comp = M.Key;
+				if (M.Value != 0 || !Comp || Comp->GetNumSections() == 0)
+				{
+					continue;
+				}
+				const FBox Box = Comp->Bounds.GetBox().ExpandBy(FVector(10.f, 10.f, 150.f));
+				if (!Box.IsInsideXY(At) || At.Z < Box.Min.Z || At.Z > Box.Max.Z)
+				{
+					continue;
+				}
+				const FProcMeshSection* Top = Comp->GetProcMeshSection(0); // section 0: the asphalt top
+				if (!Top)
+				{
+					continue;
+				}
+				const FTransform X = Comp->GetComponentTransform();
+				const FVector L = X.InverseTransformPosition(At);
+				const TArray<uint32>& I = Top->ProcIndexBuffer;
+				for (int32 K = 0; K + 2 < I.Num(); K += 3)
+				{
+					const FVector A = FVector(Top->ProcVertexBuffer[I[K]].Position);
+					const FVector B = FVector(Top->ProcVertexBuffer[I[K + 1]].Position);
+					const FVector C = FVector(Top->ProcVertexBuffer[I[K + 2]].Position);
+					const float Den = (B.Y - C.Y) * (A.X - C.X) + (C.X - B.X) * (A.Y - C.Y);
+					if (FMath::Abs(Den) < 1e-3f)
+					{
+						continue;
+					}
+					const float L1 = ((B.Y - C.Y) * (L.X - C.X) + (C.X - B.X) * (L.Y - C.Y)) / Den;
+					const float L2 = ((C.Y - A.Y) * (L.X - C.X) + (A.X - C.X) * (L.Y - C.Y)) / Den;
+					const float L3 = 1.f - L1 - L2;
+					if (L1 < -1e-3f || L2 < -1e-3f || L3 < -1e-3f)
+					{
+						continue;
+					}
+					const FVector OnTop = X.TransformPosition(FVector(L.X, L.Y, L1 * A.Z + L2 * B.Z + L3 * C.Z));
+					const float D = FMath::Abs(OnTop.Z - At.Z);
+					if (D < Best)
+					{
+						Best = D;
+						OutZ = OnTop.Z;
+						bFound = true;
+					}
+				}
+			}
+		}
+		return bFound;
+	}
+}
+
+void ARMBuildableMarking::BeginPlay()
+{
+	Super::BeginPlay();
+	if (mDrapePos.Num() >= 2)
+	{
+		// A moment later (the road under it may begin play after it, or still be waiting for its mesh), then again.
+		GetWorldTimerManager().SetTimer(mDrapeTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableMarking::DrapeOnRoadMesh), 0.5f, false);
+	}
+}
+
+void ARMBuildableMarking::DrapeOnRoadMesh()
+{
+	UWorld* World = GetWorld();
+	if (!World || IsActorBeingDestroyed() || mDrapePos.Num() < 2)
+	{
+		return;
+	}
+	const FTransform T = GetActorTransform();
+	int32 Found = 0;
+	float Moved = 0.f;
+	TArray<FVector> NewPos = mDrapePos;
+	for (FVector& P : NewPos)
+	{
+		FVector W = T.TransformPosition(P);
+		float Z;
+		if (RoadTopZ(World, W, Z))
+		{
+			++Found;
+			Moved = FMath::Max(Moved, FMath::Abs(Z - W.Z));
+			W.Z = Z;
+			P = T.InverseTransformPosition(W);
+		}
+	}
+	// Points past the road's end or edge (the drape reaches a little beyond the marking) keep their height.
+	if (Found > 0 && Found * 2 >= NewPos.Num())
+	{
+		if (Moved > 0.2f)
+		{
+			mDrapePos = NewPos;
+			RebuildMesh();
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Marking %s laid on its road's mesh (moved up to %.1f cm)"), *GetName(), Moved);
+		}
+		// Once more a while later: a road built at the same time (Road Mode) may still have been in the mesh queue.
+		if (++mDrapeTries < 2)
+		{
+			GetWorldTimerManager().SetTimer(mDrapeTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableMarking::DrapeOnRoadMesh), 4.f, false);
+		}
+	}
+	else if (++mDrapeTries < 6)
+	{
+		// The road's mesh is not there yet (being made, or the road not loaded yet): later.
+		GetWorldTimerManager().SetTimer(mDrapeTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableMarking::DrapeOnRoadMesh), 2.f, false);
+	}
+}
+
 void ARMBuildableMarking::RebuildMesh()
 {
 	mMesh->ClearAllMeshSections();
