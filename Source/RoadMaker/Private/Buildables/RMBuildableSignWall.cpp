@@ -318,6 +318,10 @@ void ARMBuildableSignWall::RebuildMesh()
 	{
 		TArray<FRMFrame> Frames;
 		GetLocalFrames(Frames, Level == 0 ? mMeshStep : Level == 1 ? 400.f : 800.f);
+		if (Level == 0)
+		{
+			RMGeometry::SimplifyFrames(Frames, SimplifyTurnDeg, 400.f); // as the wall body (repeats get their own cross-sections)
+		}
 		AddChunkBoundaries(Frames);
 		if (Frames.Num() < 2)
 		{

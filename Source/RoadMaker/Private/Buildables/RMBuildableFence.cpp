@@ -27,6 +27,22 @@ void ARMBuildableFence::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
 	DOREPLIFETIME(ARMBuildableFence, mWallLook);
 }
 
+bool ARMBuildableFence::UsesSimplifiedFrames(ERMFenceType Type)
+{
+	switch (Type)
+	{
+	case ERMFenceType::GridFence:
+	case ERMFenceType::GridFenceTall:
+	case ERMFenceType::ConcreteWall:
+	case ERMFenceType::SteelWall:
+	case ERMFenceType::FicsitWall:
+	case ERMFenceType::SignWall:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void ARMBuildableFence::RebuildMesh()
 {
 	// Long fences are drawn in sections (each switches detail on its own); every detail level gets a
@@ -35,11 +51,11 @@ void ARMBuildableFence::RebuildMesh()
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
 	const ERMFenceType Type = GetEffectiveType();
-	if (Type == ERMFenceType::GridFence || Type == ERMFenceType::GridFenceTall)
+	if (UsesSimplifiedFrames(Type))
 	{
-		// Cross-sections only where the fence bends (3 degrees), every 4 m on straight stretches. The posts keep
-		// their spacing (placed by distance along).
-		RMGeometry::SimplifyFrames(Frames, 3.f, 400.f);
+		// Cross-sections only where the fence bends, every 4 m on straight stretches. Posts, panels and texture
+		// repeats keep their places (laid out by distance along, with cross-sections of their own where needed).
+		RMGeometry::SimplifyFrames(Frames, SimplifyTurnDeg, 400.f);
 	}
 	AddChunkBoundaries(Frames);
 	mMesh->ClearAllMeshSections();
