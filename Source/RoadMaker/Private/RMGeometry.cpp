@@ -2153,13 +2153,84 @@ namespace
 	}
 }
 
+namespace
+{
+	/**
+	 * A curb's line as a smooth curve: a Hermite curve through the curb's corner points (tangents along the neighbours,
+	 * scaled by each piece's length, so a long straight edge next to short fillet steps does not overshoot), sampled
+	 * finely, then thinned: a point where the line has turned by MaxTurnDeg since the last one kept, or MaxGap cm on.
+	 * Straight stretches get a few long quads, bends as many as they need to look round.
+	 */
+	void SmoothCurbLine(const TArray<FVector>& Raw, float MaxTurnDeg, float MaxGap, TArray<FVector>& OutPos, TArray<FVector>& OutFwd)
+	{
+		OutPos.Reset();
+		OutFwd.Reset();
+		const int32 N = Raw.Num();
+		auto Flat = [](FVector V) { V.Z = 0.f; return V.GetSafeNormal(); };
+		TArray<FVector> Dir;
+		Dir.SetNum(N);
+		for (int32 I = 0; I < N; ++I)
+		{
+			const FVector D = I == 0 ? Raw[1] - Raw[0] : I == N - 1 ? Raw[N - 1] - Raw[N - 2] : Flat(Raw[I + 1] - Raw[I]) + Flat(Raw[I] - Raw[I - 1]);
+			Dir[I] = D.GetSafeNormal();
+		}
+		// Fine samples along the curve.
+		TArray<FVector> Pos, Fwd;
+		for (int32 I = 0; I + 1 < N; ++I)
+		{
+			const FVector A = Raw[I], B = Raw[I + 1];
+			const float L = FVector::Dist(A, B);
+			const FVector TA = Dir[I] * L, TB = Dir[I + 1] * L;
+			const int32 Steps = FMath::Clamp(FMath::CeilToInt(L / 10.f), 1, 400);
+			for (int32 K = (I == 0 ? 0 : 1); K <= Steps; ++K)
+			{
+				const float T = float(K) / Steps;
+				Pos.Add(FMath::CubicInterp(A, TA, B, TB, T));
+				FVector D = FMath::CubicInterpDerivative(A, TA, B, TB, T);
+				D.Z = 0.f;
+				Fwd.Add(D.Normalize() ? D : Flat(B - A));
+			}
+		}
+		// Thinned.
+		const float CosTurn = FMath::Cos(FMath::DegreesToRadians(MaxTurnDeg));
+		int32 Last = 0;
+		OutPos.Add(Pos[0]);
+		OutFwd.Add(Fwd[0]);
+		for (int32 K = 1; K < Pos.Num(); ++K)
+		{
+			const bool bEnd = K == Pos.Num() - 1;
+			const bool bTurned = FVector::DotProduct(Fwd[K], Fwd[Last]) < CosTurn;
+			const bool bFar = FVector::Dist(Pos[K], Pos[Last]) >= MaxGap;
+			if (bEnd || bTurned || bFar)
+			{
+				// Turned: keep the sample before (the turn stays within the tolerance on every quad).
+				const int32 Keep = (bTurned && !bEnd && K - 1 > Last) ? K - 1 : K;
+				OutPos.Add(Pos[Keep]);
+				OutFwd.Add(Fwd[Keep]);
+				Last = Keep;
+				if (Keep != K && bEnd)
+				{
+					OutPos.Add(Pos[K]);
+					OutFwd.Add(Fwd[K]);
+				}
+			}
+		}
+		if (FVector::DistSquared(OutPos.Last(), Pos.Last()) > 1.f)
+		{
+			OutPos.Add(Pos.Last());
+			OutFwd.Add(Fwd.Last());
+		}
+	}
+}
+
 void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inset, const FRMMesh& Surface, FRMMesh& Out)
 {
 	Out.Reset();
 	const float E = Inset / 100.f;            // inset in metres, as on road tops
 	const float HalfStrip = 12.f;             // cm; the line itself is 15 cm wide, drawn by the material
 	const float Lift = 1.5f;                  // cm above the slab, against z-fighting
-	const float MaxPiece = 50.f;              // short pieces so the strip follows the slab's facets
+	const float MaxTurn = 6.f;                // degrees per quad on bends: round
+	const float MaxGap = 200.f;               // cm per quad on straight stretches (follows the slab's height closely enough)
 	const FVector2D Layout(100.f, E);         // "road" so wide that only this one side line shows
 	const FVector2D Style(1.f, 1.f);          // 1 lane (no dividers), side lines on
 
@@ -2169,29 +2240,17 @@ void RMGeometry::BuildCurbLines(const TArray<TArray<FVector>>& Curbs, float Inse
 		{
 			continue;
 		}
-		// Subdivide long curb edges (straight corners can be several metres).
-		TArray<FVector> Curb;
-		Curb.Add(Raw[0]);
-		for (int32 I = 1; I < Raw.Num(); ++I)
-		{
-			const int32 Pieces = FMath::Max(1, FMath::CeilToInt(FVector::Dist(Raw[I - 1], Raw[I]) / MaxPiece));
-			for (int32 K = 1; K <= Pieces; ++K)
-			{
-				Curb.Add(FMath::Lerp(Raw[I - 1], Raw[I], float(K) / Pieces));
-			}
-		}
+		TArray<FVector> Curb, Fwds;
+		SmoothCurbLine(Raw, MaxTurn, MaxGap, Curb, Fwds);
 		const int32 N = Curb.Num();
+		if (N < 2)
+		{
+			continue;
+		}
 		const int32 Base = Out.Vertices.Num();
 		for (int32 I = 0; I < N; ++I)
 		{
-			const FVector Prev = Curb[FMath::Max(I - 1, 0)];
-			const FVector Next = Curb[FMath::Min(I + 1, N - 1)];
-			FVector Fwd = Next - Prev;
-			Fwd.Z = 0.f;
-			if (!Fwd.Normalize())
-			{
-				Fwd = FVector::ForwardVector;
-			}
+			const FVector Fwd = Fwds[I];
 			// Curbs run so the intersection centre is on their +Right side.
 			const FVector Right = FVector::CrossProduct(FVector::UpVector, Fwd).GetSafeNormal();
 			const FVector Mid = Curb[I] + Right * Inset;
