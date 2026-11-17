@@ -252,10 +252,10 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 		}
 		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: %s dismantled with blueprint %s: %s"), *GetName(), *Proxy->GetName(), *List);
 		// What the dismantle gives back for the whole placement (to compare with "Road Mode: paid" when it was built).
-		TArray<AActor*> Children;
-		IFGDismantleInterface::Execute_GetChildDismantleActors(this, Children);
+		TArray<AActor*> Placement;
+		IFGDismantleInterface::Execute_GetChildDismantleActors(this, Placement);
 		TMap<FString, int32> Back;
-		for (AActor* A : Children)
+		for (AActor* A : Placement)
 		{
 			if (IsValid(A) && A->Implements<UFGDismantleInterface>())
 			{
@@ -272,7 +272,7 @@ void ARMBuildableBlueprintRoad::Dismantle_Implementation()
 		{
 			Given += FString::Printf(TEXT("%s%s %d"), Given.IsEmpty() ? TEXT("") : TEXT(", "), *B.Key, B.Value);
 		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: refund of the %d pieces: %s"), Children.Num(), *Given);
+		UE_LOG(LogRoadMaker, Display, TEXT("Blueprint Road: refund of the %d pieces: %s"), Placement.Num(), *Given);
 		// A moment later (once the dismantle is done): whatever of the placement was left behind, still pointing at
 		// its blueprint, goes too.
 		const void* ProxyKey = Proxy;
