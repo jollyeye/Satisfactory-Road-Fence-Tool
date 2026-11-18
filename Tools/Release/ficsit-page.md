@@ -108,6 +108,10 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
+## Changelog for version 1.4.1
+**Fixed**
+- Rebuilt for the Satisfactory update (build 520140): the game changed some of the classes Road Maker builds on (signs, blueprints, the player, the game state). Needed for that game version and newer; sign walls and Road Mode are the parts that could misbehave with 1.4.0 there.
+
 ## Changelog for version 1.4.0
 **Added**
 - Walking paths, 2 m and 4 m wide (thanks to the idea in issue #1): build them right beside a road with the snap key to widen it (one on each side of a 1-wide road makes it 1.5 foundations wide), and fences snap to their outer edge. Concrete blocks by default; no vehicle paths, tracks or lane markings on them. A 4 m path splits into two 2 m paths and two 2 m paths merge into a 4 m one. They snap to walking path ends and to road ends every 2 m across.
