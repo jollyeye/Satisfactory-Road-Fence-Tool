@@ -271,10 +271,8 @@ void ARMBuildableProcedural::BeginPlay()
 
 bool ARMBuildableProcedural::BuildQueuedMeshes()
 {
-	if (GMeshHead < GMeshQueue.Num() && !FRMDeferMeshes::ClaimFrame())
-	{
-		return true; // this frame already had its heavy step
-	}
+	// No frame of its own any more (2026-11-20): since the mesh diet our meshes are cheap, and taking whole frames
+	// held back Road Mode's tiles (the game's buildings appeared late). The queue just keeps to its small budget.
 	const double Start = FPlatformTime::Seconds();
 	int32 Done = 0;
 	while (GMeshHead < GMeshQueue.Num())
