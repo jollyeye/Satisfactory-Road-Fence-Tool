@@ -1,0 +1,276 @@
+msgid ""
+msgstr ""
+"Language: zh-Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Key:	LimitsOff
+#: Source/RoadMaker/Private/RMRoadLimits.cpp
+msgctxt "RoadMaker,LimitsOff"
+msgid "Limits: OFF"
+msgstr "限制：关"
+
+#. Key:	LimitsOn
+#: Source/RoadMaker/Private/RMRoadLimits.cpp
+msgctxt "RoadMaker,LimitsOn"
+msgid "Limits: ON"
+msgstr "限制：开"
+
+#. Key:	ModeWithLimits
+#: Source/RoadMaker/Private/RMRoadLimits.cpp
+msgctxt "RoadMaker,ModeWithLimits"
+msgid "{0} ({1})"
+msgstr "{0}（{1}）"
+
+#. Key:	LimitsHint
+#: Source/RoadMaker/Private/RMRoadLimits.cpp
+msgctxt "RoadMaker,LimitsHint"
+msgid "Toggle Limits"
+msgstr "切换限制"
+
+#. Key:	MarkingsOnRoads
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,MarkingsOnRoads"
+msgid "Lane markings go on roads"
+msgstr "车道标线只能画在道路上"
+
+#. Key:	IntersectionSidesOnly
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,IntersectionSidesOnly"
+msgid "Intersections take Sidelines only"
+msgstr "路口只能设置边线"
+
+#. Key:	AimAtRoadLines
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,AimAtRoadLines"
+msgid "Aim at a road"
+msgstr "对准一条道路"
+
+#. Key:	LaneMenuHint
+#: Source/RoadMaker/Private/LanePaint/RMLanePaint.cpp
+msgctxt "RoadMaker,LaneMenuHint"
+msgid "[{0}]  Lane menu"
+msgstr "[{0}]  车道菜单"
+
+#. Key:	MapShowRoads
+#: Source/RoadMaker/Private/Map/RMMapRoadsRow.cpp
+msgctxt "RoadMaker,MapShowRoads"
+msgid "Show Roads on Map"
+msgstr "在地图上显示道路"
+
+#. Key:	SwatchGroupRoads
+#: Source/RoadMaker/Public/Buildables/RMSwatchGroupRoads.h
+msgctxt "RoadMaker,SwatchGroupRoads"
+msgid "Roads"
+msgstr "道路"
+
+#. Key:	JoinAimAtJoint
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,JoinAimAtJoint"
+msgid "Aim near where two roads meet end to end"
+msgstr "对准两条道路首尾相接处"
+
+#. Key:	JoinWidth
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,JoinWidth"
+msgid "The roads are not the same width"
+msgstr "两条道路宽度不同"
+
+#. Key:	JoinKink
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,JoinKink"
+msgid "The roads do not continue smoothly into each other"
+msgstr "两条道路无法平滑衔接"
+
+#. Key:	JoinCurve
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,JoinCurve"
+msgid "One road would not follow both curves (e.g. a straight and a curved piece)"
+msgstr "单条道路无法同时贴合两段曲线（例如一段直线和一段曲线）"
+
+#. Key:	MergePickSecond
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,MergePickSecond"
+msgid "Aim at the road right beside it (click the picked road again to drop it)"
+msgstr "对准紧邻它的道路（再次点击已选道路可取消）"
+
+#. Key:	MergeNotBeside
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,MergeNotBeside"
+msgid "Not right beside the picked road (edge to edge, same height, all along; a road and a walking path do not merge)"
+msgstr "没有紧贴已选道路（需全程边对边、同高度；道路与步行道不能合并）"
+
+#. Key:	MergeLength
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,MergeLength"
+msgid "The roads must start and end together (cut them to match)"
+msgstr "两条道路必须同时起止（可先切割对齐）"
+
+#. Key:	MergeTooWide
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,MergeTooWide"
+msgid "Together they would be wider than 4 foundations (walking paths: only two 2 m paths)"
+msgstr "合并后宽度超过 4 格地基（步行道仅支持两条 2 米步行道合并）"
+
+#. Key:	TurnTooTight
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TurnTooTight"
+msgid "Turn is too tight for this road"
+msgstr "弯道过急，此道路无法通过"
+
+#. Key:	TooSteep
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TooSteep"
+msgid "Road is too steep"
+msgstr "道路坡度过陡"
+
+#. Key:	TooLong
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TooLong"
+msgid "Road section is too long"
+msgstr "道路段过长"
+
+#. Key:	TooShort
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TooShort"
+msgid "Too short"
+msgstr "太短"
+
+#. Key:	NotEnoughRoads
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,NotEnoughRoads"
+msgid "Aim near at least 2 free road ends"
+msgstr "请对准至少 2 个空闲道路端点"
+
+#. Key:	PickRoadEnds
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,PickRoadEnds"
+msgid "Click at least 2 free road ends to pick them"
+msgstr "点击至少 2 个空闲道路端点以选中"
+
+#. Key:	AimAtRoad
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,AimAtRoad"
+msgid "Aim at a road"
+msgstr "对准一条道路"
+
+#. Key:	BadIntersection
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,BadIntersection"
+msgid "These road ends cannot form an intersection"
+msgstr "这些道路端点无法组成路口"
+
+#. Key:	RiderTooShort
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,RiderTooShort"
+msgid "A train track or vehicle path on the road would be cut too close to its end"
+msgstr "道路上的铁轨或车辆路径会被切得离端点太近"
+
+#. Key:	AimAtFence
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,AimAtFence"
+msgid "Aim at a road fence or fence wall"
+msgstr "对准道路护栏或围栏墙"
+
+#. Key:	RoadTooNarrow
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,RoadTooNarrow"
+msgid "Only roads 2 or more wide (or 4 m walking paths) can be split"
+msgstr "只有 2 格及以上宽度的道路（或 4 米步行道）可以纵向拆分"
+
+#. Key:	RidersOnRoad
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,RidersOnRoad"
+msgid "Remove the train tracks and vehicle paths on the road first"
+msgstr "请先移除道路上的铁轨和车辆路径"
+
+#. Key:	SameFenceTaken
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,SameFenceTaken"
+msgid "The same fence is already there"
+msgstr "此处已有相同的护栏"
+
+#. Key:	FenceWallTaken
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceWallTaken"
+msgid "Another fence wall is already there"
+msgstr "此处已有其他围栏墙"
+
+#. Key:	AimAtRoadEnd
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,AimAtRoadEnd"
+msgid "Aim at an orange circle on a road end"
+msgstr "对准道路端点上的橙色圆圈"
+
+#. Key:	FenceJoinAimAtJoint
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinAimAtJoint"
+msgid "Aim near where two fences meet end to end"
+msgstr "对准两段护栏首尾相接处"
+
+#. Key:	FenceJoinType
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinType"
+msgid "The fences are not the same kind (or not the same look)"
+msgstr "两段护栏类型不同（或外观不同）"
+
+#. Key:	FenceJoinSide
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinSide"
+msgid "The fences face opposite sides of the road"
+msgstr "两段护栏朝向道路的两侧"
+
+#. Key:	FenceJoinKink
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinKink"
+msgid "The fences do not continue smoothly into each other"
+msgstr "两段护栏无法平滑衔接"
+
+#. Key:	FenceJoinCurve
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinCurve"
+msgid "One fence would not follow both curves (e.g. a straight and a curved piece)"
+msgstr "单段护栏无法同时贴合两段曲线（例如一段直线和一段曲线）"
+
+#. Key:	FenceJoinTooLong
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FenceJoinTooLong"
+msgid "The joined fence would be longer than 1 km"
+msgstr "连接后的护栏长度超过 1 公里"
+
+#. Key:	LongCurveTooLong
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,LongCurveTooLong"
+msgid "Road is longer than 1 km"
+msgstr "道路长度超过 1 公里"
+
+#. Key:	FillPickEdges
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FillPickEdges"
+msgid "Click road edges around the area, then click inside it to build"
+msgstr "先点击区域四周的道路边缘，再点击区域内部完成建造"
+
+#. Key:	FillCrosses
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,FillCrosses"
+msgid "The outline crosses itself"
+msgstr "轮廓线发生自相交"
+
+#. Key:	RoadLinesHud
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,RoadLinesHud"
+msgid "Road Lines: {0}"
+msgstr "道路标线：{0}"
+
+#. Key:	IntersectionLinesHud
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,IntersectionLinesHud"
+msgid "Intersection: {0}"
+msgstr "路口：{0}"
+
+#. Key:	RoadModeBlueprintName
+#: Source/RoadMaker/Private/Templates/RMRoadTemplate.cpp
+msgctxt "RoadMaker,RoadModeBlueprintName"
+msgid "Road"
+msgstr "道路"
