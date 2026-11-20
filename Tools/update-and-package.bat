@@ -11,6 +11,8 @@ set GIT="%ProgramFiles%\Git\cmd\git.exe"
 
 echo [1/4] Getting the latest Road Maker code...
 echo == git pull == > "%LOG%"
+rem Files the editor may rewrite while building go back to their committed state first, so the pull never stops on them.
+%GIT% -C "%MODDIR%" checkout -- Config/Localization Content/Localization >> "%LOG%" 2>&1
 %GIT% -C "%MODDIR%" pull >> "%LOG%" 2>&1
 if errorlevel 1 goto failed
 
