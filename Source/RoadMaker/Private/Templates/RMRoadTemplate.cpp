@@ -2335,7 +2335,7 @@ namespace RMRoadTemplate
 			};
 			const double LoadStart = FPlatformTime::Seconds();
 			Blueprints->LoadStoredBlueprint(Descriptor, S.StartT, Spawned, false, nullptr, Player, Proxy,
-				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K](AFGBuildable* B, int32 Index)
+				[&S, &Drop, &Moves, &Logged, &CurEnds, &CurPaths, &CurPower, K, Player](AFGBuildable* B, int32 Index)
 				{
 					if (!B)
 					{
@@ -2439,6 +2439,13 @@ namespace RMRoadTemplate
 					if (Match && Match->bChainPower)
 					{
 						CurPower.Add(Match, B);
+					}
+					// Its own build effect right away. As part of a blueprint it would wait for the blueprint's group
+					// effect, which a Road Mode tile gets only seconds later (the game's pieces showed up ~5 s late).
+					B->SetBlueprintBuildEffectID(B->GetClass()->GetDefaultObject<AFGBuildable>()->GetBlueprintBuildEffectID());
+					if (Player)
+					{
+						B->SetBuildEffectInstigator(Player);
 					}
 					Moves.Emplace(B, Target);
 					GPendingMoves.Add(B, Target);
@@ -2613,8 +2620,9 @@ namespace RMRoadTemplate
 		/** After the last tile: the checks that need the whole placement. */
 		void FinishJob(FTileJob& Job)
 		{
-			const TMap<TSubclassOf<UFGItemDescriptor>, int32> Taken = ChargePlacement(Job);
-			GiveBackGameCharge(Job, Taken);
+			// What the game took at the click goes back first, so the player has it for Road Mode's own charge.
+			GiveBackGameCharge(Job, TMap<TSubclassOf<UFGItemDescriptor>, int32>());
+			ChargePlacement(Job);
 			if (UFGInventoryComponent* Inventory = Job.Inventory.Get())
 			{
 				LogInventoryChange(Inventory, Inventory, Job.Before, TEXT("after paying"));
