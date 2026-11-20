@@ -38,7 +38,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
   with doors and windows, corner walls, quarter pipes, beams, pillars, barriers, stairs) except catwalks, walkways,
   ladders, modern and industrial railings; pipeline junctions, pipeline supports, pumps (Mk.1 / Mk.2) and valves,
   conveyor throughput monitors, wall flood lights, buffer stops, hypertube entrances, hypertube supports and wall
-  supports, jump pads. Machines, storage, poles, lights and everything else stay level (`TiltsByRule` in
+  supports, jump pads. The Foundations tab stays level (foundations, ramps, frames...: decided 2026-11-20, read from each piece's build menu category, learned from the available recipes). Machines, storage, poles, lights and everything else stay level (`TiltsByRule` in
   RMRoadTemplate.cpp). The wall flood light also snaps to our fence walls and the gantry like the other wall
   accessories (first build step; its back on the wall's face; the lamp angle step as the game's).
 

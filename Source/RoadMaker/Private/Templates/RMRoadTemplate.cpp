@@ -48,6 +48,9 @@
 #include "Buildables/FGPipeHyperStart.h"
 #include "Buildables/FGBuildableJumppad.h"
 #include "FGBuildablePolePipe.h"
+#include "FGRecipeManager.h"
+#include "FGCategory.h"
+#include "Resources/FGBuildingDescriptor.h"
 
 namespace RMRoadTemplate
 {
@@ -306,11 +309,65 @@ namespace RMRoadTemplate
 		 * hypertube entrances, hypertube supports and wall supports, jump pads. Machines, storage, poles, lights and the
 		 * rest stay level.
 		 */
+		/** Build menu category of each buildable class the player can build (from the available recipes), for TiltsByRule. */
+		TMap<TWeakObjectPtr<UClass>, FString> GBuildCategory;
+
+		void LearnCategories(UWorld* World)
+		{
+			if (GBuildCategory.Num() > 0 || !World)
+			{
+				return;
+			}
+			AFGRecipeManager* Recipes = AFGRecipeManager::Get(World);
+			if (!Recipes)
+			{
+				return;
+			}
+			TArray<TSubclassOf<UFGRecipe>> Available;
+			Recipes->GetAllAvailableRecipes(Available);
+			for (const TSubclassOf<UFGRecipe>& Recipe : Available)
+			{
+				for (const FItemAmount& Product : UFGRecipe::GetProducts(Recipe))
+				{
+					UClass* ItemClass = Product.ItemClass.Get();
+					if (!ItemClass || !ItemClass->IsChildOf(UFGBuildingDescriptor::StaticClass()))
+					{
+						continue;
+					}
+					if (UClass* Buildable = UFGBuildingDescriptor::GetBuildableClass(TSubclassOf<UFGBuildingDescriptor>(ItemClass)).Get())
+					{
+						// The tab and its sub-categories, as one text ("Cat_Foundations SC_Ramps" and the like).
+						FString Names = GetNameSafe(UFGItemDescriptor::GetCategory(Product.ItemClass).Get());
+						TArray<TSubclassOf<UFGCategory>> Subs;
+						UFGItemDescriptor::GetSubCategories(Product.ItemClass, Subs);
+						for (const TSubclassOf<UFGCategory>& Sub : Subs)
+						{
+							Names += TEXT(" ") + GetNameSafe(Sub.Get());
+						}
+						GBuildCategory.Add(Buildable, Names);
+					}
+				}
+			}
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: build menu categories of %d buildings learned"), GBuildCategory.Num());
+		}
+
 		bool TiltsByRule(const AActor* Actor)
 		{
 			if (!Actor)
 			{
 				return false;
+			}
+			// The Foundations tab stays level (foundations, ramps, frames... decided 2026-11-20).
+			for (UClass* C = Actor->GetClass(); C; C = C->GetSuperClass())
+			{
+				if (const FString* Category = GBuildCategory.Find(C))
+				{
+					if (Category->Contains(TEXT("Foundation")))
+					{
+						return false;
+					}
+					break;
+				}
 			}
 			const FString Name = Actor->GetClass()->GetName();
 			if (Actor->IsA<AFGBuildableFactoryBuilding>())
@@ -583,6 +640,7 @@ namespace RMRoadTemplate
 				if (!It.Key().IsValid()) { It.RemoveCurrent(); }
 			}
 			Stop(Self);
+			LearnCategories(Self->GetWorld());
 			FState& S = GStates.Add(Self);
 			S.Step = 1;
 			S.StartT = Self->GetActorTransform();
@@ -715,6 +773,9 @@ namespace RMRoadTemplate
 					R.Rel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
 					R.Buildable = Pair.Key.Get();
 					R.bLevel = !TiltsWithCurve(Pair.Key.Get());
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: %s (%s) %s"), *GetNameSafe(Pair.Key.Get()),
+						Pair.Key.Get() && GBuildCategory.Find(Pair.Key->GetClass()) ? **GBuildCategory.Find(Pair.Key->GetClass()) : TEXT("no category"),
+						R.bLevel ? TEXT("stays level") : TEXT("tilts with the road"));
 					// A power pole or single wall outlet without any wire in the blueprint: wired to its copy on the next tile.
 					if (const AFGBuildablePowerPole* Pole = Cast<AFGBuildablePowerPole>(Pair.Key.Get()))
 					{
@@ -2342,7 +2403,7 @@ namespace RMRoadTemplate
 					Paid += FString::Printf(TEXT(" (of %d)"), C.Value);
 				}
 			}
-			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
 		}
 
 		/** After the last tile: the checks that need the whole placement. */
