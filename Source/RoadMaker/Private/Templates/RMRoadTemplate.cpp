@@ -171,6 +171,7 @@ namespace RMRoadTemplate
 			TArray<FRigid> Rigids;
 			TArray<FStretch> Stretches;
 			float RigidMaxX = -1.f; // furthest repeated object from the back edge (-1: none)
+			float ShownCostLen = -1000.f; // curve length the shown cost was worked out for
 			/** Where the game's loader puts a piece vs where the hologram shows it (road space): the hologram centres
 			 *  its preview on the blueprint's bounds, the loader does not. Added to what the loader spawns. */
 			FVector LoaderToPreview = FVector::ZeroVector;
@@ -524,6 +525,7 @@ namespace RMRoadTemplate
 
 		void Stop(AFGBlueprintHologram* Self)
 		{
+			RestoreShownCost(Self);
 			FState* S = GStates.Find(Self);
 			if (!S)
 			{
@@ -1406,15 +1408,10 @@ namespace RMRoadTemplate
 		 * length along the curve. Only to check the player can afford it: what is taken is what the placement gives
 		 * back when dismantled, counted once it is built (see FinishJob).
 		 */
+		void PlanCost(AFGBlueprintHologram* Self, const FState& S, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out);
 		void EstimateCost(AFGBlueprintHologram* Self, const FState& S, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out)
 		{
-			Out.Reset();
-			const float Len = S.Frames.Num() > 1 ? S.Frames.Last().Dist : 0.f;
-			const int32 Times = FMath::Max(1, FMath::FloorToInt(Len / FMath::Max(S.L, 1.f) + 0.02f)); // whole tiles, as built
-			for (const FItemAmount& A : Self->GetBaseCost())
-			{
-				Out.FindOrAdd(A.ItemClass) += A.Amount * Times;
-			}
+			PlanCost(Self, S, Out);
 		}
 
 		int32 MakePlans(AFGBlueprintHologram* Self, const FState& S, TArray<FPlan>& Plans, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Cost)
@@ -1565,6 +1562,119 @@ namespace RMRoadTemplate
 				}
 			}
 			return Tiles;
+		}
+
+		/** The blueprint's own cost as saved (the descriptor's, while Road Mode shows its own cost there). */
+		TMap<TWeakObjectPtr<UFGBlueprintDescriptor>, TArray<FItemAmount>> GOriginalCost;
+
+		TArray<FItemAmount> OriginalCost(const AFGBlueprintHologram* Self)
+		{
+			UFGBlueprintDescriptor* Desc = Self ? Self->mBlueprintDescriptor.Get() : nullptr;
+			if (!Desc)
+			{
+				return TArray<FItemAmount>();
+			}
+			if (const TArray<FItemAmount>* Saved = GOriginalCost.Find(Desc))
+			{
+				return *Saved;
+			}
+			return Desc->mCost;
+		}
+
+		/**
+		 * What the drawn curve costs: the blueprint's cost without our pieces per whole tile (the game's pieces repeated
+		 * along it; its splines rebuilt along the curve are counted the same way, close to their length), plus our
+		 * pieces as they are built (stretched by length, repeated per tile) and the wires between tiles.
+		 */
+		void PlanCost(AFGBlueprintHologram* Self, const FState& S, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Out)
+		{
+			Out.Reset();
+			const float Len = S.Frames.Num() > 1 ? S.Frames.Last().Dist : 0.f;
+			// The blueprint without our pieces.
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Rest;
+			for (const FItemAmount& A : OriginalCost(Self))
+			{
+				Rest.FindOrAdd(A.ItemClass) += A.Amount;
+			}
+			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
+			{
+				if (Cast<ARMBuildableProcedural>(Pair.Key.Get()))
+				{
+					TArray<FItemAmount> Ours;
+					PieceCost(Self, Pair.Key.Get(), Ours);
+					for (const FItemAmount& A : Ours)
+					{
+						if (int32* Have = Rest.Find(A.ItemClass))
+						{
+							*Have = FMath::Max(0, *Have - A.Amount);
+						}
+					}
+				}
+			}
+			const int32 Tiles = RigidTiles(S, Len);
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& R : Rest)
+			{
+				if (R.Value * Tiles > 0)
+				{
+					Out.FindOrAdd(R.Key) += R.Value * Tiles;
+				}
+			}
+			// Our pieces and the wires, as the plan builds them.
+			TArray<FPlan> Plans;
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Ours;
+			MakePlans(Self, S, Plans, Ours);
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& O : Ours)
+			{
+				Out.FindOrAdd(O.Key) += O.Value;
+			}
+		}
+
+		/** Puts the blueprint's own cost back (Road Mode over, or the build click: the game then takes its usual cost). */
+		void RestoreShownCost(const AFGBlueprintHologram* Self)
+		{
+			UFGBlueprintDescriptor* Desc = Self ? Self->mBlueprintDescriptor.Get() : nullptr;
+			if (Desc)
+			{
+				if (TArray<FItemAmount>* Saved = GOriginalCost.Find(Desc))
+				{
+					Desc->mCost = *Saved;
+					GOriginalCost.Remove(Desc);
+				}
+			}
+		}
+
+		/**
+		 * While drawing, the cost the build gun shows is the plan's (live, as the curve changes): written into the
+		 * blueprint's descriptor (its base cost; the multiplier stays 1) and put back when Road Mode ends or builds.
+		 */
+		void RefreshShownCost(AFGBlueprintHologram* Self, FState& S)
+		{
+			UFGBlueprintDescriptor* Desc = Self ? Self->mBlueprintDescriptor.Get() : nullptr;
+			if (!Desc || S.bFinal || S.Step != 1 || S.Frames.Num() < 2)
+			{
+				return;
+			}
+			const float Len = S.Frames.Last().Dist;
+			if (FMath::Abs(Len - S.ShownCostLen) < 50.f)
+			{
+				return;
+			}
+			if (!GOriginalCost.Contains(Desc))
+			{
+				GOriginalCost.Add(Desc, Desc->mCost);
+			}
+			S.ShownCostLen = Len;
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Cost;
+			PlanCost(Self, S, Cost);
+			TArray<FItemAmount> Shown;
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Cost)
+			{
+				if (C.Value > 0)
+				{
+					Shown.Add(FItemAmount(C.Key, C.Value));
+				}
+			}
+			Desc->mCost = Shown;
 		}
 
 		bool HasFullSplines(const FState& S)
@@ -3160,6 +3270,7 @@ namespace RMRoadTemplate
 					// Done: the game constructs it the usual way (sent to the server with the Road Mode data added to its
 					// construct message), and Road Mode builds it in Construct, on the server.
 					S->bFinal = true;
+					RMRoadMode::RestoreShownCost(Self); // the game takes the blueprint's own cost at the click (given back after)
 					Scope.Override(true);
 					// A client keeps no state once the message is sent (the host's Construct ran meanwhile and cleared it).
 					TWeakObjectPtr<AFGBlueprintHologram> Weak(Self);
@@ -3250,6 +3361,7 @@ namespace RMRoadTemplate
 						RMRoadMode::Update(Self, *S, End);
 						S->bFinal = true;
 					}
+					RMRoadMode::RestoreShownCost(Self);
 					RMRoadMode::GNoPreview = false;
 					if (!S)
 					{
@@ -3335,7 +3447,13 @@ namespace RMRoadTemplate
 				}
 				if (S && S->Step == 1 && S->Frames.Num() > 1 && S->L > 1.f)
 				{
-					Scope.Override(FMath::Max(1, FMath::FloorToInt(S->Frames.Last().Dist / S->L + 0.02f))); // whole tiles only, as built
+					// The plan's cost is in the descriptor while drawing (see RefreshShownCost).
+					RMRoadMode::RefreshShownCost(const_cast<AFGBlueprintHologram*>(Blueprint), *const_cast<RMRoadMode::FState*>(S));
+					Scope.Override(1);
+				}
+				else if (Blueprint && !S)
+				{
+					RMRoadMode::RestoreShownCost(Blueprint); // not (or no longer) in Road Mode: the blueprint's own cost
 				}
 			});
 		// Aiming at a Blueprint Road's wireframe is a valid aim for a blueprint (it snaps to its ends).
