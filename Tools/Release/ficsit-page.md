@@ -110,7 +110,11 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 ## Changelog for version 1.4.1
 **Fixed**
-- Rebuilt for the Satisfactory update (build 520140): the game changed some of the classes Road Maker builds on (signs, blueprints, the player, the game state). Needed for that game version and newer; sign walls and Road Mode are the parts that could misbehave with 1.4.0 there.
+- Satisfactory 1.2.6 (build 520140): the game crashed within seconds of looking at a Road Maker road, fence, intersection or walking path. The update added a function to one of the game's interfaces, so Road Maker 1.4.0 ended up calling the wrong code. 1.4.1 is rebuilt for the new game version and needs build 520140 or newer.
+
+**Note**
+- SML's official headers for 1.2.6 aren't out yet, so this version is built on community-reconstructed headers ([SML PR #433](https://github.com/satisfactorymodding/SatisfactoryModLoader/pull/433)). Everything tested fine (building, Road Mode, sign walls, editing, save and load), but if you run into a crash, please report it on GitHub. A rebuild on the official headers will follow when they're published.
+- Thanks to muaxl and KemiteMiata for the detailed crash analysis.
 
 ## Changelog for version 1.4.0
 **Added**
