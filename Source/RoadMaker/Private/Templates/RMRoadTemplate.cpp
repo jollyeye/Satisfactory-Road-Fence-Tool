@@ -1410,7 +1410,7 @@ namespace RMRoadTemplate
 		{
 			Out.Reset();
 			const float Len = S.Frames.Num() > 1 ? S.Frames.Last().Dist : 0.f;
-			const int32 Times = FMath::Max(1, FMath::RoundToInt(Len / FMath::Max(S.L, 1.f)));
+			const int32 Times = FMath::Max(1, FMath::FloorToInt(Len / FMath::Max(S.L, 1.f) + 0.02f)); // whole tiles, as built
 			for (const FItemAmount& A : Self->GetBaseCost())
 			{
 				Out.FindOrAdd(A.ItemClass) += A.Amount * Times;
@@ -2042,7 +2042,55 @@ namespace RMRoadTemplate
 			/** Paid once everything is built: what the placement gives back when dismantled (its Blueprint Road's list). */
 			TWeakObjectPtr<ARMBuildableBlueprintRoad> Ghost;
 			TWeakObjectPtr<UFGInventoryComponent> Inventory;
+			/** Items in the inventory and the Dimensional Depot at the click, to log what really left them (check). */
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Before;
 		};
+
+		TMap<TSubclassOf<UFGItemDescriptor>, int32> CountItems(const UObject* Context, UFGInventoryComponent* Inventory, const TArray<TSubclassOf<UFGItemDescriptor>>& Also)
+		{
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Out;
+			if (!Inventory)
+			{
+				return Out;
+			}
+			TArray<FInventoryStack> Stacks;
+			Inventory->GetInventoryStacks(Stacks);
+			TSet<TSubclassOf<UFGItemDescriptor>> Items(Also);
+			for (const FInventoryStack& Stack : Stacks)
+			{
+				Items.Add(Stack.Item.GetItemClass());
+			}
+			for (const TSubclassOf<UFGItemDescriptor>& Item : Items)
+			{
+				if (Item)
+				{
+					Out.Add(Item, Available(Context, Inventory, Item));
+				}
+			}
+			return Out;
+		}
+
+		/** Logs what left the inventory / depot since the click (what Road Mode took plus anything the game took). */
+		void LogInventoryChange(const UObject* Context, UFGInventoryComponent* Inventory, const TMap<TSubclassOf<UFGItemDescriptor>, int32>& Before, const TCHAR* When)
+		{
+			if (!Inventory || Before.Num() == 0)
+			{
+				return;
+			}
+			TArray<TSubclassOf<UFGItemDescriptor>> Keys;
+			Before.GetKeys(Keys);
+			const TMap<TSubclassOf<UFGItemDescriptor>, int32> Now = CountItems(Context, Inventory, Keys);
+			FString Line;
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& B : Before)
+			{
+				const int32 Gone = B.Value - Now.FindRef(B.Key);
+				if (Gone != 0)
+				{
+					Line += FString::Printf(TEXT("%s%s %d"), Line.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(B.Key.Get()), Gone);
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: left the inventory since the click (%s): %s"), When, Line.IsEmpty() ? TEXT("nothing") : *Line);
+		}
 
 		void RunTile(FTileJob& Job, int32 K)
 		{
@@ -2410,6 +2458,24 @@ namespace RMRoadTemplate
 		void FinishJob(FTileJob& Job)
 		{
 			ChargePlacement(Job);
+			if (UFGInventoryComponent* Inventory = Job.Inventory.Get())
+			{
+				LogInventoryChange(Inventory, Inventory, Job.Before, TEXT("after paying"));
+				// And a moment later, in case the game takes anything after us.
+				TWeakObjectPtr<UFGInventoryComponent> WeakInv(Inventory);
+				const TMap<TSubclassOf<UFGItemDescriptor>, int32> Before = Job.Before;
+				FTimerHandle Handle;
+				if (UWorld* W = Job.World.Get())
+				{
+					W->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateLambda([WeakInv, Before]()
+					{
+						if (UFGInventoryComponent* Inv = WeakInv.Get())
+						{
+							LogInventoryChange(Inv, Inv, Before, TEXT("3 s later"));
+						}
+					}), 3.f, false);
+				}
+			}
 			const FState& S = Job.S;
 			UWorld* World = Job.World.Get();
 			if (!World)
@@ -2523,10 +2589,14 @@ namespace RMRoadTemplate
 				Player = Cast<AFGCharacterPlayer>(Self->GetInstigator());
 			}
 			UFGInventoryComponent* Inventory = Player && !bFree ? Player->GetInventory() : nullptr;
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> ItemsAtClick;
 			if (Inventory)
 			{
 				TMap<TSubclassOf<UFGItemDescriptor>, int32> Estimate;
 				EstimateCost(Self, S, Estimate);
+				TArray<TSubclassOf<UFGItemDescriptor>> EstimateItems;
+				Estimate.GetKeys(EstimateItems);
+				ItemsAtClick = CountItems(Self, Inventory, EstimateItems);
 				for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& C : Estimate)
 				{
 					if (Available(Self, Inventory, C.Key) < C.Value)
@@ -2785,6 +2855,7 @@ namespace RMRoadTemplate
 			Job->Built = Built;
 			Job->Ghost = PlacedGhost;
 			Job->Inventory = Inventory;
+			Job->Before = MoveTemp(ItemsAtClick);
 			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
 			FRMDeferMeshes::ClaimFrame(); // the click's frame is taken: the first tile comes in a later one
 			StartJob(Job);
@@ -3215,7 +3286,7 @@ namespace RMRoadTemplate
 				}
 				if (S && S->Step == 1 && S->Frames.Num() > 1 && S->L > 1.f)
 				{
-					Scope.Override(FMath::Max(1, FMath::RoundToInt(S->Frames.Last().Dist / S->L)));
+					Scope.Override(FMath::Max(1, FMath::FloorToInt(S->Frames.Last().Dist / S->L + 0.02f))); // whole tiles only, as built
 				}
 			});
 		// Aiming at a Blueprint Road's wireframe is a valid aim for a blueprint (it snaps to its ends).
