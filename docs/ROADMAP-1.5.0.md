@@ -42,6 +42,13 @@ Nothing here is decided in detail yet: each item gets its design written down be
   RMRoadTemplate.cpp). The wall flood light also snaps to our fence walls and the gantry like the other wall
   accessories (first build step; its back on the wall's face; the lamp angle step as the game's).
 
+- **Road Mode cost and build fixes** (2026-11-20, tested): the game takes the blueprint's own cost once at the click
+  by itself (it ignores the hologram's cost multiplier for that, even when nothing gets built): measured from the
+  inventory and given back before Road Mode charges what was built. Live cost while drawing: the plan's cost written
+  into the blueprint descriptor (restored on the click / leaving Road Mode). Preview and affordability by whole
+  tiles. The game's pieces play their own build effect at once (they waited ~5 s for a blueprint group effect).
+  The mesh queue no longer takes whole frames. "Road Mode: paid" and the inventory check lines are in the normal log.
+
 ## Waiting on something
 - **Traffic lights** (on hold since 2026-11-15): pole + light heads at intersection corners following the
   intersection's state; waits for the Automated Machines mod so the lights can use its alarms / actions.
