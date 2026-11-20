@@ -3065,6 +3065,13 @@ namespace
 		return Hologram->GetBuildClass() && Hologram->GetBuildClass()->GetName().Contains(TEXT("Ladder"));
 	}
 
+	/** The wall flood light: a wall accessory too (its hologram is the game's flood light hologram, not a wall attachment). */
+	bool IsWallFloodlight(const AFGHologram* Hologram)
+	{
+		const UClass* Build = Hologram ? Hologram->GetBuildClass() : nullptr;
+		return Build && Build->GetName().Contains(TEXT("Floodlight")) && Build->GetName().Contains(TEXT("Wall"));
+	}
+
 	/** Other pieces that mount on walls without being wall attachments: fans, vents, ladders and the beam connectors / supports. */
 	bool IsExtraWallPiece(const AFGHologram* Hologram)
 	{
@@ -3097,7 +3104,8 @@ namespace
 		}
 		// The piece's origin goes on the middle of the wall, so two-sided pieces show on both faces and
 		// the back of a one-sided one is hidden inside it.
-		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * (IsFaceMountedPiece(Hologram) ? -LadderStandOff : Face.Depth), FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
+		const float In = IsFaceMountedPiece(Hologram) ? -LadderStandOff : IsWallFloodlight(Hologram) ? 0.f : Face.Depth; // the flood light's back on the face
+		Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * In, FQuat(Face.Normal, FMath::DegreesToRadians(Turn)) * Base);
 		if (!GAttachOnWall.Contains(Hologram))
 		{
 			GAttachOnWall.Add(Hologram);
@@ -3412,7 +3420,31 @@ void RMVanillaSnapping::InstallHooks()
 
 	RM_HOOK_SET_LOCATION(AFGBuildableHologram);
 	RM_HOOK_SET_LOCATION(AFGPowerPoleHologram);
-	RM_HOOK_SET_LOCATION(AFGFloodlightHologram);
+	// Flood lights: the wall one goes on our fence walls and the gantry like the other wall accessories (first step only:
+	// the second step sets the lamp's angle); otherwise the road snapping as before.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGFloodlightHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGFloodlightHologram>(),
+		[](auto& Scope, AFGFloodlightHologram* Hologram, const FHitResult& Hit)
+		{
+			if (IsWallFloodlight(Hologram) && IsStartStep(Hologram) && PlaceAttachmentOnWall(Scope, Hologram, Hit))
+			{
+				return;
+			}
+			HandleSetLocation(Scope, Hologram, Hit);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGFloodlightHologram::IsValidHitResult, GetMutableDefault<AFGFloodlightHologram>(),
+		[](auto& Scope, const AFGFloodlightHologram* Hologram, const FHitResult& Hit)
+		{
+			FWallFace Face;
+			if (IsWallFloodlight(Hologram) && FindWallFace(Hit, Face))
+			{
+				Scope.Override(true); // our fence walls are no game walls, but it mounts on them
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGFloodlightHologram::CheckValidPlacement, GetMutableDefault<AFGFloodlightHologram>(),
+		[](AFGFloodlightHologram* Hologram)
+		{
+			FixAttachmentValidity(Hologram);
+		});
 	RM_HOOK_SET_LOCATION(AFGRailroadTrackHologram);
 	RM_HOOK_SET_LOCATION(AFGVehiclePathSegmentHologram);
 	RM_HOOK_SET_LOCATION(AFGFoundationHologram);

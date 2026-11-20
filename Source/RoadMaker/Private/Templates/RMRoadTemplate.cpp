@@ -40,6 +40,14 @@
 #include "Components/BoxComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Containers/Ticker.h"
+#include "Buildables/FGBuildableFactoryBuilding.h"
+#include "Buildables/FGBuildableWalkway.h"
+#include "Buildables/FGBuildablePipelineJunction.h"
+#include "Buildables/FGBuildablePipelinePump.h"
+#include "Buildables/FGBuildableConveyorMonitor.h"
+#include "Buildables/FGPipeHyperStart.h"
+#include "Buildables/FGBuildableJumppad.h"
+#include "FGBuildablePolePipe.h"
 
 namespace RMRoadTemplate
 {
@@ -283,10 +291,43 @@ namespace RMRoadTemplate
 
 		/** Objects that tilt with the curve: splines (belts, pipes, rails...) and our road pieces and markings. Everything
 		 *  else (foundations, machines, poles...) stays level. */
-		bool TiltsWithCurve(const AActor* Actor)
+		/** Our road pieces and markings, and the game's splines (belts, pipes, rails, hypertubes, vehicle paths). */
+		bool IsCurvePiece(const AActor* Actor)
 		{
 			return Actor && (Actor->IsA<ARMBuildableSpline>() || Actor->IsA<ARMBuildableMarking>()
 				|| Actor->FindComponentByClass<USplineComponent>() != nullptr);
+		}
+
+		/**
+		 * Pieces that tilt with the road's slope instead of staying level (decided 2026-11-20, issue #7): everything in
+		 * the Architecture tab (foundations, ramps, roofs, frames, walls with doors and windows, corner walls, quarter
+		 * pipes, beams, pillars, barriers, stairs) except catwalks, walkways, ladders and the railings; and pipeline
+		 * junctions, pipeline supports, pumps and valves, conveyor throughput monitors, wall flood lights, buffer stops,
+		 * hypertube entrances, hypertube supports and wall supports, jump pads. Machines, storage, poles, lights and the
+		 * rest stay level.
+		 */
+		bool TiltsByRule(const AActor* Actor)
+		{
+			if (!Actor)
+			{
+				return false;
+			}
+			const FString Name = Actor->GetClass()->GetName();
+			if (Actor->IsA<AFGBuildableFactoryBuilding>())
+			{
+				return !Actor->IsA<AFGBuildableWalkway>() && !Name.Contains(TEXT("Catwalk")) && !Name.Contains(TEXT("Walkway"))
+					&& !Name.Contains(TEXT("Railing")) && !Name.Contains(TEXT("Ladder"));
+			}
+			return Actor->IsA<AFGBuildablePipelineJunction>() || Actor->IsA<AFGBuildablePolePipe>() || Actor->IsA<AFGBuildablePipelinePump>()
+				|| Actor->IsA<AFGBuildableConveyorMonitor>() || Actor->IsA<AFGPipeHyperStart>() || Actor->IsA<AFGBuildableJumppad>()
+				|| (Name.Contains(TEXT("Floodlight")) && Name.Contains(TEXT("Wall")))
+				|| Name.Contains(TEXT("BufferStop")) || Name.Contains(TEXT("EndStop"))
+				|| ((Name.Contains(TEXT("Hyper")) || Name.Contains(TEXT("HyperTube"))) && Name.Contains(TEXT("Support")));
+		}
+
+		bool TiltsWithCurve(const AActor* Actor)
+		{
+			return IsCurvePiece(Actor) || TiltsByRule(Actor);
 		}
 
 		/**
@@ -766,7 +807,7 @@ namespace RMRoadTemplate
 			for (FRigid& R : S.Rigids)
 			{
 				const AFGBuildable* B = R.Buildable.Get();
-				if (!B || TiltsWithCurve(B))
+				if (!B || IsCurvePiece(B) || B->IsA<AFGBuildableFactoryBuilding>()) // foundations / walls under or beside it are no attachments
 				{
 					continue;
 				}

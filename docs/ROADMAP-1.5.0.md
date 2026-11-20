@@ -32,6 +32,16 @@ Nothing here is decided in detail yet: each item gets its design written down be
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
 
+- **Road Mode: what tilts with the road** (issue #7, list from the user 2026-11-20; built 2026-11-20, to test): besides our
+  road pieces, markings and the game's splines, these now follow the road's slope instead of staying level: everything
+  in the Architecture tab (every class under AFGBuildableFactoryBuilding: foundations, ramps, roofs, frames, all walls
+  with doors and windows, corner walls, quarter pipes, beams, pillars, barriers, stairs) except catwalks, walkways,
+  ladders, modern and industrial railings; pipeline junctions, pipeline supports, pumps (Mk.1 / Mk.2) and valves,
+  conveyor throughput monitors, wall flood lights, buffer stops, hypertube entrances, hypertube supports and wall
+  supports, jump pads. Machines, storage, poles, lights and everything else stay level (`TiltsByRule` in
+  RMRoadTemplate.cpp). The wall flood light also snaps to our fence walls and the gantry like the other wall
+  accessories (first build step; its back on the wall's face; the lamp angle step as the game's).
+
 ## Waiting on something
 - **Traffic lights** (on hold since 2026-11-15): pole + light heads at intersection corners following the
   intersection's state; waits for the Automated Machines mod so the lights can use its alarms / actions.
