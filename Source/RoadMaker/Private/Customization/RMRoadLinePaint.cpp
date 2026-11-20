@@ -64,19 +64,34 @@ namespace
 		return D ? ARMBuildableMarking::VariantCount(D->mMarkingKind) : 1;
 	}
 
-	FString MarkingVariantName()
+	/** The variant the mouse wheel picked, as shown in the hint (translatable; VehicleName stays English for the icon lookup). */
+	FText MarkingVariantName()
 	{
-		static const TCHAR* ArrowNames[] = { TEXT("straight"), TEXT("left"), TEXT("right"), TEXT("straight or left"), TEXT("straight or right"), TEXT("left or right") };
 		const URMRoadLineDescriptor* D = MarkingOption();
 		const int32 V = GMarkingVariant % FMath::Max(MarkingVariantCount(), 1);
 		if (D && D->mMarkingKind == ERMMarkingKind::Digit)
 		{
-			return FString::FromInt(V);
+			return FText::AsNumber(V);
 		}
 		if (D && D->mMarkingKind == ERMMarkingKind::Vehicle)
 		{
-			return ARMBuildableMarking::VehicleName(V);
+			static const FText VehicleNames[] = {
+				NSLOCTEXT("RoadMaker", "MarkingTractor", "Tractor"),
+				NSLOCTEXT("RoadMaker", "MarkingTruck", "Truck"),
+				NSLOCTEXT("RoadMaker", "MarkingExplorer", "Explorer"),
+				NSLOCTEXT("RoadMaker", "MarkingFactoryCart", "Factory Cart"),
+				NSLOCTEXT("RoadMaker", "MarkingCyberwagon", "Cyberwagon"),
+			};
+			return VehicleNames[FMath::Clamp(V, 0, 4)];
 		}
+		static const FText ArrowNames[] = {
+			NSLOCTEXT("RoadMaker", "ArrowStraight", "straight"),
+			NSLOCTEXT("RoadMaker", "ArrowLeft", "left"),
+			NSLOCTEXT("RoadMaker", "ArrowRight", "right"),
+			NSLOCTEXT("RoadMaker", "ArrowStraightOrLeft", "straight or left"),
+			NSLOCTEXT("RoadMaker", "ArrowStraightOrRight", "straight or right"),
+			NSLOCTEXT("RoadMaker", "ArrowLeftOrRight", "left or right"),
+		};
 		return ArrowNames[FMath::Clamp(V, 0, 5)];
 	}
 }
@@ -90,8 +105,8 @@ FText RMRoadLinePaint::GetActiveText()
 {
 	if (GActiveMarking)
 	{
-		return FText::FromString(FString::Printf(TEXT("%s: %s (mouse wheel: next, click: paint)"),
-			*UFGItemDescriptor::GetItemName(GActiveMarking).ToString(), *MarkingVariantName()));
+		return FText::Format(NSLOCTEXT("RoadMaker", "MarkingHud", "{0}: {1} (mouse wheel: next, click: paint)"),
+			UFGItemDescriptor::GetItemName(GActiveMarking), MarkingVariantName());
 	}
 	TArray<FString> Parts;
 	for (TSubclassOf<URMRoadLineDescriptor> D : { GActiveSides, GActiveLanes })

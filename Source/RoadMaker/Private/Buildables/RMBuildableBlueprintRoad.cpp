@@ -197,7 +197,7 @@ void ARMBuildableBlueprintRoad::RebuildMesh()
 
 FText ARMBuildableBlueprintRoad::GetDismantleDisplayName_Implementation(AFGCharacterPlayer* byCharacter) const
 {
-	return FText::FromString(FString::Printf(TEXT("Blueprint Road (%d wide)"), GetWidthUnits()));
+	return FText::Format(NSLOCTEXT("RoadMaker", "BlueprintRoadName", "Blueprint Road ({0} wide)"), FText::AsNumber(GetWidthUnits()));
 }
 
 void ARMBuildableBlueprintRoad::GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const

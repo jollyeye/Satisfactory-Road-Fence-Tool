@@ -129,7 +129,39 @@ def item_amount(cls, amount):
     return ia
 
 
-def text(s):
+# Every text players read goes into one string table (/RoadMaker/Text/ST_RoadMaker) under a fixed
+# key, so the translation gather finds it (plain Python texts have no key and are skipped) and a
+# translation keeps working from build to build. Same key = same text everywhere (building, its
+# descriptor and its recipe share the name).
+_string_table = None
+
+
+def string_table():
+    global _string_table
+    if _string_table is None:
+        path = ROOT + "/Text/ST_RoadMaker"
+        try:
+            if eal.does_asset_exist(path):
+                _string_table = unreal.load_asset(path + ".ST_RoadMaker")
+            else:
+                _string_table = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+                    "ST_RoadMaker", ROOT + "/Text", unreal.StringTable, unreal.StringTableFactory())
+                log("  string table created")
+        except Exception as e:
+            log("  ! string table: %s" % e)
+            _string_table = False
+    return _string_table or None
+
+
+def text(s, key=None):
+    table = string_table() if key else None
+    if table is not None and hasattr(unreal, "RMEditorTools"):
+        try:
+            return unreal.RMEditorTools.table_text(table, key, s)
+        except Exception as e:
+            log("  ! table text %s: %s" % (key, e))
+    if key:
+        log("  ! text without a key (not translatable): " + key)
     return unreal.Text(s) if hasattr(unreal, "Text") else s
 
 
@@ -265,12 +297,12 @@ try:
     if ia_limits:
         setp(ia_limits, unreal.InputActionValueType.BOOLEAN, "value_type", "ValueType")
         setp(ia_limits, False, "consume_input", "bConsumeInput")
-        setp(ia_limits, text("Toggle Road Limits"), "action_description", "ActionDescription")
+        setp(ia_limits, text("Toggle Road Limits", "Input.ToggleLimits"), "action_description", "ActionDescription")
         try:
             settings = unreal.new_object(unreal.PlayerMappableKeySettings, outer=ia_limits)
             setp(settings, "RoadMaker_ToggleLimits", "name", "Name")
-            setp(settings, text("Toggle Road Limits"), "display_name", "DisplayName")
-            setp(settings, text("Road Maker"), "display_category", "DisplayCategory")
+            setp(settings, text("Toggle Road Limits", "Input.ToggleLimits"), "display_name", "DisplayName")
+            setp(settings, text("Road Maker", "Menu.RoadMaker"), "display_category", "DisplayCategory")
             setp(ia_limits, settings, "player_mappable_key_settings", "PlayerMappableKeySettings")
         except Exception as e:
             log("  ! player mappable settings: %s" % e)
@@ -287,7 +319,7 @@ try:
         except Exception as e:
             log("  ! unmap_all: %s" % e)
         mc_road.map_key(ia_limits, make_key("LeftAlt"))
-        setp(mc_road, text("Road Maker"), "m_display_name", "mDisplayName")
+        setp(mc_road, text("Road Maker", "Menu.RoadMaker"), "m_display_name", "mDisplayName")
         setp(mc_road, 10.0, "m_menu_priority", "mMenuPriority")
         log("  mappings: %d" % len(mc_road.get_editor_property("mappings")))
         eal.save_loaded_asset(mc_road, only_if_is_dirty=False)
@@ -296,27 +328,27 @@ except Exception as e:
 
 log("== Holograms ==")
 bm = make_bp("Holograms", "BM_Straight", BuildModeDescriptor)
-setp(cdo(bm), text("Straight"), "m_display_name", "mDisplayName")
+setp(cdo(bm), text("Straight", "BuildMode.Straight"), "m_display_name", "mDisplayName")
 finish(bm)
 
 # Road-only copies of Default and Straight: their names get "(Limits: ON / OFF)" added in game.
 bm_road_default = make_bp("Holograms", "BM_RoadDefault", BuildModeDescriptor)
-setp(cdo(bm_road_default), text("Default"), "m_display_name", "mDisplayName")
-setp(cdo(bm_road_default), text("Quadratic Bezier curve: the end heads along the line from the start, the mouse wheel turns it."), "m_description", "mDescription")
+setp(cdo(bm_road_default), text("Default", "BuildMode.Default"), "m_display_name", "mDisplayName")
+setp(cdo(bm_road_default), text("Quadratic Bezier curve: the end heads along the line from the start, the mouse wheel turns it.", "BuildMode.Default.Desc"), "m_description", "mDescription")
 finish(bm_road_default)
 
 bm_road_straight = make_bp("Holograms", "BM_RoadStraight", BuildModeDescriptor)
-setp(cdo(bm_road_straight), text("Straight"), "m_display_name", "mDisplayName")
+setp(cdo(bm_road_straight), text("Straight", "BuildMode.Straight"), "m_display_name", "mDisplayName")
 finish(bm_road_straight)
 
 bm_keep = make_bp("Holograms", "BM_KeepAngle", BuildModeDescriptor)
-setp(cdo(bm_keep), text("Zoop"), "m_display_name", "mDisplayName")
-setp(cdo(bm_keep), text("Straight on out of the start, keeping its direction and slope: level from a foundation edge or a free start, the road's own slope from a road end. Move the aim along the road to set the length; it stops on the longest road allowed."), "m_description", "mDescription")
+setp(cdo(bm_keep), text("Zoop", "BuildMode.Zoop"), "m_display_name", "mDisplayName")
+setp(cdo(bm_keep), text("Straight on out of the start, keeping its direction and slope: level from a foundation edge or a free start, the road's own slope from a road end. Move the aim along the road to set the length; it stops on the longest road allowed.", "BuildMode.Zoop.Desc"), "m_description", "mDescription")
 finish(bm_keep)
 
 bm_smooth = make_bp("Holograms", "BM_Smooth", BuildModeDescriptor)
-setp(cdo(bm_smooth), text("Smooth quadratic Bezier"), "m_display_name", "mDisplayName")
-setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."), "m_description", "mDescription")
+setp(cdo(bm_smooth), text("Smooth quadratic Bezier", "BuildMode.Smooth"), "m_display_name", "mDisplayName")
+setp(cdo(bm_smooth), text("Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees.", "BuildMode.Smooth.Desc"), "m_description", "mDescription")
 finish(bm_smooth)
 
 # Long Curve is no longer a build mode: the road limits toggle (Alt) does it in every mode.
@@ -340,14 +372,14 @@ holo_fill = make_bp("Holograms", "Holo_RoadFill", RMFillHologram)
 finish(holo_fill)
 
 bm_cut_fences = make_bp("Holograms", "BM_CutWithFences", BuildModeDescriptor)
-setp(cdo(bm_cut_fences), text("Cut also fences"), "m_display_name", "mDisplayName")
-setp(cdo(bm_cut_fences), text("Also cuts this road's fences at the same place: road fences standing on it and fence walls on its edges (stacked walls too). Other roads and their fences are left alone. Train tracks and vehicle paths on the road are always cut."), "m_description", "mDescription")
+setp(cdo(bm_cut_fences), text("Cut also fences", "BuildMode.CutFences"), "m_display_name", "mDisplayName")
+setp(cdo(bm_cut_fences), text("Also cuts this road's fences at the same place: road fences standing on it and fence walls on its edges (stacked walls too). Other roads and their fences are left alone. Train tracks and vehicle paths on the road are always cut.", "BuildMode.CutFences.Desc"), "m_description", "mDescription")
 finish(bm_cut_fences)
 
 # Road Mode for blueprints holding a Road Maker road (RMRoadTemplate.cpp adds it to the game's blueprint hologram).
 bm_road_mode = make_bp("Holograms", "BM_RoadMode", BuildModeDescriptor)
-setp(cdo(bm_road_mode), text("Road Mode"), "m_display_name", "mDisplayName")
-setp(cdo(bm_road_mode), text("Builds this blueprint's road along a road you draw (start, end, curves, like the road tool), with the blueprint's fences, fence walls and walking paths beside it all the way."), "m_description", "mDescription")
+setp(cdo(bm_road_mode), text("Road Mode", "BuildMode.RoadMode"), "m_display_name", "mDisplayName")
+setp(cdo(bm_road_mode), text("Builds this blueprint's road along a road you draw (start, end, curves, like the road tool), with the blueprint's fences, fence walls and walking paths beside it all the way.", "BuildMode.RoadMode.Desc"), "m_description", "mDescription")
 finish(bm_road_mode)
 
 holo_cut = make_bp("Holograms", "Holo_RoadCut", RMRoadCutHologram)
@@ -403,7 +435,7 @@ log("== Sub-category ==")
 subcat = None
 if VehiclePathSubCat:
     subcat_bp = make_bp("Buildables", "SC_Roads", VehiclePathSubCat)
-    setp(cdo(subcat_bp), text("Roads"), "m_display_name", "mDisplayName")
+    setp(cdo(subcat_bp), text("Roads", "Menu.Roads"), "m_display_name", "mDisplayName")
     setp(cdo(subcat_bp), 50.0, "m_menu_priority", "mMenuPriority")
     finish(subcat_bp)
     subcat = subcat_bp.generated_class()
@@ -437,7 +469,7 @@ fence_wall_classes = {}
 wall_subcat = None
 if WallsSubCat:
     wsc = make_bp("Buildables", "SC_FenceWalls", WallsSubCat)
-    setp(cdo(wsc), text("Fence Walls"), "m_display_name", "mDisplayName")
+    setp(cdo(wsc), text("Fence Walls", "Menu.FenceWalls"), "m_display_name", "mDisplayName")
     setp(cdo(wsc), 90.0, "m_menu_priority", "mMenuPriority")
     finish(wsc)
     wall_subcat = wsc.generated_class()
@@ -453,19 +485,19 @@ lane_marking_subcat = None
 if VehicleCat:
     rtc = make_bp("Buildables", "BC_RoadTools", VehicleCat)
     rc_cdo = cdo(rtc)
-    setp(rc_cdo, text("Road Tools"), "m_display_name", "mDisplayName")
+    setp(rc_cdo, text("Road Tools", "Menu.RoadTools"), "m_display_name", "mDisplayName")
     base_prio = getp(unreal.get_default_object(VehicleCat), "m_menu_priority", "mMenuPriority") or 0.0
     setp(rc_cdo, float(base_prio) + 0.5, "m_menu_priority", "mMenuPriority")
     finish(rtc)
     road_tools_cat = rtc.generated_class()
 if VehiclePathSubCat:
     erc = make_bp("Buildables", "SC_EditRoad", VehiclePathSubCat)
-    setp(cdo(erc), text("Edit road"), "m_display_name", "mDisplayName")
+    setp(cdo(erc), text("Edit road", "Menu.EditRoad"), "m_display_name", "mDisplayName")
     setp(cdo(erc), 1.0, "m_menu_priority", "mMenuPriority")
     finish(erc)
     edit_road_subcat = erc.generated_class()
     efc = make_bp("Buildables", "SC_EditFence", VehiclePathSubCat)
-    setp(cdo(efc), text("Edit fence"), "m_display_name", "mDisplayName")
+    setp(cdo(efc), text("Edit fence", "Menu.EditFence"), "m_display_name", "mDisplayName")
     setp(cdo(efc), 2.0, "m_menu_priority", "mMenuPriority")
     finish(efc)
     edit_fence_subcat = efc.generated_class()
@@ -667,8 +699,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     b = make_bp("Buildables", "Build_" + name, parent)
     c = cdo(b)
     setp(c, holo.generated_class(), "m_hologram_class", "mHologramClass")
-    setp(c, text(display), "m_display_name", "mDisplayName")
-    setp(c, text(desc), "m_description", "mDescription")
+    setp(c, text(display, name + ".Name"), "m_display_name", "mDisplayName")
+    setp(c, text(desc, name + ".Desc"), "m_description", "mDescription")
     for k, v in props.items():
         if k == "m_fence_type" and FenceEnum is not None:
             v = getattr(FenceEnum, v, v)
@@ -718,8 +750,8 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     d = make_bp("Buildables", "Desc_" + name, BuildingDescriptor)
     dc = cdo(d)
     setp(dc, b.generated_class(), "m_buildable_class", "mBuildableClass")
-    setp(dc, text(display), "m_display_name", "mDisplayName")
-    setp(dc, text(desc), "m_description", "mDescription")
+    setp(dc, text(display, name + ".Name"), "m_display_name", "mDisplayName")
+    setp(dc, text(desc, name + ".Desc"), "m_description", "mDescription")
     # Build menu order: the order of TOOLS (roads 1 to 4 wide first).
     setp(dc, float(MENU_ORDER.get(name, 50)), "m_menu_priority", "mMenuPriority")
     tool_subcat = {"road": edit_road_subcat, "fence": edit_fence_subcat}.get(ROAD_TOOLS_MENU.get(name))
@@ -749,7 +781,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
 
     r = make_bp("Unlocks", "Recipe_" + name, Recipe)
     rc = cdo(r)
-    setp(rc, text(display), "m_display_name", "mDisplayName")
+    setp(rc, text(display, name + ".Name"), "m_display_name", "mDisplayName")
     setp(rc, [item_amount(d.generated_class(), 1)], "m_product", "mProduct")
     setp(rc, [item_amount(cls, amt) for cls, amt in cost if cls], "m_ingredients", "mIngredients")
     if BuildGun:
@@ -817,7 +849,7 @@ if MaterialTab:
         unreal.BlueprintEditorLibrary.reparent_blueprint(cat, MaterialTab)
     except Exception as e:
         log("  ! tab reparent failed: %s" % e)
-setp(cdo(cat), text("Road Lines"), "m_display_name", "mDisplayName")
+setp(cdo(cat), text("Road Lines", "Customizer.RoadLines"), "m_display_name", "mDisplayName")
 setp(cdo(cat), 50.0, "m_menu_priority", "mMenuPriority")
 if brush_tex:
     brush = unreal.SlateBrush()
@@ -828,7 +860,7 @@ finish(cat)
 subcats = {}
 for i, (key, display) in enumerate((("Sidelines", "Sidelines"), ("Lanes", "Lanes"), ("Markings", "Markings"))):
     sc = make_bp("Customization", "CustSub_RoadLines_" + key, CustSubCategory)
-    setp(cdo(sc), text(display), "m_display_name", "mDisplayName")
+    setp(cdo(sc), text(display, "Customizer." + key), "m_display_name", "mDisplayName")
     setp(cdo(sc), float(i), "m_menu_priority", "mMenuPriority")
     finish(sc)
     subcats[key] = sc.generated_class()
@@ -863,8 +895,8 @@ OPTIONS = [
 for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIONS):
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)
     c = cdo(d)
-    setp(c, text(display), "m_display_name", "mDisplayName")
-    setp(c, text("Road Lines: " + display + (". Aim at a road or intersection and apply." if is_side else ". Aim at a road and apply.")), "m_description", "mDescription")
+    setp(c, text(display, "RoadLines." + key), "m_display_name", "mDisplayName")
+    setp(c, text("Road Lines: " + display + (". Aim at a road or intersection and apply." if is_side else ". Aim at a road and apply."), "RoadLines." + key + ".Desc"), "m_description", "mDescription")
     setp(c, cat.generated_class(), "m_category", "mCategory")
     setp(c, [subcats[sub]], "m_sub_categories", "mSubCategories")
     setp(c, float(i), "m_menu_priority", "mMenuPriority")
@@ -887,7 +919,7 @@ for i, (key, sub, display, is_side, sides, lanes, continuous) in enumerate(OPTIO
 
     r = make_bp("Customization", "Recipe_RoadLines_" + key, CustRecipe)
     rc = cdo(r)
-    setp(rc, text(display), "m_display_name", "mDisplayName")
+    setp(rc, text(display, "RoadLines." + key), "m_display_name", "mDisplayName")
     setp(rc, d.generated_class(), "m_customization_desc", "mCustomizationDesc")
     setp(rc, [item_amount(d.generated_class(), 1)], "m_product", "mProduct")
     if cust_produced_in:
@@ -906,11 +938,11 @@ MARKING_OPTIONS = [
 for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_OPTIONS):
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)
     c = cdo(d)
-    setp(c, text(display), "m_display_name", "mDisplayName")
-    what = {"ARROW": "arrow", "DIGIT": "single digit (0 to 9)", "VEHICLE": "vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon)"}[kind]
+    setp(c, text(display, "RoadLines." + key), "m_display_name", "mDisplayName")
+    what = {"ARROW": "an arrow", "DIGIT": "a single digit (0 to 9)", "VEHICLE": "a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon)"}[kind]
     pick = {"ARROW": "arrow", "DIGIT": "digit", "VEHICLE": "vehicle"}[kind]
     big = ""
-    setp(c, text("Paints a " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + pick + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."), "m_description", "mDescription")
+    setp(c, text("Paints " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + pick + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building.", "RoadLines." + key + ".Desc"), "m_description", "mDescription")
     setp(c, cat.generated_class(), "m_category", "mCategory")
     setp(c, [subcats["Markings"]], "m_sub_categories", "mSubCategories")
     setp(c, float(i), "m_menu_priority", "mMenuPriority")
@@ -933,7 +965,7 @@ for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_O
 
     r = make_bp("Customization", "Recipe_RoadLines_" + key, CustRecipe)
     rc = cdo(r)
-    setp(rc, text(display), "m_display_name", "mDisplayName")
+    setp(rc, text(display, "RoadLines." + key), "m_display_name", "mDisplayName")
     setp(rc, d.generated_class(), "m_customization_desc", "mCustomizationDesc")
     setp(rc, [item_amount(d.generated_class(), 1)], "m_product", "mProduct")
     if cust_produced_in:
@@ -948,7 +980,7 @@ for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_O
 log("== Road materials (customizer) ==")
 MaterialDescBase = native_class("FGFactoryCustomizationDescriptor_Material", "FGFactoryCustomizationDescriptorMaterial")
 roads_sub = make_bp("Customization", "CustSub_Material_Roads", CustSubCategory)
-setp(cdo(roads_sub), text("Roads"), "m_display_name", "mDisplayName")
+setp(cdo(roads_sub), text("Roads", "Customizer.Roads"), "m_display_name", "mDisplayName")
 setp(cdo(roads_sub), 50.0, "m_menu_priority", "mMenuPriority")
 finish(roads_sub)
 road_material_descs = []
@@ -961,8 +993,8 @@ if MaterialDescBase and MaterialTab:
     for i, (key, display, desc, ident) in enumerate(ROAD_MATERIALS):
         md = make_bp("Customization", "MaterialDesc_Road_" + key, MaterialDescBase)
         mc = cdo(md)
-        setp(mc, text(display), "m_display_name", "mDisplayName")
-        setp(mc, text(desc), "m_description", "mDescription")
+        setp(mc, text(display, "RoadMaterial." + key), "m_display_name", "mDisplayName")
+        setp(mc, text(desc, "RoadMaterial." + key + ".Desc"), "m_description", "mDescription")
         setp(mc, MaterialTab, "m_category", "mCategory")
         setp(mc, [roads_sub.generated_class()], "m_sub_categories", "mSubCategories")
         setp(mc, float(i), "m_menu_priority", "mMenuPriority")
@@ -982,7 +1014,7 @@ if MaterialDescBase and MaterialTab:
 
         r = make_bp("Customization", "Recipe_MaterialDesc_Road_" + key, CustRecipe)
         rc = cdo(r)
-        setp(rc, text(display), "m_display_name", "mDisplayName")
+        setp(rc, text(display, "RoadMaterial." + key), "m_display_name", "mDisplayName")
         setp(rc, md.generated_class(), "m_customization_desc", "mCustomizationDesc")
         setp(rc, [item_amount(md.generated_class(), 1)], "m_product", "mProduct")
         if cust_produced_in:
@@ -998,7 +1030,7 @@ def make_schematic(name, display, recipe_list):
     log("== " + name + " ==")
     bp = make_bp("Unlocks", name, Schematic)
     c = cdo(bp)
-    setp(c, text(display), "m_display_name", "mDisplayName")
+    setp(c, text(display, "Schematic." + name), "m_display_name", "mDisplayName")
     setp(c, 1, "m_tech_tier", "mTechTier")
     st = getattr(unreal, "SchematicType", None)
     if st is not None:
@@ -1095,5 +1127,8 @@ if base_building:
     log("  fence wall recipes unlock with " + str(base_building.get_name()))
 finish(gwm)
 
+if string_table() is not None:
+    eal.save_loaded_asset(string_table(), only_if_is_dirty=False)
+    log("  string table saved")
 log("DONE")
 _log.close()

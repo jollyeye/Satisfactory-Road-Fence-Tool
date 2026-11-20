@@ -30,11 +30,17 @@ Nothing here is decided in detail yet: each item gets its design written down be
   make the building names and descriptions from `create_assets.py` localizable, gather them and post the new strings
   on the issue for translation.
   - Started 2026-11-20: `LocalizationTargets` in the uplugin, `Config/Localization/RoadMaker.ini` (gather source +
-    assets, import the PO files, export them back with new strings, compile .locres), a GatherText step in
+    assets, import the PO files, compile .locres; no PO export, it rewrote the tracked files), a GatherText step in
     `update-and-package.bat`, the three FromString texts now NSLOCTEXT (RoadLinesHud, IntersectionLinesHud,
     RoadModeBlueprintName). PO files live in `Content/Localization/RoadMaker/<culture>/RoadMaker.po` (tracked in git).
     Asset texts (building names / descriptions) are written by create_assets.py as plain strings, which the gather
     skips: they need keyed texts (an editor helper making FText with namespace / key) before they can be translated.
+  - Phase 2 (2026-11-21): every asset text in create_assets.py goes into one string table,
+    `/RoadMaker/Text/ST_RoadMaker` (namespace `RoadMakerAssets`), under a fixed key such as `Road_1x.Name`, through
+    `URMEditorTools::TableText` (editor only). A building, its descriptor and its recipe share one key, so each text
+    is translated once. The marking hint (arrow and vehicle names) and "Blueprint Road ({0} wide)" are NSLOCTEXT now.
+    The zh-Hans PO has the 121 new entries with empty translations (108 asset texts, 13 code texts) for muaxl.
+    The lane paint menu (LanePaint/) still has plain texts, but nothing opens it any more.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
 
