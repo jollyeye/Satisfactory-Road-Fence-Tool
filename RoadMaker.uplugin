@@ -16,6 +16,12 @@
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": false,
+	"LocalizationTargets": [
+		{
+			"Name": "RoadMaker",
+			"LoadingPolicy": "Always"
+		}
+	],
 	"Modules": [
 		{
 			"Name": "RoadMaker",

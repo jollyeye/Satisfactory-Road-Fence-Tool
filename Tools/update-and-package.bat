@@ -19,11 +19,14 @@ echo == build == >> "%LOG%"
 call "%ENGINE%\Engine\Build\BatchFiles\Build.bat" FactoryEditor Win64 Development -Project="%PROJECT%" -WaitMutex >> "%LOG%" 2>&1
 if errorlevel 1 goto failed
 
-echo [3/4] Updating assets and materials...
+echo [3/4] Updating assets, materials and translations...
 echo == assets == >> "%LOG%"
 "%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" -run=pythonscript -script="%MODDIR%\Tools\create_assets.py" -unattended -nop4 -nosplash -stdout > D:\SFMods\assets-editor-log.txt 2>&1
 echo == materials == >> "%LOG%"
 "%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" -run=pythonscript -script="%MODDIR%\Tools\make_materials.py" -unattended -nop4 -nosplash -stdout >> D:\SFMods\materials-editor-log.txt 2>&1
+
+echo == localization == >> "%LOG%"
+"%ENGINE%\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "%PROJECT%" -run=GatherText -config="%MODDIR%\Config\Localization\RoadMaker.ini" -unattended -nop4 -nosplash -stdout > D:\SFMods\localization-editor-log.txt 2>&1
 
 echo [4/4] Packaging Road Maker into the game...
 echo == package == >> "%LOG%"

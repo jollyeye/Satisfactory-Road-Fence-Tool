@@ -29,6 +29,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
   three `FText::FromString` texts ("Road Lines: ", "Intersection: ", "Road") into localizable text; import the PO; then
   make the building names and descriptions from `create_assets.py` localizable, gather them and post the new strings
   on the issue for translation.
+  - Started 2026-11-20: `LocalizationTargets` in the uplugin, `Config/Localization/RoadMaker.ini` (gather source +
+    assets, import the PO files, export them back with new strings, compile .locres), a GatherText step in
+    `update-and-package.bat`, the three FromString texts now NSLOCTEXT (RoadLinesHud, IntersectionLinesHud,
+    RoadModeBlueprintName). PO files live in `Content/Localization/RoadMaker/<culture>/RoadMaker.po` (tracked in git).
+    Asset texts (building names / descriptions) are written by create_assets.py as plain strings, which the gather
+    skips: they need keyed texts (an editor helper making FText with namespace / key) before they can be translated.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
 
@@ -61,7 +67,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
 ## Loose ends from 1.4.0 (optional)
 - Road Mode: round off splines on very tight inside curves; multiplayer with a client still untested; issue #7: let
   structural pieces (pillars, beams, foundations, walls) tilt with the slope while machines, poles and lights stay level.
-- Gap Fill slabs on the map.
+- Gap Fill slabs on the map: decided against (2026-11-20).
 - Capturing a built road with everything along it as a template (the part of "road templates" Road Mode does not cover).
 
 ## Decided against / parked

@@ -101,7 +101,7 @@ FText RMRoadLinePaint::GetActiveText()
 			Parts.Add(UFGItemDescriptor::GetItemName(D).ToString());
 		}
 	}
-	return FText::FromString(TEXT("Road Lines: ") + FString::Join(Parts, TEXT(" + ")));
+	return FText::Format(NSLOCTEXT("RoadMaker", "RoadLinesHud", "Road Lines: {0}"), FText::FromString(FString::Join(Parts, TEXT(" + "))));
 }
 
 /** Road under the player's crosshair, if any. */
@@ -333,7 +333,7 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	if (RMRoadLinePaint::CanApplyTo(Target))
 	{
 		Text->SetText(Cast<ARMBuildableIntersection>(Target)
-			? FText::FromString(TEXT("Intersection: ") + UFGItemDescriptor::GetItemName(GActiveSides).ToString())
+			? FText::Format(NSLOCTEXT("RoadMaker", "IntersectionLinesHud", "Intersection: {0}"), UFGItemDescriptor::GetItemName(GActiveSides))
 			: RMRoadLinePaint::GetActiveText());
 		Box->SetBrushColor(FLinearColor(0.02f, 0.02f, 0.025f, 0.75f));
 	}

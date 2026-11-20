@@ -2791,7 +2791,7 @@ namespace RMRoadTemplate
 				if (FProperty* NameProp = ProxyClass->FindPropertyByName(TEXT("mBlueprintName")))
 				{
 					*NameProp->ContainerPtrToValuePtr<FText>(Proxy) = Self->mBlueprintDescriptor
-						? FText::FromString(Self->mBlueprintDescriptor->GetBlueprintNameAsString()) : FText::FromString(TEXT("Road"));
+						? FText::FromString(Self->mBlueprintDescriptor->GetBlueprintNameAsString()) : NSLOCTEXT("RoadMaker", "RoadModeBlueprintName", "Road");
 				}
 				if (FObjectProperty* DescProp = FindFProperty<FObjectProperty>(ProxyClass, TEXT("mBlueprintDescriptor")))
 				{
