@@ -2044,6 +2044,8 @@ namespace RMRoadTemplate
 			TWeakObjectPtr<UFGInventoryComponent> Inventory;
 			/** Items in the inventory and the Dimensional Depot at the click, to log what really left them (check). */
 			TMap<TSubclassOf<UFGItemDescriptor>, int32> Before;
+			/** One blueprint's own cost: the most the game can have taken by itself (see GiveBackGameCharge). */
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> GameCharge;
 		};
 
 		TMap<TSubclassOf<UFGItemDescriptor>, int32> CountItems(const UObject* Context, UFGInventoryComponent* Inventory, const TArray<TSubclassOf<UFGItemDescriptor>>& Also)
@@ -2413,13 +2415,14 @@ namespace RMRoadTemplate
 		}
 
 		/** Takes what the finished placement gives back when dismantled (as much as there is). */
-		void ChargePlacement(FTileJob& Job)
+		TMap<TSubclassOf<UFGItemDescriptor>, int32> ChargePlacement(FTileJob& Job)
 		{
+			TMap<TSubclassOf<UFGItemDescriptor>, int32> Taken;
 			ARMBuildableBlueprintRoad* Ghost = Job.Ghost.Get();
 			UFGInventoryComponent* Inventory = Job.Inventory.Get();
 			if (!Ghost)
 			{
-				return;
+				return Taken;
 			}
 			TArray<AActor*> Pieces;
 			IFGDismantleInterface::Execute_GetChildDismantleActors(Ghost, Pieces);
@@ -2444,6 +2447,7 @@ namespace RMRoadTemplate
 				{
 					Take = FMath::Min(Take, Available(Ghost, Inventory, C.Key));
 					Spend(Ghost, Inventory, C.Key, Take);
+					Taken.Add(C.Key, Take);
 				}
 				Paid += FString::Printf(TEXT("%s%s %d"), Paid.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(C.Key.Get()), Take);
 				if (Take < C.Value)
@@ -2452,12 +2456,53 @@ namespace RMRoadTemplate
 				}
 			}
 			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: paid %s%s"), *Paid, Inventory ? TEXT("") : TEXT(" (not taken: no cost)"));
+			return Taken;
+		}
+
+		/**
+		 * The game takes the blueprint's own cost once when a Road Mode placement is built, on top of what Road Mode
+		 * charges (it does not use the hologram's cost multiplier for that): whatever left the inventory beyond Road
+		 * Mode's charge, up to one blueprint's cost, goes back.
+		 */
+		void GiveBackGameCharge(FTileJob& Job, const TMap<TSubclassOf<UFGItemDescriptor>, int32>& Taken)
+		{
+			UFGInventoryComponent* Inventory = Job.Inventory.Get();
+			if (!Inventory || Job.GameCharge.Num() == 0)
+			{
+				return;
+			}
+			TArray<TSubclassOf<UFGItemDescriptor>> Keys;
+			Job.Before.GetKeys(Keys);
+			const TMap<TSubclassOf<UFGItemDescriptor>, int32> Now = CountItems(Inventory, Inventory, Keys);
+			FString Line;
+			for (const TPair<TSubclassOf<UFGItemDescriptor>, int32>& G : Job.GameCharge)
+			{
+				const int32* Was = Job.Before.Find(G.Key);
+				if (!Was)
+				{
+					continue;
+				}
+				const int32 Extra = (*Was - Now.FindRef(G.Key)) - Taken.FindRef(G.Key);
+				const int32 Give = FMath::Clamp(Extra, 0, G.Value);
+				if (Give <= 0)
+				{
+					continue;
+				}
+				const int32 Added = Inventory->AddStack(FInventoryStack(Give, G.Key), true);
+				Line += FString::Printf(TEXT("%s%s %d"), Line.IsEmpty() ? TEXT("") : TEXT(", "), *GetNameSafe(G.Key.Get()), Added);
+				if (Added < Give)
+				{
+					Line += FString::Printf(TEXT(" (of %d: inventory full)"), Give);
+				}
+			}
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: the game's own charge given back: %s"), Line.IsEmpty() ? TEXT("nothing (none taken)") : *Line);
 		}
 
 		/** After the last tile: the checks that need the whole placement. */
 		void FinishJob(FTileJob& Job)
 		{
-			ChargePlacement(Job);
+			const TMap<TSubclassOf<UFGItemDescriptor>, int32> Taken = ChargePlacement(Job);
+			GiveBackGameCharge(Job, Taken);
 			if (UFGInventoryComponent* Inventory = Job.Inventory.Get())
 			{
 				LogInventoryChange(Inventory, Inventory, Job.Before, TEXT("after paying"));
@@ -2856,6 +2901,10 @@ namespace RMRoadTemplate
 			Job->Ghost = PlacedGhost;
 			Job->Inventory = Inventory;
 			Job->Before = MoveTemp(ItemsAtClick);
+			for (const FItemAmount& A : Self->GetBaseCost())
+			{
+				Job->GameCharge.FindOrAdd(A.ItemClass) += A.Amount;
+			}
 			UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: click part done in %.1f ms, %d tiles to follow"), (FPlatformTime::Seconds() - ClickStart) * 1000.0, Job->Tiles);
 			FRMDeferMeshes::ClaimFrame(); // the click's frame is taken: the first tile comes in a later one
 			StartJob(Job);
