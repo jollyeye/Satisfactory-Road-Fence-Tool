@@ -523,6 +523,8 @@ namespace RMRoadTemplate
 
 		bool IsRoadMode(const AFGBlueprintHologram* Self);
 
+		void RestoreShownCost(const AFGBlueprintHologram* Self); // below, with the plan's cost
+
 		void Stop(AFGBlueprintHologram* Self)
 		{
 			RestoreShownCost(Self);
