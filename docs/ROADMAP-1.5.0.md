@@ -77,10 +77,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
   tiles. The game's pieces play their own build effect at once (they waited ~5 s for a blueprint group effect).
   The mesh queue no longer takes whole frames. "Road Mode: paid" and the inventory check lines are in the normal log.
 
-- **Road Mode: a tile is as long as its content** (issue #8; asked again by the user 2026-11-21, built, to test): one
+- **Road Mode: a tile is as long as its content** (issue #8; asked again by the user 2026-11-21, built, tested 2026-11-21): one
   tile runs from the first thing in the blueprint to the last along the arrow, all content, shorter or longer than the
   designer's box (it was the box, so a 6 m road in an 8 m blueprint left 2 m gaps). Our roads, paths and fences count
-  by their course (pillars or curbs past an end would leave gaps), the rest by its meshes; ends rounded to 10 cm;
+  by their course (pillars or curbs past an end would leave gaps), the game's belts / pipes / rails / hypertubes by their
+  spline points (their mesh bounds made a 36 m blueprint a 40.2 m tile, a 4 m gap), the rest by its meshes (not the
+  hologram's own box outline and arrow); ends rounded to 10 cm; the log names what sets each end;
   nothing measurable: the box as before. Measured once per hologram (`MeasureContent`, cached). The game still centres
   the hologram on the box, so the aim-point shift uses the box (`BoxX0` / `BoxL`). Trade-off accepted: empty space
   left on purpose (a lamp in the middle of a 16 m blueprint) is no longer kept; a key to switch back to the designer
