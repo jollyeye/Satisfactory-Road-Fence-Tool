@@ -97,6 +97,8 @@ struct ROADMAKER_API FRMWallTexLayout
 	float Height = 400.f;
 	/** v where the top / bottom faces start (their 0.2 band); below 0: VTop + 0.2. */
 	float TopV = -1.f;
+	/** Mirrored layouts: cm from a fold to the next (the texture runs out from a fold and back); 400 = 8 m panels. */
+	float FoldEvery = 400.f;
 };
 
 /** Mesh buffers in the layout UProceduralMeshComponent wants. */

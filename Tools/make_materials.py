@@ -817,8 +817,8 @@ for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWa
     if m:
         game_wall_mats[key] = m
 
-# The game's 1 m steel wall material, for the 1 m steel fence wall (1.5.0): found by name in the steel wall set
-# (a material instance with "8x1" in its name), candidates logged.
+# The 1 m steel fence wall (1.5.0): the game's 1 m steel wall has no material of its own (none found 2026-11-21),
+# it uses MI_SteelWall_8x4 with its own layout (see ARMBuildableFence::GetWallLayout); kept looking in case one appears.
 steel_low_mat = None
 try:
     _reg = unreal.AssetRegistryHelpers.get_asset_registry()

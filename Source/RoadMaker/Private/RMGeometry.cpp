@@ -1551,14 +1551,7 @@ namespace
 	// Layout of the game's concrete wall texture (TX_WallSetConcrete_01, read from the real texture):
 	// one half of an 8 m x 4 m panel, panel centre at u = 0, panel edge at u ~ 0.856, mirrored for
 	// the other half; ~0.214 units per metre; top of the wall at v ~ 0.021, bottom at ~0.888.
-	constexpr float WallPanel = 800.f;        // cm
-
-	/** Metres-free panel position: cm from the nearest panel centre (negative before it). */
-	float WallPanelOffset(float Dist)
-	{
-		const float InPanel = FMath::Fmod(Dist, WallPanel);
-		return (InPanel < 0.f ? InPanel + WallPanel : InPanel) - WallPanel * 0.5f;
-	}
+	// The panel folds are at FRMWallTexLayout::FoldEvery (400 cm: 8 m panels), see BuildFenceWall.
 }
 
 namespace
@@ -1742,8 +1735,15 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 	{
 		return;
 	}
-	// Upright frames, with extra frames at every panel centre and edge (every 4 m) so the mirrored
-	// texture folds exactly there.
+	// Upright frames, with extra frames at every panel centre and edge (every 4 m, or the layout's fold
+	// distance) so the mirrored texture folds exactly there.
+	const float Fold = FMath::Max(Layout.FoldEvery, 50.f);
+	auto FoldOffset = [Fold](float Dist)
+	{
+		const float Panel = Fold * 2.f;
+		const float InPanel = FMath::Fmod(Dist, Panel);
+		return (InPanel < 0.f ? InPanel + Panel : InPanel) - Fold;
+	};
 	TArray<FRMFrame> Upright;
 	for (int32 I = 0; I < Frames.Num(); ++I)
 	{
@@ -1751,7 +1751,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		{
 			const FRMFrame& A = Frames[I - 1];
 			const FRMFrame& B = Frames[I];
-			for (float D = FMath::FloorToFloat(A.Dist / 400.f) * 400.f + 400.f; D < B.Dist - 1.f; D += 400.f)
+			for (float D = FMath::FloorToFloat(A.Dist / Fold) * Fold + Fold; D < B.Dist - 1.f; D += Fold)
 			{
 				if (D <= A.Dist + 1.f)
 				{
@@ -1812,7 +1812,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		for (const FRMFrame& F : Upright)
 		{
 			const FVector N = (F.Right * N2.X + F.Up * N2.Y).GetSafeNormal();
-			const float Offset = WallPanelOffset(F.Dist);
+			const float Offset = FoldOffset(F.Dist);
 			for (const FVector2D& P : { A, B })
 			{
 				const float Up = FMath::Clamp(P.Y, 0.f, Height);

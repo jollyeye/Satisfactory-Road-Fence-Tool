@@ -395,9 +395,23 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 	if (mWallHeight < 400.f)
 	{
 		// 1 m walls (1.5.0).
-		if (GetEffectiveType() == ERMFenceType::FicsitWall || GetEffectiveType() == ERMFenceType::SteelWall)
+		if (GetEffectiveType() == ERMFenceType::SteelWall)
 		{
-			// The game's 1 m FICSIT / steel texture whole (a 4 m x 1 m tile repeating sideways), top and bottom
+			// The game's 1 m steel wall uses the 4 m steel wall's texture (no 1 m material, 2026-11-21): a 1 m
+			// band of its ribbed sheet at the same scale (v 0.25..0.425 of the sheet's 0.2..0.9 for 4 m), along
+			// the wall its seamless stretch u 0.08..0.54 (2 m), folded every 2 m like the game's bolt columns.
+			L.UCentre = 0.08f;
+			L.UPerMetre = 0.23f;
+			L.VTop = 0.25f;
+			L.VPerMetre = 0.175f;
+			L.TopV = 0.3f;
+			L.FoldEvery = 200.f;
+			L.bMirror = true;
+			return L;
+		}
+		if (GetEffectiveType() == ERMFenceType::FicsitWall)
+		{
+			// The game's 1 m FICSIT texture whole (a 4 m x 1 m tile repeating sideways), top and bottom
 			// edges as the game's 1 m wall has them.
 			L.UCentre = 0.f;
 			L.UPerMetre = 0.25f;
