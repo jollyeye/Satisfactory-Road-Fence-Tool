@@ -303,7 +303,7 @@ bool ARMBuildableFence::CanAffordLook(uint8 Look, AFGCharacterPlayer* Payer) con
 
 bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 {
-	if (!HasLooks() || Look < 1 || Look > 3 || Look == GetShownLook() || GetIsDismantled() || IsActorBeingDestroyed())
+	if (!HasLooks() || !SupportsLook(Look) || Look == GetShownLook() || GetIsDismantled() || IsActorBeingDestroyed())
 	{
 		return false;
 	}
@@ -379,7 +379,7 @@ bool ARMBuildableFence::SetWallLook(uint8 Look, AFGCharacterPlayer* Payer)
 
 void ARMBuildableFence::SetPreviewWallLook(uint8 Look)
 {
-	if (!HasLooks() || Look == mPreviewWallLook)
+	if (!HasLooks() || Look == mPreviewWallLook || (Look != 0 && !SupportsLook(Look)))
 	{
 		return;
 	}
@@ -391,6 +391,32 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 {
 	// The layout belongs to the game material of the look shown (a wall can switch looks).
 	FRMWallTexLayout L;
+	L.Height = mWallHeight;
+	if (mWallHeight < 400.f)
+	{
+		// 1 m walls (1.5.0).
+		if (GetEffectiveType() == ERMFenceType::FicsitWall)
+		{
+			// The game's 1 m FICSIT texture whole, top and bottom edges as the game's 1 m wall has them.
+			L.UCentre = 0.f;
+			L.UPerMetre = 0.25f;
+			L.VTop = 0.f;
+			L.VPerMetre = 1.f;
+			L.TopV = 0.3f;
+			L.bMirror = false;
+			return L;
+		}
+		// Concrete: the same texture as the 4 m wall, without its grooves: the plain band between its second
+		// and third horizontal groove (v 0.45 and 0.77; bolt dots up to v 0.52) is a bit over 1 m tall, and
+		// the mirrored half panel (u 0 to 0.43) stays clear of the vertical frame at u 0.76 (texture dump).
+		L.UCentre = 0.f;
+		L.UPerMetre = 0.214f;
+		L.VTop = 0.535f;
+		L.VPerMetre = 0.21675f;
+		L.TopV = 0.535f;
+		L.bMirror = true;
+		return L;
+	}
 	if (GetEffectiveType() == ERMFenceType::FicsitWall)
 	{
 		// FICSIT look: the game's 1 m FICSIT wall material (MI_WallSetOrange_8x1). Its texture is a
@@ -554,7 +580,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 	}
 	case ERMFenceType::ConcreteWall:
 	case ERMFenceType::FicsitWall:
-		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, WallLayout);
+		RMGeometry::BuildFenceWall(Frames, 400.f, Main, WallLayout.Height, 50.f, WallLayout);
 		break;
 	case ERMFenceType::SignWall:
 	{
@@ -587,13 +613,13 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 		RMGeometry::BuildGridFence(Frames, UVScale, Main, Panel, 2.f, bLowPoly);
 		break;
 	case ERMFenceType::ConcreteWall:
-		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout);
+		RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout);
 		break;
 	case ERMFenceType::SteelWall:
 		RMGeometry::BuildSteelFenceWall(Frames, Main, GetWallHeight());
 		break;
 	case ERMFenceType::FicsitWall:
-		RMGeometry::BuildFenceWall(Frames, UVScale, Main, GetWallHeight(), 50.f, WallLayout); // shape to follow
+		RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout); // shape to follow
 		break;
 	case ERMFenceType::SignWall:
 		// Body and back here; the sign face is added by ARMBuildableSignWall.
@@ -620,9 +646,9 @@ void ARMBuildableFence::GetCutSection(float& OutHalfWidth, float& OutBottom, flo
 		OutHalfWidth = 12.f;
 		OutTop = 205.f;
 		break;
-	default: // fence walls (4 m)
+	default: // fence walls (4 m or 1 m)
 		OutHalfWidth = 28.f;
-		OutTop = GetWallHeight() + 5.f;
+		OutTop = GetHeight() + 5.f;
 		break;
 	}
 }
@@ -647,7 +673,7 @@ ARMBuildableFence::EJoinCheck ARMBuildableFence::CheckJoin(const ARMBuildableFen
 	{
 		return EJoinCheck::NotJoined;
 	}
-	if (GetEffectiveType() != Other->GetEffectiveType() || GetShownLook() != Other->GetShownLook())
+	if (GetEffectiveType() != Other->GetEffectiveType() || GetShownLook() != Other->GetShownLook() || !FMath::IsNearlyEqual(GetHeight(), Other->GetHeight()))
 	{
 		return EJoinCheck::Type;
 	}

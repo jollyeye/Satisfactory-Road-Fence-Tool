@@ -1499,6 +1499,9 @@ ASSIGN = {
     "Build_FenceWall_Ficsit": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
     "Build_FenceWall_Sign": {"m_main_material": sw_metal, "m_panel_material": sw_back, "m_front_material": sw_front},
     "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    # 1 m walls (1.5.0): the same game materials; their own texture layout is set in code.
+    "Build_FenceWall_ConcreteLow": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    "Build_FenceWall_FicsitLow": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)

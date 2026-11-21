@@ -1825,7 +1825,8 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 				{
 					// Top and bottom: a plain stretch of the texture, mirrored every metre (no seams).
 					const float Mirror = FMath::Abs(FMath::Fmod(F.Dist / 100.f, 2.f) - 1.f);
-					UV0 = FVector2D(Layout.UCentre + 0.6f * (Layout.bMirror ? 1.f : 0.5f) + (P.X + Half) * WallUPerCm, WallVTop + 0.2f + Mirror * 0.2f);
+					const float TopV = Layout.TopV >= 0.f ? Layout.TopV : WallVTop + 0.2f;
+					UV0 = FVector2D(Layout.UCentre + 0.6f * (Layout.bMirror ? 1.f : 0.5f) + (P.X + Half) * WallUPerCm, TopV + Mirror * 0.2f);
 				}
 				const int32 V = Out.AddVertex(F.ProfileToWorld(P), N, UV0, F.Fwd);
 				SetTangent(V, bVertical && Layout.bMirror && Offset < 0.f ? -F.Fwd : F.Fwd);

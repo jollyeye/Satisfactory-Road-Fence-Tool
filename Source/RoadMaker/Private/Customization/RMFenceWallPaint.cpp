@@ -163,7 +163,7 @@ namespace
 			FenceWallClearPaintDisqualifiers(State);
 			// Valid only if the player can pay for the switch (inventory + Dimensional Depot).
 			// Red on a wall already in this material (nothing to apply), like the game's walls.
-			const bool bCanApply = Look != Wall->GetShownLook()
+			const bool bCanApply = Look != Wall->GetShownLook() && Wall->SupportsLook(Look)
 				&& Wall->CanAffordLook(Look, Cast<AFGCharacterPlayer>(PC ? PC->GetPawn() : nullptr));
 			FenceWallReportHit(State, Wall, bCanApply);
 			// The game outlines the aimed building with custom depth: stencil 2 draws the white

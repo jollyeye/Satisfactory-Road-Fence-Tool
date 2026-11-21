@@ -93,6 +93,10 @@ struct ROADMAKER_API FRMWallTexLayout
 	float VTop = 0.021f;
 	float VPerMetre = 0.21675f;
 	bool bMirror = true;
+	/** The wall's height (cm): 400 for the 4 m walls, 100 for the 1 m ones. */
+	float Height = 400.f;
+	/** v where the top / bottom faces start (their 0.2 band); below 0: VTop + 0.2. */
+	float TopV = -1.f;
 };
 
 /** Mesh buffers in the layout UProceduralMeshComponent wants. */

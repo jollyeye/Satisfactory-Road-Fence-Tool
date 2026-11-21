@@ -51,7 +51,7 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 		const bool bOwnWall = GetFenceDefaults()->IsWall();
 		// Replacing needs a different fence: another type, or the same type showing another look.
 		const ERMFenceType OwnType = GetFenceDefaults()->mFenceType;
-		const bool bSameFence = Other && Other->GetEffectiveType() == OwnType;
+		const bool bSameFence = Other && Other->GetEffectiveType() == OwnType && FMath::IsNearlyEqual(Other->GetHeight(), GetFenceDefaults()->GetHeight());
 		if (Other && Other->IsWall() == bOwnWall && mSnapToGuideLines && !bSameFence)
 		{
 			TArray<FRMSplinePoint> Points;
@@ -85,8 +85,10 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 						BaseZ = F.Pos.Z;
 					}
 				}
-				const float Wall = ARMBuildableFence::GetWallHeight();
-				const float Shift = hitResult.Location.Z - BaseZ < Wall * 0.5f ? -Wall : Wall;
+				// Upper half of the aimed wall: on top of it (its height up); lower half: below it (the new wall's
+				// height down). 1 m and 4 m walls stack on each other.
+				const float OtherHeight = Other->GetHeight();
+				const float Shift = hitResult.Location.Z - BaseZ < OtherHeight * 0.5f ? -GetFenceDefaults()->GetHeight() : OtherHeight;
 				for (FRMSplinePoint& P : Points)
 				{
 					P.Location.Z += Shift;
@@ -590,7 +592,8 @@ bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence
 	FTransform T = GetActorTransform();
 	T.SetScale3D(FVector::OneVector);
 	const float Length = Local.Last().Dist;
-	const float Wall = ARMBuildableFence::GetWallHeight();
+	const float Wall = ARMBuildableFence::GetWallHeight(); // tallest wall: the search box
+	const float OwnHeight = GetFenceDefaults()->GetHeight();
 	TArray<FVector> Samples; // along the new wall, leaving its two ends free (walls may meet end to end)
 	FBox Box(ForceInit);
 	for (const FRMFrame& F : Local)
@@ -647,8 +650,10 @@ bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence
 			const FVector Rel = P - Near->Pos;
 			const float Along = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Fwd.X, Near->Fwd.Y, 0.f).GetSafeNormal()));
 			const float Across = FMath::Abs(FVector::DotProduct(FVector(Rel.X, Rel.Y, 0.f), FVector(Near->Right.X, Near->Right.Y, 0.f).GetSafeNormal()));
-			// Both go up from their base line: walls Wall high; road fences count as the same when their bases are within 1 m.
-			const float Overlap = (SameRoadFence.IsSet() ? 120.f : Wall) - FMath::Abs(Rel.Z);
+			// Both go up from their base line: walls by their heights (the new one starts Rel.Z above the other's
+			// base); road fences count as the same when their bases are within 1 m.
+			const float Overlap = SameRoadFence.IsSet() ? 120.f - FMath::Abs(Rel.Z)
+				: FMath::Min(Other->GetHeight(), Rel.Z + OwnHeight) - FMath::Max(0.f, Rel.Z);
 			if (Along < 30.f && Across < 40.f && Overlap > 20.f)
 			{
 				++Shared;

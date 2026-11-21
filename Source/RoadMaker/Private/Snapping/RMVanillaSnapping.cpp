@@ -2996,8 +2996,9 @@ namespace
 		// Along the wall: where you aim, on the wall's centre line (it climbs with the wall).
 		const float Along = FVector::DotProduct(Hit.Location - Near.Pos, Fwd);
 		const FVector OnLine = Near.Pos + Fwd3 * Along;
-		// Five heights, 1 m apart: the bottom and top edge of the wall and three on its face.
-		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - OnLine.Z) / 100.f), 0.f, 4.f);
+		// Heights 1 m apart from the bottom edge to the top edge: five on a 4 m wall, two (bottom, top) on a 1 m wall.
+		const float Levels = Wall ? FMath::Max(1.f, FMath::RoundToFloat(Wall->GetHeight() / 100.f)) : 4.f;
+		const float Level = FMath::Clamp(FMath::RoundToFloat((Hit.Location.Z - OnLine.Z) / 100.f), 0.f, Levels);
 		const float HalfThickness = 25.f; // walls are 0.5 m thick
 		Out.Depth = HalfThickness + 1.f;
 		Out.Location = OnLine + Normal * Out.Depth;

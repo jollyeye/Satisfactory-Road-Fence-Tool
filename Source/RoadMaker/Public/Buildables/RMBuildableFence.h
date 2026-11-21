@@ -103,7 +103,15 @@ public:
 	{
 		return Type == ERMFenceType::ConcreteWall || Type == ERMFenceType::SteelWall || Type == ERMFenceType::FicsitWall;
 	}
+	/** Height of the 4 m walls (steel, sign, steel mesh walls are always 4 m). */
 	static float GetWallHeight() { return 400.f; }
+	/** This wall's height: 400, or 100 for the 1 m walls (1.5.0). */
+	float GetHeight() const { return IsWall() ? mWallHeight : 0.f; }
+	/** A look the Material tab can switch this wall to (the 1 m walls have no steel look). */
+	bool SupportsLook(uint8 Look) const
+	{
+		return Look >= 1 && Look <= 3 && (mWallHeight >= 400.f || (mWallLookClasses.IsValidIndex(Look - 1) && mWallLookClasses[Look - 1]));
+	}
 
 	// Cut Fence: both pieces keep the side and look; outline of the fence's cross-section.
 	virtual void GetCutSection(float& OutHalfWidth, float& OutBottom, float& OutTop) const override;
@@ -145,6 +153,10 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")
 	ERMFenceType mFenceType = ERMFenceType::GuardRail;
+
+	/** Fence walls: height in cm (400; 100 for the 1 m concrete / FICSIT walls). Same thickness and placement. */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")
+	float mWallHeight = 400.f;
 
 	/** How far the fence sits in from the road edge, in cm (half the fence footprint is enough). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Fence")

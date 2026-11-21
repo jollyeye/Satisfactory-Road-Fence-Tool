@@ -193,6 +193,40 @@ if Desc_SteelPipe:
 
 UnlockRecipe = load_game_class("BP_UnlockRecipe") or native_class("FGUnlockRecipe")
 
+
+def game_wall_cost_per_4m(build_class, fallback):
+    """Fence walls cost what the game's 8 m wall of that material costs per 8 m (its 4 m and 1 m tall walls
+    cost the same): half its recipe per 4 m, rounded up. Found by the recipe whose product is the wall."""
+    if build_class:
+        desc_name = "Desc_" + build_class.get_name()[len("Build_"):]
+        for a in find_game_asset("Recipe_", contains=True):
+            n = str(a.asset_name)
+            if "Wall" not in n:
+                continue
+            try:
+                rcls = load_game_class(n)
+                rd = unreal.get_default_object(rcls) if rcls else None
+                prods = getp(rd, "m_product", "mProduct") if rd else None
+                if not prods or not any(p.item_class and p.item_class.get_name() == desc_name for p in prods):
+                    continue
+                ings = getp(rd, "m_ingredients", "mIngredients") or []
+                cost = [(i.item_class, (int(i.amount) + 1) // 2) for i in ings if i.item_class and i.amount > 0]
+                if cost:
+                    log("  %s costs %s per 8 m (%s): %s per 4 m" % (build_class.get_name(), n,
+                        ", ".join("%d %s" % (i.amount, i.item_class.get_name()) for i in ings),
+                        ", ".join("%d %s" % (c, k.get_name()) for k, c in cost)))
+                    return cost
+            except Exception as e:
+                log("  ! wall cost %s: %s" % (n, e))
+    log("  ! game wall recipe not found for %s, fallback cost" % (build_class.get_name() if build_class else "?"))
+    return fallback
+
+
+log("== Fence wall costs from the game's walls ==")
+COST_CONCRETE_WALL = game_wall_cost_per_4m(VanillaConcreteWall, [(Desc_Cement, 2)])
+COST_FICSIT_WALL = game_wall_cost_per_4m(VanillaFicsitWall, [(Desc_IronPlate, 1)])
+COST_STEEL_WALL = game_wall_cost_per_4m(VanillaSteelWall, [(Desc_SteelBeam, 1)])
+
 # Icons: borrow a foundation icon for roads and the intersection, a railing icon for fences.
 def icons_from(names):
     for n in names:
@@ -442,7 +476,10 @@ if VehiclePathSubCat:
 
 # Fence walls: build menu Walls tab, own section "Fence Walls"; unlocked by the game's Tier 1
 # Base Building milestone (added at runtime by the world module), not by the Road Maker milestone.
-FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel"}
+FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel", "FenceWall_ConcreteLow", "FenceWall_FicsitLow"}
+# The looks the customizer's Material tab switches between (concrete, FICSIT, steel), per wall height.
+TALL_LOOKS = ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")
+LOW_LOOKS = ("FenceWall_ConcreteLow", "FenceWall_FicsitLow")  # no steel 1 m wall
 # Everything in the Walls tab, Fence Walls section (the steel mesh wall too).
 WALLS_MENU = FENCE_WALLS | {"Fence_GridTall", "FenceWall_Sign"}
 
@@ -464,6 +501,9 @@ WALL_LAYOUTS = {
     "FenceWall_Concrete": (0.0, 0.214, 0.021, 0.21675, True),
     "FenceWall_Ficsit": (0.0, 0.214, 0.021, 0.21675, True),
     "FenceWall_Steel": (0.0, 0.214, 0.021, 0.21675, True),
+    # 1 m walls: their layouts are set in code (ARMBuildableFence::GetWallLayout).
+    "FenceWall_ConcreteLow": (0.0, 0.214, 0.535, 0.21675, True),
+    "FenceWall_FicsitLow": (0.0, 0.25, 0.0, 1.0, False),
 }
 fence_wall_classes = {}
 wall_subcat = None
@@ -554,13 +594,17 @@ TOOLS = [
     ("Fence_GridTall", RMBuildableFence, holo_fence, "Steel Mesh Fence Wall", "4 m steel frame with a diamond wire mesh. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it, or hold the snap key to replace it. Cost is per 4 m.",
      {"m_fence_type": "GRID_FENCE_TALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_metal, "m_panel_material": mat_grid}),
     ("FenceWall_Concrete", RMBuildableFence, holo_fence, "Concrete Fence Wall", "4 m concrete wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted. Cost is per 4 m.",
-     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, [(Desc_Cement, 1)], fence_icons, {"m_main_material": mat_concrete}),
+     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0}, COST_CONCRETE_WALL, fence_icons, {"m_main_material": mat_concrete}),
+    ("FenceWall_ConcreteLow", RMBuildableFence, holo_fence, "Concrete Fence Wall 1 m", "1 m concrete wall, 0.5 m thick, plain concrete without the panel grooves: kerbs, parking edges, planters. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete and FICSIT. Costs what the 4 m wall does. Cost is per 4 m.",
+     {"m_fence_type": "CONCRETE_WALL", "m_edge_inset": 0.0, "m_wall_height": 100.0}, COST_CONCRETE_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Ficsit", RMBuildableFence, holo_fence, "FICSIT Fence Wall", "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
-     {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0}, [(Desc_IronPlate, 1)], fence_icons, {"m_main_material": mat_concrete}),
+     {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0}, COST_FICSIT_WALL, fence_icons, {"m_main_material": mat_concrete}),
+    ("FenceWall_FicsitLow", RMBuildableFence, holo_fence, "FICSIT Fence Wall 1 m", "1 m FICSIT wall, 0.5 m thick, like the game's 1 m FICSIT wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete and FICSIT. Costs what the 4 m wall does. Cost is per 4 m.",
+     {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0, "m_wall_height": 100.0}, COST_FICSIT_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Sign", RMBuildableSignWall, holo_fence, "Sign Wall", "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 8 m, like a Small Billboard.",
      {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0}, [(Desc_EncasedBeam, 3), (Desc_CopperSheet, 4), (Desc_CrystalOscillator, 1)], fence_icons, {}),
     ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
-     {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, [(Desc_SteelBeam, 1)], fence_icons, {"m_main_material": mat_concrete}),
+     {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, COST_STEEL_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel.",
      {}, [(Desc_SteelBeam, 1), (Desc_SteelPipe, 1)], road_icons, {"m_main_material": mat_metal}),
     ("LaneArrow", RMBuildableMarking, holo_marking, "Lane Arrow", "Paints an arrow on a lane of a road. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the arrow (straight, left, right, straight or left, straight or right, left or right). It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
@@ -581,7 +625,8 @@ TOOLS = [
 
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
-              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5}
+              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
+              "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
 MarkingKindEnum = getattr(unreal, "RMMarkingKind", None)
@@ -718,7 +763,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
         # Swatch group and default swatch of the matching game wall (FICSIT walls start in the
         # FICSIT factory colours, concrete walls in concrete).
-        vanilla = {"FenceWall_Ficsit": VanillaFicsitWall, "FenceWall_Steel": VanillaSteelWall}.get(name) or VanillaConcreteWall
+        vanilla = {"FenceWall_Ficsit": VanillaFicsitWall, "FenceWall_FicsitLow": VanillaFicsitWall, "FenceWall_Steel": VanillaSteelWall}.get(name) or VanillaConcreteWall
         if vanilla:
             vw = unreal.get_default_object(vanilla)
             for prop in ("m_swatch_group", "m_default_swatch_customization_override"):
@@ -797,7 +842,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
         # Fence walls are never in the Road Maker milestone: FICSIT unlocks with Base Building,
         # concrete and steel with the game's concrete / steel wall materials (AWESOME Shop), the
         # steel mesh wall with Tier 3 Basic Steel Production.
-        if name == "FenceWall_Ficsit" and base_building:
+        if name in ("FenceWall_Ficsit", "FenceWall_FicsitLow") and base_building:
             wall_recipes.append(r.generated_class())
         if name == "Fence_GridTall" and basic_steel:
             recipe_unlocked_by[r.generated_class()] = basic_steel
@@ -1068,10 +1113,11 @@ setp(g, [sch.generated_class()], "m_schematics", "mSchematics")
 if light_swatch:
     setp(g, light_swatch, "m_default_road_swatch", "mDefaultRoadSwatch")
 # Each fence wall knows the recipe of every look (cost of switching in the customizer).
-look_recipes = [fence_wall_recipes.get(n) for n in ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")]
 for wname, wcls in fence_wall_classes.items():
+    looks = LOW_LOOKS if wname in LOW_LOOKS else TALL_LOOKS
+    look_recipes = [fence_wall_recipes.get(n) for n in looks]
     wbp = unreal.load_asset("%s/Buildables/Build_%s.Build_%s" % (ROOT, wname, wname))
-    look_classes = [fence_wall_classes.get(n) for n in ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")]
+    look_classes = [fence_wall_classes.get(n) for n in looks]
     if wbp and all(look_recipes):
         setp(cdo(wbp), look_recipes, "m_wall_look_recipes", "mWallLookRecipes")
         if all(look_classes):
@@ -1093,10 +1139,11 @@ if road_material_descs:
 
 # Concrete and steel fence walls unlock with the game's concrete / steel wall materials.
 alongside = {}
-for game_recipe, variant in (("Recipe_Material_Wall_Concrete", "FenceWall_Concrete"), ("Recipe_Material_Wall_Steel", "FenceWall_Steel")):
+for game_recipe, variant in (("Recipe_Material_Wall_Concrete", "FenceWall_Concrete"), ("Recipe_Material_Wall_Concrete", "FenceWall_ConcreteLow"),
+                             ("Recipe_Material_Wall_Steel", "FenceWall_Steel")):
     gr = load_game_class(game_recipe)
     if gr and variant in fence_wall_recipes:
-        alongside[gr] = fence_wall_recipes[variant]
+        alongside[fence_wall_recipes[variant]] = gr  # our recipe -> the game recipe it unlocks with
         log("  %s unlocks with %s" % (variant, game_recipe))
 try:
     g.set_editor_property("m_unlock_alongside", alongside)

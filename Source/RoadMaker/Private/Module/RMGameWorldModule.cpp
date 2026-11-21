@@ -2,6 +2,7 @@
 #include "Styling/SlateBrush.h"
 #include "Engine/Texture2D.h"
 #include "RoadMakerModule.h"
+#include "Buildables/RMBuildableFence.h"
 #include "FGSchematic.h"
 #include "FGSchematicManager.h"
 #include "FGRecipeManager.h"
@@ -105,9 +106,26 @@ void URMGameWorldModule::RegisterFenceWallMaterials()
 		{
 			continue;
 		}
+		// Which look this material is (1 concrete, 2 FICSIT, 3 steel): its recipe's place in a 4 m wall's looks.
+		uint8 Look = 0;
+		for (const TSubclassOf<AFGBuildable>& Variant : mFenceWallVariants)
+		{
+			const ARMBuildableFence* Wall = Variant ? Cast<ARMBuildableFence>(Variant.GetDefaultObject()) : nullptr;
+			if (Wall && Wall->mWallHeight >= 400.f && Wall->mWallLookRecipes.Contains(Entry.Value))
+			{
+				Look = static_cast<uint8>(Wall->mWallLookRecipes.IndexOfByKey(Entry.Value) + 1);
+				break;
+			}
+		}
 		int32 Added = 0;
 		for (const TSubclassOf<AFGBuildable>& Variant : mFenceWallVariants)
 		{
+			// Not listed on a wall without that look (no steel 1 m wall): the tab shows it can't be applied.
+			const ARMBuildableFence* Wall = Variant ? Cast<ARMBuildableFence>(Variant.GetDefaultObject()) : nullptr;
+			if (Wall && Look && !Wall->SupportsLook(Look))
+			{
+				continue;
+			}
 			if (Variant && !Desc->GetBuildableMap().Contains(Variant) && Desc->AddType(Variant, Entry.Value))
 			{
 				++Added;
@@ -169,9 +187,9 @@ void URMGameWorldModule::AddRecipesAlongsideGameRecipes()
 			TArray<TSubclassOf<UFGRecipe>> ToAdd;
 			for (const TPair<TSubclassOf<UFGRecipe>, TSubclassOf<UFGRecipe>>& Pair : mUnlockAlongside)
 			{
-				if (Pair.Key && Pair.Value && List->Contains(Pair.Key) && !List->Contains(Pair.Value))
+				if (Pair.Key && Pair.Value && List->Contains(Pair.Value) && !List->Contains(Pair.Key))
 				{
-					ToAdd.Add(Pair.Value);
+					ToAdd.Add(Pair.Key);
 				}
 			}
 			if (ToAdd.Num() == 0)

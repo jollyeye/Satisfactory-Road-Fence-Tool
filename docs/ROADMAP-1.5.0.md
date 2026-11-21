@@ -4,7 +4,21 @@ Started 2026-11-20, after 1.4.1 (rebuilt for Satisfactory 1.2.6 / build 520140 o
 Nothing here is decided in detail yet: each item gets its design written down before it is built.
 
 ## Planned
-- **1 m tall fence walls** (added 2026-11-20): low versions of the fence walls (concrete, steel, steel mesh, FICSIT) for
+- **1 m tall fence walls** (added 2026-11-20; concrete and FICSIT built 2026-11-21, to test):
+  - Decided 2026-11-21: two buildings, *Concrete Fence Wall 1 m* and *FICSIT Fence Wall 1 m* (`FenceWall_ConcreteLow`,
+    `FenceWall_FicsitLow`), same fence types with `mWallHeight = 100`, same 0.5 m thickness and placement; the Material
+    tab switches between the two (no steel 1 m wall: `SupportsLook`, not listed for steel). Concrete: the 4 m wall's own
+    texture without grooves (the plain band v 0.535..0.752 between its 2nd and 3rd horizontal grooves; mirrored half panel
+    u 0..0.43, clear of the frame at u 0.76; from the texture dump). FICSIT: the game's 1 m FICSIT texture whole.
+  - Cost: like the game, a 1 m wall costs what the 4 m wall does, and fence walls now cost what the game's wall of that
+    material costs (game: 4 concrete per 8 m; ours was 1 per 4 m): read from the game's wall recipes in
+    create_assets.py (half per 4 m, rounded up). Walls already built give back the new cost when dismantled.
+  - Stacking: upper half of any fence wall = on top (its height up), lower half = below (the new wall's height down);
+    1 m and 4 m walls stack on each other; the overlap check uses both heights; replacing needs another type or height;
+    Join Fence needs the same height. Wall attachments: snap points every 1 m from bottom to top (two on a 1 m wall).
+  - Unlocks: concrete 1 m with the game's concrete wall material (like the 4 m; `mUnlockAlongside` is now keyed by
+    our recipe), FICSIT 1 m with Base Building. Names and descriptions in the string table, PO entries added.
+  - Original notes: low versions of the fence walls (concrete, steel, steel mesh, FICSIT) for
   kerbs, parking edges and planters, plus a 1 m sign wall with the game's 1 m sign (already noted as "later" when the
   sign wall was built). Today every wall is 4 m tall (`ARMBuildableFence::GetWallHeight()` is a fixed 400 cm): the height
   becomes a property of the wall type. To decide: separate buildings in the menu or a height option on each wall;

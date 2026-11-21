@@ -57,8 +57,9 @@ protected:
 	TMap<TSubclassOf<class AFGBuildable>, TSubclassOf<class UFGRecipe>> mRoadBuildableRecipes;
 
 	/**
-	 * Recipes unlocked together with a game recipe (key): our recipe is added to every schematic that
-	 * unlocks the game's one, e.g. the concrete fence wall with the customizer's concrete wall material.
+	 * Our recipes (key) unlocked together with a game recipe (value): ours is added to every schematic that
+	 * unlocks the game's one, e.g. the concrete fence walls (4 m and 1 m) with the customizer's concrete wall
+	 * material. Keyed by our recipe since 1.5.0, so several of ours can follow one game recipe.
 	 */
 	void AddRecipesAlongsideGameRecipes();
 

@@ -1000,3 +1000,27 @@ msgstr ""
 msgctxt "RoadMakerAssets,RoadMaterial.Cyber.Desc"
 msgid "Matte plastic with circuit-board grooves in the primary colour. The lane lines glow in the secondary colour."
 msgstr ""
+
+#. Key:	FenceWall_ConcreteLow.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_ConcreteLow.Name"
+msgid "Concrete Fence Wall 1 m"
+msgstr ""
+
+#. Key:	FenceWall_ConcreteLow.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_ConcreteLow.Desc"
+msgid "1 m concrete wall, 0.5 m thick, plain concrete without the panel grooves: kerbs, parking edges, planters. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete and FICSIT. Costs what the 4 m wall does. Cost is per 4 m."
+msgstr ""
+
+#. Key:	FenceWall_FicsitLow.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_FicsitLow.Name"
+msgid "FICSIT Fence Wall 1 m"
+msgstr ""
+
+#. Key:	FenceWall_FicsitLow.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_FicsitLow.Desc"
+msgid "1 m FICSIT wall, 0.5 m thick, like the game's 1 m FICSIT wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete and FICSIT. Costs what the 4 m wall does. Cost is per 4 m."
+msgstr ""

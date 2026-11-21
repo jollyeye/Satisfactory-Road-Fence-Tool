@@ -1004,7 +1004,7 @@ namespace RMRoadTemplate
 					const ARMBuildableFence* Wall = Cast<ARMBuildableFence>(St.Piece.Get());
 					if (Wall && Wall->IsWall() && FMath::Abs(P.Y - S.Yc - St.Y) <= 60.f
 						&& P.X - S.X0 >= St.XMin - 10.f && P.X - S.X0 <= St.XMax + 10.f
-						&& P.Z - S.Zb >= St.Z - 50.f && P.Z - S.Zb <= St.Z + ARMBuildableFence::GetWallHeight() + 50.f)
+						&& P.Z - S.Zb >= St.Z - 50.f && P.Z - S.Zb <= St.Z + Wall->GetHeight() + 50.f)
 					{
 						const FString Name = B->GetClass()->GetName();
 						R.bLevel = (Name.Contains(TEXT("Conveyor")) && (Name.Contains(TEXT("Wall")) || Name.Contains(TEXT("Hole")))) || Name.Contains(TEXT("Ladder"));
