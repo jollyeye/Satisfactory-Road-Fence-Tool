@@ -69,7 +69,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
   2 m (`FRMWallTexLayout::FoldEvery`, new), like the game's bolt columns. Tested: height right, but the game repeats
   (one bolt column every ~2 m) where the fold mirrored (pairs 1 m apart, a bright seam at each fold). Now its own
   builder `RMGeometry::BuildSteelFenceWallLow`: 2 m cells restarting the panel window like the 4 m steel wall; ends,
-  top and bottom on the texture's black strip (u 0.9..0.98), as asked; to check in game. Now all three looks switch on the 1 m walls. Unlocks with the game's steel wall material.
+  top and bottom on the texture's black strip (u 0.9..0.98), as asked; to check in game.
+  - Stacking flicker (2026-11-21): every fence wall reached 2 cm below its base (to hide gaps on uneven ground) with
+    the full thickness, so a stacked wall shared its faces with the one below for 2 cm (flicker, tiling off). The
+    skirt is now tucked 1 cm inside the faces (`BuildFenceWall`, `BuildSteelFenceWallLow`): visible faces run exactly
+    base to top. The sign wall (bevelled profile) still has the old skirt; walls stacked on it are fine.
+  - Steel 1 m band: bolt rows like the game's 1 m wall (v from 0.258, 0.2 per metre); colour was only the angle. Now all three looks switch on the 1 m walls. Unlocks with the game's steel wall material.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
   - 2026-11-21: SML v3.12.1 is on master ("Update headers to CL520140"), but it does not build: `FGPlayerController.h`

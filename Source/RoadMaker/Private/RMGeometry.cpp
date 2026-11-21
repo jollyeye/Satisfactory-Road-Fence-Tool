@@ -1734,13 +1734,14 @@ void RMGeometry::BuildSteelFenceWallLow(const TArray<FRMFrame>& InFrames, FRMMes
 	const float Length = Frames.Last().Dist;
 	const float Cell = 200.f;   // the panel texture restarts every 2 m (as on the game's 1 m steel wall)
 	const float Half = 25.f;    // 0.5 m thick, like the other fence walls
-	const float Bottom = -2.f;  // a little below the ground line, like BuildFenceWall
+	const float Bottom = -2.f;  // a skirt below the base line, tucked inside the faces like BuildFenceWall
 	// The 4 m steel wall's panel window (u 0.08..0.54 per 2 m, one bolt column), and the game's 1 m wall's band of the
 	// ribbed sheet: its three bolt rows sit ~0.15, 0.49, 0.83 m from the top (screenshot 2026-11-21); the texture's
 	// bolt rows are at v 0.288, 0.351, 0.428 (texture dump), so v from 0.258 at 0.2 per metre. Black strip: u 0.9..0.98.
 	const float PanelUStart = 0.08f, PanelUSize = 0.46f, PanelV0 = 0.258f, PanelVPerCm = 0.002f;
 	auto Dark = [Half](const FVector2D& P) { return FVector2D(0.91f + 0.06f * (P.X + Half) / (2.f * Half), 0.3f + 0.4f * FMath::Clamp(P.Y / 400.f, 0.f, 1.f)); };
-	const TArray<FVector2D> Slab = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom), FVector2D(Half, Height), FVector2D(-Half, Height) };
+	const TArray<FVector2D> Slab = { FVector2D(-Half + 1.f, Bottom), FVector2D(Half - 1.f, Bottom), FVector2D(Half, 0.f),
+		FVector2D(Half, Height), FVector2D(-Half, Height), FVector2D(-Half, 0.f) };
 
 	const int32 Cells = FMath::Max(1, FMath::CeilToInt((Length - 1.f) / Cell));
 	for (int32 C = 0; C < Cells; ++C)
@@ -1833,12 +1834,15 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 		F.Up = FVector::UpVector;
 		F.Right = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal();
 	}
-	// Centred on the line (like the street lights on the road edge). A little below the ground line
-	// so no gap shows on uneven ground; stacked walls overlap there.
+	// Centred on the line (like the street lights on the road edge). A 2 cm skirt below the base line so
+	// no gap shows where the ground dips between the wall's points; it is tucked 1 cm inside the faces,
+	// so a wall stacked on another hides it inside the one below instead of sharing its faces there
+	// (they flickered, 2026-11-21): the visible faces run exactly from the base to the top.
 	const float Half = Thickness * 0.5f;
 	const float Bottom = -2.f;
-	const TArray<FVector2D> Profile = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom),
-		FVector2D(Half, Height), FVector2D(-Half, Height) };
+	const float Tuck = 1.f;
+	const TArray<FVector2D> Profile = { FVector2D(-Half + Tuck, Bottom), FVector2D(Half - Tuck, Bottom), FVector2D(Half, 0.f),
+		FVector2D(Half, Height), FVector2D(-Half, Height), FVector2D(-Half, 0.f) };
 
 	// UV0 = the game's wall texture layout (for the game's own wall material); UV1 = (metres along,
 	// metres up) for Road Maker's own wall material. The tangent runs the way the texture's u grows
