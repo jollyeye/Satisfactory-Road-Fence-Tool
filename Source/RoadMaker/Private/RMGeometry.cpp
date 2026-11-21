@@ -1736,8 +1736,9 @@ void RMGeometry::BuildSteelFenceWallLow(const TArray<FRMFrame>& InFrames, FRMMes
 	const float Half = 25.f;    // 0.5 m thick, like the other fence walls
 	const float Bottom = -2.f;  // a little below the ground line, like BuildFenceWall
 	// The 4 m steel wall's panel window (u 0.08..0.54 per 2 m, one bolt column), and the game's 1 m wall's band of the
-	// ribbed sheet: v from 0.25, 0.175 per metre (checked against the game's wall 2026-11-21). Black strip: u 0.9..0.98.
-	const float PanelUStart = 0.08f, PanelUSize = 0.46f, PanelV0 = 0.25f, PanelVPerCm = 0.00175f;
+	// ribbed sheet: its three bolt rows sit ~0.15, 0.49, 0.83 m from the top (screenshot 2026-11-21); the texture's
+	// bolt rows are at v 0.288, 0.351, 0.428 (texture dump), so v from 0.258 at 0.2 per metre. Black strip: u 0.9..0.98.
+	const float PanelUStart = 0.08f, PanelUSize = 0.46f, PanelV0 = 0.258f, PanelVPerCm = 0.002f;
 	auto Dark = [Half](const FVector2D& P) { return FVector2D(0.91f + 0.06f * (P.X + Half) / (2.f * Half), 0.3f + 0.4f * FMath::Clamp(P.Y / 400.f, 0.f, 1.f)); };
 	const TArray<FVector2D> Slab = { FVector2D(-Half, Bottom), FVector2D(Half, Bottom), FVector2D(Half, Height), FVector2D(-Half, Height) };
 

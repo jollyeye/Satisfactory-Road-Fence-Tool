@@ -820,12 +820,31 @@ for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWa
 # The 1 m steel fence wall (1.5.0): the game's 1 m steel wall has no material of its own (none found 2026-11-21),
 # it uses MI_SteelWall_8x4 with its own layout (see ARMBuildableFence::GetWallLayout); kept looking in case one appears.
 steel_low_mat = None
+# The game's 1 m steel wall itself: its mesh's materials (the wall may use another instance than the 4 m one).
+try:
+    _reg = unreal.AssetRegistryHelpers.get_asset_registry()
+    _all = _reg.get_assets(unreal.ARFilter(package_paths=["/Game/FactoryGame/Buildable/Building"], recursive_paths=True))
+    for _h in _all:
+        _n = str(_h.asset_name).lower()
+        if "steel" in _n and ("8x1" in _n or "_1m" in _n):
+            _cls = str(_h.asset_class_path.asset_name) if hasattr(_h, "asset_class_path") else str(getattr(_h, "asset_class", ""))
+            log("Steel 1 m wall asset: %s (%s)" % (_h.package_name, _cls))
+            if _cls == "StaticMesh":
+                _sm = unreal.load_asset(str(_h.package_name))
+                for _slot in (_sm.get_editor_property("static_materials") if _sm else []):
+                    _mi = _slot.get_editor_property("material_interface")
+                    log("    slot %s: %s" % (_slot.get_editor_property("material_slot_name"), _mi.get_path_name() if _mi else None))
+                    if _mi and not steel_low_mat and "steel" in _mi.get_name().lower():
+                        steel_low_mat = _mi
+                        log("Fence wall steel 1 m uses the game's 1 m steel wall material " + _mi.get_path_name())
+except Exception as e:
+    log("  ! game 1 m steel wall: %s" % e)
 try:
     _reg = unreal.AssetRegistryHelpers.get_asset_registry()
     _hits = _reg.get_assets(unreal.ARFilter(package_paths=["/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet"], recursive_paths=True))
     _cands = sorted(str(h.package_name) for h in _hits if "8x1" in str(h.asset_name) and str(h.asset_name).startswith("MI_"))
     log("Steel 1 m wall material candidates: %s" % (", ".join(_cands) or "none"))
-    for _c in _cands:
+    for _c in ([] if steel_low_mat else _cands):
         steel_low_mat = unreal.load_asset(_c)
         if steel_low_mat:
             log("Fence wall steel 1 m uses " + _c)
