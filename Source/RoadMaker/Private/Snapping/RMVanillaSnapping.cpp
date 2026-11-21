@@ -3673,13 +3673,15 @@ void RMVanillaSnapping::InstallHooks()
 				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableIntersection::StaticClass());
 			}
 		});
-	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGConveyorBeltHologram>(),
-		[](AFGConveyorBeltHologram* Hologram, const FHitResult& Hit)
+	// Logged after the placement is finished (2026-11-22: right after SetHologramLocationAndRotation the game had not
+	// swapped yet, even on its own walls and ceilings).
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::PostHologramPlacement, GetMutableDefault<AFGConveyorBeltHologram>(),
+		[](AFGConveyorBeltHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
 			LogSupportChoice(Hologram, Hit);
 		});
-	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGWireHologram>(),
-		[](AFGWireHologram* Hologram, const FHitResult& Hit)
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::PostHologramPlacement, GetMutableDefault<AFGWireHologram>(),
+		[](AFGWireHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
 			LogSupportChoice(Hologram, Hit);
 		});
