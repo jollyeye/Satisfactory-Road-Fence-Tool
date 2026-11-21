@@ -3164,17 +3164,35 @@ namespace
 	TMap<TWeakObjectPtr<const AFGHologram>, FString> GSupportLog;
 	void LogSupportChoice(AFGHologram* Parent, const FHitResult& Hit)
 	{
+		// Every support child's state: d = disabled, h = actor hidden, v = root component visible, m = visible meshes.
 		TArray<FString> Parts;
 		for (AFGHologram* Child : Parent->GetHologramChildren())
 		{
-			if (Child && !Child->IsDisabled() && !Child->IsHidden())
+			if (!Child)
 			{
-				Parts.Add(Child->GetBuildClass() ? Child->GetBuildClass()->GetName() : Child->GetClass()->GetName());
+				continue;
 			}
+			int32 Meshes = 0;
+			TArray<UPrimitiveComponent*> Prims;
+			Child->GetComponents<UPrimitiveComponent>(Prims);
+			for (const UPrimitiveComponent* P : Prims)
+			{
+				Meshes += P->IsVisible() ? 1 : 0;
+			}
+			const USceneComponent* Root = Child->GetRootComponent();
+			Parts.Add(FString::Printf(TEXT("%s[d%d h%d v%d m%d]"), Child->GetBuildClass() ? *Child->GetBuildClass()->GetName() : *Child->GetClass()->GetName(),
+				Child->IsDisabled() ? 1 : 0, Child->IsHidden() ? 1 : 0, Root && Root->IsVisible() ? 1 : 0, Meshes));
+		}
+		// The power line's chosen pole (private in the game, read by name).
+		FString Active;
+		if (const FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(Parent->GetClass(), TEXT("mActivePoleHologram")))
+		{
+			const UObject* Pole = Prop->GetObjectPropertyValue_InContainer(Parent);
+			Active = FString::Printf(TEXT(" activePole=%s"), Pole ? *Pole->GetClass()->GetName() : TEXT("none"));
 		}
 		const AActor* Aimed = Hit.GetActor();
-		const FString Line = FString::Printf(TEXT("aim %s normal %s -> active %s"), Aimed ? *Aimed->GetClass()->GetName() : TEXT("nothing"),
-			*Hit.ImpactNormal.ToCompactString(), Parts.Num() ? *FString::Join(Parts, TEXT(", ")) : TEXT("none"));
+		const FString Line = FString::Printf(TEXT("aim %s up %.1f -> %s%s"), Aimed ? *Aimed->GetClass()->GetName() : TEXT("nothing"),
+			Hit.ImpactNormal.Z, *FString::Join(Parts, TEXT(" ")), *Active);
 		FString& Last = GSupportLog.FindOrAdd(Parent);
 		if (Last != Line)
 		{
