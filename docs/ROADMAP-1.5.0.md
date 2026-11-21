@@ -9,7 +9,9 @@ Nothing here is decided in detail yet: each item gets its design written down be
     `FenceWall_FicsitLow`), same fence types with `mWallHeight = 100`, same 0.5 m thickness and placement; the Material
     tab switches between the two (no steel 1 m wall: `SupportsLook`, not listed for steel). Concrete: the 4 m wall's own
     texture without grooves (the plain band v 0.535..0.752 between its 2nd and 3rd horizontal grooves; mirrored half panel
-    u 0..0.43, clear of the frame at u 0.76; from the texture dump). FICSIT: the game's 1 m FICSIT texture whole.
+    u 0..0.43, clear of the frame at u 0.76; from the texture dump). Tested 2026-11-21: the panel frame still showed every
+    8 m (the half panel runs 4 m, to u 0.86): stretched to 0.17 u per metre (ends at u 0.68). Icons: the 4 m wall icons
+    at 1 m (`render_icons.py fencewall_low` / `fencewall_ficsit_low`, framed like the 4 m ones). FICSIT: the game's 1 m FICSIT texture whole.
   - Cost: like the game, a 1 m wall costs what the 4 m wall does, and fence walls now cost what the game's wall of that
     material costs (game: 4 concrete per 8 m; ours was 1 per 4 m): read from the game's wall recipes in
     create_assets.py (half per 4 m, rounded up). Walls already built give back the new cost when dismantled.

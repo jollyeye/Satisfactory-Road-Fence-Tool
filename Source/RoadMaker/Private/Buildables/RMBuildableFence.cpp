@@ -407,10 +407,12 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 			return L;
 		}
 		// Concrete: the same texture as the 4 m wall, without its grooves: the plain band between its second
-		// and third horizontal groove (v 0.45 and 0.77; bolt dots up to v 0.52) is a bit over 1 m tall, and
-		// the mirrored half panel (u 0 to 0.43) stays clear of the vertical frame at u 0.76 (texture dump).
+		// and third horizontal groove (v 0.45 and 0.77; bolt dots up to v 0.52) is a bit over 1 m tall. Along
+		// the wall the mirrored half panel runs 4 m from its centre; at the 4 m wall's 0.214 u per metre it
+		// reaches the panel frame (vertical groove at u 0.76, angled corners), seen every 8 m (tested
+		// 2026-11-21), so it is stretched a little: 0.17 u per metre ends at u 0.68 (texture dump).
 		L.UCentre = 0.f;
-		L.UPerMetre = 0.214f;
+		L.UPerMetre = 0.17f;
 		L.VTop = 0.535f;
 		L.VPerMetre = 0.21675f;
 		L.TopV = 0.535f;

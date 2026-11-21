@@ -312,13 +312,19 @@ def intersection(sc):
         end = (sx * (hw - e), sy * (hw + stub))
         lstrip([start] + path + [end] if (sx * sy) > 0 else [end] + path + [start])
 
-def fence_wall(sc, kind="concrete"):
-    # One straight 4 m tall fence wall piece, 0.5 m thick, with the look of its material on the face.
-    L, H, T = 6.0, 4.0, 0.5
+def fence_wall(sc, kind="concrete", H=4.0):
+    # One straight fence wall piece, 0.5 m thick (4 m tall, or 1 m for the low walls), with its material's look.
+    L, T = 6.0, 0.5
+    if H < 4.0:
+        # Framed like the 4 m icons (same size wall piece), so the low wall reads as short.
+        sc.bounds += [(0, -T / 2, 0), (L, T / 2, 0), (0, -T / 2, 4.0), (L, T / 2, 4.0)]
     y = T / 2 + 0.01   # visible face (towards the camera)
     def stripe(x0, x1, z0, z1, col):
         sc.quad((x0, y, z0), (x1, y, z0), (x1, y, z1), (x0, y, z1), col, layer=1, two=True, shade=False)
-    if kind == "concrete":
+    if kind == "concrete" and H < 4.0:
+        # Plain concrete, no grooves (like the 1 m wall in game).
+        box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, CONCRETE * 0.92)
+    elif kind == "concrete":
         base = CONCRETE * 0.92
         box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, base)
         seam = CONCRETE * 0.62
@@ -822,6 +828,8 @@ elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
 elif what == "fencewall_sign": fence_wall(sc, "sign")
+elif what == "fencewall_low": fence_wall(sc, "concrete", H=1.0)
+elif what == "fencewall_ficsit_low": fence_wall(sc, "ficsit", H=1.0)
 elif what == "gapfill": traffic_cone(sc)
 elif what == "cementmixer": cement_mixer(sc)
 render(sc, out)
