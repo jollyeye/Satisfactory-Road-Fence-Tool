@@ -59,6 +59,11 @@ namespace
 	/** Reads the protected snap-to-guidelines flag (set while the snap key is held). */
 	struct FRMSnapAccess : public AFGHologram
 	{
+		/** Adds a surface class the hologram takes (protected in the game). */
+		static void AddHitClass(AFGHologram* Hologram, UClass* Class)
+		{
+			static_cast<FRMSnapAccess*>(Hologram)->AddValidHitClass(Class);
+		}
 		static bool IsSnapHeld(const AFGHologram* Hologram)
 		{
 			return static_cast<const FRMSnapAccess*>(Hologram)->mSnapToGuideLines;
@@ -3645,9 +3650,9 @@ void RMVanillaSnapping::InstallHooks()
 		{
 			if (Hologram && Hologram->IsA<AFGWallAttachmentHologram>())
 			{
-				Hologram->AddValidHitClass(ARMBuildableFence::StaticClass());
-				Hologram->AddValidHitClass(ARMBuildableRoad::StaticClass());
-				Hologram->AddValidHitClass(ARMBuildableIntersection::StaticClass());
+				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableFence::StaticClass());
+				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableRoad::StaticClass());
+				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableIntersection::StaticClass());
 			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGConveyorBeltHologram>(),
