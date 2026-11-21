@@ -670,7 +670,22 @@ namespace RMRoadTemplate
 			Span = FContentSpan();
 			Span.Descriptor = Self->mBlueprintDescriptor.Get();
 			float XMin = TNumericLimits<float>::Max(), XMax = -TNumericLimits<float>::Max();
+			FString MinBy, MaxBy;
 			const FTransform ToRoad = S.RoadT.Inverse();
+			// The hologram's own box outline and direction arrow are not content (the arrow sits outside the box).
+			TSet<const UObject*> NotContent;
+			for (const TCHAR* Name : { TEXT("mBlueprintBoundsMesh"), TEXT("mBlueprintDirectionMesh") })
+			{
+				if (FObjectProperty* Prop = FindFProperty<FObjectProperty>(AFGBlueprintHologram::StaticClass(), Name))
+				{
+					NotContent.Add(Prop->GetObjectPropertyValue_InContainer(Self));
+				}
+			}
+			auto Extend = [&](float Lo, float Hi, const FString& By)
+			{
+				if (Lo < XMin) { XMin = Lo; MinBy = By; }
+				if (Hi > XMax) { XMax = Hi; MaxBy = By; }
+			};
 			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
 			{
 				USceneComponent* Root = Pair.Value;
@@ -689,8 +704,7 @@ namespace RMRoadTemplate
 						for (const FRMFrame& F : Own)
 						{
 							const float X = RootRel.TransformPosition(PieceT.InverseTransformPosition(F.Pos)).X;
-							XMin = FMath::Min(XMin, X);
-							XMax = FMath::Max(XMax, X);
+							Extend(X, X, Piece->GetName());
 						}
 						continue;
 					}
@@ -701,15 +715,14 @@ namespace RMRoadTemplate
 				for (USceneComponent* C : Children)
 				{
 					const UMeshComponent* Mesh = Cast<UMeshComponent>(C);
-					if (!Mesh || !Mesh->IsVisible())
+					if (!Mesh || !Mesh->IsVisible() || NotContent.Contains(Mesh))
 					{
 						continue;
 					}
 					const FBox B = Mesh->Bounds.GetBox().TransformBy(ToRoad);
 					if (B.IsValid)
 					{
-						XMin = FMath::Min(XMin, B.Min.X);
-						XMax = FMath::Max(XMax, B.Max.X);
+						Extend(B.Min.X, B.Max.X, Pair.Key->GetName() + TEXT(".") + Mesh->GetName());
 					}
 				}
 			}
@@ -719,15 +732,15 @@ namespace RMRoadTemplate
 			}
 			if (XMax - XMin < 100.f)
 			{
-				UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: nothing to measure, a tile is the designer's box (%.0f cm)"), S.L);
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: nothing to measure, a tile is the designer's box (%.0f cm)"), S.L);
 				return;
 			}
 			S.X0 = FMath::RoundToFloat(XMin / 10.f) * 10.f;
 			S.L = FMath::RoundToFloat(XMax / 10.f) * 10.f - S.X0;
 			Span.X0 = S.X0;
 			Span.L = S.L;
-			UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: content X %.0f..%.0f, a tile is %.0f cm (designer's box %.0f cm)"),
-				XMin, XMax, S.L, S.BoxL);
+			UE_LOG(LogRoadMaker, Display, TEXT("Road Mode: content X %.0f..%.0f (box %.0f..%.0f), a tile is %.0f cm; starts at %s, ends at %s"),
+				XMin, XMax, S.BoxX0, S.BoxX0 + S.BoxL, S.L, *MinBy, *MaxBy);
 		}
 
 		void Begin(AFGBlueprintHologram* Self)
