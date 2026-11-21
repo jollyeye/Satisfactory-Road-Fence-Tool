@@ -710,7 +710,7 @@ namespace RMRoadTemplate
 					}
 				}
 				// The game's belts, pipes, rails, hypertubes: along their spline points too (their mesh bounds reach well
-				// past their ends: a belt's made a 40 m tile of a 36 m one, 2026-11-21).
+				// past their ends and left a gap between tiles, 2026-11-21).
 				if (const TArray<FSplinePointData>* Pts = SplinePointsOf(Pair.Key.Get()))
 				{
 					if (Pts->Num() >= 2)
