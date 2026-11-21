@@ -84,7 +84,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     stood like a floor pole: now turned upside down (roll 180).
   - Power lines (asked 2026-11-22, to test): the game's wire swaps its automatic pole for a wall outlet where the outlet
     takes the surface aimed at; the outlet's `IsValidHitResult` now takes our fence wall faces too (it already took the
-    road's underside), so lines get wall outlets on our walls and under our roads.
+    road's underside), so lines get wall outlets on our walls and under our roads. Tested: no swap (so the wire does not decide by
+    `IsValidHitResult`). Same wish for belts: their support swaps to the wall / ceiling mount on walls and ceilings
+    (`mChildWallPoleHologram`, `mChildCeilingPoleHologram`, both wall attachment holograms). Try 2: every wall attachment
+    hologram adds our fence, road and intersection classes to its valid hit classes (`AddValidHitClass`, at BeginPlay);
+    a logger ("Support: ...", one line per change) shows what the belt / wire picks for what is aimed at.
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the

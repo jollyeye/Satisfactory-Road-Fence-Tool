@@ -44,6 +44,9 @@
 #include "Hologram/FGCeilingLightHologram.h"
 #include "Hologram/FGPowerPoleWallHologram.h"
 #include "Hologram/FGPoleHologram.h"
+#include "Hologram/FGConveyorBeltHologram.h"
+#include "Hologram/FGWireHologram.h"
+#include "Buildables/RMBuildableFence.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
@@ -3148,6 +3151,33 @@ namespace
 		}
 	}
 
+	/**
+	 * Belts and power lines swap their automatic support (pole / wall mount / ceiling mount, pole / wall outlet) by the
+	 * surface aimed at. Log each swap with what is aimed at (2026-11-22, to learn how the game decides for our walls and
+	 * roads). One line per change per hologram.
+	 */
+	TMap<TWeakObjectPtr<const AFGHologram>, FString> GSupportLog;
+	void LogSupportChoice(AFGHologram* Parent, const FHitResult& Hit)
+	{
+		TArray<FString> Parts;
+		for (AFGHologram* Child : Parent->GetHologramChildren())
+		{
+			if (Child && !Child->IsDisabled() && !Child->IsHidden())
+			{
+				Parts.Add(Child->GetBuildClass() ? Child->GetBuildClass()->GetName() : Child->GetClass()->GetName());
+			}
+		}
+		const AActor* Aimed = Hit.GetActor();
+		const FString Line = FString::Printf(TEXT("aim %s normal %s -> active %s"), Aimed ? *Aimed->GetClass()->GetName() : TEXT("nothing"),
+			*Hit.ImpactNormal.ToCompactString(), Parts.Num() ? *FString::Join(Parts, TEXT(", ")) : TEXT("none"));
+		FString& Last = GSupportLog.FindOrAdd(Parent);
+		if (Last != Line)
+		{
+			Last = Line;
+			UE_LOG(LogRoadMaker, Display, TEXT("Support: %s %s"), *Parent->GetClass()->GetName(), *Line);
+		}
+	}
+
 	/** Ceiling lights, the conveyor ceiling mount and the single wall outlets: they go under our roads (1.5.0). */
 	bool IsUnderRoadPiece(const AFGHologram* Hologram)
 	{
@@ -3606,6 +3636,29 @@ void RMVanillaSnapping::InstallHooks()
 		[](AFGPowerPoleWallHologram* Hologram)
 		{
 			FixAttachmentValidity(Hologram);
+		});
+
+	// Wall attachments (the belt's wall and ceiling mounts, the power line's wall outlet, and on their own) take our fence
+	// walls, roads and intersections as surfaces (their valid hit classes), so the belt and the power line can pick them.
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGHologram::BeginPlay, GetMutableDefault<AFGHologram>(),
+		[](AFGHologram* Hologram)
+		{
+			if (Hologram && Hologram->IsA<AFGWallAttachmentHologram>())
+			{
+				Hologram->AddValidHitClass(ARMBuildableFence::StaticClass());
+				Hologram->AddValidHitClass(ARMBuildableRoad::StaticClass());
+				Hologram->AddValidHitClass(ARMBuildableIntersection::StaticClass());
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGConveyorBeltHologram>(),
+		[](AFGConveyorBeltHologram* Hologram, const FHitResult& Hit)
+		{
+			LogSupportChoice(Hologram, Hit);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGWireHologram>(),
+		[](AFGWireHologram* Hologram, const FHitResult& Hit)
+		{
+			LogSupportChoice(Hologram, Hit);
 		});
 
 	// Under our roads (1.5.0): ceiling lights and the conveyor ceiling mount (a pole hologram) hang from the underside.
