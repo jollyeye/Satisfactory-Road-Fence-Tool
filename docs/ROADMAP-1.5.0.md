@@ -46,6 +46,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
     release (decided 2026-11-21), with all untranslated entries including the new 1.5.0 buildings.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
+  - 2026-11-21: SML v3.12.1 is on master ("Update headers to CL520140"), but it does not build: `FGPlayerController.h`
+    uses `FClientInitialLoadStatusData` (RPC `Client_InitialNetLoadStatusUpdate`) and master deleted
+    `FGClientInitialLoadStatusData.h`, which defined it (only a forward declaration is left), so UHT fails before
+    our code. Its headers also differ from PR #433 in 32 files, including `FGUseableInterface.h` (the 1.4.0 crash),
+    `FGPlayerController.h`, `FGBuildableFactory.h` and `FGBuildablePipelinePump.h`. Staying on `pr-433` until master
+    builds. Decided: keep everything for 1.5.0, no 1.4.2 unless there is an emergency.
 
 - **Road Mode: what tilts with the road** (issue #7, list from the user 2026-11-20; built 2026-11-20, to test): besides our
   road pieces, markings and the game's splines, these now follow the road's slope instead of staying level: everything
