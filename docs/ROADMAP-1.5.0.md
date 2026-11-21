@@ -60,6 +60,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
     Built and checked 2026-11-21: the gather finds 103 distinct asset texts (namespace RoadMakerAssets) and the code
     texts. From now on every new text is localizable (rules in `CLAUDE.md`). Reply to muaxl on issue #9 at the 1.5.0
     release (decided 2026-11-21), with all untranslated entries including the new 1.5.0 buildings.
+- **Check placement of objects on the road and under the road** (added 2026-11-21 by the user): to look at what goes
+  wrong placing things on top of our roads and below them (details to collect when we start it).
+- **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
+  walls (not the 4 m steel wall's ribbed shape) with the game's 1 m steel wall material (found by name: an `MI_*8x1*` in
+  the SteelWallSet folder, logged by make_materials.py), laid out like the 1 m FICSIT texture (a 4 m x 1 m tile;
+  to check in game). Now all three looks switch on the 1 m walls. Unlocks with the game's steel wall material.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
   - 2026-11-21: SML v3.12.1 is on master ("Update headers to CL520140"), but it does not build: `FGPlayerController.h`

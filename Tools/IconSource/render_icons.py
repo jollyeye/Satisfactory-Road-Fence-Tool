@@ -336,6 +336,13 @@ def fence_wall(sc, kind="concrete", H=4.0):
         for x in (1.6, 4.4):                      # tie holes
             for z in (1.7, 2.3):
                 stripe(x - 0.08, x + 0.08, z - 0.08, z + 0.08, seam)
+    elif kind == "steel" and H < 4.0:
+        # 1 m steel wall: a solid steel slab, darker rails along the top and bottom of its face.
+        panel = np.array([150, 156, 164.0])
+        box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, panel)
+        rail = np.array([88, 92, 98.0])
+        stripe(0.0, L, 0.0, 0.14, rail)
+        stripe(0.0, L, H - 0.14, H, rail)
     elif kind == "steel":
         dark = np.array([58, 60, 64.0])
         panel = np.array([150, 156, 164.0])
@@ -830,6 +837,7 @@ elif what == "fencewall_steel": fence_wall(sc, "steel")
 elif what == "fencewall_sign": fence_wall(sc, "sign")
 elif what == "fencewall_low": fence_wall(sc, "concrete", H=1.0)
 elif what == "fencewall_ficsit_low": fence_wall(sc, "ficsit", H=1.0)
+elif what == "fencewall_steel_low": fence_wall(sc, "steel", H=1.0)
 elif what == "gapfill": traffic_cone(sc)
 elif what == "cementmixer": cement_mixer(sc)
 render(sc, out)

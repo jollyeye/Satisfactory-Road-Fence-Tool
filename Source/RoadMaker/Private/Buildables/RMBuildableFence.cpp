@@ -395,9 +395,10 @@ FRMWallTexLayout ARMBuildableFence::GetWallLayout() const
 	if (mWallHeight < 400.f)
 	{
 		// 1 m walls (1.5.0).
-		if (GetEffectiveType() == ERMFenceType::FicsitWall)
+		if (GetEffectiveType() == ERMFenceType::FicsitWall || GetEffectiveType() == ERMFenceType::SteelWall)
 		{
-			// The game's 1 m FICSIT texture whole, top and bottom edges as the game's 1 m wall has them.
+			// The game's 1 m FICSIT / steel texture whole (a 4 m x 1 m tile repeating sideways), top and bottom
+			// edges as the game's 1 m wall has them.
 			L.UCentre = 0.f;
 			L.UPerMetre = 0.25f;
 			L.VTop = 0.f;
@@ -577,7 +578,7 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 		Steel.VTop = 0.2f;
 		Steel.VPerMetre = 0.175f;
 		Steel.bMirror = false;
-		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, Steel);
+		RMGeometry::BuildFenceWall(Frames, 400.f, Main, WallLayout.Height, 50.f, WallLayout.Height < GetWallHeight() ? WallLayout : Steel);
 		break;
 	}
 	case ERMFenceType::ConcreteWall:
@@ -618,7 +619,15 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 		RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout);
 		break;
 	case ERMFenceType::SteelWall:
-		RMGeometry::BuildSteelFenceWall(Frames, Main, GetWallHeight());
+		if (WallLayout.Height < GetWallHeight())
+		{
+			// 1 m steel wall: a plain slab like the other 1 m walls, with the game's 1 m steel wall texture.
+			RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout);
+		}
+		else
+		{
+			RMGeometry::BuildSteelFenceWall(Frames, Main, GetWallHeight());
+		}
 		break;
 	case ERMFenceType::FicsitWall:
 		RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout); // shape to follow

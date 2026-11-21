@@ -817,9 +817,27 @@ for key, path in (("ficsit", "/Game/FactoryGame/Buildable/Building/Wall/FicsitWa
     if m:
         game_wall_mats[key] = m
 
+# The game's 1 m steel wall material, for the 1 m steel fence wall (1.5.0): found by name in the steel wall set
+# (a material instance with "8x1" in its name), candidates logged.
+steel_low_mat = None
+try:
+    _reg = unreal.AssetRegistryHelpers.get_asset_registry()
+    _hits = _reg.get_assets(unreal.ARFilter(package_paths=["/Game/FactoryGame/Buildable/Building/Wall/SteelWallSet"], recursive_paths=True))
+    _cands = sorted(str(h.package_name) for h in _hits if "8x1" in str(h.asset_name) and str(h.asset_name).startswith("MI_"))
+    log("Steel 1 m wall material candidates: %s" % (", ".join(_cands) or "none"))
+    for _c in _cands:
+        steel_low_mat = unreal.load_asset(_c)
+        if steel_low_mat:
+            log("Fence wall steel 1 m uses " + _c)
+            break
+except Exception as e:
+    log("  ! steel 1 m wall material: %s" % e)
+
 # Fence wall looks for the customizer's Material tab: concrete, FICSIT, steel (switched in place).
 wall_looks = [game_wall_mat or fwall, game_wall_mats.get("ficsit") or game_wall_mat or fwall,
               game_wall_mats.get("steel") or game_wall_mat or fwall]
+# The 1 m walls: the same, with the game's 1 m steel material.
+wall_looks_low = [wall_looks[0], wall_looks[1], steel_low_mat or wall_looks[2]]
 
 # --- Road looks for the Material tab: concrete blocks (pavers) and cyberpunk -------------------
 def cpd_param(mat, name, index, default, x, y):
@@ -1500,8 +1518,9 @@ ASSIGN = {
     "Build_FenceWall_Sign": {"m_main_material": sw_metal, "m_panel_material": sw_back, "m_front_material": sw_front},
     "Build_FenceWall_Steel": {"m_main_material": game_wall_mats.get("steel") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
     # 1 m walls (1.5.0): the same game materials; their own texture layout is set in code.
-    "Build_FenceWall_ConcreteLow": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
-    "Build_FenceWall_FicsitLow": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks},
+    "Build_FenceWall_ConcreteLow": {"m_main_material": game_wall_mat or fwall, "m_wall_look_materials": wall_looks_low},
+    "Build_FenceWall_FicsitLow": {"m_main_material": game_wall_mats.get("ficsit") or game_wall_mat or fwall, "m_wall_look_materials": wall_looks_low},
+    "Build_FenceWall_SteelLow": {"m_main_material": wall_looks_low[2], "m_wall_look_materials": wall_looks_low},
 }
 for name, props in ASSIGN.items():
     bp = load_bp(name)
