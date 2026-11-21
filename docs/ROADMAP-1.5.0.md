@@ -72,8 +72,15 @@ Nothing here is decided in detail yet: each item gets its design written down be
   was updated. Now the fallback repeat is 8 m and the face is rebuilt when the repeat length changes.
 - **Scroll turns a wall stacked on another wall round** (asked 2026-11-21, built, to test): stacking snapped it facing
   like the wall below with no way to turn it; now a scroll step flips it, like on a road edge.
-- **Check placement of objects on the road and under the road** (added 2026-11-21 by the user): to look at what goes
-  wrong placing things on top of our roads and below them (details to collect when we start it).
+- **Placement of objects on the road and under the road** (added 2026-11-21 by the user; first part built, to test):
+  - Foundations, ramps and frames aimed at the top of a road or intersection sat with their middle on the surface (the
+    game puts their origin, half way up, at the hit): now the game's placement, then up by half their height
+    (`PlaceFoundationOnRoad`; road ends keep `PlaceFoundationAtRoadEnd`).
+  - Under the road: ceiling lights, the conveyor ceiling mount and the single wall outlets (not the double) hang from
+    the underside of roads and intersections (`PlaceUnderRoad`): lined up with the road (scroll turns lights and the
+    mount), the outlet facing down; `IsValidHitResult` accepts the underside, the "no surface" disqualifiers are dropped
+    like for the wall attachments. The ceiling mount's hologram may be a pole hologram whose placement check is
+    protected (not hookable): if it shows red under a road, that is next.
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the

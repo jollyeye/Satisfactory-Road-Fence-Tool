@@ -41,6 +41,9 @@
 #include "Hologram/FGSignPoleHologram.h"
 #include "Hologram/FGBeamHologram.h"
 #include "Hologram/FGWallAttachmentHologram.h"
+#include "Hologram/FGCeilingLightHologram.h"
+#include "Hologram/FGPowerPoleWallHologram.h"
+#include "Hologram/FGPoleHologram.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "HAL/PlatformTime.h"
@@ -3145,10 +3148,118 @@ namespace
 		}
 	}
 
+	/** Ceiling lights, the conveyor ceiling mount and the single wall outlets: they go under our roads (1.5.0). */
+	bool IsUnderRoadPiece(const AFGHologram* Hologram)
+	{
+		const UClass* Build = Hologram ? Hologram->GetBuildClass().Get() : nullptr;
+		if (!Build)
+		{
+			return false;
+		}
+		const FString Name = Build->GetName();
+		return Name.Contains(TEXT("CeilingLight")) || Name.Contains(TEXT("ConveyorCeiling"))
+			|| (Name.Contains(TEXT("PowerPoleWall")) && !Name.Contains(TEXT("Double")));
+	}
+
+	/** Aiming at the underside of one of our roads or intersections: where, and the road's direction there. */
+	bool FindRoadUnderside(const FHitResult& Hit, FVector& OutLocation, FVector& OutFwd)
+	{
+		AActor* Actor = Hit.GetActor();
+		if (Hit.ImpactNormal.Z > -0.5f || !Actor)
+		{
+			return false;
+		}
+		if (const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Actor))
+		{
+			TArray<FRMFrame> Frames;
+			Road->GetWorldFrames(Frames, 100.f);
+			float Best = TNumericLimits<float>::Max();
+			OutFwd = Road->GetActorForwardVector();
+			for (const FRMFrame& F : Frames)
+			{
+				const float D = FVector::DistSquared(F.Pos, Hit.ImpactPoint);
+				if (D < Best)
+				{
+					Best = D;
+					OutFwd = F.Fwd;
+				}
+			}
+		}
+		else if (Cast<ARMBuildableIntersection>(Actor))
+		{
+			OutFwd = Actor->GetActorForwardVector();
+		}
+		else
+		{
+			return false;
+		}
+		OutFwd = FVector(OutFwd.X, OutFwd.Y, 0.f).GetSafeNormal();
+		OutLocation = Hit.ImpactPoint;
+		return !OutFwd.IsNearlyZero();
+	}
+
+	/**
+	 * Under a road: hanging from its underside like from a ceiling, lined up with the road (the scroll wheel turns
+	 * ceiling lights and the belt mount). The single wall outlet goes on the underside facing down. The game's own
+	 * "no surface" checks are dropped like for the wall attachments (FixAttachmentValidity).
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceUnderRoad(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		FVector Location, Fwd;
+		if (!IsUnderRoadPiece(Hologram) || !FindRoadUnderside(Hit, Location, Fwd))
+		{
+			return false;
+		}
+		const FString Name = Hologram->GetBuildClass()->GetName();
+		FRotator Rotation;
+		if (Name.Contains(TEXT("PowerPoleWall")))
+		{
+			// A wall piece's front is its X axis: pointing down, its top along the road.
+			Rotation = FRotationMatrix::MakeFromXZ(FVector::DownVector, Fwd).Rotator();
+		}
+		else
+		{
+			Rotation = FRotator(0.f, Fwd.Rotation().Yaw + FRMSnapAccess::ScrollDegrees(Hologram), 0.f);
+		}
+		Hologram->SetActorLocationAndRotation(Location, Rotation);
+		GAttachOnWall.Add(Hologram);
+		Scope.Cancel();
+		return true;
+	}
+
+	/**
+	 * Foundations, ramps and frames aimed at the top of one of our roads or intersections sit on it (the game puts
+	 * their middle on the surface, as their origin is half way up).
+	 */
+	template <typename TScope, typename THologram>
+	bool PlaceFoundationOnRoad(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		AActor* Actor = Hit.GetActor();
+		const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(Hologram->GetBuildClass().Get());
+		if (!Foundation || !Actor || Hit.ImpactNormal.Z < 0.5f || (!Cast<ARMBuildableRoad>(Actor) && !Cast<ARMBuildableIntersection>(Actor)))
+		{
+			return false;
+		}
+		Scope(Hologram, Hit); // the game's placement (its grid, rotation), then up by half its height
+		FVector Location = Hologram->GetActorLocation();
+		Location.Z = Hit.ImpactPoint.Z + Foundation->mHeight * 0.5f;
+		Hologram->SetActorLocation(Location);
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& InHit)
 	{
 		const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
+		if (IsUnderRoadPiece(Hologram))
+		{
+			if (PlaceUnderRoad(Scope, Hologram, InHit))
+			{
+				return true;
+			}
+			GAttachOnWall.Remove(Hologram);
+		}
 		const ESnapKind Kind = KindOf(Hologram);
 		if (Kind == ESnapKind::None || !Hologram->GetWorld() || GInPathReplace)
 		{
@@ -3162,7 +3273,7 @@ namespace
 
 		if (Kind == ESnapKind::Foundation)
 		{
-			return PlaceFoundationAtRoadEnd(Scope, Hologram, Hit);
+			return PlaceFoundationAtRoadEnd(Scope, Hologram, Hit) || PlaceFoundationOnRoad(Scope, Hologram, Hit);
 		}
 
 		if (Kind == ESnapKind::PathStart)
@@ -3464,11 +3575,71 @@ void RMVanillaSnapping::InstallHooks()
 
 #undef RM_HOOK_SET_LOCATION
 
-	// Wall attachments: snap to our fence walls and the gantry like signs, without the snap key.
+	// Wall attachments: snap to our fence walls and the gantry like signs, without the snap key. The single wall outlet
+	// also goes under our roads.
 	SUBSCRIBE_METHOD_VIRTUAL(AFGWallAttachmentHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGWallAttachmentHologram>(),
 		[](auto& Scope, AFGWallAttachmentHologram* Hologram, const FHitResult& Hit)
 		{
+			if (PlaceUnderRoad(Scope, Hologram, Hit))
+			{
+				return;
+			}
 			PlaceAttachmentOnWall(Scope, Hologram, Hit);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGPowerPoleWallHologram::IsValidHitResult, GetMutableDefault<AFGPowerPoleWallHologram>(),
+		[](auto& Scope, const AFGPowerPoleWallHologram* Hologram, const FHitResult& Hit)
+		{
+			FVector L, F;
+			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
+			{
+				Scope.Override(true);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGPowerPoleWallHologram::CheckValidPlacement, GetMutableDefault<AFGPowerPoleWallHologram>(),
+		[](AFGPowerPoleWallHologram* Hologram)
+		{
+			FixAttachmentValidity(Hologram);
+		});
+
+	// Under our roads (1.5.0): ceiling lights and the conveyor ceiling mount (a pole hologram) hang from the underside.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGCeilingLightHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGCeilingLightHologram>(),
+		[](auto& Scope, AFGCeilingLightHologram* Hologram, const FHitResult& Hit)
+		{
+			if (!PlaceUnderRoad(Scope, Hologram, Hit))
+			{
+				GAttachOnWall.Remove(Hologram);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGCeilingLightHologram::CheckValidPlacement, GetMutableDefault<AFGCeilingLightHologram>(),
+		[](AFGCeilingLightHologram* Hologram)
+		{
+			FixAttachmentValidity(Hologram);
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGPoleHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGPoleHologram>(),
+		[](auto& Scope, AFGPoleHologram* Hologram, const FHitResult& Hit)
+		{
+			if (!PlaceUnderRoad(Scope, Hologram, Hit))
+			{
+				GAttachOnWall.Remove(Hologram);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGPoleHologram::IsValidHitResult, GetMutableDefault<AFGPoleHologram>(),
+		[](auto& Scope, const AFGPoleHologram* Hologram, const FHitResult& Hit)
+		{
+			FVector L, F;
+			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
+			{
+				Scope.Override(true);
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::IsValidHitResult, GetMutableDefault<AFGBuildableHologram>(),
+		[](auto& Scope, const AFGBuildableHologram* Hologram, const FHitResult& Hit)
+		{
+			FVector L, F;
+			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
+			{
+				Scope.Override(true); // ceiling lights use the buildable hologram's check
+			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWallAttachmentHologram::CheckValidPlacement, GetMutableDefault<AFGWallAttachmentHologram>(),
 		[](AFGWallAttachmentHologram* Hologram)
