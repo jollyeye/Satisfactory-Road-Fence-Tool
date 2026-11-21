@@ -3589,7 +3589,8 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL(AFGPowerPoleWallHologram::IsValidHitResult, GetMutableDefault<AFGPowerPoleWallHologram>(),
 		[](auto& Scope, const AFGPowerPoleWallHologram* Hologram, const FHitResult& Hit)
 		{
-			FVector L, F;
+			FVector L;
+			FVector F;
 			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
 			{
 				Scope.Override(true);
@@ -3626,7 +3627,8 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL(AFGPoleHologram::IsValidHitResult, GetMutableDefault<AFGPoleHologram>(),
 		[](auto& Scope, const AFGPoleHologram* Hologram, const FHitResult& Hit)
 		{
-			FVector L, F;
+			FVector L;
+			FVector F;
 			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
 			{
 				Scope.Override(true);
@@ -3635,7 +3637,8 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::IsValidHitResult, GetMutableDefault<AFGBuildableHologram>(),
 		[](auto& Scope, const AFGBuildableHologram* Hologram, const FHitResult& Hit)
 		{
-			FVector L, F;
+			FVector L;
+			FVector F;
 			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
 			{
 				Scope.Override(true); // ceiling lights use the buildable hologram's check
