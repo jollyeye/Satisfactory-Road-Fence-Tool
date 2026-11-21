@@ -66,7 +66,10 @@ Nothing here is decided in detail yet: each item gets its design written down be
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the
   ribbed sheet at the 4 m scale (v 0.25..0.425, 0.175 per metre), along the wall the seamless u 0.08..0.54 folded every
-  2 m (`FRMWallTexLayout::FoldEvery`, new), like the game's bolt columns; to check in game. Now all three looks switch on the 1 m walls. Unlocks with the game's steel wall material.
+  2 m (`FRMWallTexLayout::FoldEvery`, new), like the game's bolt columns. Tested: height right, but the game repeats
+  (one bolt column every ~2 m) where the fold mirrored (pairs 1 m apart, a bright seam at each fold). Now its own
+  builder `RMGeometry::BuildSteelFenceWallLow`: 2 m cells restarting the panel window like the 4 m steel wall; ends,
+  top and bottom on the texture's black strip (u 0.9..0.98), as asked; to check in game. Now all three looks switch on the 1 m walls. Unlocks with the game's steel wall material.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
   - 2026-11-21: SML v3.12.1 is on master ("Update headers to CL520140"), but it does not build: `FGPlayerController.h`

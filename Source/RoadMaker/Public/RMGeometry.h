@@ -274,6 +274,12 @@ namespace RMGeometry
 	 * panel in u 0.08..0.54 per 2 m (repeated) / v 0.2..0.9, rails and ends on its dark bands.
 	 */
 	ROADMAKER_API void BuildSteelFenceWall(const TArray<FRMFrame>& Frames, FRMMesh& Out, float Height = 400.f);
+	/**
+	 * The 1 m steel fence wall (1.5.0): a plain 0.5 m slab like the other 1 m walls, with the game's 1 m steel wall
+	 * look: a 1 m band of the steel wall texture's ribbed sheet, restarting every 2 m like the 4 m steel wall (one
+	 * bolt column per 2 m); ends, top and bottom on the texture's black strip.
+	 */
+	ROADMAKER_API void BuildSteelFenceWallLow(const TArray<FRMFrame>& Frames, FRMMesh& Out, float Height = 100.f);
 
 	ROADMAKER_API void BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, FRMMesh& Out, float Height = 400.f, float Thickness = 50.f,
 		const FRMWallTexLayout& Layout = FRMWallTexLayout());

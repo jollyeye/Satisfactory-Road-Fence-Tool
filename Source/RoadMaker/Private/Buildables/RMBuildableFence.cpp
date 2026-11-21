@@ -592,7 +592,12 @@ void ARMBuildableFence::BuildFenceFar2Mesh(ERMFenceType Type, TArray<FRMFrame> F
 		Steel.VTop = 0.2f;
 		Steel.VPerMetre = 0.175f;
 		Steel.bMirror = false;
-		RMGeometry::BuildFenceWall(Frames, 400.f, Main, WallLayout.Height, 50.f, WallLayout.Height < GetWallHeight() ? WallLayout : Steel);
+		if (WallLayout.Height < GetWallHeight())
+		{
+			RMGeometry::BuildSteelFenceWallLow(Frames, Main, WallLayout.Height);
+			break;
+		}
+		RMGeometry::BuildFenceWall(Frames, 400.f, Main, GetWallHeight(), 50.f, Steel);
 		break;
 	}
 	case ERMFenceType::ConcreteWall:
@@ -635,8 +640,8 @@ void ARMBuildableFence::BuildFenceMesh(ERMFenceType Type, TArray<FRMFrame> Frame
 	case ERMFenceType::SteelWall:
 		if (WallLayout.Height < GetWallHeight())
 		{
-			// 1 m steel wall: a plain slab like the other 1 m walls, with the game's 1 m steel wall texture.
-			RMGeometry::BuildFenceWall(Frames, UVScale, Main, WallLayout.Height, 50.f, WallLayout);
+			// 1 m steel wall: a plain slab like the other 1 m walls, with the game's 1 m steel wall look.
+			RMGeometry::BuildSteelFenceWallLow(Frames, Main, WallLayout.Height);
 		}
 		else
 		{
