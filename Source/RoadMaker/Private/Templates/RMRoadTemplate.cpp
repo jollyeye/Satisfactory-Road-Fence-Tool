@@ -709,6 +709,21 @@ namespace RMRoadTemplate
 						continue;
 					}
 				}
+				// The game's belts, pipes, rails, hypertubes: along their spline points too (their mesh bounds reach well
+				// past their ends: a belt's made a 40 m tile of a 36 m one, 2026-11-21).
+				if (const TArray<FSplinePointData>* Pts = SplinePointsOf(Pair.Key.Get()))
+				{
+					if (Pts->Num() >= 2)
+					{
+						const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+						for (const FSplinePointData& Pt : *Pts)
+						{
+							const float X = RootRel.TransformPosition(Pt.Location).X;
+							Extend(X, X, Pair.Key->GetName());
+						}
+						continue;
+					}
+				}
 				TArray<USceneComponent*> Children;
 				Root->GetChildrenComponents(true, Children);
 				Children.Add(Root);
