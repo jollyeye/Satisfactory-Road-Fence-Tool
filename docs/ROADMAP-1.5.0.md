@@ -41,6 +41,9 @@ Nothing here is decided in detail yet: each item gets its design written down be
     is translated once. The marking hint (arrow and vehicle names) and "Blueprint Road ({0} wide)" are NSLOCTEXT now.
     The zh-Hans PO has the 121 new entries with empty translations (108 asset texts, 13 code texts) for muaxl.
     The lane paint menu (LanePaint/) still has plain texts, but nothing opens it any more.
+    Built and checked 2026-11-21: the gather finds 103 distinct asset texts (namespace RoadMakerAssets) and the code
+    texts. From now on every new text is localizable (rules in `CLAUDE.md`). Reply to muaxl on issue #9 at the 1.5.0
+    release (decided 2026-11-21), with all untranslated entries including the new 1.5.0 buildings.
 - **Rebuild on SML's official 1.2.6 headers** when they are published (may come first as 1.4.2): `git checkout master`
   and `git pull` in `D:\SFMods\SML` (now on branch `pr-433`), rebuild, test, release.
 
