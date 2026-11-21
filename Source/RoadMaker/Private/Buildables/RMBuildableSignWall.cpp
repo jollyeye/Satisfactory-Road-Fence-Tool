@@ -252,8 +252,14 @@ void ARMBuildableSignWall::CopyCutSettingsTo(ARMBuildableSpline* New) const
 float ARMBuildableSignWall::GetRepeatLength() const
 {
 	// The design keeps its proportions: as tall as the wall, as wide as that makes it.
-	const FVector2D Size = mSign ? mSign->GetDesignSize() : FVector2D(800.f, 400.f);
-	return GetHeight() * Size.X / FMath::Max(Size.Y, 1.f); // 8 m: the billboard on 4 m, the 4 m label sign on 1 m
+	// 8 m on both walls: the billboard (8 x 4 m) on 4 m, the 4 m label sign (4 x 0.5 m) on 1 m. Before the hidden sign
+	// is there, 8 m too; when it reports another size the face is rebuilt (OnSignDesignChanged).
+	if (!mSign)
+	{
+		return 800.f;
+	}
+	const FVector2D Size = mSign->GetDesignSize();
+	return GetHeight() * Size.X / FMath::Max(Size.Y, 1.f);
 }
 
 void ARMBuildableSignWall::CheckDesignMaterial()
@@ -293,6 +299,13 @@ void ARMBuildableSignWall::OnSignDesignChanged()
 	{
 		mSign->mWall = this;
 	}
+	// The face was built for another repeat length (before the sign told its size, 2026-11-21: a 1 m wall showed the
+	// label design every 2 m): build it again.
+	if (mBuiltRepeat > 0.f && !FMath::IsNearlyEqual(mBuiltRepeat, GetRepeatLength(), 1.f))
+	{
+		RebuildMesh();
+		return;
+	}
 	UMaterialInterface* Front = GetFrontMaterial();
 	if (!Front)
 	{
@@ -315,6 +328,7 @@ void ARMBuildableSignWall::RebuildMesh()
 	// The sign face on the road side, at every distance level (like a billboard, seen from across the map).
 	UMaterialInterface* Front = GetFrontMaterial();
 	const float Repeat = GetRepeatLength();
+	mBuiltRepeat = Repeat;
 	for (int32 Level = 0; Level < 3; ++Level)
 	{
 		TArray<FRMFrame> Frames;

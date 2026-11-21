@@ -78,6 +78,9 @@ private:
 	UPROPERTY(Transient)
 	class UFGFactoryClipboardSettings* mPendingDesign = nullptr;
 
+	/** Repeat length the face was last built with (0: not built yet). */
+	float mBuiltRepeat = 0.f;
+
 
 	// The design, copied onto the wall while it is saved into a blueprint (the hidden sign is no building of the
 	// blueprint): the wall placed from the blueprint gives it to its new sign. Empty otherwise.

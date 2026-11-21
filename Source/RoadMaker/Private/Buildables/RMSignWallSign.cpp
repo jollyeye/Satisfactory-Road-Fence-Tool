@@ -199,7 +199,11 @@ UMaterialInterface* ARMSignWallSign::GetSignMaterial()
 
 FVector2D ARMSignWallSign::GetDesignSize() const
 {
-	return mWorldDimensions.X > 1.f && mWorldDimensions.Y > 1.f ? mWorldDimensions : FVector2D(800.f, 400.f);
+	if (mWorldDimensions.X > 1.f && mWorldDimensions.Y > 1.f)
+	{
+		return mWorldDimensions;
+	}
+	return IsA<ARMSignWallSignLabel>() ? FVector2D(400.f, 50.f) : FVector2D(800.f, 400.f);
 }
 
 TSubclassOf<UObject> ARMSignWallSign::GetClipboardMappingClass_Implementation()

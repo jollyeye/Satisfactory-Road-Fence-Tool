@@ -67,6 +67,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
   sign wall's body, face and sign position use the wall's own height. Same cost as the 4 m sign wall, per 8 m; unlocks
   with the Road Maker milestone; icon (`fencewall_sign_low`); string table + PO entries. Copy / paste and middle-click
   designs only work between walls of the same height (label layouts vs billboard layouts).
+  Tested 2026-11-21: the right sign (`Build_StandaloneWidgetSign_SmallVeryWide`, 400 x 50) but 4 designs per 8 m: the
+  face was built before the sign told its size (fallback 800 x 400 = every 2 m on a 1 m wall) and only its material
+  was updated. Now the fallback repeat is 8 m and the face is rebuilt when the repeat length changes.
+- **Scroll turns a wall stacked on another wall round** (asked 2026-11-21, built, to test): stacking snapped it facing
+  like the wall below with no way to turn it; now a scroll step flips it, like on a road edge.
 - **Check placement of objects on the road and under the road** (added 2026-11-21 by the user): to look at what goes
   wrong placing things on top of our roads and below them (details to collect when we start it).
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m

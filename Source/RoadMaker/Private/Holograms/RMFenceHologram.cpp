@@ -93,8 +93,11 @@ bool ARMFenceHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
 				{
 					P.Location.Z += Shift;
 				}
-				mInwardSign = Other->GetInwardSign();
+				// Facing like the wall below; a scroll step turns it round (like on a road edge), e.g. a sign wall's
+				// design to the other side.
+				mInwardSign = mFacingFlipped ? -Other->GetInwardSign() : Other->GetInwardSign();
 				mOnRoadEdge = true;
+				mOnRoadOrCurb = true;
 				SetWorldPoints(Points);
 				return true;
 			}
