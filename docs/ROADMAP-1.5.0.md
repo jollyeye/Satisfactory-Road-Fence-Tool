@@ -80,7 +80,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     the underside of roads and intersections (`PlaceUnderRoad`): lined up with the road (scroll turns lights and the
     mount), the outlet facing down; `IsValidHitResult` accepts the underside, the "no surface" disqualifiers are dropped
     like for the wall attachments. The ceiling mount's hologram may be a pole hologram whose placement check is
-    protected (not hookable): if it shows red under a road, that is next.
+    protected (not hookable): if it shows red under a road, that is next. Tested 2026-11-22: works; the ceiling mount
+    stood like a floor pole: now turned upside down (roll 180).
+  - Power lines (asked 2026-11-22, to test): the game's wire swaps its automatic pole for a wall outlet where the outlet
+    takes the surface aimed at; the outlet's `IsValidHitResult` now takes our fence wall faces too (it already took the
+    road's underside), so lines get wall outlets on our walls and under our roads.
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the

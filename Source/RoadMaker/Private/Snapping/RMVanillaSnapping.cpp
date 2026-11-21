@@ -3220,7 +3220,9 @@ namespace
 		}
 		else
 		{
-			Rotation = FRotator(0.f, Fwd.Rotation().Yaw + FRMSnapAccess::ScrollDegrees(Hologram), 0.f);
+			// The belt mount stands like a floor pole: upside down, hanging from the road (tested 2026-11-22).
+			const float Roll = Name.Contains(TEXT("ConveyorCeiling")) ? 180.f : 0.f;
+			Rotation = FRotator(0.f, Fwd.Rotation().Yaw + FRMSnapAccess::ScrollDegrees(Hologram), Roll);
 		}
 		Hologram->SetActorLocationAndRotation(Location, Rotation);
 		GAttachOnWall.Add(Hologram);
@@ -3586,12 +3588,16 @@ void RMVanillaSnapping::InstallHooks()
 			}
 			PlaceAttachmentOnWall(Scope, Hologram, Hit);
 		});
+	// The wall outlet takes the underside of our roads and the faces of our fence walls. Drawing a power line, the game
+	// swaps its automatic pole for the wall outlet where the outlet takes the surface aimed at: so on our walls and under
+	// our roads too (asked 2026-11-22).
 	SUBSCRIBE_METHOD_VIRTUAL(AFGPowerPoleWallHologram::IsValidHitResult, GetMutableDefault<AFGPowerPoleWallHologram>(),
 		[](auto& Scope, const AFGPowerPoleWallHologram* Hologram, const FHitResult& Hit)
 		{
 			FVector L;
 			FVector F;
-			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
+			FWallFace Face;
+			if ((IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F)) || FindWallFace(Hit, Face))
 			{
 				Scope.Override(true);
 			}
