@@ -633,11 +633,14 @@ float2 acrossA = float2(0.70710678, 0.70710678);
 float2 alongA = float2(0.70710678, -0.70710678);
 float2 acrossB = float2(0.70710678, -0.70710678);
 float2 alongB = float2(0.70710678, 0.70710678);
-float t = topA ? sN.x : sN.y;
-float s = topA ? -sin(3.14159265 * (p.y + idx.x)) : sin(3.14159265 * (p.x + idx.y));
+// Picks between the two wires by lerp, not "? :": DirectX 11's shader compiler crashes ("Negate modifier not
+// allowed") when a negated or abs() value goes into a ? : choice (UE 5.6, 2026-11-21).
+float fa = topA ? 1.0 : 0.0;
+float t = lerp(sN.y, sN.x, fa);
+float s = lerp(sin(3.14159265 * (p.x + idx.y)), -sin(3.14159265 * (p.y + idx.x)), fa);
 float slope = bend * 3.14159265 * wire / cell * s; // height change along the wire (bend)
-float2 acr = topA ? acrossA : acrossB;
-float2 alg = topA ? alongA : alongB;
+float2 acr = lerp(acrossB, acrossA, fa);
+float2 alg = lerp(alongB, alongA, fa);
 float tc = clamp(t, -0.95, 0.95);
 float2 n2 = acr * tc - alg * slope;
 // World-space normal, the same on every fence whichever way its sheet faces (a fence's sheet faces one way or the
@@ -646,7 +649,7 @@ float2 n2 = acr * tc - alg * slope;
 // turned towards the camera (the sheet is two-sided).
 float3 Tw = normalize(Tg - float3(0, 0, 1) * dot(Tg, float3(0, 0, 1)));
 float3 Nw = normalize(N);
-if (dot(Nw, C) < 0.0) Nw = -Nw;
+Nw *= dot(Nw, C) < 0.0 ? -1.0 : 1.0;
 float3 n = normalize(Tw * n2.x + float3(0, 0, 1) * n2.y + Nw * sqrt(saturate(1.0 - tc * tc)));
 return float4(max(inA, inB), n);
 """
@@ -669,11 +672,12 @@ float zb = sqrt(saturate(1.0 - sN.y * sN.y)) + bend * wb;
 bool inA = abs(o.x) < wire;
 bool inB = abs(o.y) < wire;
 bool topA = inA && (!inB || za >= zb);
-float w = topA ? wa : wb;                       // +1 where this wire is on top, -1 where it is underneath
+float fa = topA ? 1.0 : 0.0;                    // lerp, not ? : (DirectX 11 compiler bug, see DIAMOND_HLSL)
+float w = lerp(wb, wa, fa);                     // +1 where this wire is on top, -1 where it is underneath
 float dip = lerp(0.55, 1.0, saturate(w * 0.5 + 0.5));
 // Shadow of the other wire, where that one is on top (its weave > 0) and this pixel is next to it.
-float dOther = topA ? abs(o.y) : abs(o.x);
-float otherTop = topA ? wb : wa;
+float dOther = lerp(abs(o.x), abs(o.y), fa);
+float otherTop = lerp(wa, wb, fa);
 float shadow = (1.0 - smoothstep(wire, wire * 2.2, dOther)) * saturate(otherTop);
 return dip * (1.0 - 0.6 * shadow);
 """
@@ -696,7 +700,7 @@ link(dia, "", gmask, "")
 link(dia, "", gnorm, "")
 MEL.connect_material_property(gmask, "", MP.MP_OPACITY_MASK)
 # Low quality (graphics settings): no round wires, the flat sheet's normal (turned to the camera), like the road looks.
-g_flat = custom(grid, "float3 n = normalize(N); return dot(n, C) < 0.0 ? -n : n;", unreal.CustomMaterialOutputType.CMOT_FLOAT3,
+g_flat = custom(grid, "float3 n = normalize(N); return n * (dot(n, C) < 0.0 ? -1.0 : 1.0);", unreal.CustomMaterialOutputType.CMOT_FLOAT3,
                 ["N", "C"], -450, 600, "FlatSheetNormal")
 link(node(grid, unreal.MaterialExpressionVertexNormalWS, -650, 600), "", g_flat, "N")
 link(node(grid, unreal.MaterialExpressionCameraVectorWS, -650, 680), "", g_flat, "C")

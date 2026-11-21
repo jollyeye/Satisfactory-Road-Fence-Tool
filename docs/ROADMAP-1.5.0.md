@@ -52,6 +52,13 @@ Nothing here is decided in detail yet: each item gets its design written down be
     our code. Its headers also differ from PR #433 in 32 files, including `FGUseableInterface.h` (the 1.4.0 crash),
     `FGPlayerController.h`, `FGBuildableFactory.h` and `FGBuildablePipelinePump.h`. Staying on `pr-433` until master
     builds. Decided: keep everything for 1.5.0, no 1.4.2 unless there is an emergency.
+  - 2026-11-21, later: SML master builds with the new CSS engine **Unreal 5.6.1** (release 5.6.1-css-87, installed in
+    `D:\UE-CSS`; the game 1.2.6 / CL520140 runs on 5.6.1). The user switched `D:\SFMods\SML` to master (also needed
+    for another mod). Road Maker compiled with no errors on 5.6.1 and the game loads it with a save. Found:
+    `M_RoadGridFence` failed to compile for DirectX 11 (SM5; fxc "Negate modifier not allowed", from negated / abs()
+    values in `? :` choices): rewritten with lerp, to check in the next build. A harmless Cast<> warning for
+    `RM_HOOK_SET_LOCATION(AFGPowerPoleHologram)` (runtime IsA checks). `en-US/RoadMaker.locres` is not found by the
+    game (English comes from the source texts, so nothing missing).
 
 - **Road Mode: what tilts with the road** (issue #7, list from the user 2026-11-20; built 2026-11-20, to test): besides our
   road pieces, markings and the game's splines, these now follow the road's slope instead of staying level: everything
