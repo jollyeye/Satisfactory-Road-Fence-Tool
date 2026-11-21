@@ -77,6 +77,15 @@ Nothing here is decided in detail yet: each item gets its design written down be
   tiles. The game's pieces play their own build effect at once (they waited ~5 s for a blueprint group effect).
   The mesh queue no longer takes whole frames. "Road Mode: paid" and the inventory check lines are in the normal log.
 
+- **Road Mode: a tile is as long as its content** (issue #8; asked again by the user 2026-11-21, built, to test): one
+  tile runs from the first thing in the blueprint to the last along the arrow, all content, shorter or longer than the
+  designer's box (it was the box, so a 6 m road in an 8 m blueprint left 2 m gaps). Our roads, paths and fences count
+  by their course (pillars or curbs past an end would leave gaps), the rest by its meshes; ends rounded to 10 cm;
+  nothing measurable: the box as before. Measured once per hologram (`MeasureContent`, cached). The game still centres
+  the hologram on the box, so the aim-point shift uses the box (`BoxX0` / `BoxL`). Trade-off accepted: empty space
+  left on purpose (a lamp in the middle of a 16 m blueprint) is no longer kept; a key to switch back to the designer
+  size can come later if asked. Reply on issue #8 at the 1.5.0 release (with the user's go-ahead).
+
 ## Waiting on something
 - **Traffic lights** (on hold since 2026-11-15): pole + light heads at intersection corners following the
   intersection's state; waits for the Automated Machines mod so the lights can use its alarms / actions.
@@ -95,4 +104,3 @@ Nothing here is decided in detail yet: each item gets its design written down be
 ## Decided against / parked
 - Loading the blueprint once for all Road Mode tiles (2026-11-17: not needed).
 - Fence placement preview at the new spacing (2026-11-17: fine as it is).
-- Road Mode tile length measured from the content instead of the designer size (issue #8, 2026-11-18).

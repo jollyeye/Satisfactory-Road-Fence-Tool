@@ -165,7 +165,8 @@ namespace RMRoadTemplate
 			int32 Step = 0;
 			FTransform StartT; // the hologram at the first click
 			FTransform RoadT;  // the same, turned so X = the blueprint's arrow (the road space everything is measured in)
-			float X0 = 0.f, L = 0.f, Yc = 0.f, Zb = 0.f; // the blueprint box, hologram-local
+			float X0 = 0.f, L = 0.f, Yc = 0.f, Zb = 0.f; // one tile: from the content's start, its length (road space)
+			float BoxX0 = 0.f, BoxL = 0.f; // the designer's box along the arrow (where the game centres the hologram)
 			TArray<TPair<TWeakObjectPtr<USceneComponent>, bool>> Hidden;
 			TArray<FBent> Bents;
 			TArray<FRigid> Rigids;
@@ -571,6 +572,8 @@ namespace RMRoadTemplate
 			GStates.Remove(Self);
 		}
 
+		void MeasureContent(AFGBlueprintHologram* Self, FState& S, bool bLog);
+
 		/** The blueprint's box in hologram space: back edge X0, length L along the arrow, centre Yc, floor Zb. */
 		void MeasureBox(AFGBlueprintHologram* Self, FState& S, bool bLog = true)
 		{
@@ -632,8 +635,99 @@ namespace RMRoadTemplate
 			S.HalfW = Box.GetExtent().Y;
 			S.Height = Box.GetSize().Z;
 			S.Zb = Box.Min.Z;
+			S.BoxX0 = S.X0;
+			S.BoxL = S.L;
 			UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: blueprint box X %.0f..%.0f, Y %.0f..%.0f, floor %.0f (descriptor %dx%dx%d = %.0f cm long)"),
 				Box.Min.X, Box.Max.X, Box.Min.Y, Box.Max.Y, Box.Min.Z, Dim.X, Dim.Y, Dim.Z, DescL);
+			MeasureContent(Self, S, bLog);
+		}
+
+		/**
+		 * One tile is as long as what is in the blueprint, not the designer's box (1.5.0, issue #8): from the first
+		 * thing to the last along the arrow, shorter or longer than the box. Our roads, paths and fences count by their
+		 * course (their pillars or curbs poking past an end would leave gaps between tiles); everything else by its
+		 * meshes. Ends rounded to 10 cm. Nothing measurable (or under 1 m): the designer's box, as before.
+		 */
+		/** Measured once per hologram and blueprint (before the first click the box is measured every frame). */
+		struct FContentSpan { TWeakObjectPtr<UObject> Descriptor; float X0 = 0.f, L = 0.f; };
+		TMap<TWeakObjectPtr<AFGBlueprintHologram>, FContentSpan> GContentSpans;
+
+		void MeasureContent(AFGBlueprintHologram* Self, FState& S, bool bLog)
+		{
+			if (const FContentSpan* Cached = GContentSpans.Find(Self))
+			{
+				if (Cached->Descriptor.Get() == static_cast<UObject*>(Self->mBlueprintDescriptor.Get()) && Self->mBuildableToNewRoot.Num() > 0)
+				{
+					if (Cached->L > 0.f) { S.X0 = Cached->X0; S.L = Cached->L; }
+					return;
+				}
+			}
+			for (auto It = GContentSpans.CreateIterator(); It; ++It)
+			{
+				if (!It.Key().IsValid()) { It.RemoveCurrent(); }
+			}
+			FContentSpan& Span = GContentSpans.FindOrAdd(Self);
+			Span = FContentSpan();
+			Span.Descriptor = Self->mBlueprintDescriptor.Get();
+			float XMin = TNumericLimits<float>::Max(), XMax = -TNumericLimits<float>::Max();
+			const FTransform ToRoad = S.RoadT.Inverse();
+			for (const TPair<TObjectPtr<AFGBuildable>, TObjectPtr<USceneComponent>>& Pair : Self->mBuildableToNewRoot)
+			{
+				USceneComponent* Root = Pair.Value;
+				if (!Root || !Pair.Key)
+				{
+					continue;
+				}
+				if (ARMBuildableSpline* Piece = Cast<ARMBuildableSpline>(Pair.Key.Get()))
+				{
+					TArray<FRMFrame> Own;
+					Piece->GetWorldFrames(Own, 100.f);
+					if (Own.Num() > 1)
+					{
+						const FTransform RootRel = Root->GetComponentTransform().GetRelativeTransform(S.RoadT);
+						const FTransform PieceT = Piece->GetActorTransform();
+						for (const FRMFrame& F : Own)
+						{
+							const float X = RootRel.TransformPosition(PieceT.InverseTransformPosition(F.Pos)).X;
+							XMin = FMath::Min(XMin, X);
+							XMax = FMath::Max(XMax, X);
+						}
+						continue;
+					}
+				}
+				TArray<USceneComponent*> Children;
+				Root->GetChildrenComponents(true, Children);
+				Children.Add(Root);
+				for (USceneComponent* C : Children)
+				{
+					const UMeshComponent* Mesh = Cast<UMeshComponent>(C);
+					if (!Mesh || !Mesh->IsVisible())
+					{
+						continue;
+					}
+					const FBox B = Mesh->Bounds.GetBox().TransformBy(ToRoad);
+					if (B.IsValid)
+					{
+						XMin = FMath::Min(XMin, B.Min.X);
+						XMax = FMath::Max(XMax, B.Max.X);
+					}
+				}
+			}
+			if (Self->mBuildableToNewRoot.Num() == 0)
+			{
+				GContentSpans.Remove(Self); // the preview is not built yet: measure again next time
+			}
+			if (XMax - XMin < 100.f)
+			{
+				UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: nothing to measure, a tile is the designer's box (%.0f cm)"), S.L);
+				return;
+			}
+			S.X0 = FMath::RoundToFloat(XMin / 10.f) * 10.f;
+			S.L = FMath::RoundToFloat(XMax / 10.f) * 10.f - S.X0;
+			Span.X0 = S.X0;
+			Span.L = S.L;
+			UE_CLOG(bLog, LogRoadMaker, Display, TEXT("Road Mode: content X %.0f..%.0f, a tile is %.0f cm (designer's box %.0f cm)"),
+				XMin, XMax, S.L, S.BoxL);
 		}
 
 		void Begin(AFGBlueprintHologram* Self)
@@ -3066,7 +3160,8 @@ namespace RMRoadTemplate
 					else
 					{
 						const FVector BackEdge = Probe.RoadT.TransformPosition(FVector(Probe.X0, Probe.Yc, Probe.Zb));
-						const FVector Middle = Probe.RoadT.TransformPosition(FVector(Probe.X0 + Probe.L * 0.5f, Probe.Yc, Probe.Zb));
+						// The game centres the hologram on the designer's box; the road starts where the content does.
+						const FVector Middle = Probe.RoadT.TransformPosition(FVector(Probe.BoxX0 + Probe.BoxL * 0.5f, Probe.Yc, Probe.Zb));
 						Self->SetActorLocation(Self->GetActorLocation() + (Middle - BackEdge));
 					}
 				}
