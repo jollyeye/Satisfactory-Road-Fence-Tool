@@ -42,6 +42,10 @@ public:
 
 	ARMSignWallSign* GetSign() const { return mSign; }
 
+	/** The hidden sign it makes: the billboard one, or the Label Sign (4m) one for the 1 m sign wall (1.5.0). */
+	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
+	TSubclassOf<ARMSignWallSign> mSignClass;
+
 	/** Material of the face until the hidden sign has its design material (plain dark). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mFrontMaterial = nullptr;

@@ -60,6 +60,13 @@ Nothing here is decided in detail yet: each item gets its design written down be
     Built and checked 2026-11-21: the gather finds 103 distinct asset texts (namespace RoadMakerAssets) and the code
     texts. From now on every new text is localizable (rules in `CLAUDE.md`). Reply to muaxl on issue #9 at the 1.5.0
     release (decided 2026-11-21), with all untranslated entries including the new 1.5.0 buildings.
+- **Sign Wall 1 m** (asked 2026-11-21, built, to test): `FenceWall_SignLow`, the sign wall at `mWallHeight = 100`; its
+  hidden sign is `ARMSignWallSignLabel`, which takes the settings of the game's **Label Sign (4m)** (4 x 0.5 m, found
+  by size: the label sign 8 times as wide as tall, logged "SignWall 1 m: uses ..."), its design scaled up to 8 x 1 m,
+  repeated every 8 m (repeat = height x design width / height). The wall picks its sign class (`mSignClass`); the
+  sign wall's body, face and sign position use the wall's own height. Same cost as the 4 m sign wall, per 8 m; unlocks
+  with the Road Maker milestone; icon (`fencewall_sign_low`); string table + PO entries. Copy / paste and middle-click
+  designs only work between walls of the same height (label layouts vs billboard layouts).
 - **Check placement of objects on the road and under the road** (added 2026-11-21 by the user): to look at what goes
   wrong placing things on top of our roads and below them (details to collect when we start it).
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m

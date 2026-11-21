@@ -1036,3 +1036,15 @@ msgstr ""
 msgctxt "RoadMakerAssets,FenceWall_SteelLow.Desc"
 msgid "1 m steel wall, 0.5 m thick, a solid wall with the look of the game's 1 m steel wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Costs what the 4 m wall does. Cost is per 4 m."
 msgstr ""
+
+#. Key:	FenceWall_SignLow.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_SignLow.Name"
+msgid "Sign Wall 1 m"
+msgstr ""
+
+#. Key:	FenceWall_SignLow.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,FenceWall_SignLow.Desc"
+msgid "1 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of a 4 m Label Sign, scaled up to 8 x 1 m). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Ends and top in matte metal, circuit grooves on the back. Costs what the 4 m sign wall does. Cost is per 8 m."
+msgstr ""

@@ -126,8 +126,9 @@ void ARMBuildableSignWall::EnsureSign()
 	// Inside the wall, at the middle of its length and height, facing the road side.
 	const FRMFrame& Mid = Frames[Frames.Num() / 2];
 	const FVector Front = FVector(Mid.Right.X, Mid.Right.Y, 0.f).GetSafeNormal() * GetInwardSign();
-	const FTransform At(Front.Rotation(), Mid.Pos + FVector::UpVector * GetWallHeight() * 0.5f);
-	ARMSignWallSign* Sign = GetWorld()->SpawnActorDeferred<ARMSignWallSign>(ARMSignWallSign::StaticClass(), At, nullptr, nullptr,
+	const FTransform At(Front.Rotation(), Mid.Pos + FVector::UpVector * GetHeight() * 0.5f);
+	UClass* SignClass = mSignClass ? mSignClass.Get() : ARMSignWallSign::StaticClass();
+	ARMSignWallSign* Sign = GetWorld()->SpawnActorDeferred<ARMSignWallSign>(SignClass, At, nullptr, nullptr,
 		ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Sign)
 	{
@@ -252,7 +253,7 @@ float ARMBuildableSignWall::GetRepeatLength() const
 {
 	// The design keeps its proportions: as tall as the wall, as wide as that makes it.
 	const FVector2D Size = mSign ? mSign->GetDesignSize() : FVector2D(800.f, 400.f);
-	return GetWallHeight() * Size.X / FMath::Max(Size.Y, 1.f);
+	return GetHeight() * Size.X / FMath::Max(Size.Y, 1.f); // 8 m: the billboard on 4 m, the 4 m label sign on 1 m
 }
 
 void ARMBuildableSignWall::CheckDesignMaterial()
@@ -332,7 +333,7 @@ void ARMBuildableSignWall::RebuildMesh()
 			RMGeometry::MirrorFrames(Frames);
 		}
 		FRMMesh Face;
-		RMGeometry::BuildSignWallFace(Frames, Face, GetWallHeight(), 50.f, Repeat);
+		RMGeometry::BuildSignWallFace(Frames, Face, GetHeight(), 50.f, Repeat);
 		if (Level == 0)
 		{
 			ApplyNearSection(Face, 2, false, Front);

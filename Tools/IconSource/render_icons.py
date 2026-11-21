@@ -359,14 +359,16 @@ def fence_wall(sc, kind="concrete", H=4.0):
         # The sign wall: metal body (the grid fence's metal), a black design face with orange text on the road side.
         metal = np.array([128, 133, 140.0])
         box(sc, (L / 2, 0, H / 2), L / 2, T / 2, H / 2, metal)
-        b = 0.12  # metal rim left round the face
+        b = 0.12 if H >= 4.0 else 0.06  # metal rim left round the face
         black = np.array([14, 15, 18.0])
         stripe(b, L - b, b, H - b, black)
         from PIL import ImageFont
-        tw, th = 1200, 800
+        # The text texture keeps the face's proportions (a long low strip on the 1 m wall).
+        tw = 1200
+        th = 800 if H >= 4.0 else max(60, int(tw * (H - 2 * b) / (L - 2 * b)))
         tex = Image.new("RGBA", (tw, th), (0, 0, 0, 0))
         dt = ImageDraw.Draw(tex)
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", 330)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", 330 if H >= 4.0 else int(th * 0.8))
         text = "FICSIT"
         box_ = dt.textbbox((0, 0), text, font=font)
         w_, h_ = box_[2] - box_[0], box_[3] - box_[1]
@@ -835,6 +837,7 @@ elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")
 elif what == "fencewall_sign": fence_wall(sc, "sign")
+elif what == "fencewall_sign_low": fence_wall(sc, "sign", H=1.0)
 elif what == "fencewall_low": fence_wall(sc, "concrete", H=1.0)
 elif what == "fencewall_ficsit_low": fence_wall(sc, "ficsit", H=1.0)
 elif what == "fencewall_steel_low": fence_wall(sc, "steel", H=1.0)

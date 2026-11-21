@@ -481,7 +481,7 @@ FENCE_WALLS = {"FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel", "Fen
 TALL_LOOKS = ("FenceWall_Concrete", "FenceWall_Ficsit", "FenceWall_Steel")
 LOW_LOOKS = ("FenceWall_ConcreteLow", "FenceWall_FicsitLow", "FenceWall_SteelLow")
 # Everything in the Walls tab, Fence Walls section (the steel mesh wall too).
-WALLS_MENU = FENCE_WALLS | {"Fence_GridTall", "FenceWall_Sign"}
+WALLS_MENU = FENCE_WALLS | {"Fence_GridTall", "FenceWall_Sign", "FenceWall_SignLow"}
 
 basic_steel = None
 for sname in ("Schematic_3-1", "Schematic_3-2", "Schematic_3-3", "Schematic_3-4"):
@@ -604,6 +604,8 @@ TOOLS = [
      {"m_fence_type": "FICSIT_WALL", "m_edge_inset": 0.0, "m_wall_height": 100.0}, COST_FICSIT_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_Sign", RMBuildableSignWall, holo_fence, "Sign Wall", "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 8 m, like a Small Billboard.",
      {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0}, [(Desc_EncasedBeam, 3), (Desc_CopperSheet, 4), (Desc_CrystalOscillator, 1)], fence_icons, {}),
+    ("FenceWall_SignLow", RMBuildableSignWall, holo_fence, "Sign Wall 1 m", "1 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of a 4 m Label Sign, scaled up to 8 x 1 m). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Ends and top in matte metal, circuit grooves on the back. Costs what the 4 m sign wall does. Cost is per 8 m.",
+     {"m_fence_type": "SIGN_WALL", "m_edge_inset": 0.0, "m_wall_height": 100.0, "m_sign_class": native_class("RMSignWallSignLabel")}, [(Desc_EncasedBeam, 3), (Desc_CopperSheet, 4), (Desc_CrystalOscillator, 1)], fence_icons, {}),
     ("FenceWall_Steel", RMBuildableFence, holo_fence, "Steel Fence Wall", "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m.",
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0}, COST_STEEL_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("FenceWall_SteelLow", RMBuildableFence, holo_fence, "Steel Fence Wall 1 m", "1 m steel wall, 0.5 m thick, a solid wall with the look of the game's 1 m steel wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Costs what the 4 m wall does. Cost is per 4 m.",
@@ -629,7 +631,7 @@ TOOLS = [
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
               "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
-              "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7, "FenceWall_SteelLow": 8}
+              "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7, "FenceWall_SteelLow": 8, "FenceWall_SignLow": 9}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
 MarkingKindEnum = getattr(unreal, "RMMarkingKind", None)
@@ -850,7 +852,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
             wall_recipes.append(r.generated_class())
         if name == "Fence_GridTall" and basic_steel:
             recipe_unlocked_by[r.generated_class()] = basic_steel
-        if name == "FenceWall_Sign":
+        if name in ("FenceWall_Sign", "FenceWall_SignLow"):
             recipes.append(r.generated_class())  # with the Road Maker milestone
     elif name not in MARKING_TOOLS:
         recipes.append(r.generated_class())

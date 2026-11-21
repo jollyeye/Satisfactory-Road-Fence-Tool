@@ -26,8 +26,8 @@ public:
 	/** Seen from anywhere along a long wall: the wall's half length on top of the sign's own range. */
 	virtual float GetSignificanceRange_Implementation() const override;
 
-	/** The game sign class whose settings this one takes (the 8 x 4 m billboard). */
-	static UClass* GetGameSignClass();
+	/** The game sign class whose settings this one takes (the 8 x 4 m billboard; the label variant: Label Sign (4m)). */
+	virtual UClass* GetGameSignClass() const;
 
 	/** The wall this sign belongs to (set by the wall when it makes the sign). */
 	UPROPERTY(SaveGame, Replicated)
@@ -67,4 +67,17 @@ private:
 
 	UPROPERTY(Transient)
 	UTextureRenderTarget2D* mSignTexture = nullptr;
+};
+
+/**
+ * The hidden sign of the 1 m sign wall (1.5.0): the game's Label Sign (4m), 4 x 0.5 m, an 8:1 design shown scaled up to
+ * 8 x 1 m. Found by its size among the game's label signs (the one 8 times as wide as tall), logged.
+ */
+UCLASS()
+class ROADMAKER_API ARMSignWallSignLabel : public ARMSignWallSign
+{
+	GENERATED_BODY()
+
+public:
+	virtual UClass* GetGameSignClass() const override;
 };

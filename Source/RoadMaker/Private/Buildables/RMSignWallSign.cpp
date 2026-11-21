@@ -25,7 +25,38 @@ void ARMSignWallSign::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutL
 	DOREPLIFETIME(ARMSignWallSign, mExtraRange);
 }
 
-UClass* ARMSignWallSign::GetGameSignClass()
+UClass* ARMSignWallSignLabel::GetGameSignClass() const
+{
+	static TWeakObjectPtr<UClass> Cached;
+	static bool bSearched = false;
+	if (!Cached.IsValid() && !bSearched)
+	{
+		bSearched = true;
+		// The label signs (2, 3 and 4 m): the 4 m one is 8 times as wide as tall.
+		const FStructProperty* DimProp = FindFProperty<FStructProperty>(AFGBuildableWidgetSign::StaticClass(), TEXT("mWorldDimensions"));
+		for (const TCHAR* Name : { TEXT("SmallVeryWide"), TEXT("SmallWide"), TEXT("Small"), TEXT("Medium") })
+		{
+			const FString Path = FString::Printf(TEXT("/Game/FactoryGame/Buildable/Factory/SignDigital/Build_StandaloneWidgetSign_%s.Build_StandaloneWidgetSign_%s_C"), Name, Name);
+			UClass* Class = LoadClass<AFGBuildableWidgetSign>(nullptr, *Path);
+			const FVector2D* Dim = Class && DimProp ? DimProp->ContainerPtrToValuePtr<FVector2D>(Class->GetDefaultObject()) : nullptr;
+			UE_LOG(LogRoadMaker, Display, TEXT("SignWall 1 m: game sign %s: %s, %s"), Name, Class ? TEXT("found") : TEXT("missing"),
+				Dim ? *Dim->ToString() : TEXT("no size"));
+			if (Dim && Dim->Y > 1.f && FMath::IsNearlyEqual(Dim->X / Dim->Y, 8.f, 0.5f))
+			{
+				Cached = Class;
+				UE_LOG(LogRoadMaker, Display, TEXT("SignWall 1 m: uses %s (%.0f x %.0f cm)"), *Class->GetName(), Dim->X, Dim->Y);
+				break;
+			}
+		}
+		if (!Cached.IsValid())
+		{
+			UE_LOG(LogRoadMaker, Warning, TEXT("SignWall 1 m: no 8:1 label sign found, using the billboard"));
+		}
+	}
+	return Cached.IsValid() ? Cached.Get() : Super::GetGameSignClass();
+}
+
+UClass* ARMSignWallSign::GetGameSignClass() const
 {
 	static TWeakObjectPtr<UClass> Cached;
 	if (!Cached.IsValid())
@@ -46,7 +77,7 @@ void ARMSignWallSign::CopyGameSignDefaults()
 	UClass* Game = GetGameSignClass();
 	if (!Game)
 	{
-		UE_LOG(LogRoadMaker, Warning, TEXT("SignWall: %s not found, the sign wall shows no design"), GGameSignPath);
+		UE_LOG(LogRoadMaker, Warning, TEXT("SignWall: game sign not found, the sign wall shows no design"));
 		return;
 	}
 	const UObject* CDO = Game->GetDefaultObject();
