@@ -115,43 +115,62 @@ void ARMBuildableTunnel::BuildTunnelMesh(const TArray<FVector>& Left, const TArr
 		Along.Add(I == 0 ? 0.f : Along.Last() + D);
 	}
 
-	for (int32 I = 0; I + 1 < N; ++I)
+	// Vertices shared between neighbouring quads: one ring of points per cross-section for each face (inner, outer) and
+	// one pair per foot. A ring is only made again where the blocks' "metres along" are counted from a new start: UVs are
+	// half floats, so on long tunnels they restart every 64 m or so (at a whole block row, the pattern seamless).
+	constexpr float UVRestart = 64.f;
+	const int32 RingSize = S + 1;
+	auto MakeRing = [&](int32 I, float Base, TArray<int32>& OutRing)
 	{
-		const FSection& A = Sections[I];
-		const FSection& B = Sections[I + 1];
-		// Metres along counted from a whole block row below this stretch (UVs are half floats: long tunnels band).
-		const float Base = FMath::FloorToFloat(Along[I] / 4.f) * 4.f;
-		const float UA = Along[I] - Base;
-		const float UB = Along[I + 1] - Base;
-		// Inner (Offset -HalfT, facing in) and outer (+HalfT, facing out) faces.
+		const FSection& Sec = Sections[I];
+		const float U = Along[I] - Base;
+		OutRing.Reset();
 		for (const float Offset : { -HalfT, HalfT })
 		{
 			const float Sign = Offset < 0.f ? -1.f : 1.f;
-			for (int32 K = 0; K < S; ++K)
+			for (int32 K = 0; K <= S; ++K)
 			{
-				const float PA0 = A.Angle(K, S), PA1 = A.Angle(K + 1, S);
-				const float PB0 = B.Angle(K, S), PB1 = B.Angle(K + 1, S);
-				const float SA0 = (PA0 + A.Half) * (A.Radius + Offset) / 100.f, SA1 = (PA1 + A.Half) * (A.Radius + Offset) / 100.f;
-				const float SB0 = (PB0 + B.Half) * (B.Radius + Offset) / 100.f, SB1 = (PB1 + B.Half) * (B.Radius + Offset) / 100.f;
-				const int32 V0 = Vertex(Out, A.Point(PA0, Offset), A.Dir(PA0) * Sign, UA, SA0);
-				const int32 V1 = Vertex(Out, A.Point(PA1, Offset), A.Dir(PA1) * Sign, UA, SA1);
-				const int32 V2 = Vertex(Out, B.Point(PB1, Offset), B.Dir(PB1) * Sign, UB, SB1);
-				const int32 V3 = Vertex(Out, B.Point(PB0, Offset), B.Dir(PB0) * Sign, UB, SB0);
-				const float PM = (PA0 + PA1) * 0.5f;
-				Quad(Out, V0, V1, V2, V3, A.Dir(PM) * Sign);
+				const float Phi = Sec.Angle(K, S);
+				OutRing.Add(Vertex(Out, Sec.Point(Phi, Offset), Sec.Dir(Phi) * Sign, U, (Phi + Sec.Half) * (Sec.Radius + Offset) / 100.f));
 			}
 		}
-		// The two feet (flat strips across the thickness, facing down along the arc).
+		// The feet: inner and outer corner of each (flat, facing down along the arc).
 		for (const int32 K : { 0, S })
 		{
-			const float PA = A.Angle(K, S), PB = B.Angle(K, S);
-			const FVector Foot = K == 0 ? -A.Tangent(PA) : A.Tangent(PA);
-			const int32 V0 = Vertex(Out, A.Point(PA, -HalfT), Foot, UA, 0.f);
-			const int32 V1 = Vertex(Out, A.Point(PA, HalfT), Foot, UA, Thickness / 100.f);
-			const int32 V2 = Vertex(Out, B.Point(PB, HalfT), Foot, UB, Thickness / 100.f);
-			const int32 V3 = Vertex(Out, B.Point(PB, -HalfT), Foot, UB, 0.f);
-			Quad(Out, V0, V1, V2, V3, Foot);
+			const float Phi = Sec.Angle(K, S);
+			const FVector Foot = K == 0 ? -Sec.Tangent(Phi) : Sec.Tangent(Phi);
+			OutRing.Add(Vertex(Out, Sec.Point(Phi, -HalfT), Foot, U, 0.f));
+			OutRing.Add(Vertex(Out, Sec.Point(Phi, HalfT), Foot, U, Thickness / 100.f));
 		}
+	};
+	float Base = 0.f;
+	TArray<int32> RingA, RingB;
+	MakeRing(0, Base, RingA);
+	for (int32 I = 0; I + 1 < N; ++I)
+	{
+		if (Along[I + 1] - Base > UVRestart)
+		{
+			Base = FMath::FloorToFloat(Along[I] / 4.f) * 4.f;
+			MakeRing(I, Base, RingA); // this cross-section again, counted from the new start
+		}
+		MakeRing(I + 1, Base, RingB);
+		const FSection& A = Sections[I];
+		for (int32 Face = 0; Face < 2; ++Face)
+		{
+			const float Sign = Face == 0 ? -1.f : 1.f;
+			for (int32 K = 0; K < S; ++K)
+			{
+				const int32 J = Face * RingSize + K;
+				Quad(Out, RingA[J], RingA[J + 1], RingB[J + 1], RingB[J], A.Dir((A.Angle(K, S) + A.Angle(K + 1, S)) * 0.5f) * Sign);
+			}
+		}
+		for (int32 Foot = 0; Foot < 2; ++Foot)
+		{
+			const int32 J = 2 * RingSize + Foot * 2;
+			const float Phi = A.Angle(Foot == 0 ? 0 : S, S);
+			Quad(Out, RingA[J], RingA[J + 1], RingB[J + 1], RingB[J], Foot == 0 ? -A.Tangent(Phi) : A.Tangent(Phi));
+		}
+		Swap(RingA, RingB);
 	}
 
 	// The two cut ends: the arch's cross-section, facing out of the tunnel.
