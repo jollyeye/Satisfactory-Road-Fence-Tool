@@ -73,6 +73,19 @@ Nothing here is decided in detail yet: each item gets its design written down be
   was updated. Now the fallback repeat is 8 m and the face is rebuilt when the repeat length changes.
 - **Scroll turns a wall stacked on another wall round** (asked 2026-11-21, built, to test): stacking snapped it facing
   like the wall below with no way to turn it; now a scroll step flips it, like on a road edge.
+- **Lane Text** (design decided 2026-11-22, not built): text painted along a lane, written vertically: one upright
+  character after another down the lane, each as big as the lane numbers, read from top to bottom looking down the
+  lane (the first character farthest, the last nearest; the characters' tops point away from the viewer).
+  - Any language (option B): the game's font draws each character into one shared glyph texture of the characters
+    used so far (Chinese / Japanese included); each character is a tile draped on the road like the other markings,
+    following the lane's curve.
+  - Placing: a new "Lane Text" option in the customizer's Road Lines tab, aim at a lane and click; the text runs from
+    the aimed point along the lane. E opens the game's sign editor through a hidden game sign inside the marking (the
+    sign wall's trick: text field, saving, multiplayer, copy / paste). Middle click copies, dismantles like the others.
+  - Look: like the other markings: the road's primary colour on asphalt / concrete, the secondary colour glowing on
+    cyberpunk (the same x4 glow as the lines); materials `M_RoadMarking` / `M_RoadMarkingCyber` with the glyph texture
+    as an opacity mask (new masked versions). Paint gun works like on the other markings.
+  - Saves: only a new marking type. UI texts translatable (CLAUDE.md).
 - **Placement of objects on the road and under the road** (added 2026-11-21 by the user; first part built, to test):
   - Foundations, ramps and frames aimed at the top of a road or intersection sat with their middle on the surface (the
     game puts their origin, half way up, at the hit): now the game's placement, then up by half their height
@@ -176,8 +189,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
 - **Integration with Automated Machines** (postponed 2026-11-12): name-based contract through reflection (`AM_GetAlarms`,
   `AM_GetActions`, `AM_DoAction`, `AM_OnAlarm`); intersection "vehicle enters / busy / clear", road "vehicle on road",
   boom barrier and traffic light actions.
-- **Road text marking** (on hold since 2026-11-13): text painted on a lane in any language, drawn with the game's font
-  into a texture at run time.
+- **Road text marking** (on hold since 2026-11-13; design decided 2026-11-22, moved to Planned): see "Lane Text" above.
 
 ## Loose ends from 1.4.0 (optional)
 - Road Mode: round off splines on very tight inside curves; multiplayer with a client still untested; issue #7: let
