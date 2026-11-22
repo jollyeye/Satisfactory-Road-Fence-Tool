@@ -283,6 +283,8 @@ RMRoadMergeHologram = native_class("RMRoadMergeHologram")
 RMRoadJoinHologram = native_class("RMRoadJoinHologram")
 RMFenceJoinHologram = native_class("RMFenceJoinHologram")
 RMGantryHologram = native_class("RMGantryHologram")
+RMTunnelHologram = native_class("RMTunnelHologram")
+RMBuildableTunnel = native_class("RMBuildableTunnel")
 RMBuildableGantry = native_class("RMBuildableGantry")
 RMBuildableMarking = native_class("RMBuildableMarking")
 RMMarkingHologram = native_class("RMMarkingHologram")
@@ -435,6 +437,8 @@ finish(holo_adjust)
 
 holo_gantry = make_bp("Holograms", "Holo_SignGantry", RMGantryHologram)
 finish(holo_gantry)
+holo_tunnel = make_bp("Holograms", "Holo_Tunnel", RMTunnelHologram)
+finish(holo_tunnel)
 
 holo_marking = make_bp("Holograms", "Holo_Marking", RMMarkingHologram)
 finish(holo_marking)
@@ -612,6 +616,8 @@ TOOLS = [
      {"m_fence_type": "STEEL_WALL", "m_edge_inset": 0.0, "m_wall_height": 100.0}, COST_STEEL_WALL, fence_icons, {"m_main_material": mat_concrete}),
     ("SignGantry", RMBuildableGantry, holo_gantry, "Sign Gantry", "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel.",
      {}, [(Desc_SteelBeam, 1), (Desc_SteelPipe, 1)], road_icons, {"m_main_material": mat_metal}),
+    ("Tunnel", RMBuildableTunnel, holo_tunnel, "Tunnel Arch", "A rounded concrete arch over roads, a tunnel shell following their curve. Click the first side: a road or walking path edge, or a fence wall (the arch then rises from its top). Click the other side: the same road's other edge, the far edge of a road beside it, or another fence wall; the arch spans everything between and runs along the whole stretch where the two sides run side by side (cut the road or fence for a shorter tunnel). Then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click to build. Ceiling lights hang inside it. Paintable. Cost is per 16 m2 of shell.",
+     {}, COST_CONCRETE_WALL, road_icons, {}),
     ("LaneArrow", RMBuildableMarking, holo_marking, "Lane Arrow", "Paints an arrow on a lane of a road. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the arrow (straight, left, right, straight or left, straight or right, left or right). It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
      {"m_kind": "ARROW"}, [], road_icons, {}),
     ("LaneNumber", RMBuildableMarking, holo_marking, "Lane Number", "Paints a single digit (0 to 9) on a lane of a road, for speed limits and lane numbers. Aim at a road: it snaps to the middle of the lane you aim at and reads upright for traffic driving the way you are looking along the road. The mouse wheel picks the digit. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
@@ -631,7 +637,7 @@ TOOLS = [
 ]
 
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
-              "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
+              "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9, "Tunnel": 10,
               "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "LaneText": 4, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
               "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7, "FenceWall_SteelLow": 8, "FenceWall_SignLow": 9}
 
@@ -762,7 +768,7 @@ for (name, parent, holo, display, desc, props, cost, icons, mats) in TOOLS:
     for k, m in mats.items():
         if m:
             setp(c, m, k)
-    if parent in (RMBuildableRoad, RMBuildableIntersection, RMBuildableMarking):
+    if parent in (RMBuildableRoad, RMBuildableIntersection, RMBuildableMarking, RMBuildableTunnel):
         setp(c, True, "allow_coloring", "m_allow_coloring", "mAllowColoring")
         setp(c, None, "m_default_swatch_customization_override", "mDefaultSwatchCustomizationOverride")
     if name in FENCE_WALLS:

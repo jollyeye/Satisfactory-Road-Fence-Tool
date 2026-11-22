@@ -1114,3 +1114,57 @@ msgstr ""
 msgctxt "RoadMakerAssets,RoadLines.MarkText.Desc"
 msgid "Paints text down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest); any language. Picking it opens a box to write the text (R opens it again). Aim at a road: the ghost shows the text in the middle of the lane you aim at; the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click on painted text copies it."
 msgstr ""
+
+#. Key:	TunnelPickSides
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TunnelPickSides"
+msgid "Click both sides of the tunnel: road or walking path edges, or fence walls"
+msgstr ""
+
+#. Key:	TunnelNotBeside
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,TunnelNotBeside"
+msgid "The two sides do not run side by side (3 to 60 m apart)"
+msgstr ""
+
+#. Key:	TunnelArcHint
+#: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
+msgctxt "RoadMaker,TunnelArcHint"
+msgid "Arc: {0}° (aim up or down; click to build)"
+msgstr ""
+
+#. Key:	TunnelDropFirst
+#: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
+msgctxt "RoadMaker,TunnelDropFirst"
+msgid "Tunnel: click to drop this side"
+msgstr ""
+
+#. Key:	TunnelNotBesideHint
+#: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
+msgctxt "RoadMaker,TunnelNotBesideHint"
+msgid "Tunnel: this side does not run beside the first one"
+msgstr ""
+
+#. Key:	TunnelSecondSide
+#: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
+msgctxt "RoadMaker,TunnelSecondSide"
+msgid "Tunnel: click the other side"
+msgstr ""
+
+#. Key:	TunnelFirstSide
+#: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
+msgctxt "RoadMaker,TunnelFirstSide"
+msgid "Tunnel: click the first side (a road or walking path edge, or a fence wall)"
+msgstr ""
+
+#. Key:	Tunnel.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,Tunnel.Name"
+msgid "Tunnel Arch"
+msgstr ""
+
+#. Key:	Tunnel.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,Tunnel.Desc"
+msgid "A rounded concrete arch over roads, a tunnel shell following their curve. Click the first side: a road or walking path edge, or a fence wall (the arch then rises from its top). Click the other side: the same road's other edge, the far edge of a road beside it, or another fence wall; the arch spans everything between and runs along the whole stretch where the two sides run side by side (cut the road or fence for a shorter tunnel). Then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click to build. Ceiling lights hang inside it. Paintable. Cost is per 16 m2 of shell."
+msgstr ""

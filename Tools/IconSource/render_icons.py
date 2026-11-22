@@ -767,6 +767,21 @@ def sign_gantry(sc):
     sc.quad((xf, 1.5, 6.9), (xf, 3.7, 6.9), (xf, 2.6, 6.2), (xf, 2.6, 6.2), W, layer=2, two=True, shade=False)
 
 
+def tunnel_icon(sc):
+    """A straight road under a rounded concrete arch (the Tunnel Arch), the road running out of both ends."""
+    road(sc, 16, 2, length=20.0, bend=0.0)
+    R = 8.0; T = 0.6; x0, x1 = 6.0, 14.0; S = 18
+    SHELL = np.array([196, 192, 184.0])
+    def pt(x, k, r):
+        a = math.pi * k / S
+        return (x, -r * math.cos(a), r * math.sin(a))
+    for k in range(S):
+        for r in (R - T / 2, R + T / 2):
+            sc.quad(pt(x0, k, r), pt(x0, k + 1, r), pt(x1, k + 1, r), pt(x1, k, r), SHELL, layer=1, two=True)
+        for x in (x0, x1):
+            sc.quad(pt(x, k, R - T / 2), pt(x, k + 1, R - T / 2), pt(x, k + 1, R + T / 2), pt(x, k, R + T / 2), SHELL, layer=1, two=True)
+
+
 def marking_icon(sc, kind):
     """A straight road with a big white arrow (or the digit 5) painted on it."""
     road(sc, 8, 1, length=18.0, bend=0.0)
@@ -836,6 +851,7 @@ elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
 elif what == "gantry": sign_gantry(sc)
+elif what == "tunnel": tunnel_icon(sc)
 elif what == "lanearrow": marking_icon(sc, "arrow")
 elif what == "lanenumber": marking_icon(sc, "digit")
 elif what == "lanevehicle": marking_icon(sc, "vehicle")

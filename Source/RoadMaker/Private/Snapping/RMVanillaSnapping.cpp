@@ -34,6 +34,7 @@
 #include "UObject/UnrealType.h"
 #include "WheeledVehicles/FGVehiclePathSegment.h"
 #include "WheeledVehicles/FGVehiclePathNode.h"
+#include "Buildables/RMBuildableTunnel.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "Buildables/FGBuildableFoundation.h"
 #include "Hologram/FGFoundationHologram.h"
@@ -3406,6 +3407,10 @@ namespace
 		{
 			OutFwd = Actor->GetActorForwardVector();
 		}
+		else if (const ARMBuildableTunnel* Tunnel = Cast<ARMBuildableTunnel>(Actor))
+		{
+			OutFwd = Tunnel->GetDirectionAt(Hit.ImpactPoint); // the inside of a tunnel's arch, near its top (1.5.0)
+		}
 		else
 		{
 			return false;
@@ -3928,6 +3933,7 @@ void RMVanillaSnapping::InstallHooks()
 				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableFence::StaticClass());
 				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableRoad::StaticClass());
 				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableIntersection::StaticClass());
+				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableTunnel::StaticClass());
 			}
 		});
 	// Logged after the placement is finished (2026-11-22: right after SetHologramLocationAndRotation the game had not

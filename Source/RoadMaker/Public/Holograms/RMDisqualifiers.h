@@ -262,3 +262,19 @@ class ROADMAKER_API URMCD_FillCrosses : public UFGConstructDisqualifier
 public:
 	URMCD_FillCrosses() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "FillCrosses", "The outline crosses itself"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_TunnelPickSides : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_TunnelPickSides() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "TunnelPickSides", "Click both sides of the tunnel: road or walking path edges, or fence walls"); }
+};
+
+UCLASS()
+class ROADMAKER_API URMCD_TunnelNotBeside : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_TunnelNotBeside() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "TunnelNotBeside", "The two sides do not run side by side (3 to 60 m apart)"); }
+};

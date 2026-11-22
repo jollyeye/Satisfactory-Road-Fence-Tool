@@ -1525,6 +1525,7 @@ ASSIGN = {
     "Build_WalkingPath_2m": ROAD_LOOKS,
     "Build_WalkingPath_4m": ROAD_LOOKS,
     "Build_SignGantry": {"m_main_material": steel},
+    "Build_Tunnel": {"m_shell_material": pavers},  # the walking path's concrete blocks, turned 90 degrees (UV1 in code)
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,

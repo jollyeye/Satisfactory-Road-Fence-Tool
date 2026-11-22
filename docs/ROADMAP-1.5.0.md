@@ -27,16 +27,19 @@ Nothing here is decided in detail yet: each item gets its design written down be
   becomes a property of the wall type. To decide: separate buildings in the menu or a height option on each wall;
   cost per 4 m scaled by height (1/4); how the panel textures and the steel wall's cells fit 1 m; stacking (four 1 m
   walls = one 4 m wall?); wall attachments and the snap rules on a low wall.
-- **Tunnel** (added 2026-11-20): a road (and walking path) enclosed in a tunnel shell following the road's curve: side
-  walls and a ceiling, lights along it, portals at the ends. To decide first, because it shapes everything else:
-  - Terrain: Satisfactory cannot dig the landscape, and its collision stays inside the hill. Options: a tunnel only as
-    an above-ground / covered road (cut-and-cover look, gallery, snow shed), or one placed into a hill where the road
-    inside rides above the landscape collision (the road surface is ours, so vehicles and players drive on it, but the
-    terrain may still poke through the floor or walls on curves and bumps).
-  - Shape: one piece that wraps a road of a given width (1 to 4 lanes, with or without walking paths), or wall + roof
-    pieces snapping to road edges like the fence walls.
-  - Lighting inside (the game's light sources along the ceiling, or emissive strips in the material), the map (show
-    it as a covered road), Road Mode (a tunnel in a blueprint stretched along the curve like the fence walls).
+- **Tunnel** (added 2026-11-20; design decided and built 2026-11-22, to test): **Tunnel Arch** (`Build_Tunnel`,
+  `ARMBuildableTunnel` + `ARMTunnelHologram`), in the build menu with the roads.
+  - Decided 2026-11-22: a covered road above ground (the game cannot dig: hills keep their collision). One shell piece,
+    made by clicks: the first side (a road / walking path edge, or a fence wall: the arch rises from its top), the
+    other side (the same road's other edge, a parallel road's far edge, or another fence wall: one arch spans
+    everything between), then the aim sets the arc (5 degree steps, 10 up to a semicircle; the angle shown on screen,
+    `RMScreenHint`), click builds. No length step: it runs the whole stretch where the two sides run side by side
+    (straight across, 3 to 60 m apart); shorter = cut the road or fence. Rounded arch, 18 pieces around, 0.5 m thick,
+    plain cut ends, no portals, no lights (the game's ceiling lights, the belt ceiling mount and the wall outlet hang
+    inside it near its top, like under roads). Material: the walking path's concrete blocks (`M_RoadPavers`) turned
+    90 degrees (UV1 = metres along / around), paintable with the road swatches. Cost: the game's concrete wall per
+    16 m^2 of shell. Saved: the two feet lines (one point per cross-section, thinned where straight) and the arc.
+  - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
 - **Boom barrier** (moved here from 1.4.0 on 2026-11-16; concept image `docs/concepts/boom-barrier-concept.png`): the
   striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it,
   snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe
