@@ -82,12 +82,14 @@ Nothing here is decided in detail yet: each item gets its design written down be
   - A paint job, not editable (decided 2026-11-22): to change it, dismantle and paint again. The text is set before
     painting: choosing "Lane Text" in the customizer's Road Lines tab opens a small text box (our own window, built in
     code like the old lane menu, translatable labels); it stays until changed; E while holding the tool opens it again
-    (key to confirm). Aiming at a lane previews the text on the hologram along the lane (curve, road colours); click
+    R, as markings have no build modes (decided 2026-11-22; E is the game's Quick Switch menu). Aiming at a lane previews the text on the hologram along the lane (curve, road colours); click
     paints it. Middle click on painted text copies it into the tool (clone). No hidden sign, no sign editor.
   - Look: like the other markings: the road's primary colour on asphalt / concrete, the secondary colour glowing on
     cyberpunk (the same x4 glow as the lines); materials `M_RoadMarking` / `M_RoadMarkingCyber` with the glyph texture
     as an opacity mask (new masked versions). Paint gun works like on the other markings.
   - Saves: only a new marking type. UI texts translatable (CLAUDE.md).
+- **Road Lines icons in the Quick Switch radial menu** (found 2026-11-22, built, to test): E with a Road Lines option
+  in hand showed bare white / magenta discs; see GAME-UI-GUIDE "Quick Switch radial menu".
 - **Placement of objects on the road and under the road** (added 2026-11-21 by the user; first part built, to test):
   - Foundations, ramps and frames aimed at the top of a road or intersection sat with their middle on the surface (the
     game puts their origin, half way up, at the hit): now the game's placement, then up by half their height

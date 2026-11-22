@@ -162,6 +162,14 @@ visible `*HotbarEntry*` widget, read its shortcut through the first object prope
 `UFGHotbarShortcut` (reflection), and if it holds a Road Lines recipe, give the `mIcon` image a MID
 of the same material (if it has none) with `Texture` = `GetDisplayImage()` and `IsColor` = 0.
 
+### Our options in the Quick Switch radial menu (E)
+With a Road Lines option in hand, E opens the game's radial menu of the options in the same category. Its slots
+showed the bare `MM_UI_CustomiserIcon` (white / magenta discs, screenshot 2026-11-22): the same gap as the hotbar.
+Fix (`FixOtherCustomiserIcons` in `RMRoadLinePaint.cpp`, on the hotbar ticker): any visible `*CustomiserIcon*` widget
+whose `mIcon` is bare (no `Texture`, or no instance) gets its option from its own widget or a widget around it (a
+property holding a hotbar shortcut, a customization recipe or the descriptor class), and that option's big icon with
+`IsColor` = 0. Each widget chain is logged once ("Road Lines icons: bare customizer picture in ...").
+
 ### Icons themselves
 `Tools/IconSource/render_icons.py` (Python + PIL) draws the pictures into `Tools/Icons`;
 `create_assets.py` imports every PNG there as a texture.

@@ -1029,9 +1029,137 @@ namespace
 	 * with the bare material (a white / magenta swatch). Fill it in the way the game does for
 	 * materials: a dynamic instance with Texture = the option's icon and IsColor = 0.
 	 */
+	/**
+	 * The Road Lines option a widget stands for, if any: one of its properties holds a hotbar shortcut, a customization
+	 * recipe or the option (descriptor) itself. Properties found once per widget class.
+	 */
+	TSubclassOf<UFGFactoryCustomizationDescriptor> FindRoadLinesDesc(UObject* Widget)
+	{
+		auto FromClass = [](UClass* C) -> TSubclassOf<UFGFactoryCustomizationDescriptor>
+		{
+			if (!C)
+			{
+				return nullptr;
+			}
+			if (C->IsChildOf(URMRoadLineDescriptor::StaticClass()))
+			{
+				return C;
+			}
+			if (C->IsChildOf(UFGCustomizationRecipe::StaticClass()))
+			{
+				TSubclassOf<UFGFactoryCustomizationDescriptor> D = UFGCustomizationRecipe::GetCustomizationDescriptor(TSubclassOf<UFGCustomizationRecipe>(C));
+				return D && D->IsChildOf(URMRoadLineDescriptor::StaticClass()) ? D : nullptr;
+			}
+			return nullptr;
+		};
+		for (TFieldIterator<FProperty> It(Widget->GetClass()); It; ++It)
+		{
+			if (const FClassProperty* CP = CastField<FClassProperty>(*It))
+			{
+				if (TSubclassOf<UFGFactoryCustomizationDescriptor> D = FromClass(Cast<UClass>(CP->GetObjectPropertyValue_InContainer(Widget))))
+				{
+					return D;
+				}
+			}
+			else if (const FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(*It))
+			{
+				UObject* V = OP->GetObjectPropertyValue_InContainer(Widget);
+				if (UFGFactoryCustomizationShortcut* S = Cast<UFGFactoryCustomizationShortcut>(V))
+				{
+					if (TSubclassOf<UFGFactoryCustomizationDescriptor> D = FromClass(S->GetCustomizationRecipe()))
+					{
+						return D;
+					}
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	/**
+	 * Other menus that show a customizer option the same way (the E radial menu of options in the same category, asked
+	 * 2026-11-22): a customizer picture left bare (no Texture) whose widget, or a widget around it, stands for a Road Lines
+	 * option gets that option's icon. Logged once per widget class.
+	 */
+	void FixOtherCustomiserIcons()
+	{
+		static TMap<TWeakObjectPtr<UClass>, bool> GIsIconWidget;
+		static TSet<FString> GLogged;
+		for (TObjectIterator<UUserWidget> It; It; ++It)
+		{
+			UUserWidget* IconWidget = *It;
+			if (!IconWidget || IconWidget->IsTemplate() || !IconWidget->IsVisible())
+			{
+				continue;
+			}
+			UClass* C = IconWidget->GetClass();
+			const bool* Known = GIsIconWidget.Find(C);
+			if (!(Known ? *Known : GIsIconWidget.Add(C, C->GetName().Contains(TEXT("CustomiserIcon")))))
+			{
+				continue;
+			}
+			UImage* Image = nullptr;
+			TArray<UWidget*> Widgets;
+			CollectWidgets(IconWidget, Widgets);
+			for (UWidget* W : Widgets)
+			{
+				if (UImage* I = Cast<UImage>(W); I && I->GetName() == TEXT("mIcon"))
+				{
+					Image = I;
+					break;
+				}
+			}
+			UObject* Res = Image ? Image->GetBrush().GetResourceObject() : nullptr;
+			UMaterialInstanceDynamic* Mid = Cast<UMaterialInstanceDynamic>(Res);
+			UTexture* Current = nullptr;
+			if (Mid)
+			{
+				Mid->GetTextureParameterValue(FHashedMaterialParameterInfo(TEXT("Texture")), Current);
+			}
+			if (!Image || !Cast<UMaterialInterface>(Res) || (Mid && Current && !Current->GetName().StartsWith(TEXT("T_RoadLines"))
+				&& !Current->GetName().StartsWith(TEXT("T_Icon"))))
+			{
+				continue; // not a customizer picture, or the game filled it (not bare)
+			}
+			// The option: on the icon widget or a widget around it.
+			TSubclassOf<UFGFactoryCustomizationDescriptor> Desc;
+			TArray<FString> Chain;
+			for (UObject* O = IconWidget; O && !Desc; O = O->GetOuter())
+			{
+				if (UUserWidget* U = Cast<UUserWidget>(O))
+				{
+					Chain.Add(U->GetClass()->GetName());
+					Desc = FindRoadLinesDesc(U);
+				}
+			}
+			const FString Key = FString::Join(Chain, TEXT(" < "));
+			if (!GLogged.Contains(Key) && !Key.Contains(TEXT("HotbarEntry")))
+			{
+				GLogged.Add(Key);
+				UE_LOG(LogRoadMaker, Display, TEXT("Road Lines icons: bare customizer picture in %s -> %s"), *Key, Desc ? *Desc->GetName() : TEXT("no Road Lines option found"));
+			}
+			UTexture2D* Icon = Desc ? UFGItemDescriptor::GetBigIcon(TSubclassOf<UFGItemDescriptor>(Desc.Get())) : nullptr;
+			if (!Icon)
+			{
+				continue;
+			}
+			if (!Mid)
+			{
+				Mid = UMaterialInstanceDynamic::Create(Cast<UMaterialInterface>(Res), Image);
+				Image->SetBrushFromMaterial(Mid);
+			}
+			if (Current != Icon)
+			{
+				Mid->SetTextureParameterValue(TEXT("Texture"), Icon);
+				Mid->SetScalarParameterValue(TEXT("IsColor"), 0.f);
+			}
+		}
+	}
+
 	bool FixRoadLinesHotbarIcons(float)
 	{
 		EnsureVehicleOptionIcon();
+		FixOtherCustomiserIcons();
 		// Whether a widget class is a hotbar entry, decided once per class (no class-name string per widget per pass).
 		static TMap<TWeakObjectPtr<UClass>, bool> GIsHotbarEntry;
 		for (TObjectIterator<UUserWidget> It; It; ++It)
