@@ -3201,6 +3201,13 @@ namespace
 		}
 	}
 
+	/**
+	 * Our surfaces that act as a game wall (fence wall faces) or ceiling (road / intersection undersides). The belt and the
+	 * power line keep their floor pole while it takes the surface and fall back to the wall / ceiling piece when it does
+	 * not (seen 2026-11-22: the game's poles refuse its walls): so the floor poles refuse these, the wall pieces take them.
+	 */
+	bool IsOurWallOrCeiling(const FHitResult& Hit);
+
 	/** Ceiling lights, the conveyor ceiling mount and the single wall outlets: they go under our roads (1.5.0). */
 	bool IsUnderRoadPiece(const AFGHologram* Hologram)
 	{
@@ -3249,6 +3256,27 @@ namespace
 		OutFwd = FVector(OutFwd.X, OutFwd.Y, 0.f).GetSafeNormal();
 		OutLocation = Hit.ImpactPoint;
 		return !OutFwd.IsNearlyZero();
+	}
+
+	bool IsOurWallOrCeiling(const FHitResult& Hit)
+	{
+		FVector L;
+		FVector F;
+		FWallFace Face;
+		return FindRoadUnderside(Hit, L, F) || (FMath::Abs(Hit.ImpactNormal.Z) < 0.5f && FindWallFace(Hit, Face));
+	}
+
+	/** A floor pole the belt / power line puts at its end (not the wall or ceiling pieces). */
+	bool IsFloorPole(const AFGHologram* Hologram)
+	{
+		const UClass* Build = Hologram ? Hologram->GetBuildClass().Get() : nullptr;
+		if (!Build)
+		{
+			return false;
+		}
+		const FString Name = Build->GetName();
+		return (Name.Contains(TEXT("ConveyorPole")) && !Name.Contains(TEXT("Wall")) && !Name.Contains(TEXT("Stackable")))
+			|| (Name.Contains(TEXT("PowerPole")) && !Name.Contains(TEXT("Wall")));
 	}
 
 	/**
@@ -3717,15 +3745,33 @@ void RMVanillaSnapping::InstallHooks()
 			{
 				Scope.Override(true);
 			}
+			else if (IsFloorPole(Hologram) && IsOurWallOrCeiling(Hit))
+			{
+				Scope.Override(false); // like on a game wall / ceiling: the belt takes its wall / ceiling mount
+			}
+		});
+	SUBSCRIBE_METHOD_VIRTUAL(AFGPowerPoleHologram::IsValidHitResult, GetMutableDefault<AFGPowerPoleHologram>(),
+		[](auto& Scope, const AFGPowerPoleHologram* Hologram, const FHitResult& Hit)
+		{
+			if (IsFloorPole(Hologram) && IsOurWallOrCeiling(Hit))
+			{
+				Scope.Override(false); // like on a game wall: the power line takes its wall outlet
+			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL(AFGBuildableHologram::IsValidHitResult, GetMutableDefault<AFGBuildableHologram>(),
 		[](auto& Scope, const AFGBuildableHologram* Hologram, const FHitResult& Hit)
 		{
 			FVector L;
 			FVector F;
+			FWallFace Face;
 			if (IsUnderRoadPiece(Hologram) && FindRoadUnderside(Hit, L, F))
 			{
 				Scope.Override(true); // ceiling lights use the buildable hologram's check
+			}
+			else if (Hologram->IsA<AFGWallAttachmentHologram>() && Hologram->GetBuildClass()
+				&& Hologram->GetBuildClass()->GetName().Contains(TEXT("ConveyorPoleWall")) && FindWallFace(Hit, Face))
+			{
+				Scope.Override(true); // the belt's wall mount on our fence walls
 			}
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWallAttachmentHologram::CheckValidPlacement, GetMutableDefault<AFGWallAttachmentHologram>(),
