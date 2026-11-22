@@ -88,6 +88,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
     cyberpunk (the same x4 glow as the lines); materials `M_RoadMarking` / `M_RoadMarkingCyber` with the glyph texture
     as an opacity mask (new masked versions). Paint gun works like on the other markings.
   - Saves: only a new marking type. UI texts translatable (CLAUDE.md).
+  - Step 1 (2026-11-22, built, to test): `RMLaneText` (Customization/RMLaneText.*): a 2048 render target of 128 px cells
+    (256 characters) drawn on demand with the game's font (runtime / composite font picked automatically, every loaded
+    font logged; `RM.LaneTextFont <name>` picks one); `ARMBuildableMarking::PlanRange` (PlanOn generalised to any
+    stretch of the lane), `TextLength`, `BuildTextMesh` (tiles as long as a lane number, 1.2 wide, 0.5 gap, in half
+    lane widths; first character farthest; cut at the drape samples). No new material: the vehicle icon paint
+    (`M_RoadMarkingIcon` / `...Cyber`) with the glyph texture as its `Icon`. Test: `RM.LaneText [cyber] <text>`.
 - **Road Lines icons in the Quick Switch radial menu** (found 2026-11-22, built, to test): E with a Road Lines option
   in hand showed bare white / magenta discs; see GAME-UI-GUIDE "Quick Switch radial menu".
 - **Placement of objects on the road and under the road** (added 2026-11-21 by the user; first part built, to test):

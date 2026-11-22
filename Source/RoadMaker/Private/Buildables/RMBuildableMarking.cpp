@@ -697,6 +697,22 @@ bool ARMBuildableMarking::FindPlacement(const ARMBuildableRoad* Road, const FVec
 bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, ERMMarkingKind Kind, float SizeMultiplier,
 	FTransform& OutTransform, float& OutWidth, FRMMarkingDrape& OutDrape)
 {
+	float LaneWidth = 200.f;
+	FTransform T;
+	FRMMarkingDrape Probe;
+	if (!PlanRange(Road, Aim, LookDir, 0.f, 0.f, T, LaneWidth, Probe))
+	{
+		return false;
+	}
+	OutWidth = FMath::Min(LaneWidth, MaxLaneWidth) * SizeMultiplier;
+	// The road surface along the lane, every 50 cm over the marking's length (plus a little), in its local space.
+	const float Half = HalfLength(Kind, OutWidth) + 25.f;
+	return PlanRange(Road, Aim, LookDir, -Half, Half, OutTransform, LaneWidth, OutDrape);
+}
+
+bool ARMBuildableMarking::PlanRange(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, float FromX, float ToX,
+	FTransform& OutTransform, float& OutLaneWidth, FRMMarkingDrape& OutDrape)
+{
 	TArray<FRMFrame> Frames;
 	if (Road)
 	{
@@ -708,14 +724,13 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 		return false;
 	}
 	OutTransform = Spot.Transform;
-	OutWidth = FMath::Min(Spot.LaneWidth, MaxLaneWidth) * SizeMultiplier;
-
-	// The road surface along the lane, every 50 cm over the marking's length (plus a little), in its local space.
-	const float Half = HalfLength(Kind, OutWidth) + 25.f;
-	const int32 Count = FMath::Max(2, FMath::CeilToInt(2.f * Half / 50.f) + 1);
+	OutLaneWidth = Spot.LaneWidth;
+	// The road surface along the lane, about every 50 cm from FromX to ToX, in the marking's local space.
+	const float Span = FMath::Max(ToX - FromX, 1.f);
+	const int32 Count = FMath::Max(2, FMath::CeilToInt(Span / 50.f) + 1);
 	OutDrape = FRMMarkingDrape();
-	OutDrape.Step = 2.f * Half / (Count - 1);
-	OutDrape.Start = -Half;
+	OutDrape.Step = Span / (Count - 1);
+	OutDrape.Start = FromX;
 	for (int32 K = 0; K < Count; ++K)
 	{
 		const float X = OutDrape.Start + K * OutDrape.Step;
@@ -725,6 +740,75 @@ bool ARMBuildableMarking::PlanOn(const ARMBuildableRoad* Road, const FVector& Ai
 		OutDrape.Up.Add(OutTransform.InverseTransformVectorNoScale(F.Up));
 	}
 	return true;
+}
+
+namespace
+{
+	// Lane Text tiles (1.5.0): as long as a lane number (its box 1.8 tall, stretched 1.8 along), a little wider than one
+	// (a glyph cell has margins), with a gap between characters. In units of half the drawn width, like the digits.
+	constexpr float TextTileAlong = 1.8f * 1.8f;
+	constexpr float TextTileAcross = 1.2f;
+	constexpr float TextGap = 0.5f;
+}
+
+float ARMBuildableMarking::TextLength(int32 NumChars, float LaneWidth)
+{
+	const float Scale = FMath::Min(LaneWidth, MaxLaneWidth) * 0.5f;
+	return NumChars <= 0 ? 0.f : (NumChars * TextTileAlong + (NumChars - 1) * TextGap) * Scale;
+}
+
+void ARMBuildableMarking::BuildTextMesh(int32 NumChars, TFunctionRef<FBox2D(int32)> CellUV, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape)
+{
+	const float Scale = FMath::Min(LaneWidth, MaxLaneWidth) * 0.5f;
+	const float Len = TextTileAlong * Scale;
+	const float HalfAcross = TextTileAcross * Scale * 0.5f;
+	for (int32 I = 0; I < NumChars; ++I)
+	{
+		// The first character farthest: character I is (NumChars - 1 - I) tiles from the near end.
+		const float X0 = (NumChars - 1 - I) * (TextTileAlong + TextGap) * Scale;
+		const float X1 = X0 + Len;
+		const FBox2D Cell = CellUV(I);
+		// Its top (v min) away from the viewer (X1), its left (u min) on the viewer's left (-Y).
+		auto UVOf = [&](const FVector2D& V)
+		{
+			return FVector2D(FMath::Lerp(Cell.Min.X, Cell.Max.X, (V.Y + HalfAcross) / (2.f * HalfAcross)),
+				FMath::Lerp(Cell.Min.Y, Cell.Max.Y, (X1 - V.X) / Len));
+		};
+		const TArray<FVector2D> Quad = { FVector2D(X0, -HalfAcross), FVector2D(X1, -HalfAcross), FVector2D(X1, HalfAcross), FVector2D(X0, HalfAcross) };
+		auto Emit = [&](const TArray<FVector2D>& Poly)
+		{
+			if (Poly.Num() < 3)
+			{
+				return;
+			}
+			TArray<int32> Ids;
+			FVector Normal = FVector::UpVector;
+			for (const FVector2D& V : Poly)
+			{
+				FVector N = FVector::UpVector;
+				const FVector Pos = Drape && Drape->IsValid() ? Drape->Map(V.X, V.Y, Lift, &N) : FVector(V.X, V.Y, Lift);
+				Normal = N;
+				Ids.Add(Out.AddVertex(Pos, N, UVOf(V), FVector::ForwardVector));
+			}
+			for (int32 K = 1; K + 1 < Ids.Num(); ++K)
+			{
+				Out.AddTriangle(Ids[0], Ids[K], Ids[K + 1], Normal);
+			}
+		};
+		if (!Drape || !Drape->IsValid())
+		{
+			Emit(Quad);
+			continue;
+		}
+		// Cut at the drape's samples so each slice lies on the road between two of them.
+		const int32 K0 = FMath::FloorToInt((X0 - Drape->Start) / Drape->Step);
+		const int32 K1 = FMath::CeilToInt((X1 - Drape->Start) / Drape->Step);
+		for (int32 K = K0; K < K1; ++K)
+		{
+			const float A = Drape->Start + K * Drape->Step;
+			Emit(ClipX(ClipX(Quad, A, 1.f), A + Drape->Step, -1.f));
+		}
+	}
 }
 
 UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look, uint8 Variant) const

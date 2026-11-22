@@ -102,6 +102,21 @@ public:
 	static bool PlanOn(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, ERMMarkingKind Kind, float SizeMultiplier,
 		FTransform& OutTransform, float& OutWidth, FRMMarkingDrape& OutDrape);
 
+	/**
+	 * Like PlanOn for any stretch of the lane: the road surface from FromX to ToX (cm along the lane from the aimed
+	 * spot, in the direction looked at). For Lane Text (1.5.0).
+	 */
+	static bool PlanRange(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, float FromX, float ToX,
+		FTransform& OutTransform, float& OutLaneWidth, FRMMarkingDrape& OutDrape);
+
+	/**
+	 * Lane Text (1.5.0): the layout of NumChars characters written along the lane, read top to bottom looking down it:
+	 * the first character farthest, each upright with its top away from the viewer, as long as a lane number. The last
+	 * one starts at X = 0. CellUV gives each character's cell in the glyph texture (min = top left, max = bottom right).
+	 */
+	static float TextLength(int32 NumChars, float LaneWidth);
+	static void BuildTextMesh(int32 NumChars, TFunctionRef<FBox2D(int32)> CellUV, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape);
+
 	/** Stores the road surface under it (set before it is spawned). */
 	void SetDrape(const FRMMarkingDrape& Drape);
 	/** The road surface under it as stored (empty for flat markings). */
