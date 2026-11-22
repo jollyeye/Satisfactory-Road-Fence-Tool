@@ -5,7 +5,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
 
 **Released 2026-11-22 on ficsit.app.** Release prep (everything below tested by the user): version 1.5.0 (SML ^3.12.1), new intro
 picture (`docs/screenshots/intro-1.5.jpg`), ficsit page and changelog, README, support logger removed, routine logs to
-Verbose. Left: the replies on issues #8 and #9 (only with the user's go-ahead). Moved to a later version: tunnel stacking, tunnels on the map, attachments on a
+Verbose. Replies posted on issues #8 (closed) and #9 (already closed) the same day. Moved to a later version: tunnel stacking, tunnels on the map, attachments on a
 Road Mode tunnel bent with it; traffic lights and boom barrier.
 
 ## Planned
