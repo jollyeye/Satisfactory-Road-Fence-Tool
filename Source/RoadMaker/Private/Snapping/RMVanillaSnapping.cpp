@@ -3534,7 +3534,8 @@ namespace
 		{
 			Location = Face.Location;
 			Up = Face.Normal;
-			Along = Face.Fwd.IsNearlyZero() ? FVector::UpVector : Face.Fwd;
+			// Along the wall as it climbs (tilted with a sloped wall, like the wall attachments).
+			Along = Face.Fwd.IsNearlyZero() ? FVector::UpVector : (Face.Fwd + FVector::UpVector * Face.Slope).GetSafeNormal();
 		}
 		else
 		{
@@ -3546,6 +3547,7 @@ namespace
 		const AFGBuildablePillar* Pillar = Hologram->GetBuildClass() ? Cast<AFGBuildablePillar>(Hologram->GetBuildClass()->GetDefaultObject()) : nullptr;
 		const float Half = Pillar ? Pillar->GetSize().Z * 0.5f : 0.f;
 		Hologram->SetActorLocationAndRotation(Location + Up * Half, Turn * Base);
+		GAttachOnWall.Add(Hologram); // the game's floor checks ("surface is uneven") are dropped, see ValidatePlacementAndCost
 		Scope.Cancel();
 		return true;
 	}
@@ -3557,6 +3559,10 @@ namespace
 		if (PlacePillarOnOurPiece(Scope, Hologram, Hit))
 		{
 			return true;
+		}
+		if (Hologram->template IsA<AFGPillarHologram>())
+		{
+			GAttachOnWall.Remove(Hologram);
 		}
 		if (IsUnderRoadPiece(Hologram))
 		{
@@ -4271,6 +4277,15 @@ void RMVanillaSnapping::InstallHooks()
 
 	// First click on a road-end snap point: make sure the start keeps our direction.
 	// Intersection connections: real placement check every few frames per connection (see FJunctionCheckMemo).
+	// Pillars on our roads and walls: the game's floor checks ("surface is uneven") are dropped after its validation (their
+	// own placement checks are protected); clearance, overlaps and cost stay (FixAttachmentValidity).
+	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Self, UFGInventoryComponent* Inventory)
+	{
+		if (Self && Self->IsA<AFGPillarHologram>())
+		{
+			FixAttachmentValidity(Self);
+		}
+	});
 	SUBSCRIBE_METHOD(AFGHologram::ValidatePlacementAndCost, [](auto& Scope, AFGHologram* Self, UFGInventoryComponent* Inventory)
 	{
 		if (!IsJunctionChild(Self))
