@@ -3467,21 +3467,23 @@ namespace
 	}
 
 	/**
-	 * Foundations, ramps and frames aimed at the top of one of our roads or intersections sit on it (the game puts
-	 * their middle on the surface, as their origin is half way up).
+	 * Foundations, ramps and frames aimed at the top of one of our roads or intersections sit on it, aimed at the underside
+	 * they hang below it, top against it (the game puts their middle on the surface, as their origin is half way up).
 	 */
 	template <typename TScope, typename THologram>
 	bool PlaceFoundationOnRoad(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
 	{
 		AActor* Actor = Hit.GetActor();
 		const AFGBuildableFoundation* Foundation = GetDefault<AFGBuildableFoundation>(Hologram->GetBuildClass().Get());
-		if (!Foundation || !Actor || Hit.ImpactNormal.Z < 0.5f || (!Cast<ARMBuildableRoad>(Actor) && !Cast<ARMBuildableIntersection>(Actor)))
+		const bool bOnTop = Hit.ImpactNormal.Z > 0.5f;
+		const bool bUnder = Hit.ImpactNormal.Z < -0.5f;
+		if (!Foundation || !Actor || (!bOnTop && !bUnder) || (!Cast<ARMBuildableRoad>(Actor) && !Cast<ARMBuildableIntersection>(Actor)))
 		{
 			return false;
 		}
-		Scope(Hologram, Hit); // the game's placement (its grid, rotation), then up by half its height
+		Scope(Hologram, Hit); // the game's placement (its grid, rotation), then up / down by half its height
 		FVector Location = Hologram->GetActorLocation();
-		Location.Z = Hit.ImpactPoint.Z + Foundation->mHeight * 0.5f;
+		Location.Z = Hit.ImpactPoint.Z + Foundation->mHeight * (bOnTop ? 0.5f : -0.5f);
 		Hologram->SetActorLocation(Location);
 		return true;
 	}
