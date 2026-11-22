@@ -406,8 +406,9 @@ void ARMFenceHologram::CheckValidPlacement()
 			AddConstructDisqualifier(URMCD_TooShort::StaticClass());
 		}
 	}
-	// Fence walls cannot share their course with another fence wall (like the game's walls): touching
-	// end to end, stacked edge to edge or overlapping in part is fine (yellow), the same curve is not.
+	// Fence walls cannot share their course with another fence wall of the same height (like the game's walls):
+	// touching end to end, stacked edge to edge or overlapping in part is fine (yellow), the same curve is not. A 1 m
+	// and a 4 m wall may share it (yellow).
 	mTouchingOther = false;
 	if (GetFenceDefaults()->IsWall() && OverlapsAnotherWall(TOptional<ERMFenceType>(), &mTouchingOther))
 	{
@@ -669,7 +670,9 @@ bool ARMFenceHologram::OverlapsAnotherWall(TOptional<ERMFenceType> SameRoadFence
 		// The same curve: they run together for most of the shorter one (its two free ends left out).
 		const float SharedLength = Shared * 100.f;
 		const float Shorter = FMath::Max(FMath::Min(Length, Frames.Last().Dist) - 100.f, 100.f);
-		if (SharedLength >= 0.75f * Shorter)
+		// A 1 m wall and a 4 m wall may share their course (2026-11-22): yellow like touching; same height as before.
+		const bool bSameHeight = SameRoadFence.IsSet() || FMath::IsNearlyEqual(Other->GetHeight(), OwnHeight, 1.f);
+		if (SharedLength >= 0.75f * Shorter && bSameHeight)
 		{
 			return true;
 		}

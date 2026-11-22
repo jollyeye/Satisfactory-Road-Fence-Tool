@@ -17,7 +17,8 @@ Nothing here is decided in detail yet: each item gets its design written down be
     create_assets.py (half per 4 m, rounded up). Walls already built give back the new cost when dismantled.
   - Stacking: upper half of any fence wall = on top (its height up), lower half = below (the new wall's height down);
     1 m and 4 m walls stack on each other; the overlap check uses both heights; replacing needs another type or height;
-    Join Fence needs the same height. Wall attachments: snap points every 1 m from bottom to top (two on a 1 m wall).
+    Join Fence needs the same height. A 1 m and a 4 m wall may share the same course (asked 2026-11-22: yellow, like
+    touching); walls of the same height keep the old rule (the same curve is refused). Wall attachments: snap points every 1 m from bottom to top (two on a 1 m wall).
   - Unlocks: concrete 1 m with the game's concrete wall material (like the 4 m; `mUnlockAlongside` is now keyed by
     our recipe), FICSIT 1 m with Base Building. Names and descriptions in the string table, PO entries added.
   - Original notes: low versions of the fence walls (concrete, steel, steel mesh, FICSIT) for
