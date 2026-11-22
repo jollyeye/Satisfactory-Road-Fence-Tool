@@ -79,9 +79,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
   - Any language (option B): the game's font draws each character into one shared glyph texture of the characters
     used so far (Chinese / Japanese included); each character is a tile draped on the road like the other markings,
     following the lane's curve.
-  - Placing: a new "Lane Text" option in the customizer's Road Lines tab, aim at a lane and click; the text runs from
-    the aimed point along the lane. E opens the game's sign editor through a hidden game sign inside the marking (the
-    sign wall's trick: text field, saving, multiplayer, copy / paste). Middle click copies, dismantles like the others.
+  - A paint job, not editable (decided 2026-11-22): to change it, dismantle and paint again. The text is set before
+    painting: choosing "Lane Text" in the customizer's Road Lines tab opens a small text box (our own window, built in
+    code like the old lane menu, translatable labels); it stays until changed; E while holding the tool opens it again
+    (key to confirm). Aiming at a lane previews the text on the hologram along the lane (curve, road colours); click
+    paints it. Middle click on painted text copies it into the tool (clone). No hidden sign, no sign editor.
   - Look: like the other markings: the road's primary colour on asphalt / concrete, the secondary colour glowing on
     cyberpunk (the same x4 glow as the lines); materials `M_RoadMarking` / `M_RoadMarkingCyber` with the glyph texture
     as an opacity mask (new masked versions). Paint gun works like on the other markings.
