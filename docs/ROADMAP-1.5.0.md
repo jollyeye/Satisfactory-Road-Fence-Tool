@@ -46,6 +46,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     outlet uses these points in a tunnel. Tested 2026-11-22: works; signs were missing and pillars only took the two
     lowest points (the pillar placement asked for an upright face): now signs (flat on the leaning face, their top up
     the arch) and pillars (out of the face) use all nine points.
+    Then (asked 2026-11-22): signs on a climbing tunnel lean with its slope (their up square to the tunnel's course,
+    like on a climbing fence wall). Beams (every beam, asked 2026-11-22): on fence walls and the arch the start goes on
+    the face's snap point and the beam comes straight out of the face: the game places it for a hit made flat on that
+    face (its own orientation from the normal), then its start moves to the middle of the wall; the resulting axes
+    are logged ("Beam on ...") in case the game ignores the normal.
   - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
 - **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
   several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two

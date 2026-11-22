@@ -307,8 +307,18 @@ bool ARMBuildableTunnel::GetAttachFace(const FVector& WorldHit, const FVector& I
 	const float Sign = Out >= 0.f ? 1.f : -1.f;
 	const FVector Normal = Dir * Sign;
 	const FVector Face = S.Point(SnapPhi, Sign * (Thickness * 0.5f + 1.f));
-	// "Up" in the face: towards the top of the arch; at the top, along the tunnel.
-	FVector Up = K * 2 == AttachPoints - 1 ? Along : (SnapPhi < 0.f ? S.Tangent(SnapPhi) : -S.Tangent(SnapPhi));
+	// "Up" in the face: towards the top of the arch, square to the tunnel's course (so a sign on a climbing tunnel leans
+	// with its slope, like on a climbing fence wall); at the top, along the tunnel.
+	FVector Up = Along;
+	if (K * 2 != AttachPoints - 1)
+	{
+		const FVector TowardsTop = SnapPhi < 0.f ? S.Tangent(SnapPhi) : -S.Tangent(SnapPhi);
+		Up = FVector::CrossProduct(Normal, Along);
+		if (FVector::DotProduct(Up, TowardsTop) < 0.f)
+		{
+			Up = -Up;
+		}
+	}
 	Up = (Up - Normal * FVector::DotProduct(Up, Normal)).GetSafeNormal();
 	OutLocation = T.TransformPosition(Face);
 	OutNormal = T.TransformVectorNoScale(Normal);

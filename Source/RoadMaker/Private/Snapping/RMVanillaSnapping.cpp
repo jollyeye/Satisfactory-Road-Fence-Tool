@@ -4065,15 +4065,33 @@ void RMVanillaSnapping::InstallHooks()
 			}
 		});
 	// (Their placement check is protected in the game, so no hook there yet: if one of them shows red on our walls, that is the next step.)
-	// The beams themselves: the start point goes on the middle of the wall (their direction stays the game's).
-	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
-		[](AFGBeamHologram* Hologram, const FHitResult& Hit)
+	// The beams themselves (every beam: 1.5.0, asked 2026-11-22): on our fence walls and the tunnel's arch the start goes
+	// on the face's snap point (1 m levels on walls, the nine points on the arch) and the beam comes straight out of the
+	// face, as on the game's walls: the game places it for a hit made flat on that face at the snap point (its own
+	// orientation from the surface normal), then its start is moved to the middle of the wall.
+	SUBSCRIBE_METHOD_VIRTUAL(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
+		[](auto& Scope, AFGBeamHologram* Hologram, const FHitResult& InHit)
 		{
+			const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit);
 			FWallFace Face;
-			if (IsStartStep(Hologram) && FindWallFace(Hit, Face))
+			if (!IsStartStep(Hologram) || !FindWallFace(Hit, Face))
 			{
-				Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
+				return;
 			}
+			FHitResult OnFace = Hit;
+			OnFace.Location = Face.Location;
+			OnFace.ImpactPoint = Face.Location;
+			OnFace.Normal = Face.Normal;
+			OnFace.ImpactNormal = Face.Normal;
+			Scope(Hologram, OnFace);
+			Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
+			if (SignLogDue(Hologram, 60, 2.0))
+			{
+				const FQuat Q = Hologram->GetActorQuat();
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Beam on %s: face normal %s -> beam X %s Y %s Z %s"), *GetNameSafe(Hit.GetActor()),
+					*Face.Normal.ToCompactString(), *Q.GetAxisX().ToCompactString(), *Q.GetAxisY().ToCompactString(), *Q.GetAxisZ().ToCompactString());
+			}
+			Scope.Cancel();
 		});
 
 	// Debug log: the meshes of every beam-like hologram (connectors, shelf, supports) for the gantry.
