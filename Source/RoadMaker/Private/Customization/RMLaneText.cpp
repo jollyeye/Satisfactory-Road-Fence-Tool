@@ -101,7 +101,9 @@ UTextureRenderTarget2D* RMLaneText::GetGlyphTexture(UWorld* World)
 	{
 		UTextureRenderTarget2D* RT = NewObject<UTextureRenderTarget2D>(GetTransientPackage(), TEXT("RM_LaneTextGlyphs"));
 		RT->RenderTargetFormat = RTF_RGBA8;
-		RT->ClearColor = FLinearColor(0.f, 0.f, 0.f, 0.f);
+		// Opaque black: the icon paint cuts by red x alpha, and the canvas writes the characters' colour, not alpha
+		// (with a transparent clear nothing showed, 2026-11-22): so alpha stays 1 and the white characters decide.
+		RT->ClearColor = FLinearColor(0.f, 0.f, 0.f, 1.f);
 		RT->bAutoGenerateMips = false;
 		RT->InitAutoFormat(GlyphTextureSize, GlyphTextureSize);
 		RT->UpdateResourceImmediate(true);
@@ -133,7 +135,7 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 	}
 	if (GGlyphCells.Num() == 0)
 	{
-		UKismetRenderingLibrary::ClearRenderTarget2D(World, RT, FLinearColor(0.f, 0.f, 0.f, 0.f));
+		UKismetRenderingLibrary::ClearRenderTarget2D(World, RT, FLinearColor(0.f, 0.f, 0.f, 1.f));
 	}
 	UCanvas* Canvas = nullptr;
 	FVector2D Size;
@@ -166,6 +168,26 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 			FVector2D::ZeroVector, true, true, false, FLinearColor::Transparent);
 	}
 	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, Context);
+	// Check: the brightest red and its alpha over the first new character's cell (a few pixels read back).
+	if (const int32* First = GGlyphCells.Find(New[0]))
+	{
+		float MaxR = 0.f, AtA = 0.f;
+		const int32 X0 = (*First % GlyphCellsPerRow) * GlyphCell, Y0 = (*First / GlyphCellsPerRow) * GlyphCell;
+		for (int32 Y = 16; Y < GlyphCell; Y += 16)
+		{
+			for (int32 X = 16; X < GlyphCell; X += 16)
+			{
+				const FLinearColor P = UKismetRenderingLibrary::ReadRenderTargetPixel(World, RT, X0 + X, Y0 + Y);
+				if (P.R > MaxR)
+				{
+					MaxR = P.R;
+					AtA = P.A;
+				}
+			}
+		}
+		UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: drew %d characters (%d in the texture); '%c': brightest red %.2f, alpha %.2f"),
+			New.Num(), GGlyphCells.Num(), New[0], MaxR, AtA);
+	}
 	return true;
 }
 
