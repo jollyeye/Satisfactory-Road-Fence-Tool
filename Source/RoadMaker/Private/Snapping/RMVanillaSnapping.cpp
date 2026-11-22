@@ -3210,20 +3210,23 @@ namespace
 	 */
 	bool IsOurWallOrCeiling(const FHitResult& Hit);
 
+	bool FindRoadUnderside(const FHitResult& Hit, FVector& OutLocation, FVector& OutFwd);
+
 	/**
-	 * Test (2026-11-22): force the belt's end support. "RM.BeltSupport" cycles game's choice -> wall mount -> ceiling
-	 * mount; "RM.BeltSupport 0/1/2" sets it. After the game's placement the floor pole at the end being placed is swapped
-	 * for that mount, which is placed by our snapping, given to the belt as its end connection, and the belt re-routes.
+	 * The belt's end support on our surfaces (1.5.0): the game picks its wall / ceiling mount only for its own walls and
+	 * foundations (by their class). Aiming at one of our fence wall faces the floor pole at the end being placed is
+	 * swapped for the wall mount, under a road or intersection for the ceiling mount; the mount is placed by our snapping,
+	 * given to the belt as its end connection, and the belt re-routes to it. Anywhere else the game's choice stays.
+	 * (Tested 2026-11-22 with a forced console version: snaps on our points.) "RM.BeltSupport 0" turns it off.
 	 */
-	int32 GForcedBeltSupport = 0;
+	bool GBeltSupportOnOurSurfaces = true;
 	FAutoConsoleCommandWithWorldAndArgs GRMBeltSupport(
 		TEXT("RM.BeltSupport"),
-		TEXT("Belt end support: 0 the game's choice, 1 wall mount, 2 ceiling mount; no argument cycles."),
+		TEXT("Belt wall / ceiling mounts on Road Maker walls and roads: 1 on (default), 0 off."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld*)
 		{
-			GForcedBeltSupport = Args.Num() > 0 ? FMath::Clamp(FCString::Atoi(*Args[0]), 0, 2) : (GForcedBeltSupport + 1) % 3;
-			UE_LOG(LogRoadMaker, Display, TEXT("Support: forced belt support %d (%s)"), GForcedBeltSupport,
-				GForcedBeltSupport == 1 ? TEXT("wall mount") : GForcedBeltSupport == 2 ? TEXT("ceiling mount") : TEXT("game's choice"));
+			GBeltSupportOnOurSurfaces = Args.Num() > 0 ? FCString::Atoi(*Args[0]) != 0 : !GBeltSupportOnOurSurfaces;
+			UE_LOG(LogRoadMaker, Display, TEXT("Support: belt mounts on our walls and roads %s"), GBeltSupportOnOurSurfaces ? TEXT("on") : TEXT("off"));
 		}));
 
 	struct FRMBeltAccess : public AFGConveyorBeltHologram
@@ -3251,12 +3254,28 @@ namespace
 
 	void ForceBeltSupport(AFGConveyorBeltHologram* Belt, const FHitResult& Hit)
 	{
-		if (GForcedBeltSupport == 0)
+		if (!GBeltSupportOnOurSurfaces)
 		{
 			return;
 		}
-		const TCHAR* TargetName = GForcedBeltSupport == 1 ? TEXT("mChildWallPoleHologram") : TEXT("mChildCeilingPoleHologram");
-		const TCHAR* ConnName = GForcedBeltSupport == 1 ? TEXT("mChildWallPoleSnapConnection") : TEXT("mChildCeilingPoleSnapConnection");
+		FVector L;
+		FVector F;
+		FWallFace Face;
+		int32 Mode = 0;
+		if (FindRoadUnderside(Hit, L, F))
+		{
+			Mode = 2;
+		}
+		else if (FMath::Abs(Hit.ImpactNormal.Z) < 0.5f && FindWallFace(Hit, Face))
+		{
+			Mode = 1;
+		}
+		if (Mode == 0)
+		{
+			return; // not our surface: the game's choice (its walls and foundations snap as usual)
+		}
+		const TCHAR* TargetName = Mode == 1 ? TEXT("mChildWallPoleHologram") : TEXT("mChildCeilingPoleHologram");
+		const TCHAR* ConnName = Mode == 1 ? TEXT("mChildWallPoleSnapConnection") : TEXT("mChildCeilingPoleSnapConnection");
 		for (int32 I = 0; I < 2; ++I)
 		{
 			// The end being placed: the one whose support is shown now.

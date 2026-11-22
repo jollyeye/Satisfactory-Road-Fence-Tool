@@ -93,7 +93,14 @@ Nothing here is decided in detail yet: each item gets its design written down be
     game foundation underside -> ceiling mount (children toggled disabled + hidden; the power line's
     `mActivePoleHologram`). Try 3: the floor poles (conveyor pole, power pole) refuse our fence wall faces and road
     undersides in `IsValidHitResult` like the game's poles refuse its walls, the belt's wall mount takes our wall faces;
-    if the game falls back to the wall / ceiling piece when the pole refuses, the swap happens by itself.
+    if the game falls back to the wall / ceiling piece when the pole refuses, the swap happens by itself. It did not: the
+    game picks by the aimed building's class (its walls and foundations, even a foundation's side; not lightweight
+    instances, not our pieces). Try 4 (tested with a forced console version: works, snaps on our points): after the
+    belt's `PostHologramPlacement`, aiming at our fence wall face / road underside, the floor pole at the end being
+    placed is disabled + hidden, the wall / ceiling mount enabled + shown, placed by our snapping, set as the belt's
+    `mChildWallPoleSnapConnection` / `mChildCeilingPoleSnapConnection`, and the belt re-routes (`GenerateAndUpdateSpline`,
+    protected). Now automatic on our surfaces only (`RM.BeltSupport 0` turns it off). To test: building, item flow.
+    Power line next, the same way (`mActivePoleHologram`, `mPowerPole` / `mPowerPoleWall`).
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the
