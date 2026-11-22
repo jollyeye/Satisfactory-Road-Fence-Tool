@@ -3204,51 +3204,6 @@ namespace
 	}
 
 	/**
-	 * Belts and power lines swap their automatic support (pole / wall mount / ceiling mount, pole / wall outlet) by the
-	 * surface aimed at. Log each swap with what is aimed at (2026-11-22, to learn how the game decides for our walls and
-	 * roads). One line per change per hologram.
-	 */
-	TMap<TWeakObjectPtr<const AFGHologram>, FString> GSupportLog;
-	void LogSupportChoice(AFGHologram* Parent, const FHitResult& Hit)
-	{
-		// Every support child's state: d = disabled, h = actor hidden, v = root component visible, m = visible meshes.
-		TArray<FString> Parts;
-		for (AFGHologram* Child : Parent->GetHologramChildren())
-		{
-			if (!Child)
-			{
-				continue;
-			}
-			int32 Meshes = 0;
-			TArray<UPrimitiveComponent*> Prims;
-			Child->GetComponents<UPrimitiveComponent>(Prims);
-			for (const UPrimitiveComponent* P : Prims)
-			{
-				Meshes += P->IsVisible() ? 1 : 0;
-			}
-			const USceneComponent* Root = Child->GetRootComponent();
-			Parts.Add(FString::Printf(TEXT("%s[d%d h%d v%d m%d]"), Child->GetBuildClass() ? *Child->GetBuildClass()->GetName() : *Child->GetClass()->GetName(),
-				Child->IsDisabled() ? 1 : 0, Child->IsHidden() ? 1 : 0, Root && Root->IsVisible() ? 1 : 0, Meshes));
-		}
-		// The power line's chosen pole (private in the game, read by name).
-		FString Active;
-		if (const FObjectPropertyBase* Prop = FindFProperty<FObjectPropertyBase>(Parent->GetClass(), TEXT("mActivePoleHologram")))
-		{
-			const UObject* Pole = Prop->GetObjectPropertyValue_InContainer(Parent);
-			Active = FString::Printf(TEXT(" activePole=%s"), Pole ? *Pole->GetClass()->GetName() : TEXT("none"));
-		}
-		const AActor* Aimed = Hit.GetActor();
-		const FString Line = FString::Printf(TEXT("aim %s up %.1f -> %s%s"), Aimed ? *Aimed->GetClass()->GetName() : TEXT("nothing"),
-			Hit.ImpactNormal.Z, *FString::Join(Parts, TEXT(" ")), *Active);
-		FString& Last = GSupportLog.FindOrAdd(Parent);
-		if (Last != Line)
-		{
-			Last = Line;
-			UE_LOG(LogRoadMaker, Display, TEXT("Support: %s %s"), *Parent->GetClass()->GetName(), *Line);
-		}
-	}
-
-	/**
 	 * Our surfaces that act as a game wall (fence wall faces) or ceiling (road / intersection undersides). The belt and the
 	 * power line keep their floor pole while it takes the surface and fall back to the wall / ceiling piece when it does
 	 * not (seen 2026-11-22: the game's poles refuse its walls): so the floor poles refuse these, the wall pieces take them.
@@ -3353,7 +3308,7 @@ namespace
 			if (FPlatformTime::Seconds() - LastLog > 1.0)
 			{
 				LastLog = FPlatformTime::Seconds();
-				UE_LOG(LogRoadMaker, Display, TEXT("Support: forced end %d to %s at %s (connection %s at %s)"), I, *Target->GetClass()->GetName(),
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Support: forced end %d to %s at %s (connection %s at %s)"), I, *Target->GetClass()->GetName(),
 					*Target->GetActorLocation().ToCompactString(), *GetNameSafe(Conn), Conn ? *Conn->GetComponentLocation().ToCompactString() : TEXT("-"));
 			}
 			return;
@@ -3403,7 +3358,7 @@ namespace
 		if (FPlatformTime::Seconds() - LastLog > 1.0)
 		{
 			LastLog = FPlatformTime::Seconds();
-			UE_LOG(LogRoadMaker, Display, TEXT("Support: wire end %d on a wall outlet at %s (connection %s)"), Current,
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Support: wire end %d on a wall outlet at %s (connection %s)"), Current,
 				*Socket->GetActorLocation().ToCompactString(), *GetNameSafe(Socket->GetSnapConnection()));
 		}
 	}
@@ -3989,19 +3944,17 @@ void RMVanillaSnapping::InstallHooks()
 				FRMSnapAccess::AddHitClass(Hologram, ARMBuildableTunnel::StaticClass());
 			}
 		});
-	// Logged after the placement is finished (2026-11-22: right after SetHologramLocationAndRotation the game had not
-	// swapped yet, even on its own walls and ceilings).
+	// After the placement is finished (2026-11-22: right after SetHologramLocationAndRotation the game had not swapped its
+	// support yet, even on its own walls and ceilings).
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::PostHologramPlacement, GetMutableDefault<AFGConveyorBeltHologram>(),
 		[](AFGConveyorBeltHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
 			ForceBeltSupport(Hologram, Hit);
-			LogSupportChoice(Hologram, Hit);
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::PostHologramPlacement, GetMutableDefault<AFGWireHologram>(),
 		[](AFGWireHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
 			ForceWireSupport(Hologram, Hit);
-			LogSupportChoice(Hologram, Hit);
 		});
 
 	// Under our roads (1.5.0): ceiling lights and the conveyor ceiling mount (a pole hologram) hang from the underside.
@@ -4136,7 +4089,7 @@ void RMVanillaSnapping::InstallHooks()
 				GAttachOnWall.Add(Hologram); // the game's surface checks are dropped (see ValidatePlacementAndCost)
 				if (SignLogDue(Hologram, 60, 3.0))
 				{
-					UE_LOG(LogRoadMaker, Display, TEXT("Beam on %s: face normal %s, beam along local %s"), *GetNameSafe(Hit.GetActor()),
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Beam on %s: face normal %s, beam along local %s"), *GetNameSafe(Hit.GetActor()),
 						*Face.Normal.ToCompactString(), bAlongZ ? TEXT("Z") : TEXT("X"));
 				}
 				Scope.Cancel();

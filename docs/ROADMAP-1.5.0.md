@@ -3,6 +3,12 @@
 Started 2026-11-20, after 1.4.1 (rebuilt for Satisfactory 1.2.6 / build 520140 on the community headers of SML PR #433).
 Nothing here is decided in detail yet: each item gets its design written down before it is built.
 
+**Release prep done 2026-11-22** (everything below tested by the user): version 1.5.0 (SML ^3.12.1), new intro
+picture (`docs/screenshots/intro-1.5.jpg`), ficsit page and changelog, README, support logger removed, routine logs to
+Verbose. Left for the user: build the release zip (Alpakit Release) and upload; after that, with the user's go-ahead,
+the replies on issues #8 and #9. Moved to a later version: tunnel stacking, tunnels on the map, attachments on a
+Road Mode tunnel bent with it; traffic lights and boom barrier.
+
 ## Planned
 - **1 m tall fence walls** (added 2026-11-20; concrete and FICSIT built 2026-11-21, to test):
   - Decided 2026-11-21: two buildings, *Concrete Fence Wall 1 m* and *FICSIT Fence Wall 1 m* (`FenceWall_ConcreteLow`,

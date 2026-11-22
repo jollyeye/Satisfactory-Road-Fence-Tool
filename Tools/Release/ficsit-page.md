@@ -7,15 +7,15 @@ Road Maker
 RoadMaker
 
 ## Short description (max 128 characters)
-Curved roads with lane lines and markings, intersections, road tools, fences, fence walls, a sign gantry and roads on the map.
+Curved roads with lane lines and markings, intersections, road tools, fences, fence walls, tunnel arches and a sign gantry.
 
 ## Full description (paste as Markdown)
 
-**Road Maker** adds real roads to Satisfactory: curved roads in asphalt, concrete blocks or cyberpunk, lane lines, arrows, numbers and vehicle icons you paint in the customizer, tools to cut, join, split, merge and reshape roads and fences, a sign gantry, intersections that join up to six roads, fences and 4 m fence walls that follow the road edge, one-click vehicle paths and railway tracks along the lanes, and your roads drawn on the map.
+**Road Maker** adds real roads to Satisfactory: curved roads in asphalt, concrete blocks or cyberpunk, lane lines, arrows, numbers, vehicle icons and text in any language you paint in the customizer, tools to cut, join, split, merge and reshape roads and fences, a sign gantry across whole carriageways, tunnel arches, intersections that join up to six roads, fences and 4 m and 1 m fence walls that follow the road edge, one-click vehicle paths and railway tracks along the lanes, and your roads drawn on the map.
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
-![An asphalt road with a lane arrow and a lane number, a glowing cyberpunk road with a vehicle marking, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.4.jpg)
+![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, chain-link fence, guard rails, street lights, chevrons, a tunnel arch with direction signs and a lit fence wall](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.5.jpg)
 
 ![Road Maker in the build menu: roads 1 to 4 wide, intersection, Gap Fill, walking paths, fences and the Sign Gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu-1.4.png)
 
@@ -35,7 +35,9 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 - **Sidelines:** on / off.
 - **Lanes:** 1 lane, or 2, 3 and 4 lanes, dashed or continuous.
-- **Markings:** Lane Arrow (straight, left, right, straight or left, straight or right, left or right), Lane Number (0 to 9) and **Lane Vehicle** (the game's own Tractor, Truck, Explorer, Factory Cart and Cyberwagon icons). Aim at a lane: a preview shows it on the lane centre, facing the way you look; the mouse wheel picks the variant, click paints it. Sized to the lane, lying on the road surface, in the road's line colours (glowing on cyberpunk roads), repaintable. Dismantle on its own or with the road. Middle click a marking to pick the same one again. On a 1-lane road a marking sits in the middle, sized to the road.
+- **Markings:** Lane Arrow (straight, left, right, straight or left, straight or right, left or right), Lane Number (0 to 9), **Lane Vehicle** (the game's own Tractor, Truck, Explorer, Factory Cart and Cyberwagon icons) and **Lane Text**. Aim at a lane: a preview shows it on the lane centre, facing the way you look; the mouse wheel picks the variant, click paints it. Sized to the lane, lying on the road surface, in the road's line colours (glowing on cyberpunk roads), repaintable. Dismantle on its own or with the road. Middle click a marking to pick the same one again. On a 1-lane road a marking sits in the middle, sized to the road.
+- **Lane Text:** words painted down a lane, one upright character after another, each as big as a lane number, read from top to bottom looking down the lane, in any language the game's font has (Chinese and Japanese too). Picking it opens a box to write the text (up to 24 characters; **R** opens it again); the preview shows it along the lane, following curves; click paints it. Like real paint it can't be edited: dismantle it and paint again. Middle click copies its text.
+- The Quick Switch menu (E) shows the Road Lines options with their icons.
 - Hover a road to preview, click to apply. Middle lines use the **primary colour**, side lines the **secondary colour**; roads have their own default swatch group ("Roads").
 
 ### Road Tools (build menu)
@@ -46,7 +48,14 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Lines, paint, markings, fences and paths are kept. A green outline shows what will be joined or merged.
 
 ### Sign Gantry
-- Two of the game's H-beams on the fence lines of a road with a beam across, 8 to 24 m above it, in the game's beam material and paint. Signs snap to the beam and columns every 2 m; wall attachments snap to it too.
+- Two of the game's H-beams on the fence lines of roads with a beam across, 8 to 24 m above them, in the game's beam material and paint. Signs snap to the beam and columns every 2 m; wall attachments snap to it too.
+- Click the first side (a road or walking path edge: an arrow shows where the column goes), then the other side: the same road's other edge, or the far edge of a road or path beside it, so one gantry spans the whole carriageway (3 to 60 m). Then the mouse sets the height and a click builds it.
+
+### Tunnel Arch
+- A rounded arch of concrete blocks over roads, following their curve and slope. Click the first side (a road or walking path edge, or a fence wall: the arch then rises from its top), click the other side (the far edge, a parallel road's edge or another fence wall: everything between is covered), then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click.
+- It runs along the whole stretch where the two sides run side by side; cut the road or fence for a shorter tunnel. Paintable.
+- Ceiling lights, the belt ceiling mount and wall outlets hang inside it; signs, wall attachments, pillars and beams snap to nine points around the arch, inside and outside.
+- Satisfactory can't dig into the ground, so it's a covered road: bury it with foundations, or end it at a cliff.
 
 ### Sign backgrounds
 - **Chevrons Left** and **Chevrons Right** in the sign editor's Backgrounds, for every sign: curve warnings in the sign's own colours.
@@ -68,10 +77,12 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 ### Fence Walls — Walls › Fence Walls
 ![A steel fence wall, a steel mesh fence wall and a sign wall along a curved road over a hill](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/fence-walls-1.4.jpg)
 
-4 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
+4 m and 1 m tall walls that follow a road edge (centred on it) or an intersection's curb, like the fences.
 - **FICSIT**, **Concrete** and **Steel Fence Wall** use the game's own wall materials and paint exactly like the game's walls. The customizer's **Material** tab switches a fence wall between concrete, FICSIT and steel in place, with a preview while aiming; switching costs the difference, like the game's walls.
 - **Steel Mesh Fence Wall**: chrome posts and tubes with a woven chain-link mesh (the former 4 m metal grid fence).
-- Signs and wall attachments (conveyor, power and pipe wall mounts, wall holes, ladders...) snap to fence walls.
+- **1 m walls**: Concrete (plain, no grooves), FICSIT and Steel Fence Wall 1 m, for curbs, parking edges and planters, and the **Sign Wall 1 m** (the game's 4 m Label Sign design, scaled up to 8 x 1 m). 1 m and 4 m walls stack on each other and may share a course. Each costs what the game's wall of that material costs.
+- **Sign Wall**: shows a sign design along its whole length (press E on it to edit it with the game's sign editor).
+- Signs, wall attachments (conveyor, power and pipe wall mounts, wall holes, ladders...), beams, beam supports, pillars and the wall flood light snap to fence walls, following their curve and slope.
 - Aim at the upper or lower half of a fence wall to stack another one above or below it. Hold the snap key (Ctrl) to replace the aimed fence wall with a different one, like the game's walls.
 - Unlocks: FICSIT with Tier 1 **Base Building**, Steel Mesh with Tier 3 **Basic Steel Production**, Concrete and Steel together with the game's concrete and steel wall materials (AWESOME Shop).
 
@@ -86,7 +97,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 ![A road blueprint in the blueprint designer, and the same blueprint laid along a curve with Road Mode](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/blueprint-road-mode.jpg)
 
 - A new build mode on any blueprint: click twice like a road and the blueprint is laid along the curve you draw, its arrow pointing the way.
-- Roads, walking paths, fences, fence walls, lane markings, belts, pipes, rails, hypertubes and vehicle paths running along the arrow bend with the curve; everything else repeats along it, buildings and poles staying level.
+- Roads, walking paths, fences, fence walls, tunnel arches, lane markings, belts, pipes, rails, hypertubes and vehicle paths running along the arrow bend with the curve; everything else repeats along it. Architecture pieces (walls, beams, pillars, roofs...) tilt with the road; buildings, machines, poles and the Foundations tab stay level.
+- A tile is as long as the blueprint's content, not the designer box.
 - Belts, pipes, rails, hypertubes and vehicle paths are joined from tile to tile and to the next placement; power poles without wires are wired along.
 - Each placement leaves a Blueprint Road (a wireframe shown in Road Mode and with the dismantle tool): new placements snap to its ends, and dismantling it removes the whole placement.
 - You pay exactly what the placement gives back when dismantled.
@@ -95,6 +107,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - **Power poles** (all tiers) and **street lights** snap to the road's fence lines while holding the snap key (Ctrl); street lights face the road, scroll flips them.
 - **Vehicle paths** and **railway tracks** snap to road and intersection ends — one point per lane (every 2 m on 1-lane roads) — and line up with the road, slope included; scroll flips them 180°.
 - **Foundations, frames and ramps** snap to free road ends and intersection ends, top level with the road, in 4 m steps; scroll turns them 90°.
+- **On and under roads:** foundations, ramps and frames sit on top of a road (or hang under it, top against it); ceiling lights, the belt ceiling mount and single wall outlets hang under roads; pillars stand on roads and walls along their surface.
+- **Belts and power lines** pick the wall or ceiling mount / wall outlet on fence walls, under roads and in tunnels, like on the game's walls.
 - Dismantling a road or intersection also removes the vehicle paths and tracks on it (refunded).
 
 ### Map
@@ -105,8 +119,35 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Saves stay small: only a few numbers per piece are saved, meshes are rebuilt on load.
 
 ### Notes
+- Translations: Chinese (Simplified) by muaxl. Every text can be translated; see GitHub issue #9.
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
+
+## Changelog for version 1.5.0
+**Added**
+- Tunnel Arch: a rounded concrete-block arch over roads, following their curve and slope. Click the two sides (road or walking path edges, or fence walls: the arch rises from their top; several parallel roads are covered at once), then aim to set the arc, up to a semicircle, shown on screen. Lights, belt mounts and outlets hang inside; signs, wall attachments, pillars and beams snap to nine points around the arch. Works in Road Mode (a tunnel running the whole blueprint becomes one arch over the whole curve).
+- Lane Text: text painted down a lane in any language, one upright character after another, as big as the lane numbers, in the road's line colours (glowing on cyberpunk roads). Write it in its box (R opens it again), preview it along the lane, click to paint; middle click copies it.
+- 1 m fence walls: Concrete (no grooves), FICSIT and Steel, and the Sign Wall 1 m (the game's Label Sign design, 8 x 1 m). They stack with the 4 m walls and may share a course with them.
+- Sign Gantry over whole carriageways: pick both sides (any road or walking path edges straight across, up to 60 m); arrows show where the columns go.
+- On and under roads: foundations, ramps and frames sit on top of roads or hang under them; ceiling lights, the belt ceiling mount and single wall outlets hang under roads; pillars and the big pillar support stand on roads and fence walls along the surface.
+- Belts and power lines switch to the wall / ceiling mount and the wall outlet on fence walls, under roads and in tunnels, like on the game's walls.
+- Beams and beam supports snap to fence walls and tunnel arches, straight out of the face, following curves and slopes (diagonal and free form modes work too).
+- Road Mode: architecture pieces and several logistics pieces tilt with the road (issue #7); the wall flood light snaps to fence walls; live cost while drawing.
+- Translations: every text can now be translated. Chinese (Simplified) by muaxl (issue #9).
+
+**Changed**
+- Road Mode: a tile is as long as the blueprint's content, not the designer box (issue #8): a 6 m road in an 8 m designer no longer leaves 2 m gaps.
+- Fence walls cost what the game's wall of the same material costs (they were cheaper). Walls already built give back the new cost.
+- A fence wall stacked on another one turns round with the scroll wheel.
+
+**Fixed**
+- Stacked fence walls no longer flicker where they meet.
+- Road Lines options showed blank icons in the Quick Switch menu (E).
+- Road Mode: the game's pieces show their build effect at once (they appeared about 5 s late); the blueprint's cost is no longer taken twice.
+- Metal grid fence material: compiles under DirectX 11 on the new engine.
+
+**Note**
+- Built for Satisfactory 1.2.6 (build 520140) with SML 3.12.1.
 
 ## Changelog for version 1.4.1
 **Fixed**

@@ -1,14 +1,14 @@
 # Road Maker
 
 A Satisfactory mod (C++, SML) that adds real roads: curved roads 1 to 4 foundations wide in asphalt,
-concrete blocks or cyberpunk, lane lines and lane markings, intersections joining up to six roads,
-tools to cut, split and reshape roads, road fences and fence walls, a sign gantry, and snapping for
+concrete blocks or cyberpunk, lane lines, lane markings and lane text, intersections joining up to six roads,
+tools to cut, split and reshape roads, road fences and fence walls, tunnel arches, a sign gantry, and snapping for
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.4.1**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.
+Manager). Current version: **1.5.0**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
 
-![An asphalt road with lane markings, a glowing cyberpunk road, a tractor, a chain-link fence, street lights, a chevron curve sign and a sign gantry](docs/screenshots/intro-1.4.jpg)
+![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, fences, street lights, chevrons and a tunnel arch with direction signs](docs/screenshots/intro-1.5.jpg)
 
 ## Features
 
@@ -29,6 +29,7 @@ Manager). Current version: **1.4.1**, for Satisfactory 1.2 (build 520140 or newe
   game's Tractor, Truck, Explorer, Factory Cart and Cyberwagon icons). Aim at a lane, the mouse wheel
   picks the variant, click paints, middle click picks a painted one again. Sized to the lane, lying on the road surface, in the
   road's line colours (glowing on cyberpunk roads); they move along when a road is reshaped.
+- Road Lines › Markings › **Lane Text**: text in any language painted down a lane (R opens its text box).
 - Material tab › Roads: Asphalt, Concrete Blocks, Cyberpunk, switched in place.
 
 **Road Tools (build menu tab)**
@@ -42,10 +43,13 @@ Manager). Current version: **1.4.1**, for Satisfactory 1.2 (build 520140 or newe
 **Fences, walls and signs**
 - Guard Rail (H-beam material, paintable), Cement Blocks, Metal Grid Fence (woven chain-link): follow a
   road edge or intersection curb.
-- Fence walls (Walls › Fence Walls): FICSIT, Concrete, Steel and Steel Mesh, 4 m tall, stackable,
-  painted and switched like the game's walls.
-- Sign Gantry: the game's H-beams across a road, 8 to 24 m high; signs snap to it every 2 m.
-- Signs and wall attachments (wall mounts, wall holes, ladders...) snap to fence walls and the gantry.
+- Fence walls (Walls › Fence Walls): FICSIT, Concrete, Steel and Steel Mesh, 4 m tall, and Concrete,
+  FICSIT, Steel and Sign Wall 1 m, stackable, painted and switched like the game's walls.
+- Sign Gantry: the game's H-beams across one road or a whole carriageway (pick both sides), 8 to 24 m high;
+  signs snap to it every 2 m.
+- Tunnel Arch: a rounded concrete-block arch over roads, from road edges or fence wall tops, arc up to a semicircle.
+- Signs, wall attachments (wall mounts, wall holes, ladders...), beams and pillars snap to fence walls, the gantry
+  and the tunnel arch.
 - Sign backgrounds: Chevrons Left and Chevrons Right in the game's sign editor.
 
 **Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu. For map modders: the roads are drawn directly above the map picture (`mMap` in Widget_Map's `Overlay_0`), so anything you add to that overlay draws on top of them.

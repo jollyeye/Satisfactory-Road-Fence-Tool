@@ -73,7 +73,7 @@ namespace
 		const FName Use = Found.IsNone() ? First : Found;
 		if (Use != GGlyphTypeface)
 		{
-			UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: typefaces in %s: %s; draws with %s"), *GetNameSafe(Font),
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Text: typefaces in %s: %s; draws with %s"), *GetNameSafe(Font),
 				*FString::Join(Names, TEXT(", ")), *Use.ToString());
 			GGlyphTypeface = Use;
 			GGlyphCells.Reset(); // another typeface: draw again
@@ -115,7 +115,7 @@ namespace
 		if (!bListed)
 		{
 			bListed = true;
-			UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: fonts loaded: %s"), *FString::Join(Names, TEXT(", ")));
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Text: fonts loaded: %s"), *FString::Join(Names, TEXT(", ")));
 		}
 		UFont* Best = nullptr;
 		auto Pick = [&](TFunctionRef<bool(const FString&)> Test)
@@ -232,7 +232,7 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 		Canvas->DrawItem(Item);
 	}
 	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, Context);
-	UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: drew %d characters (%d in the texture)"), New.Num(), GGlyphCells.Num());
+	UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Text: drew %d characters (%d in the texture)"), New.Num(), GGlyphCells.Num());
 	return true;
 }
 
