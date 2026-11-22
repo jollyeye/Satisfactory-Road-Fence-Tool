@@ -6,6 +6,11 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
+#include "CanvasItem.h"
+#include "Fonts/FontMeasure.h"
+#include "Fonts/SlateFontInfo.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Rendering/SlateRenderer.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Kismet/KismetRenderingLibrary.h"
@@ -18,8 +23,10 @@
 
 namespace
 {
-	constexpr int32 GlyphTextureSize = 2048;
-	constexpr int32 GlyphCell = 128;
+	// A character covers about 5 m of road, so it needs many pixels: 256 per cell, 256 characters in a 4096 texture.
+	// One channel (R8): 16 MB instead of 64; the icon paint reads red, and alpha samples as 1.
+	constexpr int32 GlyphTextureSize = 4096;
+	constexpr int32 GlyphCell = 256;
 	constexpr int32 GlyphCellsPerRow = GlyphTextureSize / GlyphCell;
 	constexpr int32 GlyphCells = GlyphCellsPerRow * GlyphCellsPerRow;
 
@@ -100,7 +107,7 @@ UTextureRenderTarget2D* RMLaneText::GetGlyphTexture(UWorld* World)
 	if (!GGlyphTexture.IsValid() && World)
 	{
 		UTextureRenderTarget2D* RT = NewObject<UTextureRenderTarget2D>(GetTransientPackage(), TEXT("RM_LaneTextGlyphs"));
-		RT->RenderTargetFormat = RTF_RGBA8;
+		RT->RenderTargetFormat = RTF_R8;
 		// Opaque black: the icon paint cuts by red x alpha, and the canvas writes the characters' colour, not alpha
 		// (with a transparent clear nothing showed, 2026-11-22): so alpha stays 1 and the white characters decide.
 		RT->ClearColor = FLinearColor(0.f, 0.f, 0.f, 1.f);
@@ -159,35 +166,25 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 			continue; // an empty cell
 		}
 		const FString Str(1, &C);
-		const FVector2D Measured = Canvas->K2_TextSize(Font, Str, FVector2D(1.f, 1.f));
-		// As large as the cell allows (a margin round it), so every character is as tall as it can be.
+		// Drawn through the font cache at the real pixel size, so the character is rasterised sharp. Scaling a
+		// normal-size character up stretches its small bitmap (the blurry letters of the first test, 2026-11-22).
 		const float Fit = GlyphCell * 0.86f;
-		const float Scale = FMath::Min(Fit / FMath::Max(Measured.Y, 1.f), Fit / FMath::Max(Measured.X, 1.f));
 		const FVector2D Centre((Index % GlyphCellsPerRow + 0.5f) * GlyphCell, (Index / GlyphCellsPerRow + 0.5f) * GlyphCell);
-		Canvas->K2_DrawText(Font, Str, Centre, FVector2D(Scale, Scale), FLinearColor::White, 0.f, FLinearColor::Transparent,
-			FVector2D::ZeroVector, true, true, false, FLinearColor::Transparent);
+		constexpr float ProbeSize = 64.f;
+		FVector2D Measured(ProbeSize, ProbeSize);
+		if (FSlateApplication::IsInitialized())
+		{
+			Measured = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Str, FSlateFontInfo(Font, ProbeSize));
+		}
+		const float FontSize = ProbeSize * FMath::Min(Fit / FMath::Max(Measured.Y, 1.f), Fit / FMath::Max(Measured.X, 1.f));
+		FCanvasTextItem Item(Centre, FText::FromString(Str), FSlateFontInfo(Font, FontSize), FLinearColor::White);
+		Item.bCentreX = true;
+		Item.bCentreY = true;
+		Item.BlendMode = SE_BLEND_Translucent;
+		Canvas->DrawItem(Item);
 	}
 	UKismetRenderingLibrary::EndDrawCanvasToRenderTarget(World, Context);
-	// Check: the brightest red and its alpha over the first new character's cell (a few pixels read back).
-	if (const int32* First = GGlyphCells.Find(New[0]))
-	{
-		float MaxR = 0.f, AtA = 0.f;
-		const int32 X0 = (*First % GlyphCellsPerRow) * GlyphCell, Y0 = (*First / GlyphCellsPerRow) * GlyphCell;
-		for (int32 Y = 16; Y < GlyphCell; Y += 16)
-		{
-			for (int32 X = 16; X < GlyphCell; X += 16)
-			{
-				const FColor P = UKismetRenderingLibrary::ReadRenderTargetPixel(World, RT, X0 + X, Y0 + Y);
-				if (P.R / 255.f > MaxR)
-				{
-					MaxR = P.R / 255.f;
-					AtA = P.A / 255.f;
-				}
-			}
-		}
-		UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: drew %d characters (%d in the texture); '%c': brightest red %.2f, alpha %.2f"),
-			New.Num(), GGlyphCells.Num(), New[0], MaxR, AtA);
-	}
+	UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: drew %d characters (%d in the texture)"), New.Num(), GGlyphCells.Num());
 	return true;
 }
 
