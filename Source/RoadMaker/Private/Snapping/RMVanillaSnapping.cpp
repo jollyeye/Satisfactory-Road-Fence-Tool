@@ -45,6 +45,7 @@
 #include "Hologram/FGPowerPoleWallHologram.h"
 #include "Hologram/FGPoleHologram.h"
 #include "Hologram/FGPillarHologram.h"
+#include "FGBuildablePillar.h"
 #include "Hologram/FGConveyorBeltHologram.h"
 #include "Hologram/FGWireHologram.h"
 #include "FGFactoryConnectionComponent.h"
@@ -3541,7 +3542,10 @@ namespace
 		}
 		const FQuat Base = FRotationMatrix::MakeFromZX(Up, Along).ToQuat();
 		const FQuat Turn(Up, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram)));
-		Hologram->SetActorLocationAndRotation(Location, Turn * Base);
+		// The pillar's origin is its middle (tested 2026-11-22): out from the surface by half its height.
+		const AFGBuildablePillar* Pillar = Hologram->GetBuildClass() ? Cast<AFGBuildablePillar>(Hologram->GetBuildClass()->GetDefaultObject()) : nullptr;
+		const float Half = Pillar ? Pillar->GetSize().Z * 0.5f : 0.f;
+		Hologram->SetActorLocationAndRotation(Location + Up * Half, Turn * Base);
 		Scope.Cancel();
 		return true;
 	}
