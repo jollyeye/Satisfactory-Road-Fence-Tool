@@ -100,7 +100,10 @@ Nothing here is decided in detail yet: each item gets its design written down be
     placed is disabled + hidden, the wall / ceiling mount enabled + shown, placed by our snapping, set as the belt's
     `mChildWallPoleSnapConnection` / `mChildCeilingPoleSnapConnection`, and the belt re-routes (`GenerateAndUpdateSpline`,
     protected). Now automatic on our surfaces only (`RM.BeltSupport 0` turns it off). To test: building, item flow.
-    Power line next, the same way (`mActivePoleHologram`, `mPowerPole` / `mPowerPoleWall`).
+    Tested 2026-11-22: belts work (mount built, connected, items flow). Power line the same way (built, to test): after
+    the wire's `PostHologramPlacement`, on our surfaces with the automatic pole active, the wall outlet instead
+    (`mPowerPole` / `mPowerPoleWall` toggled, `mActivePoleHologram` set, `SetConnection(mCurrentConnection, outlet's snap
+    connection)`).
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the

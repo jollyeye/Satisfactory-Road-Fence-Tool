@@ -3315,6 +3315,54 @@ namespace
 		}
 	}
 
+	/**
+	 * The power line's automatic pole on our surfaces (1.5.0), like the belt's mounts: the game swaps its pole for the
+	 * wall outlet only on its own walls / foundations. Aiming at one of our fence wall faces or a road / intersection
+	 * underside, while the automatic pole is the active one: the wall outlet instead (placed by our snapping), made the
+	 * line's active pole, its connection the end of the cable being placed. "RM.BeltSupport 0" turns it off too.
+	 */
+	void ForceWireSupport(AFGWireHologram* Wire, const FHitResult& Hit)
+	{
+		if (!GBeltSupportOnOurSurfaces || !IsOurWallOrCeiling(Hit))
+		{
+			return;
+		}
+		const UClass* WireClass = AFGWireHologram::StaticClass();
+		const FObjectPropertyBase* PoleProp = FindFProperty<FObjectPropertyBase>(WireClass, TEXT("mPowerPole"));
+		const FObjectPropertyBase* SocketProp = FindFProperty<FObjectPropertyBase>(WireClass, TEXT("mPowerPoleWall"));
+		const FObjectPropertyBase* ActiveProp = FindFProperty<FObjectPropertyBase>(WireClass, TEXT("mActivePoleHologram"));
+		const FIntProperty* CurrentProp = FindFProperty<FIntProperty>(WireClass, TEXT("mCurrentConnection"));
+		if (!PoleProp || !SocketProp || !ActiveProp || !CurrentProp)
+		{
+			return;
+		}
+		AFGHologram* Pole = Cast<AFGHologram>(PoleProp->GetObjectPropertyValue_InContainer(Wire));
+		AFGPowerPoleWallHologram* Socket = Cast<AFGPowerPoleWallHologram>(SocketProp->GetObjectPropertyValue_InContainer(Wire));
+		UObject* Active = ActiveProp->GetObjectPropertyValue_InContainer(Wire);
+		if (!Pole || !Socket || (Active != Pole && Active != Socket))
+		{
+			return; // snapped to an existing connection: nothing to place
+		}
+		if (Active == Pole)
+		{
+			Pole->SetDisabled(true);
+			Pole->SetActorHiddenInGame(true);
+			Socket->SetDisabled(false);
+			Socket->SetActorHiddenInGame(false);
+			ActiveProp->SetObjectPropertyValue_InContainer(Wire, Socket);
+		}
+		Socket->SetHologramLocationAndRotation(Hit); // our snapping: fence wall face / road underside
+		const int32 Current = CurrentProp->GetPropertyValue_InContainer(Wire);
+		Wire->SetConnection(Current, Socket->GetSnapConnection());
+		static double LastLog = 0.0;
+		if (FPlatformTime::Seconds() - LastLog > 1.0)
+		{
+			LastLog = FPlatformTime::Seconds();
+			UE_LOG(LogRoadMaker, Display, TEXT("Support: wire end %d on a wall outlet at %s (connection %s)"), Current,
+				*Socket->GetActorLocation().ToCompactString(), *GetNameSafe(Socket->GetSnapConnection()));
+		}
+	}
+
 	/** Ceiling lights, the conveyor ceiling mount and the single wall outlets: they go under our roads (1.5.0). */
 	bool IsUnderRoadPiece(const AFGHologram* Hologram)
 	{
@@ -3819,6 +3867,7 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::PostHologramPlacement, GetMutableDefault<AFGWireHologram>(),
 		[](AFGWireHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
+			ForceWireSupport(Hologram, Hit);
 			LogSupportChoice(Hologram, Hit);
 		});
 
