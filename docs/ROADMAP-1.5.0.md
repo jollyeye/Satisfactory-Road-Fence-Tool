@@ -55,6 +55,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     (cross-section square to the wall's course, so it turns with curves and slopes), scroll turns it; the length step
     aims along the beam (1 m steps, 1 to 48 m, `mCurrentLength` + `OnRep_CurrentLength`). `RM.BeamAxis 1` if the beam
     runs along its Z, not X. The game's surface checks are dropped like for pillars.
+    Tested 2026-11-22: orientation right; but the diagonal / free form build modes were ignored, and the beam support
+    sat turned. Now ours only in the default mode (the other modes: the game's placement for a hit made flat on the face
+    at the snap point, start moved to the wall's middle); the beam support stands on the face like the big pillar
+    support (up out of the face, lined up with the wall's course); "surface is uneven" and the like are dropped for every
+    piece we place on our faces (one hook after `ValidatePlacementAndCost`).
   - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
 - **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
   several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two

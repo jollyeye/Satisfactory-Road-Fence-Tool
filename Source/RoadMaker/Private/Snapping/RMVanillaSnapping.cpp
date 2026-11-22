@@ -3129,6 +3129,18 @@ namespace
 			GAttachOnWall.Remove(Hologram);
 			return false;
 		}
+		if (Hologram->GetBuildClass() && Hologram->GetBuildClass()->GetName().Contains(TEXT("Beam")) && Hologram->GetBuildClass()->GetName().Contains(TEXT("Support")))
+		{
+			// The beam support stands on the face like the big pillar support: its up out of the face, its base on it,
+			// lined up with the wall's course (tilted with its slope; up the arch on the tunnel); scroll turns it.
+			FVector Along = Face.bOriented ? Face.Up
+				: (Face.Fwd.IsNearlyZero() ? FVector::UpVector : (Face.Fwd + FVector::UpVector * Face.Slope).GetSafeNormal());
+			const FQuat Base = FRotationMatrix::MakeFromZX(Face.Normal, Along).ToQuat();
+			Hologram->SetActorLocationAndRotation(Face.Location, FQuat(Face.Normal, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram))) * Base);
+			GAttachOnWall.Add(Hologram);
+			Scope.Cancel();
+			return true;
+		}
 		if (Face.bOriented)
 		{
 			// The tunnel's arch: flat on the (leaning) face, its top up the arch; the scroll wheel turns it on the face.
@@ -4085,6 +4097,22 @@ void RMVanillaSnapping::InstallHooks()
 					GAttachOnWall.Remove(Hologram);
 					return; // anywhere else: the game's own placement
 				}
+				if (!Hologram->IsCurrentBuildMode(Hologram->GetDefaultBuildGunMode()))
+				{
+					// Diagonal / free form: the game's own placement and angles, its start on the face's snap point
+					// (a hit made flat on the face there), moved to the middle of the wall.
+					GBeamOnFace.Remove(Hologram);
+					FHitResult OnFace = Hit;
+					OnFace.Location = Face.Location;
+					OnFace.ImpactPoint = Face.Location;
+					OnFace.Normal = Face.Normal;
+					OnFace.ImpactNormal = Face.Normal;
+					Scope(Hologram, OnFace);
+					Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
+					GAttachOnWall.Add(Hologram);
+					Scope.Cancel();
+					return;
+				}
 				// The beam's cross-section square to the wall's course: up in the face, tilted with a climbing wall.
 				FVector FaceUp = Face.Up;
 				if (!Face.bOriented)
@@ -4405,7 +4433,8 @@ void RMVanillaSnapping::InstallHooks()
 	// own placement checks are protected); clearance, overlaps and cost stay (FixAttachmentValidity).
 	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Self, UFGInventoryComponent* Inventory)
 	{
-		if (Self && (Self->IsA<AFGPillarHologram>() || GBeamOnFace.Contains(Self)) && GAttachOnWall.Contains(Self))
+		// Pillars, beams, beam supports and the other pieces we put on our faces: "surface is uneven" and the like dropped.
+		if (Self && GAttachOnWall.Contains(Self))
 		{
 			FixAttachmentValidity(Self);
 			// The colour was set inside the validation, from the reasons we just dropped: green again when none are left.
