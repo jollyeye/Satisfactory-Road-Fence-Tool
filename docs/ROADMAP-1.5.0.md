@@ -50,7 +50,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     like on a climbing fence wall). Beams (every beam, asked 2026-11-22): on fence walls and the arch the start goes on
     the face's snap point and the beam comes straight out of the face: the game places it for a hit made flat on that
     face (its own orientation from the normal), then its start moves to the middle of the wall; the resulting axes
-    are logged ("Beam on ...") in case the game ignores the normal.
+    are logged ("Beam on ...") in case the game ignores the normal. Tested: it ignores it (kept its last world
+    rotation). Now both beam steps are ours on our faces: start on the snap point, straight out of the face like a pillar
+    (cross-section square to the wall's course, so it turns with curves and slopes), scroll turns it; the length step
+    aims along the beam (1 m steps, 1 to 48 m, `mCurrentLength` + `OnRep_CurrentLength`). `RM.BeamAxis 1` if the beam
+    runs along its Z, not X. The game's surface checks are dropped like for pillars.
   - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
 - **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
   several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two

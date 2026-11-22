@@ -3078,6 +3078,9 @@ namespace
 	// ---- Wall attachments (conveyor / power / pipe wall mounts, wall holes...) on fence walls and the gantry ----
 	TAutoConsoleVariable<float> CVarWallAttachYaw(TEXT("rm.WallAttachYaw"), 0.f, TEXT("Extra yaw (degrees) for wall attachments placed on fence walls / the gantry, if a piece sits turned."));
 	TSet<TWeakObjectPtr<const AFGHologram>> GAttachOnWall;
+	/** Beams started on one of our faces: their start and rotation (kept for the length step). */
+	TMap<TWeakObjectPtr<const AFGHologram>, FTransform> GBeamOnFace;
+	TAutoConsoleVariable<int32> CVarBeamAxis(TEXT("RM.BeamAxis"), 0, TEXT("Beams on our walls: the beam's length runs along its local X (0) or Z (1)."));
 
 	/** The belt carriers stay level with the world, everything else tilts with the wall. */
 	bool IsLevelWallPiece(const AFGHologram* Hologram)
@@ -4066,31 +4069,90 @@ void RMVanillaSnapping::InstallHooks()
 		});
 	// (Their placement check is protected in the game, so no hook there yet: if one of them shows red on our walls, that is the next step.)
 	// The beams themselves (every beam: 1.5.0, asked 2026-11-22): on our fence walls and the tunnel's arch the start goes
-	// on the face's snap point (1 m levels on walls, the nine points on the arch) and the beam comes straight out of the
-	// face, as on the game's walls: the game places it for a hit made flat on that face at the snap point (its own
-	// orientation from the surface normal), then its start is moved to the middle of the wall.
+	// on the face's snap point (1 m levels on walls, the nine points on the arch), the beam straight out of the face like
+	// a pillar, turned with the wall's curve and slope (the game kept its last world rotation there: tested 2026-11-22).
+	// The game's own placement is skipped for both steps; the length step is done here too (aim along the beam).
 	SUBSCRIBE_METHOD_VIRTUAL(AFGBeamHologram::SetHologramLocationAndRotation, GetMutableDefault<AFGBeamHologram>(),
 		[](auto& Scope, AFGBeamHologram* Hologram, const FHitResult& InHit)
 		{
-			const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit);
-			FWallFace Face;
-			if (!IsStartStep(Hologram) || !FindWallFace(Hit, Face))
+			if (IsStartStep(Hologram))
+			{
+				const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit);
+				FWallFace Face;
+				if (!FindWallFace(Hit, Face))
+				{
+					GBeamOnFace.Remove(Hologram);
+					GAttachOnWall.Remove(Hologram);
+					return; // anywhere else: the game's own placement
+				}
+				// The beam's cross-section square to the wall's course: up in the face, tilted with a climbing wall.
+				FVector FaceUp = Face.Up;
+				if (!Face.bOriented)
+				{
+					const FVector AlongClimb = Face.Fwd.IsNearlyZero() ? FVector::RightVector : (Face.Fwd + FVector::UpVector * Face.Slope).GetSafeNormal();
+					FaceUp = FVector::CrossProduct(Face.Normal, AlongClimb);
+					if (FaceUp.Z < 0.f)
+					{
+						FaceUp = -FaceUp;
+					}
+					if (FaceUp.IsNearlyZero())
+					{
+						FaceUp = FVector::UpVector;
+					}
+				}
+				const bool bAlongZ = CVarBeamAxis.GetValueOnGameThread() == 1;
+				const FQuat Base = bAlongZ ? FRotationMatrix::MakeFromZX(Face.Normal, FaceUp).ToQuat() : FRotationMatrix::MakeFromXZ(Face.Normal, FaceUp).ToQuat();
+				const FQuat Rot = FQuat(Face.Normal, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram))) * Base;
+				const FTransform T(Rot, Face.Location - Face.Normal * Face.Depth);
+				Hologram->SetActorTransform(T);
+				GBeamOnFace.Add(Hologram, T);
+				GAttachOnWall.Add(Hologram); // the game's surface checks are dropped (see ValidatePlacementAndCost)
+				if (SignLogDue(Hologram, 60, 3.0))
+				{
+					UE_LOG(LogRoadMaker, Display, TEXT("Beam on %s: face normal %s, beam along local %s"), *GetNameSafe(Hit.GetActor()),
+						*Face.Normal.ToCompactString(), bAlongZ ? TEXT("Z") : TEXT("X"));
+				}
+				Scope.Cancel();
+				return;
+			}
+			const FTransform* T = GBeamOnFace.Find(Hologram);
+			if (!T)
 			{
 				return;
 			}
-			FHitResult OnFace = Hit;
-			OnFace.Location = Face.Location;
-			OnFace.ImpactPoint = Face.Location;
-			OnFace.Normal = Face.Normal;
-			OnFace.ImpactNormal = Face.Normal;
-			Scope(Hologram, OnFace);
-			Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
-			if (SignLogDue(Hologram, 60, 2.0))
+			// Length: where the view passes closest to the beam's line, in 1 m steps.
+			const FVector Start = T->GetLocation();
+			const FVector Dir = CVarBeamAxis.GetValueOnGameThread() == 1 ? T->GetRotation().GetAxisZ() : T->GetRotation().GetAxisX();
+			FVector Eye = InHit.TraceStart;
+			FVector View = (InHit.TraceEnd - InHit.TraceStart).GetSafeNormal();
+			APlayerController* PC = Hologram->GetWorld() ? Hologram->GetWorld()->GetFirstPlayerController() : nullptr;
+			if (PC && PC->PlayerCameraManager)
 			{
-				const FQuat Q = Hologram->GetActorQuat();
-				UE_LOG(LogRoadMaker, Verbose, TEXT("Beam on %s: face normal %s -> beam X %s Y %s Z %s"), *GetNameSafe(Hit.GetActor()),
-					*Face.Normal.ToCompactString(), *Q.GetAxisX().ToCompactString(), *Q.GetAxisY().ToCompactString(), *Q.GetAxisZ().ToCompactString());
+				Eye = PC->PlayerCameraManager->GetCameraLocation();
+				View = PC->PlayerCameraManager->GetCameraRotation().Vector();
 			}
+			const FVector W0 = Start - Eye;
+			const float B = FVector::DotProduct(Dir, View);
+			const float Denom = 1.f - B * B;
+			float Length = 100.f;
+			if (Denom > 1e-3f)
+			{
+				Length = (B * FVector::DotProduct(View, W0) - FVector::DotProduct(Dir, W0)) / Denom;
+			}
+			Length = FMath::Clamp(FMath::RoundToFloat(Length / 100.f) * 100.f, 100.f, 4800.f);
+			if (FFloatProperty* Prop = FindFProperty<FFloatProperty>(AFGBeamHologram::StaticClass(), TEXT("mCurrentLength")))
+			{
+				float* Value = Prop->ContainerPtrToValuePtr<float>(Hologram);
+				if (!FMath::IsNearlyEqual(*Value, Length))
+				{
+					*Value = Length;
+					if (UFunction* OnRep = Hologram->FindFunction(TEXT("OnRep_CurrentLength")))
+					{
+						Hologram->ProcessEvent(OnRep, nullptr); // the game rebuilds the beam's mesh for the length
+					}
+				}
+			}
+			Hologram->SetActorTransform(*T);
 			Scope.Cancel();
 		});
 
@@ -4343,7 +4405,7 @@ void RMVanillaSnapping::InstallHooks()
 	// own placement checks are protected); clearance, overlaps and cost stay (FixAttachmentValidity).
 	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Self, UFGInventoryComponent* Inventory)
 	{
-		if (Self && Self->IsA<AFGPillarHologram>() && GAttachOnWall.Contains(Self))
+		if (Self && (Self->IsA<AFGPillarHologram>() || GBeamOnFace.Contains(Self)) && GAttachOnWall.Contains(Self))
 		{
 			FixAttachmentValidity(Self);
 			// The colour was set inside the validation, from the reasons we just dropped: green again when none are left.
