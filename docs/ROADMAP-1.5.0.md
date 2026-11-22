@@ -105,7 +105,11 @@ Nothing here is decided in detail yet: each item gets its design written down be
     (`mPowerPole` / `mPowerPoleWall` toggled, `mActivePoleHologram` set, `SetConnection(mCurrentConnection, outlet's snap
     connection)`). Tested 2026-11-22: works when built; the hologram's cable still ends where the pole was (drawn by a
     private game function inside its placement, reset every frame): kept that way.
-  - Foundations aimed at a road's underside hang below it, top against it (asked 2026-11-22, to test).
+  - Foundations aimed at a road's underside hang below it, top against it (asked 2026-11-22, tested).
+  - Pillars and the big pillar support (asked 2026-11-22, built, to test): like the game's, base on the surface, the
+    pillar along its direction: on road / intersection tops and undersides (tilted with the road, hanging under it),
+    on fence wall faces out of the wall on its snap points, following curves; scroll turns it (`PlacePillarOnOurPiece`).
+    Assumes the pillar's origin is its base; their placement check is protected (not hookable) if they show red.
 - **Steel 1 m fence wall** (asked 2026-11-21, built, to test): `FenceWall_SteelLow`, the slab of the other two 1 m
   walls (not the 4 m steel wall's ribbed shape). Tested 2026-11-21: the game has no 1 m steel material, its 1 m wall
   uses `MI_SteelWall_8x4`; the first try squeezed that whole texture into 1 m (frame showing). Now a 1 m band of the

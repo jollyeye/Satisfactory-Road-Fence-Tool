@@ -44,6 +44,7 @@
 #include "Hologram/FGCeilingLightHologram.h"
 #include "Hologram/FGPowerPoleWallHologram.h"
 #include "Hologram/FGPoleHologram.h"
+#include "Hologram/FGPillarHologram.h"
 #include "Hologram/FGConveyorBeltHologram.h"
 #include "Hologram/FGWireHologram.h"
 #include "FGFactoryConnectionComponent.h"
@@ -3488,10 +3489,71 @@ namespace
 		return true;
 	}
 
+	/**
+	 * Pillars (and the big pillar support) on our pieces, like the game's on its floors and walls (1.5.0): the base on
+	 * the surface, the pillar along its direction. On a road or intersection (top or underside) the road's surface there:
+	 * tilted with a sloped road, hanging under it. On a fence wall face: out of the wall, on its snap points, following the
+	 * wall where it curves. The scroll wheel turns it round its own axis.
+	 */
+	template <typename TScope, typename THologram>
+	bool PlacePillarOnOurPiece(TScope& Scope, THologram* Hologram, const FHitResult& Hit)
+	{
+		if (!Hologram->template IsA<AFGPillarHologram>())
+		{
+			return false;
+		}
+		AActor* Actor = Hit.GetActor();
+		FVector Location;
+		FVector Up;
+		FVector Along;
+		FWallFace Face;
+		if (Actor && (Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor)) && FMath::Abs(Hit.ImpactNormal.Z) > 0.5f)
+		{
+			Location = Hit.ImpactPoint;
+			Up = Hit.ImpactNormal.GetSafeNormal();
+			FVector Fwd = Actor->GetActorForwardVector();
+			if (const ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(Actor))
+			{
+				TArray<FRMFrame> Frames;
+				Road->GetWorldFrames(Frames, 100.f);
+				float Best = TNumericLimits<float>::Max();
+				for (const FRMFrame& F : Frames)
+				{
+					const float D = FVector::DistSquared(F.Pos, Hit.ImpactPoint);
+					if (D < Best)
+					{
+						Best = D;
+						Fwd = F.Fwd;
+					}
+				}
+			}
+			Along = Fwd;
+		}
+		else if (FMath::Abs(Hit.ImpactNormal.Z) < 0.5f && FindWallFace(Hit, Face))
+		{
+			Location = Face.Location;
+			Up = Face.Normal;
+			Along = Face.Fwd.IsNearlyZero() ? FVector::UpVector : Face.Fwd;
+		}
+		else
+		{
+			return false;
+		}
+		const FQuat Base = FRotationMatrix::MakeFromZX(Up, Along).ToQuat();
+		const FQuat Turn(Up, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram)));
+		Hologram->SetActorLocationAndRotation(Location, Turn * Base);
+		Scope.Cancel();
+		return true;
+	}
+
 	template <typename TScope, typename THologram>
 	bool HandleSetLocation(TScope& Scope, THologram* Hologram, const FHitResult& InHit)
 	{
 		const FHitResult Hit = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
+		if (PlacePillarOnOurPiece(Scope, Hologram, Hit))
+		{
+			return true;
+		}
 		if (IsUnderRoadPiece(Hologram))
 		{
 			if (PlaceUnderRoad(Scope, Hologram, InHit))
