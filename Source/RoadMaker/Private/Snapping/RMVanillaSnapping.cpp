@@ -4281,9 +4281,16 @@ void RMVanillaSnapping::InstallHooks()
 	// own placement checks are protected); clearance, overlaps and cost stay (FixAttachmentValidity).
 	SUBSCRIBE_METHOD_AFTER(AFGHologram::ValidatePlacementAndCost, [](AFGHologram* Self, UFGInventoryComponent* Inventory)
 	{
-		if (Self && Self->IsA<AFGPillarHologram>())
+		if (Self && Self->IsA<AFGPillarHologram>() && GAttachOnWall.Contains(Self))
 		{
 			FixAttachmentValidity(Self);
+			// The colour was set inside the validation, from the reasons we just dropped: green again when none are left.
+			TArray<TSubclassOf<UFGConstructDisqualifier>> Left;
+			Self->GetConstructDisqualifiers(Left);
+			if (Left.Num() == 0)
+			{
+				Self->SetPlacementMaterialState(EHologramMaterialState::HMS_OK);
+			}
 		}
 	});
 	SUBSCRIBE_METHOD(AFGHologram::ValidatePlacementAndCost, [](auto& Scope, AFGHologram* Self, UFGInventoryComponent* Inventory)
