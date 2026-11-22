@@ -788,6 +788,12 @@ def marking_icon(sc, kind):
         g(-0.5, -0.22, -0.72, -0.5)   # rear wheel
         g(0.22, 0.5, -0.72, -0.5)     # front wheel
         return
+    if kind == "text":
+        # Lane Text: a blocky letter A, in the style of the digit.
+        T = 0.24; L, H, Lo, Hi, M = -0.9, 0.9, -0.5, 0.5, 0.0
+        rect(L, H, Lo, Lo + T); rect(L, H, Hi - T, Hi)                                    # legs
+        rect(H - T, H, Lo + T, Hi - T); rect(M - T / 2, M + T / 2, Lo + T, Hi - T)        # top, bar
+        return
     if kind == "arrow":
         rect(-1.1, 0.55, -0.14, 0.14)
         tri((0.55, -0.5), (1.1, 0.0), (0.55, 0.5))
@@ -833,6 +839,7 @@ elif what == "gantry": sign_gantry(sc)
 elif what == "lanearrow": marking_icon(sc, "arrow")
 elif what == "lanenumber": marking_icon(sc, "digit")
 elif what == "lanevehicle": marking_icon(sc, "vehicle")
+elif what == "lanetext": marking_icon(sc, "text")
 elif what == "fencewall": fence_wall(sc, "concrete")
 elif what == "fencewall_ficsit": fence_wall(sc, "ficsit")
 elif what == "fencewall_steel": fence_wall(sc, "steel")

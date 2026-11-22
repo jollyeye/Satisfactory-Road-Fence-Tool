@@ -21,6 +21,8 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/StrongObjectPtr.h"
+#include "Customization/RMLaneText.h"
+#include "Engine/TextureRenderTarget2D.h"
 
 ARMBuildableMarking::ARMBuildableMarking(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -48,6 +50,7 @@ void ARMBuildableMarking::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableMarking, mVariant);
 	DOREPLIFETIME(ARMBuildableMarking, mLaneWidth);
+	DOREPLIFETIME(ARMBuildableMarking, mText);
 	DOREPLIFETIME(ARMBuildableMarking, mDrapeStart);
 	DOREPLIFETIME(ARMBuildableMarking, mDrapeStep);
 	DOREPLIFETIME(ARMBuildableMarking, mDrapePos);
@@ -201,12 +204,19 @@ void ARMBuildableMarking::RebuildMesh()
 	// The cyberpunk look is the second entry (index look - 1); asphalt and concrete share the plain paint.
 	UMaterialInterface* Material = GetPaintMaterial(GetShownLook(), mVariant);
 	FRMMesh Paint;
-	BuildMarkingMesh(mKind, mVariant, mLaneWidth, Paint, Drape.IsValid() ? &Drape : nullptr);
+	FRMMesh Flat; // far copy: flat, no slices
+	if (mKind == ERMMarkingKind::Text)
+	{
+		BuildTextMeshFor(GetWorld(), mText, mLaneWidth, Paint, Drape.IsValid() ? &Drape : nullptr);
+		BuildTextMeshFor(GetWorld(), mText, mLaneWidth, Flat, nullptr);
+	}
+	else
+	{
+		BuildMarkingMesh(mKind, mVariant, mLaneWidth, Paint, Drape.IsValid() ? &Drape : nullptr);
+		BuildMarkingMesh(mKind, mVariant, mLaneWidth, Flat);
+	}
 	Paint.ApplyToSection(mMesh, 0, true);
 	ApplyMaterial(0, Material);
-	// Far copy: flat, no slices.
-	FRMMesh Flat;
-	BuildMarkingMesh(mKind, mVariant, mLaneWidth, Flat);
 	ApplyFarSection(Flat, 0, Material);
 	ApplyMarkingColors(mCustomizationData);
 	UpdateLODDistances();
@@ -502,11 +512,19 @@ float ARMBuildableMarking::HalfLength(ERMMarkingKind Kind, float LaneWidth)
 	{
 		return IconHalfSize(LaneWidth).X;
 	}
+	if (Kind == ERMMarkingKind::Text)
+	{
+		return TextLength(1, LaneWidth) * 0.5f; // one character (the real length needs the text)
+	}
 	return Kind == ERMMarkingKind::Arrow ? ArrowTop * Scale : 0.9f * FShapeBuilder::Stretch * Scale;
 }
 
 void ARMBuildableMarking::BuildMarkingMesh(ERMMarkingKind Kind, uint8 Variant, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape)
 {
+	if (Kind == ERMMarkingKind::Text)
+	{
+		return; // its mesh needs its text: BuildTextMeshFor (and it is not drawn on the map)
+	}
 	Variant = static_cast<uint8>(FMath::Clamp<int32>(Variant, 0, VariantCount(Kind) - 1));
 	// One size for every shape, so the turn arrows match the straight one: its head is half the width given.
 	TArray<TArray<FVector2D>> Polys;
@@ -762,10 +780,11 @@ void ARMBuildableMarking::BuildTextMesh(int32 NumChars, TFunctionRef<FBox2D(int3
 	const float Scale = FMath::Min(LaneWidth, MaxLaneWidth) * 0.5f;
 	const float Len = TextTileAlong * Scale;
 	const float HalfAcross = TextTileAcross * Scale * 0.5f;
+	const float Shift = -TextLength(NumChars, LaneWidth) * 0.5f; // centred on the aimed spot
 	for (int32 I = 0; I < NumChars; ++I)
 	{
 		// The first character farthest: character I is (NumChars - 1 - I) tiles from the near end.
-		const float X0 = (NumChars - 1 - I) * (TextTileAlong + TextGap) * Scale;
+		const float X0 = Shift + (NumChars - 1 - I) * (TextTileAlong + TextGap) * Scale;
 		const float X1 = X0 + Len;
 		const FBox2D Cell = CellUV(I);
 		// Its top (v min) away from the viewer (X1), its left (u min) on the viewer's left (-Y).
@@ -811,9 +830,67 @@ void ARMBuildableMarking::BuildTextMesh(int32 NumChars, TFunctionRef<FBox2D(int3
 	}
 }
 
+bool ARMBuildableMarking::PlanText(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, int32 NumChars,
+	FTransform& OutTransform, float& OutWidth, FRMMarkingDrape& OutDrape)
+{
+	float LaneWidth = 200.f;
+	FTransform T;
+	FRMMarkingDrape Probe;
+	if (NumChars <= 0 || !PlanRange(Road, Aim, LookDir, 0.f, 0.f, T, LaneWidth, Probe))
+	{
+		return false;
+	}
+	OutWidth = FMath::Min(LaneWidth, MaxLaneWidth);
+	const float Half = TextLength(NumChars, OutWidth) * 0.5f + 25.f;
+	return PlanRange(Road, Aim, LookDir, -Half, Half, OutTransform, LaneWidth, OutDrape);
+}
+
+void ARMBuildableMarking::BuildTextMeshFor(UWorld* World, const FString& Text, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape)
+{
+	// A dedicated server draws nothing (no font rendering): the tiles still give it the marking's shape.
+	if (World && !IsRunningDedicatedServer())
+	{
+		RMLaneText::EnsureGlyphs(World, Text);
+	}
+	BuildTextMesh(Text.Len(), [&Text](int32 I) { return RMLaneText::CellUV(Text[I]); }, LaneWidth, Out, Drape);
+}
+
 UMaterialInterface* ARMBuildableMarking::GetPaintMaterial(uint8 Look, uint8 Variant) const
 {
 	UMaterialInterface* Base = Look > 0 && mLookTopMaterials.IsValidIndex(Look - 1) && mLookTopMaterials[Look - 1] ? mLookTopMaterials[Look - 1] : mMarkingMaterial;
+	if (mKind == ERMMarkingKind::Text && Base)
+	{
+		// The icon paint with the shared glyph texture: one instance per paint material for the session.
+		static TMap<TWeakObjectPtr<UMaterialInterface>, TStrongObjectPtr<UMaterialInstanceDynamic>> TextInstances;
+		UWorld* World = GetWorld();
+		if (!World)
+		{
+			for (const FWorldContext& Context : GEngine ? GEngine->GetWorldContexts() : TIndirectArray<FWorldContext>())
+			{
+				if (Context.WorldType == EWorldType::Game && Context.World())
+				{
+					World = Context.World();
+				}
+			}
+		}
+		UTextureRenderTarget2D* Glyphs = IsRunningDedicatedServer() ? nullptr : RMLaneText::GetGlyphTexture(World);
+		if (!Glyphs)
+		{
+			return Base;
+		}
+		if (const TStrongObjectPtr<UMaterialInstanceDynamic>* Found = TextInstances.Find(Base))
+		{
+			if (Found->IsValid())
+			{
+				Found->Get()->SetTextureParameterValue(TEXT("Icon"), Glyphs); // the texture may have been made again
+				return Found->Get();
+			}
+		}
+		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(Base, GetTransientPackage());
+		MID->SetTextureParameterValue(TEXT("Icon"), Glyphs);
+		TextInstances.Add(Base, TStrongObjectPtr<UMaterialInstanceDynamic>(MID));
+		return MID;
+	}
 	if (mKind != ERMMarkingKind::Vehicle || !Base)
 	{
 		return Base;
@@ -981,14 +1058,18 @@ UTexture2D* ARMBuildableMarking::VehicleIcon(int32 Variant)
 }
 
 ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarking> Class, TSubclassOf<UFGRecipe> Recipe, ARMBuildableRoad* Road,
-	uint8 Variant, float SizeMultiplier, const FVector& Aim, const FVector& LookDir, const FFactoryCustomizationData* Paint, int32 Look)
+	uint8 Variant, float SizeMultiplier, const FVector& Aim, const FVector& LookDir, const FFactoryCustomizationData* Paint, int32 Look,
+	const FString& Text)
 {
 	UWorld* World = Road ? Road->GetWorld() : nullptr;
 	const ARMBuildableMarking* Default = Class ? Class->GetDefaultObject<ARMBuildableMarking>() : nullptr;
 	FTransform T;
 	float Width = 200.f;
 	FRMMarkingDrape Drape;
-	if (!World || !Default || !PlanOn(Road, Aim, LookDir, Default->mKind, SizeMultiplier, T, Width, Drape))
+	const bool bText = Default && Default->mKind == ERMMarkingKind::Text;
+	const FString CleanText = bText ? RMLaneText::Sanitize(Text) : FString();
+	if (!World || !Default || (bText ? CleanText.IsEmpty() || !PlanText(Road, Aim, LookDir, CleanText.Len(), T, Width, Drape)
+		: !PlanOn(Road, Aim, LookDir, Default->mKind, SizeMultiplier, T, Width, Drape)))
 	{
 		return nullptr;
 	}
@@ -999,6 +1080,7 @@ ARMBuildableMarking* ARMBuildableMarking::SpawnOn(TSubclassOf<ARMBuildableMarkin
 	}
 	const uint8 Count = static_cast<uint8>(VariantCount(New->mKind));
 	New->SetBuiltWithRecipe(Recipe);
+	New->mText = CleanText;
 	New->SetShape(Variant % Count, Width);
 	New->SetDrape(Drape);
 	// Painted like the road (its look and paint), unless it keeps its own (a moved marking).
@@ -1088,7 +1170,7 @@ int32 ARMBuildableMarking::MoveMarkings(ARMBuildableRoad* From, ARMBuildableRoad
 		const FRMFrame F = MarkingFrameAtDist(NewFrames, Share * NewLength);
 		const FVector Aim = F.Pos + F.Right * Across;
 		const FFactoryCustomizationData Paint = M->GetCustomizationData_Native();
-		ARMBuildableMarking* New = SpawnOn(M->GetClass(), M->GetBuiltWithRecipe(), To, M->GetVariant(), 1.f, Aim, F.Fwd * Dir, &Paint, M->GetLook());
+		ARMBuildableMarking* New = SpawnOn(M->GetClass(), M->GetBuiltWithRecipe(), To, M->GetVariant(), 1.f, Aim, F.Fwd * Dir, &Paint, M->GetLook(), M->GetText());
 		if (New)
 		{
 			++Moved;

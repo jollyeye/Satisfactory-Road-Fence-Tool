@@ -20,6 +20,17 @@
 #include "HAL/IConsoleManager.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UObjectIterator.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Border.h"
+#include "Components/Button.h"
+#include "Components/EditableTextBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
+#include "Components/Spacer.h"
+#include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 
 namespace
 {
@@ -234,6 +245,224 @@ FBox2D RMLaneText::CellUV(TCHAR Char)
 	return FBox2D(Min, Min + FVector2D(Cell, Cell));
 }
 
+FString RMLaneText::Sanitize(const FString& Text)
+{
+	FString Out;
+	for (TCHAR C : Text)
+	{
+		if (C == TEXT('\t') || C == TEXT('\n') || C == TEXT('\r'))
+		{
+			C = TEXT(' ');
+		}
+		// Control characters, and both halves of a surrogate pair (an emoji would take two cells, each half drawn as junk).
+		if (C < 32 || (C >= 0x7F && C < 0xA0) || (C >= 0xD800 && C <= 0xDFFF))
+		{
+			continue;
+		}
+		Out.AppendChar(C);
+	}
+	Out.TrimStartAndEndInline();
+	return Out.Left(MaxChars);
+}
+
+namespace
+{
+	FString GToolText;
+	TWeakObjectPtr<URMLaneTextBox> GTextBox;
+
+	const FLinearColor ColPanel(0.02f, 0.02f, 0.025f, 0.92f);
+	const FLinearColor ColButton(0.12f, 0.12f, 0.13f);
+	const FLinearColor ColOk(0.95f, 0.5f, 0.1f); // FICSIT orange
+
+	UTextBlock* BoxLabel(UWidgetTree* Tree, const FText& Text, int32 Size)
+	{
+		UTextBlock* T = Tree->ConstructWidget<UTextBlock>();
+		T->SetText(Text);
+		FSlateFontInfo Font = T->GetFont();
+		Font.Size = Size;
+		T->SetFont(Font);
+		T->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+		T->SetJustification(ETextJustify::Center);
+		T->SetAutoWrapText(true);
+		return T;
+	}
+}
+
+const FString& RMLaneText::GetToolText()
+{
+	return GToolText;
+}
+
+void RMLaneText::SetToolText(const FString& Text)
+{
+	GToolText = Sanitize(Text);
+}
+
+bool RMLaneText::IsTextBoxOpen()
+{
+	return GTextBox.IsValid();
+}
+
+void RMLaneText::OpenTextBox(APlayerController* PC)
+{
+	if (GTextBox.IsValid() || !PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	URMLaneTextBox* Box = CreateWidget<URMLaneTextBox>(PC, URMLaneTextBox::StaticClass());
+	if (!Box)
+	{
+		return;
+	}
+	Box->SetIsFocusable(true);
+	Box->AddToViewport(1000);
+	GTextBox = Box;
+	FInputModeUIOnly Mode;
+	Mode.SetWidgetToFocus(Box->TakeWidget());
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PC->SetInputMode(Mode);
+	PC->SetShowMouseCursor(true);
+	Box->FocusText();
+}
+
+void RMLaneText::CloseTextBox(bool bAccept)
+{
+	URMLaneTextBox* Box = GTextBox.Get();
+	GTextBox.Reset();
+	if (!Box)
+	{
+		return;
+	}
+	if (bAccept)
+	{
+		SetToolText(Box->GetEnteredText());
+		UE_LOG(LogRoadMaker, Verbose, TEXT("Lane Text: text set to \"%s\""), *GToolText);
+	}
+	APlayerController* PC = Box->GetOwningPlayer();
+	Box->RemoveFromParent();
+	if (PC)
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+		PC->SetShowMouseCursor(false);
+	}
+}
+
+TSharedRef<SWidget> URMLaneTextBox::RebuildWidget()
+{
+	if (WidgetTree && !WidgetTree->RootWidget)
+	{
+		UWidgetTree* Tree = WidgetTree;
+		// Dimmed screen with a panel in the middle.
+		UBorder* Catcher = Tree->ConstructWidget<UBorder>();
+		Catcher->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.25f));
+		Tree->RootWidget = Catcher;
+		UVerticalBox* Screen = Tree->ConstructWidget<UVerticalBox>();
+		Catcher->SetContent(Screen);
+		Screen->AddChildToVerticalBox(Tree->ConstructWidget<USpacer>())->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		UBorder* Panel = Tree->ConstructWidget<UBorder>();
+		Panel->SetBrushColor(ColPanel);
+		Panel->SetPadding(FMargin(18.f));
+		UVerticalBoxSlot* PanelSlot = Screen->AddChildToVerticalBox(Panel);
+		PanelSlot->SetHorizontalAlignment(HAlign_Center);
+		Screen->AddChildToVerticalBox(Tree->ConstructWidget<USpacer>())->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+
+		USizeBox* Width = Tree->ConstructWidget<USizeBox>();
+		Width->SetWidthOverride(460.f);
+		Panel->SetContent(Width);
+		UVerticalBox* Content = Tree->ConstructWidget<UVerticalBox>();
+		Width->AddChild(Content);
+
+		Content->AddChildToVerticalBox(BoxLabel(Tree, NSLOCTEXT("RoadMaker", "LaneTextTitle", "Lane Text"), 20))
+			->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		Content->AddChildToVerticalBox(BoxLabel(Tree, FText::Format(NSLOCTEXT("RoadMaker", "LaneTextHelp",
+			"Painted down the lane and read from top to bottom: the first character is the farthest. Up to {0} characters, any language."),
+			FText::AsNumber(RMLaneText::MaxChars)), 11))->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+
+		mEdit = Tree->ConstructWidget<UEditableTextBox>();
+		mEdit->SetText(FText::FromString(RMLaneText::GetToolText()));
+		mEdit->SetHintText(NSLOCTEXT("RoadMaker", "LaneTextPlaceholder", "Type the text"));
+		mEdit->OnTextChanged.AddDynamic(this, &URMLaneTextBox::OnTextChanged);
+		mEdit->OnTextCommitted.AddDynamic(this, &URMLaneTextBox::OnTextCommitted);
+		Content->AddChildToVerticalBox(mEdit)->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+
+		UHorizontalBox* Buttons = Tree->ConstructWidget<UHorizontalBox>();
+		Content->AddChildToVerticalBox(Buttons);
+		UButton* Ok = Tree->ConstructWidget<UButton>();
+		Ok->SetBackgroundColor(ColOk);
+		Ok->AddChild(BoxLabel(Tree, NSLOCTEXT("RoadMaker", "LaneTextOk", "OK"), 14));
+		Ok->OnClicked.AddDynamic(this, &URMLaneTextBox::OnOk);
+		UHorizontalBoxSlot* OkSlot = Buttons->AddChildToHorizontalBox(Ok);
+		OkSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		OkSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
+		UButton* Cancel = Tree->ConstructWidget<UButton>();
+		Cancel->SetBackgroundColor(ColButton);
+		Cancel->AddChild(BoxLabel(Tree, NSLOCTEXT("RoadMaker", "LaneTextCancel", "Cancel"), 14));
+		Cancel->OnClicked.AddDynamic(this, &URMLaneTextBox::OnCancel);
+		Buttons->AddChildToHorizontalBox(Cancel)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+	return Super::RebuildWidget();
+}
+
+FReply URMLaneTextBox::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		RMLaneText::CloseTextBox(false);
+		return FReply::Handled();
+	}
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		RMLaneText::CloseTextBox(true);
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+FString URMLaneTextBox::GetEnteredText() const
+{
+	return mEdit ? RMLaneText::Sanitize(mEdit->GetText().ToString()) : FString();
+}
+
+void URMLaneTextBox::FocusText()
+{
+	if (mEdit)
+	{
+		mEdit->SetKeyboardFocus();
+	}
+}
+
+void URMLaneTextBox::OnTextChanged(const FText& Text)
+{
+	// No more than a marking takes.
+	const FString S = Text.ToString();
+	if (mEdit && S.Len() > RMLaneText::MaxChars)
+	{
+		mEdit->SetText(FText::FromString(S.Left(RMLaneText::MaxChars)));
+	}
+}
+
+void URMLaneTextBox::OnTextCommitted(const FText& Text, ETextCommit::Type CommitMethod)
+{
+	if (CommitMethod == ETextCommit::OnEnter)
+	{
+		RMLaneText::CloseTextBox(true);
+	}
+	else if (CommitMethod == ETextCommit::OnCleared)
+	{
+		RMLaneText::CloseTextBox(false); // Esc in the field
+	}
+}
+
+void URMLaneTextBox::OnOk()
+{
+	RMLaneText::CloseTextBox(true);
+}
+
+void URMLaneTextBox::OnCancel()
+{
+	RMLaneText::CloseTextBox(false);
+}
+
 namespace
 {
 	/**
@@ -276,22 +505,15 @@ namespace
 			ARMBuildableRoad* Road = ARMBuildableMarking::FindRoadAt(World, Hit.Location);
 			FTransform T;
 			float LaneWidth = 200.f;
-			FRMMarkingDrape Probe;
-			if (!Road || !ARMBuildableMarking::PlanRange(Road, Hit.Location, View.Vector(), 0.f, 0.f, T, LaneWidth, Probe))
+			FRMMarkingDrape Drape;
+			if (!Road || !ARMBuildableMarking::PlanText(Road, Hit.Location, View.Vector(), Text.Len(), T, LaneWidth, Drape))
 			{
 				UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: aim at a road"));
 				return;
 			}
 			const float Length = ARMBuildableMarking::TextLength(Text.Len(), LaneWidth);
-			FRMMarkingDrape Drape;
-			ARMBuildableMarking::PlanRange(Road, Hit.Location, View.Vector(), -25.f, Length + 25.f, T, LaneWidth, Drape);
-			if (!RMLaneText::EnsureGlyphs(World, Text))
-			{
-				UE_LOG(LogRoadMaker, Warning, TEXT("Lane Text: could not draw the characters"));
-				return;
-			}
 			FRMMesh Mesh;
-			ARMBuildableMarking::BuildTextMesh(Text.Len(), [&Text](int32 I) { return RMLaneText::CellUV(Text[I]); }, LaneWidth, Mesh, &Drape);
+			ARMBuildableMarking::BuildTextMeshFor(World, Text, LaneWidth, Mesh, &Drape);
 
 			AActor* Actor = World->SpawnActor<AActor>(AActor::StaticClass(), T);
 			UProceduralMeshComponent* Comp = NewObject<UProceduralMeshComponent>(Actor, TEXT("LaneText"));

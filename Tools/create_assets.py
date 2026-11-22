@@ -544,7 +544,7 @@ if VehiclePathSubCat:
     edit_fence_subcat = efc.generated_class()
     lane_marking_subcat = None
 # Road Tools entries and their section.
-MARKING_TOOLS = ("LaneArrow", "LaneNumber", "LaneVehicle")  # painted from the customizer (Road Lines), not in the build menu
+MARKING_TOOLS = ("LaneArrow", "LaneNumber", "LaneVehicle", "LaneText")  # painted from the customizer (Road Lines), not in the build menu
 ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "FenceCut": "fence", "FenceJoin": "fence"}
 
 base_building = None
@@ -618,6 +618,8 @@ TOOLS = [
      {"m_kind": "DIGIT"}, [], road_icons, {}),
     ("LaneVehicle", RMBuildableMarking, holo_marking, "Lane Vehicle", "Paints a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon) on a lane of a road, to mark lanes for one kind of vehicle. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the vehicle. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build.",
      {"m_kind": "VEHICLE"}, [], road_icons, {}),
+    ("LaneText", RMBuildableMarking, holo_marking, "Lane Text", "Text painted down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest). Any language. Chosen in the customizer (Road Lines > Markings): write the text in its box (R opens it again), aim at a lane and click. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click copies its text. Free to build.",
+     {"m_kind": "TEXT"}, [], road_icons, {}),
     ("WalkingPath_2m", RMBuildableRoad, holo_road, "Walking Path (2 m)", "A walking path two metres wide: concrete blocks on top, concrete sides, one dashed middle line. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: with one on each side, a 1-wide road becomes 1.5 foundations wide, and fences snap to the path's outer edge. Click the start, click the end to build one on its own; it snaps to walking path ends. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab, the middle line in Road Lines. Free to build.",
      {"m_width_in_foundations": 1, "m_width_cm": 200.0, "m_is_walking_path": True, "m_default_look": 1}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
     ("WalkingPath_4m", RMBuildableRoad, holo_road, "Walking Path (4 m)", "A walking path four metres wide: concrete blocks on top, concrete sides. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: one on a side of a 1-wide road makes it 1.5 foundations wide, and fences snap to the path's outer edge. Or click the start, click the end: it snaps to 4 m walking path ends and to road ends every 2 m across. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. Split Road makes two 2 m paths of it. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab; Road Lines adds a middle line and side lines. Free to build.",
@@ -630,7 +632,7 @@ TOOLS = [
 
 MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9,
-              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
+              "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "LaneText": 4, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
               "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7, "FenceWall_SteelLow": 8, "FenceWall_SignLow": 9}
 
 FenceEnum = getattr(unreal, "RMFenceType", None)
@@ -985,15 +987,24 @@ MARKING_OPTIONS = [
     ("MarkArrow", "MarkArrow", "Lane Arrow", "LaneArrow", "ARROW", 1.0, 9130),
     ("MarkNumber", "MarkNumber", "Lane Number", "LaneNumber", "DIGIT", 1.0, 9131),
     ("MarkVehicle", "MarkVehicle", "Lane Vehicle", "LaneVehicle", "VEHICLE", 1.0, 9132),
+    ("MarkText", "MarkText", "Lane Text", "LaneText", "TEXT", 1.0, 9133),
 ]
 for i, (key, icon_name, display, tool, kind, size, ident) in enumerate(MARKING_OPTIONS):
     d = make_bp("Customization", "RoadLines_" + key, LineDesc)
     c = cdo(d)
     setp(c, text(display, "RoadLines." + key), "m_display_name", "mDisplayName")
-    what = {"ARROW": "an arrow", "DIGIT": "a single digit (0 to 9)", "VEHICLE": "a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon)"}[kind]
-    pick = {"ARROW": "arrow", "DIGIT": "digit", "VEHICLE": "vehicle"}[kind]
+    what = {"ARROW": "an arrow", "DIGIT": "a single digit (0 to 9)", "VEHICLE": "a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon)", "TEXT": ""}[kind]
+    pick = {"ARROW": "arrow", "DIGIT": "digit", "VEHICLE": "vehicle", "TEXT": ""}[kind]
     big = ""
-    setp(c, text("Paints " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + pick + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building.", "RoadLines." + key + ".Desc"), "m_description", "mDescription")
+    if kind == "TEXT":
+        desc = ("Paints text down a lane of a road, one upright character after another, read from top to bottom looking down the lane "
+                "(the first character is the farthest); any language. Picking it opens a box to write the text (R opens it again). "
+                "Aim at a road: the ghost shows the text in the middle of the lane you aim at; the click paints it. It takes the colour "
+                "of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; "
+                "middle click on painted text copies it.")
+    else:
+        desc = ("Paints " + what + " on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the " + pick + ", the click paints it." + big + " It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building.")
+    setp(c, text(desc, "RoadLines." + key + ".Desc"), "m_description", "mDescription")
     setp(c, cat.generated_class(), "m_category", "mCategory")
     setp(c, [subcats["Markings"]], "m_sub_categories", "mSubCategories")
     setp(c, float(i), "m_menu_priority", "mMenuPriority")

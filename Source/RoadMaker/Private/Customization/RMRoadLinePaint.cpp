@@ -7,6 +7,7 @@
 #include "Buildables/RMBuildableIntersection.h"
 #include "Net/RMRemoteCallObject.h"
 #include "Buildables/RMBuildableMarking.h"
+#include "Customization/RMLaneText.h"
 #include "ProceduralMeshComponent.h"
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
@@ -52,6 +53,14 @@ namespace
 	/** Middle click on a marking: its option and variant, taken over when the customizer picks that option. */
 	TSubclassOf<URMRoadLineDescriptor> GSampledMarking;
 	int32 GSampledVariant = 0;
+	/** Lane Text: the text of a sampled marking (middle click), and whether the text box should open next frame. */
+	FString GSampledText;
+	bool GOpenTextBoxPending = false;
+
+	bool IsTextOption(const URMRoadLineDescriptor* D)
+	{
+		return D && D->mIsMarking && D->mMarkingKind == ERMMarkingKind::Text;
+	}
 
 	const URMRoadLineDescriptor* MarkingOption()
 	{
@@ -103,6 +112,12 @@ bool RMRoadLinePaint::IsAnyActive()
 
 FText RMRoadLinePaint::GetActiveText()
 {
+	if (GActiveMarking && IsTextOption(MarkingOption()))
+	{
+		const FString& Text = RMLaneText::GetToolText();
+		return Text.IsEmpty() ? NSLOCTEXT("RoadMaker", "LaneTextHudEmpty", "Lane Text: press R to write the text")
+			: FText::Format(NSLOCTEXT("RoadMaker", "LaneTextHud", "Lane Text: \"{0}\" (R: change the text, click: paint)"), FText::FromString(Text));
+	}
 	if (GActiveMarking)
 	{
 		return FText::Format(NSLOCTEXT("RoadMaker", "MarkingHud", "{0}: {1} (mouse wheel: next, click: paint)"),
@@ -234,8 +249,11 @@ namespace
 		FTransform T;
 		float Width = 200.f;
 		FRMMarkingDrape Drape;
+		const bool bText = IsTextOption(D);
+		const FString& Text = RMLaneText::GetToolText();
 		if (!Default || !Road || !PC || !TraceAim(PC, AimRoad, AimActor, Aim, Look) || AimRoad != Road
-			|| !ARMBuildableMarking::PlanOn(Road, Aim, Look, D->mMarkingKind, D->mMarkingSize, T, Width, Drape))
+			|| (bText ? Text.IsEmpty() || !ARMBuildableMarking::PlanText(Road, Aim, Look, Text.Len(), T, Width, Drape)
+				: !ARMBuildableMarking::PlanOn(Road, Aim, Look, D->mMarkingKind, D->mMarkingSize, T, Width, Drape)))
 		{
 			DestroyGhost();
 			return;
@@ -275,7 +293,14 @@ namespace
 		GGhost.Variant = Variant;
 		GGhost.Width = Width;
 		FRMMesh Paint;
-		ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint, &Drape);
+		if (bText)
+		{
+			ARMBuildableMarking::BuildTextMeshFor(PC->GetWorld(), Text, Width, Paint, &Drape);
+		}
+		else
+		{
+			ARMBuildableMarking::BuildMarkingMesh(D->mMarkingKind, static_cast<uint8>(Variant), Width, Paint, &Drape);
+		}
 		Paint.ApplyToSection(M, 0, false);
 		M->SetMaterial(0, Default->GetPaintMaterial(LookIndex, static_cast<uint8>(Variant)));
 	}
@@ -327,7 +352,18 @@ void URMRoadLinesHint::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		return;
 	}
 	APlayerController* PC = GetOwningPlayer();
-	const bool bShow = RMRoadLinePaint::IsAnyActive() && RMRoadLinePaint::IsPaintStateActive(PC);
+	// Lane Text picked (or R pressed): its text box, once the customizer menu is closed (a frame later, so the R that
+	// opened it is not typed into it).
+	if (GOpenTextBoxPending && PC && IsTextOption(MarkingOption()) && RMRoadLinePaint::IsPaintStateActive(PC) && !PC->ShouldShowMouseCursor())
+	{
+		GOpenTextBoxPending = false;
+		RMLaneText::OpenTextBox(PC);
+	}
+	else if (GOpenTextBoxPending && !IsTextOption(MarkingOption()))
+	{
+		GOpenTextBoxPending = false;
+	}
+	const bool bShow = RMRoadLinePaint::IsAnyActive() && RMRoadLinePaint::IsPaintStateActive(PC) && !RMLaneText::IsTextBoxOpen();
 	Box->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	if (!bShow)
 	{
@@ -447,10 +483,19 @@ namespace
 				{
 					GMarkingVariant = 0;
 				}
+				const bool bNewPick = GActiveMarking != Option;
 				if (GSampledMarking == Option)
 				{
 					GMarkingVariant = GSampledVariant;
 					GSampledMarking = nullptr;
+					if (IsTextOption(Picked))
+					{
+						RMLaneText::SetToolText(GSampledText); // a clone: the same text, no box
+					}
+				}
+				else if (IsTextOption(Picked) && bNewPick)
+				{
+					GOpenTextBoxPending = true; // Lane Text picked: write (or confirm) its text
 				}
 				GActiveMarking = Option;
 				GActiveSides = nullptr;
@@ -1316,9 +1361,14 @@ namespace
 		}
 		GSampledMarking = Option;
 		GSampledVariant = Marking->GetVariant();
+		GSampledText = Marking->GetText();
 		if (GActiveMarking == Option)
 		{
 			GMarkingVariant = GSampledVariant;
+			if (IsTextOption(Option->GetDefaultObject<URMRoadLineDescriptor>()))
+			{
+				RMLaneText::SetToolText(GSampledText);
+			}
 		}
 		if (bGunInHand)
 		{
@@ -1447,9 +1497,26 @@ namespace
 		}
 		virtual bool HandleKeyDownEvent(FSlateApplication&, const FKeyEvent& KeyEvent) override
 		{
+			if (!KeyEvent.IsRepeat() && KeyEvent.GetKey() == EKeys::R && OnTextKey())
+			{
+				return true;
+			}
 			return !KeyEvent.IsRepeat() && OnSampleKey(KeyEvent.GetKey());
 		}
 	private:
+		/** R with Lane Text in hand (markings have no build modes): its text box again. */
+		static bool OnTextKey()
+		{
+			APlayerController* PC = GameWorldPlayer();
+			if (!PC || !IsTextOption(MarkingOption()) || RMLaneText::IsTextBoxOpen() || PC->ShouldShowMouseCursor()
+				|| !RMRoadLinePaint::IsPaintStateActive(PC))
+			{
+				return false;
+			}
+			GOpenTextBoxPending = true;
+			return true;
+		}
+
 		static bool OnSampleKey(const FKey& Key)
 		{
 			APlayerController* PC = GameWorldPlayer();
@@ -1620,13 +1687,20 @@ void RMRoadLinePaint::InstallHooks()
 				return; // the hint says "Aim at a road"
 			}
 			const URMRoadLineDescriptor* D = MarkingOption();
+			const FString Text = IsTextOption(D) ? RMLaneText::GetToolText() : FString();
+			if (IsTextOption(D) && Text.IsEmpty())
+			{
+				GOpenTextBoxPending = true; // nothing to paint yet: write it first
+				return;
+			}
 			if (Road->HasAuthority())
 			{
-				ARMBuildableMarking::SpawnOn(D->mMarkingClass, D->mMarkingRecipe, Road, static_cast<uint8>(GMarkingVariant), D->mMarkingSize, Aim, Look);
+				ARMBuildableMarking::SpawnOn(D->mMarkingClass, D->mMarkingRecipe, Road, static_cast<uint8>(GMarkingVariant), D->mMarkingSize, Aim, Look,
+					nullptr, -1, Text);
 			}
 			else if (URMRemoteCallObject* RCO = URMRemoteCallObject::Get(PC))
 			{
-				RCO->ServerPaintMarking(GActiveMarking, Road, GMarkingVariant, Aim, Look);
+				RCO->ServerPaintMarking(GActiveMarking, Road, GMarkingVariant, Aim, Look, Text);
 			}
 			return;
 		}

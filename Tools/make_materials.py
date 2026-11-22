@@ -1528,6 +1528,7 @@ ASSIGN = {
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,
+    "Build_LaneText": VEHICLE_MARKING_LOOKS,  # the icon paint with the glyph texture (1.5.0)
     "Build_Fence_GuardRail": {"m_main_material": game_beam_mat or steel, "m_panel_material": post_mat or steel},
     "Build_Fence_Jersey": {"m_main_material": jersey},
     "Build_Fence_Grid": {"m_main_material": post_mat or steel, "m_panel_material": grid},

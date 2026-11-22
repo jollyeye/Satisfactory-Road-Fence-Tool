@@ -1048,3 +1048,69 @@ msgstr ""
 msgctxt "RoadMakerAssets,FenceWall_SignLow.Desc"
 msgid "1 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of a 4 m Label Sign, scaled up to 8 x 1 m). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Ends and top in matte metal, circuit grooves on the back. Costs what the 4 m sign wall does. Cost is per 8 m."
 msgstr ""
+
+#. Key:	LaneTextTitle
+#: Source/RoadMaker/Private/Customization/RMLaneText.cpp
+msgctxt "RoadMaker,LaneTextTitle"
+msgid "Lane Text"
+msgstr ""
+
+#. Key:	LaneTextHelp
+#: Source/RoadMaker/Private/Customization/RMLaneText.cpp
+msgctxt "RoadMaker,LaneTextHelp"
+msgid "Painted down the lane and read from top to bottom: the first character is the farthest. Up to {0} characters, any language."
+msgstr ""
+
+#. Key:	LaneTextPlaceholder
+#: Source/RoadMaker/Private/Customization/RMLaneText.cpp
+msgctxt "RoadMaker,LaneTextPlaceholder"
+msgid "Type the text"
+msgstr ""
+
+#. Key:	LaneTextOk
+#: Source/RoadMaker/Private/Customization/RMLaneText.cpp
+msgctxt "RoadMaker,LaneTextOk"
+msgid "OK"
+msgstr ""
+
+#. Key:	LaneTextCancel
+#: Source/RoadMaker/Private/Customization/RMLaneText.cpp
+msgctxt "RoadMaker,LaneTextCancel"
+msgid "Cancel"
+msgstr ""
+
+#. Key:	LaneTextHudEmpty
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,LaneTextHudEmpty"
+msgid "Lane Text: press R to write the text"
+msgstr ""
+
+#. Key:	LaneTextHud
+#: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
+msgctxt "RoadMaker,LaneTextHud"
+msgid "Lane Text: \"{0}\" (R: change the text, click: paint)"
+msgstr ""
+
+#. Key:	LaneText.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,LaneText.Name"
+msgid "Lane Text"
+msgstr ""
+
+#. Key:	LaneText.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,LaneText.Desc"
+msgid "Text painted down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest). Any language. Chosen in the customizer (Road Lines > Markings): write the text in its box (R opens it again), aim at a lane and click. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click copies its text. Free to build."
+msgstr ""
+
+#. Key:	RoadLines.MarkText
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadLines.MarkText"
+msgid "Lane Text"
+msgstr ""
+
+#. Key:	RoadLines.MarkText.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadLines.MarkText.Desc"
+msgid "Paints text down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest); any language. Picking it opens a box to write the text (R opens it again). Aim at a road: the ghost shows the text in the middle of the lane you aim at; the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click on painted text copies it."
+msgstr ""

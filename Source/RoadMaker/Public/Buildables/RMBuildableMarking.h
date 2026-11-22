@@ -20,6 +20,8 @@ enum class ERMMarkingKind : uint8
 	Arrow,
 	Digit,
 	Vehicle,
+	/** Lane Text (1.5.0): a line of text written down the lane (mText), drawn from the shared glyph texture (RMLaneText). */
+	Text,
 };
 
 /**
@@ -64,7 +66,13 @@ public:
 	 * Arrow: 0 straight, 1 left, 2 right, 3 straight or left, 4 straight or right, 5 left or right. Digit: 0 to 9.
 	 * Vehicle: 0 Tractor, 1 Truck, 2 Explorer, 3 Factory Cart, 4 Cyberwagon.
 	 */
-	static int32 VariantCount(ERMMarkingKind Kind) { return Kind == ERMMarkingKind::Arrow ? 6 : Kind == ERMMarkingKind::Digit ? 10 : 5; }
+	static int32 VariantCount(ERMMarkingKind Kind)
+	{
+		return Kind == ERMMarkingKind::Arrow ? 6 : Kind == ERMMarkingKind::Digit ? 10 : Kind == ERMMarkingKind::Vehicle ? 5 : 1;
+	}
+
+	/** Lane Text: the text painted (empty for the other kinds). */
+	const FString& GetText() const { return mText; }
 
 	/** The name of a vehicle variant ("Tractor", ...). */
 	static const TCHAR* VehicleName(int32 Variant);
@@ -112,10 +120,18 @@ public:
 	/**
 	 * Lane Text (1.5.0): the layout of NumChars characters written along the lane, read top to bottom looking down it:
 	 * the first character farthest, each upright with its top away from the viewer, as long as a lane number. The last
-	 * one starts at X = 0. CellUV gives each character's cell in the glyph texture (min = top left, max = bottom right).
+	 * text is centred on X = 0 (on the aimed spot, like the other markings). CellUV gives each character's cell in the
+	 * glyph texture (min = top left, max = bottom right).
 	 */
 	static float TextLength(int32 NumChars, float LaneWidth);
 	static void BuildTextMesh(int32 NumChars, TFunctionRef<FBox2D(int32)> CellUV, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape);
+
+	/** Lane Text: like PlanOn, for NumChars characters. */
+	static bool PlanText(const ARMBuildableRoad* Road, const FVector& Aim, const FVector& LookDir, int32 NumChars,
+		FTransform& OutTransform, float& OutWidth, FRMMarkingDrape& OutDrape);
+
+	/** Lane Text: the mesh of Text (draws its characters into the glyph texture first; plain tiles where it cannot). */
+	static void BuildTextMeshFor(UWorld* World, const FString& Text, float LaneWidth, FRMMesh& Out, const FRMMarkingDrape* Drape);
 
 	/** Stores the road surface under it (set before it is spawned). */
 	void SetDrape(const FRMMarkingDrape& Drape);
@@ -162,7 +178,7 @@ public:
 	 */
 	static ARMBuildableMarking* SpawnOn(TSubclassOf<ARMBuildableMarking> Class, TSubclassOf<UFGRecipe> Recipe, ARMBuildableRoad* Road,
 		uint8 Variant, float SizeMultiplier, const FVector& Aim, const FVector& LookDir,
-		const struct FFactoryCustomizationData* Paint = nullptr, int32 Look = -1);
+		const struct FFactoryCustomizationData* Paint = nullptr, int32 Look = -1, const FString& Text = FString());
 
 	/** Hair above the road surface so the paint does not fight the road's own surface. */
 	static constexpr float Lift = 1.5f;
@@ -185,6 +201,10 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
 	float mLaneWidth = 200.f;
+
+	/** Lane Text (1.5.0): the text, top to bottom down the lane. Set once when painted (a paint job: not editable). */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
+	FString mText;
 
 	// The road surface under it (FRMMarkingDrape); empty = flat (markings from before draping).
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)

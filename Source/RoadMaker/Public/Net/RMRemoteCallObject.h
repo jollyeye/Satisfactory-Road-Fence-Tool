@@ -21,7 +21,8 @@ public:
 
 	/** Paints a lane marking on a road (customizer Road Lines > Markings), on the server. */
 	UFUNCTION(Server, Reliable)
-	void ServerPaintMarking(TSubclassOf<URMRoadLineDescriptor> Option, class ARMBuildableRoad* Road, int32 Variant, FVector Aim, FVector LookDir);
+	void ServerPaintMarking(TSubclassOf<URMRoadLineDescriptor> Option, class ARMBuildableRoad* Road, int32 Variant, FVector Aim, FVector LookDir,
+		const FString& Text);
 
 	/** Switches a fence wall's look (customizer Material tab), on the server. */
 	UFUNCTION(Server, Reliable)

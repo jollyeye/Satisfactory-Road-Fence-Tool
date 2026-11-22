@@ -20,12 +20,14 @@ void URMRemoteCallObject::ServerApplyRoadLines_Implementation(AActor* Target, TS
 	RMRoadLinePaint::ApplyToTarget(Target, Sides, Lanes);
 }
 
-void URMRemoteCallObject::ServerPaintMarking_Implementation(TSubclassOf<URMRoadLineDescriptor> Option, ARMBuildableRoad* Road, int32 Variant, FVector Aim, FVector LookDir)
+void URMRemoteCallObject::ServerPaintMarking_Implementation(TSubclassOf<URMRoadLineDescriptor> Option, ARMBuildableRoad* Road, int32 Variant, FVector Aim, FVector LookDir,
+	const FString& Text)
 {
 	const URMRoadLineDescriptor* D = Option ? Option->GetDefaultObject<URMRoadLineDescriptor>() : nullptr;
 	if (D && D->mIsMarking && Road && !Road->GetIsDismantled())
 	{
-		ARMBuildableMarking::SpawnOn(D->mMarkingClass, D->mMarkingRecipe, Road, static_cast<uint8>(FMath::Max(Variant, 0)), D->mMarkingSize, Aim, LookDir);
+		ARMBuildableMarking::SpawnOn(D->mMarkingClass, D->mMarkingRecipe, Road, static_cast<uint8>(FMath::Max(Variant, 0)), D->mMarkingSize, Aim, LookDir,
+			nullptr, -1, Text);
 	}
 }
 
