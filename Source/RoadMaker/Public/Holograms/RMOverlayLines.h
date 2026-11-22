@@ -65,6 +65,31 @@ namespace RMOverlayLines
 			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
 		}
 
+		/** A flat quad (both faces). */
+		void Quad(const FVector& A, const FVector& B, const FVector& C, const FVector& D, const FLinearColor& Color)
+		{
+			const int32 I = Vertices.Num();
+			for (const FVector& P : { A, B, C, D })
+			{
+				Vertices.Add(P - Base);
+				Colors.Add(Color);
+			}
+			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3, I, I + 2, I + 1, I, I + 3, I + 2 });
+		}
+
+		/** A 4 m arrow standing over Tip, pointing down at it, turned towards the camera (as the intersection tool's). */
+		void Arrow(const FVector& At, const FLinearColor& Color)
+		{
+			const FVector Tip = At + FVector(0.f, 0.f, 20.f);
+			FVector ToCam = Camera - Tip;
+			ToCam.Z = 0.f;
+			const FVector Side = FVector::CrossProduct(FVector::UpVector, ToCam.GetSafeNormal()).GetSafeNormal();
+			const FVector Up = FVector::UpVector;
+			const FVector HeadTop = Tip + Up * 150.f;
+			Quad(Tip, Tip, HeadTop + Side * 110.f, HeadTop - Side * 110.f, Color);
+			Quad(HeadTop - Side * 35.f, HeadTop + Side * 35.f, Tip + Up * 400.f + Side * 35.f, Tip + Up * 400.f - Side * 35.f, Color);
+		}
+
 		void Polyline(const TArray<FVector>& L, const FLinearColor& Color)
 		{
 			for (int32 I = 0; I + 1 < L.Num(); ++I)

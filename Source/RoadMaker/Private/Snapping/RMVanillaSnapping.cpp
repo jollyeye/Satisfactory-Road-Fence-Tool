@@ -2939,7 +2939,8 @@ namespace
 
 	/** Puts a sign on a surface: no leg, turned to face along Normal (and tilted with Slope), scroll rolls it. */
 	template <typename TScope, typename THologram>
-	void FinishSignPlacement(TScope& Scope, THologram* Hologram, const FVector& Location, const FVector& Normal, const FVector& Fwd, float Slope)
+	void FinishSignPlacement(TScope& Scope, THologram* Hologram, const FVector& Location, const FVector& Normal, const FVector& Fwd, float Slope,
+		const FVector* OrientedUp = nullptr)
 	{
 		// Facing: turned with the curve, and tilted with the wall's slope. The model's X axis runs
 		// along the wall (SignYawOffset), Y towards the viewer.
@@ -2947,7 +2948,12 @@ namespace
 		FVector AxisX = Yawed.GetAxisX();
 		const FVector AxisY = Yawed.GetAxisY();
 		AxisX = (AxisX + FVector(0.f, 0.f, Slope * (FVector::DotProduct(AxisX, Fwd) >= 0.f ? 1.f : -1.f))).GetSafeNormal();
-		const FQuat Base = FRotationMatrix::MakeFromXY(AxisX, AxisY).ToQuat();
+		FQuat Base = FRotationMatrix::MakeFromXY(AxisX, AxisY).ToQuat();
+		if (OrientedUp)
+		{
+			// A leaning face (the tunnel's arch, 1.5.0): the sign as on an upright face looking along X, turned onto the face.
+			Base = FRotationMatrix::MakeFromXZ(Normal, *OrientedUp).ToQuat() * FRotator(0.f, SignYawOffset, 0.f).Quaternion();
+		}
 		// Scroll turns it in the plane of the wall, 45 degrees per step.
 		const int32 Steps = GSignRoll.FindRef(Hologram);
 		const FQuat Final = FQuat(Normal, FMath::DegreesToRadians(45.f * Steps)) * Base;
@@ -3057,9 +3063,9 @@ namespace
 		}
 		// Automatic on fence walls and the gantry; anywhere else the sign places normally (with its leg).
 		FWallFace Face;
-		if (!Cast<ARMBuildableTunnel>(Hit.GetActor()) && FindWallFace(Hit, Face)) // signs: not on the tunnel's curved faces
+		if (FindWallFace(Hit, Face))
 		{
-			FinishSignPlacement(Scope, Hologram, Face.Location, Face.Normal, Face.Fwd, Face.Slope);
+			FinishSignPlacement(Scope, Hologram, Face.Location, Face.Normal, Face.Fwd, Face.Slope, Face.bOriented ? &Face.Up : nullptr);
 			return true;
 		}
 		if (GSignsOnWall.Remove(Hologram) > 0)
@@ -3538,7 +3544,14 @@ namespace
 		FVector Up;
 		FVector Along;
 		FWallFace Face;
-		if (Actor && (Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor)) && FMath::Abs(Hit.ImpactNormal.Z) > 0.5f)
+		if (Cast<ARMBuildableTunnel>(Actor) && FindWallFace(Hit, Face))
+		{
+			// The tunnel's arch: on its nine snap points, out of the (leaning) face, along the arch's up there.
+			Location = Face.Location;
+			Up = Face.Normal;
+			Along = Face.Up;
+		}
+		else if (Actor && (Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor)) && FMath::Abs(Hit.ImpactNormal.Z) > 0.5f)
 		{
 			Location = Hit.ImpactPoint;
 			Up = Hit.ImpactNormal.GetSafeNormal();

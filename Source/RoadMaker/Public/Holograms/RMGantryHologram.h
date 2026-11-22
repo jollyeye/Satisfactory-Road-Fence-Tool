@@ -52,6 +52,8 @@ protected:
 	/** The first column (world, on the first side's fence line) and the side's direction there. */
 	FVector mColumnA = FVector::ZeroVector;
 	FVector mFirstFwd = FVector::ForwardVector;
+	/** Where the column goes on the aimed side (step 0: under the aim; step 1: straight across from the first). */
+	FVector mHoverColumn = FVector::ZeroVector;
 	double mLastClickTime = 0.0;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")

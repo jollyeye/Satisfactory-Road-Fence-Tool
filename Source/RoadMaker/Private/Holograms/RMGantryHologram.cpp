@@ -106,6 +106,12 @@ void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		mHasHover = ARMTunnelHologram::FindSideAt(hitResult, mHover, ARMBuildableGantry::ColumnInset, false);
 		mOnRoad = false;
 		FVector ColumnB;
+		if (mHasHover)
+		{
+			int32 Seg;
+			float T;
+			RMOverlayLines::Nearest2D(mHover.Line, mStep == 1 ? mColumnA : hitResult.Location, Seg, T, mHoverColumn);
+		}
 		if (mStep == 1 && mHasHover && PairColumn(mHover, ColumnB))
 		{
 			// Across from column A to column B, level, at the lower foot (the other sinks into its road a little).
@@ -256,13 +262,19 @@ void ARMGantryHologram::RebuildOverlay()
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
 	if (mStep == 1)
 	{
-		B.Polyline(mFirst.Line, FLinearColor(0.f, 1.f, 0.f)); // the first side: green, and its column
-		B.Line(mColumnA, mColumnA + FVector(0.f, 0.f, 300.f), FLinearColor(0.f, 1.f, 0.f));
+		B.Polyline(mFirst.Line, FLinearColor(0.f, 1.f, 0.f)); // the first side: green, and its column's arrow
+		B.Arrow(mColumnA, FLinearColor(0.f, 1.f, 0.f));
 	}
 	if (mHasHover)
 	{
 		const bool bBad = mStep == 1 && !mOnRoad && !(mHover.Source == mFirst.Source && mHover.Key == mFirst.Key);
-		B.Polyline(mHover.Line, bBad ? FLinearColor(1.f, 0.05f, 0.05f) : FLinearColor(1.f, 1.f, 1.f));
+		const FLinearColor Color = bBad ? FLinearColor(1.f, 0.05f, 0.05f) : FLinearColor(1.f, 1.f, 1.f);
+		B.Polyline(mHover.Line, Color);
+		// Where the column goes on it: the white arrow (as the intersection tool shows its picks).
+		if (mStep == 0 || !(mHover.Source == mFirst.Source && mHover.Key == mFirst.Key))
+		{
+			B.Arrow(mHoverColumn, Color);
+		}
 	}
 	// The overlay hangs under the hologram, which turns with the gantry: its points are made in world space.
 	const FTransform T = mOverlayMesh->GetComponentTransform();
