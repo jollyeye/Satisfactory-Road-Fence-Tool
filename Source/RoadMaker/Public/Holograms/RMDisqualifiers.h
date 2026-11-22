@@ -278,3 +278,11 @@ class ROADMAKER_API URMCD_TunnelNotBeside : public UFGConstructDisqualifier
 public:
 	URMCD_TunnelNotBeside() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "TunnelNotBeside", "The two sides do not run side by side (3 to 60 m apart)"); }
 };
+
+UCLASS()
+class ROADMAKER_API URMCD_GantryNotAcross : public UFGConstructDisqualifier
+{
+	GENERATED_BODY()
+public:
+	URMCD_GantryNotAcross() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "GantryNotAcross", "Not straight across from the first column (3 to 60 m, at most 3 m higher or lower)"); }
+};

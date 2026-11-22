@@ -39,7 +39,19 @@ Nothing here is decided in detail yet: each item gets its design written down be
     inside it near its top, like under roads). Material: the walking path's concrete blocks (`M_RoadPavers`) turned
     90 degrees (UV1 = metres along / around), paintable with the road swatches. Cost: the game's concrete wall per
     16 m^2 of shell. Saved: the two feet lines (one point per cross-section, thinned where straight) and the arc.
+  - Tested 2026-11-22: builds and works. Then (asked 2026-11-22, built, to test): wall attachments snap to the arch
+    (`ARMBuildableTunnel::GetAttachFace`, used by `FindWallFace`): nine points around it, every eighth of the arc
+    (both feet, the top, the halves and quarters between), free along the tunnel, inside and outside; flat on the
+    leaning face, their top up the arch (along the tunnel at the top), scroll turns them on the face. The single wall
+    outlet uses these points in a tunnel; signs do not go on the arch.
   - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
+- **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
+  several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two
+  clicks for its columns like the tunnel: the first side (a road / walking path edge: the column on its fence line,
+  where you aim), the other side (any road / path edge straight across, 3 to 60 m, feet at most 3 m apart in height;
+  the same road's other edge gives the old gantry), then the height as before. Green / white / red side lines and
+  on-screen steps (`RMScreenHint`); click the first side again to drop it. Shared helpers: `RMOverlayLines.h`,
+  `ARMTunnelHologram::FindSideAt`.
 - **Boom barrier** (moved here from 1.4.0 on 2026-11-16; concept image `docs/concepts/boom-barrier-concept.png`): the
   striped arm that blocks vehicles at parking / factory entrances. A post beside the lane with a hinged arm across it,
   snapping to a road edge like the street lights; first version for show (arm up / down by interacting), later maybe

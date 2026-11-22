@@ -1,10 +1,12 @@
-// Sign gantry placement, two clicks like the game's signs: aim at a road and click to put the gantry
-// across it (columns on the road's fence lines); then the mouse sets the height of the beam in 2 m
-// steps (at least 8 m above the road) and the second click builds it.
+// Sign gantry placement (reworked 1.5.0 for carriageways of several roads and paths): click the first side (a road or
+// walking path edge: a column on its fence line), click the other side (the same road's other edge, or the far edge of
+// a road beside it: the second column straight across), then the mouse sets the height of the beam in 2 m steps (at
+// least 8 m above the road) and a click builds it. Click the first side again to drop it.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Hologram/FGBuildableHologram.h"
+#include "Holograms/RMTunnelHologram.h"
 #include "RMGantryHologram.generated.h"
 
 class UProceduralMeshComponent;
@@ -30,10 +32,27 @@ public:
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
 
 	virtual void SetMaterialState(EHologramMaterialState state) override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	void UpdateHologramLook();
 
 protected:
 	void RebuildPreview();
+	void RebuildOverlay();
+	void UpdateHint();
+	void ResetTool();
+	/** The second column for the aimed side: straight across from the first; false if it does not face it. */
+	bool PairColumn(const FRMTunnelSide& Side, FVector& OutColumn) const;
+
+	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
+	UProceduralMeshComponent* mOverlayMesh;
+
+	FRMTunnelSide mFirst;
+	FRMTunnelSide mHover;
+	bool mHasHover = false;
+	/** The first column (world, on the first side's fence line) and the side's direction there. */
+	FVector mColumnA = FVector::ZeroVector;
+	FVector mFirstFwd = FVector::ForwardVector;
+	double mLastClickTime = 0.0;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker")
 	UMaterialInterface* mPreviewMaterial = nullptr;
@@ -45,7 +64,7 @@ protected:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UStaticMeshComponent>> mParts;
 
-	/** 0: placing across a road; 1: setting the beam height. */
+	/** 0: picking the first side; 1: picking the other side; 2: setting the beam height. */
 	UPROPERTY(Replicated, CustomSerialization)
 	int32 mStep = 0;
 
@@ -55,7 +74,7 @@ protected:
 	UPROPERTY(Replicated, CustomSerialization)
 	float mBeamBottom = 800.f;
 
-	/** Step 0: the aimed piece is a road. */
+	/** Step 1: the aimed side faces the first one (the gantry is shown across). */
 	bool mOnRoad = false;
 
 	float mShownHalfSpan = -1.f;

@@ -5,6 +5,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "UI/RMScreenHint.h"
+#include "Holograms/RMOverlayLines.h"
 #include "RMRoadUtils.h"
 #include "RMGeometry.h"
 #include "RoadMakerModule.h"
@@ -23,78 +24,10 @@ namespace RMTunnelTool
 	constexpr float Step = 100.f;        // a cross-section per metre of the first side ...
 	constexpr float StraightTol = 3.f;   // ... thinned where both feet run straight (within 3 cm) ...
 	constexpr float MaxGap = 2000.f;     // ... at most 20 m apart
-	constexpr float OverlayPixels = 4.f;
 
-	/** Closest point of a polyline to P seen from above: segment, fraction, point (3D, on the line). */
-	bool Nearest2D(const TArray<FVector>& L, const FVector& P, int32& OutSeg, float& OutT, FVector& OutPoint)
-	{
-		float Best = TNumericLimits<float>::Max();
-		for (int32 I = 0; I + 1 < L.Num(); ++I)
-		{
-			const FVector2D AB(L[I + 1] - L[I]), AP(P - L[I]);
-			const float Len2 = AB.SizeSquared();
-			const float T = Len2 > 1e-4f ? FMath::Clamp(FVector2D::DotProduct(AP, AB) / Len2, 0.f, 1.f) : 0.f;
-			const FVector C = FMath::Lerp(L[I], L[I + 1], T);
-			const float D = FVector::DistSquared2D(C, P);
-			if (D < Best)
-			{
-				Best = D;
-				OutSeg = I;
-				OutT = T;
-				OutPoint = C;
-			}
-		}
-		return Best < TNumericLimits<float>::Max();
-	}
-
-	/** Camera-facing lines, in actor space (as the Gap Fill tool draws them). */
-	struct FOverlay
-	{
-		FVector Base;
-		FVector Camera;
-		float WorldPerPixel = 0.f;
-		TArray<FVector> Vertices;
-		TArray<int32> Triangles;
-		TArray<FLinearColor> Colors;
-
-		void Line(FVector A, FVector B, const FLinearColor& Color)
-		{
-			A.Z += 8.f;
-			B.Z += 8.f;
-			const FVector Dir = (B - A).GetSafeNormal();
-			if (Dir.IsNearlyZero())
-			{
-				return;
-			}
-			const float HA = OverlayPixels * WorldPerPixel * FMath::Max(FVector::Dist(A, Camera), 10.f) * 0.5f;
-			const float HB = OverlayPixels * WorldPerPixel * FMath::Max(FVector::Dist(B, Camera), 10.f) * 0.5f;
-			A -= Dir * HA;
-			B += Dir * HB;
-			const FVector SA = FVector::CrossProduct(Dir, Camera - A).GetSafeNormal();
-			const FVector SB = FVector::CrossProduct(Dir, Camera - B).GetSafeNormal();
-			const int32 I = Vertices.Num();
-			for (const FVector& P : { A - SA * HA, A + SA * HA, B + SB * HB, B - SB * HB })
-			{
-				Vertices.Add(P - Base);
-				Colors.Add(Color);
-			}
-			Triangles.Append({ I, I + 1, I + 2, I, I + 2, I + 3 });
-		}
-
-		void Polyline(const TArray<FVector>& L, const FLinearColor& Color)
-		{
-			for (int32 I = 0; I + 1 < L.Num(); ++I)
-			{
-				Line(L[I], L[I + 1], Color);
-			}
-		}
-	};
-
-	UMaterialInterface* OverlayMaterial()
-	{
-		static UMaterialInterface* M = [] { UMaterialInterface* L = LoadObject<UMaterialInterface>(nullptr, TEXT("/RoadMaker/Materials/M_RM_Overlay.M_RM_Overlay")); if (L) { L->AddToRoot(); } return L; }();
-		return M;
-	}
+	using RMOverlayLines::Nearest2D;
+	using RMOverlayLines::FOverlay;
+	using RMOverlayLines::OverlayMaterial;
 
 	bool SameSide(const FRMTunnelSide& A, const FRMTunnelSide& B)
 	{
@@ -144,7 +77,7 @@ bool ARMTunnelHologram::IsValidHitResult(const FHitResult& InHit) const
 	return mStep == 2 || Cast<ARMBuildableProcedural>(Hit.GetActor()) != nullptr || Super::IsValidHitResult(Hit);
 }
 
-bool ARMTunnelHologram::FindSide(const FHitResult& Hit, FRMTunnelSide& Out) const
+bool ARMTunnelHologram::FindSideAt(const FHitResult& Hit, FRMTunnelSide& Out, float Inset, bool bWalls)
 {
 	AActor* Actor = Hit.GetActor();
 	if (!Actor || Actor->IsActorBeingDestroyed())
@@ -175,8 +108,7 @@ bool ARMTunnelHologram::FindSide(const FHitResult& Hit, FRMTunnelSide& Out) cons
 			}
 		}
 		const float Side = FVector::DotProduct(Hit.Location - Frames[Closest].Pos, Frames[Closest].Right) >= 0.f ? 1.f : -1.f;
-		// The shell's outer face flush with the road's edge.
-		const float Across = FMath::Max(Road->GetRoadWidth() * 0.5f - ARMBuildableTunnel::Thickness * 0.5f, 0.f) * Side;
+		const float Across = FMath::Max(Road->GetRoadWidth() * 0.5f - Inset, 0.f) * Side;
 		Out = FRMTunnelSide();
 		Out.Source = Road;
 		Out.Key = Side > 0.f ? 1 : 0;
@@ -186,7 +118,8 @@ bool ARMTunnelHologram::FindSide(const FHitResult& Hit, FRMTunnelSide& Out) cons
 		}
 		return true;
 	}
-	if (ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Actor))
+	ARMBuildableFence* Wall = bWalls ? Cast<ARMBuildableFence>(Actor) : nullptr;
+	if (Wall)
 	{
 		if (Wall->GetIsDismantled() || !Wall->IsWall())
 		{

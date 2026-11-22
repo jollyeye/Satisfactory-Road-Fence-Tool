@@ -256,3 +256,63 @@ FVector ARMBuildableTunnel::GetDirectionAt(const FVector& World) const
 	const FVector Level(Dir.X, Dir.Y, 0.f);
 	return Level.IsNearlyZero() ? GetActorForwardVector() : Level.GetSafeNormal();
 }
+
+bool ARMBuildableTunnel::GetAttachFace(const FVector& WorldHit, const FVector& ImpactNormal, FVector& OutLocation, FVector& OutNormal,
+	FVector& OutUp, float& OutDepth) const
+{
+	const int32 N = FMath::Min(mLeft.Num(), mRight.Num());
+	if (N < 2)
+	{
+		return false;
+	}
+	const FTransform& T = GetActorTransform();
+	const FVector P = T.InverseTransformPosition(WorldHit);
+	// The cross-section through the aim: between the two nearest ones, by the middle line.
+	int32 Seg = 0;
+	float Frac = 0.f;
+	float Best = TNumericLimits<float>::Max();
+	for (int32 I = 0; I + 1 < N; ++I)
+	{
+		const FVector A = (mLeft[I] + mRight[I]) * 0.5f;
+		const FVector B = (mLeft[I + 1] + mRight[I + 1]) * 0.5f;
+		const FVector2D AB(B - A), AP(P - A);
+		const float Len2 = AB.SizeSquared();
+		const float F = Len2 > 1e-4f ? FMath::Clamp(FVector2D::DotProduct(AP, AB) / Len2, 0.f, 1.f) : 0.f;
+		const float D = FVector::DistSquared2D(FMath::Lerp(A, B, F), P);
+		if (D < Best)
+		{
+			Best = D;
+			Seg = I;
+			Frac = F;
+		}
+	}
+	const FVector L = FMath::Lerp(mLeft[Seg], mLeft[Seg + 1], Frac);
+	const FVector R = FMath::Lerp(mRight[Seg], mRight[Seg + 1], Frac);
+	const FVector Along = ((mLeft[Seg + 1] + mRight[Seg + 1]) - (mLeft[Seg] + mRight[Seg])).GetSafeNormal();
+	const RMTunnelMesh::FSection S(L, R, mArcDeg);
+	// Where around the arch, snapped to the nearest eighth of the arc.
+	const FVector V = P - S.Centre;
+	const float Phi = FMath::Atan2(FVector::DotProduct(V, S.Chord), FVector::DotProduct(V, S.Up));
+	const float Step = 2.f * S.Half / (AttachPoints - 1);
+	const int32 K = FMath::Clamp(FMath::RoundToInt((FMath::Clamp(Phi, -S.Half, S.Half) + S.Half) / Step), 0, AttachPoints - 1);
+	const float SnapPhi = -S.Half + K * Step;
+	const FVector Dir = S.Dir(SnapPhi);
+	// Inside or outside: the face hit (its normal), else which side of the middle of the shell the aim is.
+	const FVector LocalNormal = T.InverseTransformVectorNoScale(ImpactNormal);
+	float Out = FVector::DotProduct(LocalNormal, S.Dir(Phi));
+	if (FMath::Abs(Out) < 0.3f)
+	{
+		Out = V.Size() - S.Radius;
+	}
+	const float Sign = Out >= 0.f ? 1.f : -1.f;
+	const FVector Normal = Dir * Sign;
+	const FVector Face = S.Point(SnapPhi, Sign * (Thickness * 0.5f + 1.f));
+	// "Up" in the face: towards the top of the arch; at the top, along the tunnel.
+	FVector Up = K * 2 == AttachPoints - 1 ? Along : (SnapPhi < 0.f ? S.Tangent(SnapPhi) : -S.Tangent(SnapPhi));
+	Up = (Up - Normal * FVector::DotProduct(Up, Normal)).GetSafeNormal();
+	OutLocation = T.TransformPosition(Face);
+	OutNormal = T.TransformVectorNoScale(Normal);
+	OutUp = T.TransformVectorNoScale(Up.IsNearlyZero() ? Along : Up);
+	OutDepth = Thickness * 0.5f + 1.f;
+	return true;
+}

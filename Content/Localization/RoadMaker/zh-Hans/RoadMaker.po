@@ -668,7 +668,7 @@ msgstr ""
 #. Key:	SignGantry.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,SignGantry.Desc"
-msgid "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Aim at a road and click to put it across, then the mouse sets the height of the beam (every 2 m) and a second click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel."
+msgid "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Click the first side (a road or walking path edge), then the other side: the same road's other edge, or the far edge of a road or walking path beside it, so one gantry spans the whole carriageway. Then the mouse sets the height of the beam (every 2 m) and a click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel."
 msgstr ""
 
 #. Key:	LaneArrow.Name
@@ -1166,5 +1166,41 @@ msgstr ""
 #. Key:	Tunnel.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Tunnel.Desc"
-msgid "A rounded concrete arch over roads, a tunnel shell following their curve. Click the first side: a road or walking path edge, or a fence wall (the arch then rises from its top). Click the other side: the same road's other edge, the far edge of a road beside it, or another fence wall; the arch spans everything between and runs along the whole stretch where the two sides run side by side (cut the road or fence for a shorter tunnel). Then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click to build. Ceiling lights hang inside it. Paintable. Cost is per 16 m2 of shell."
+msgid "A rounded concrete arch over roads, a tunnel shell following their curve. Click the first side: a road or walking path edge, or a fence wall (the arch then rises from its top). Click the other side: the same road's other edge, the far edge of a road beside it, or another fence wall; the arch spans everything between and runs along the whole stretch where the two sides run side by side (cut the road or fence for a shorter tunnel). Then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click to build. Ceiling lights hang inside it; wall attachments snap to nine points around the arch, inside and outside. Paintable. Cost is per 16 m2 of shell."
+msgstr ""
+
+#. Key:	GantryNotAcross
+#: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
+msgctxt "RoadMaker,GantryNotAcross"
+msgid "Not straight across from the first column (3 to 60 m, at most 3 m higher or lower)"
+msgstr ""
+
+#. Key:	GantryHeightHint
+#: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
+msgctxt "RoadMaker,GantryHeightHint"
+msgid "Sign Gantry: beam {0} m above the road (aim up or down; click to build)"
+msgstr ""
+
+#. Key:	GantryDropFirst
+#: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
+msgctxt "RoadMaker,GantryDropFirst"
+msgid "Sign Gantry: click to drop this side"
+msgstr ""
+
+#. Key:	GantryNotAcrossHint
+#: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
+msgctxt "RoadMaker,GantryNotAcrossHint"
+msgid "Sign Gantry: this edge is not straight across from the first column"
+msgstr ""
+
+#. Key:	GantrySecondSide
+#: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
+msgctxt "RoadMaker,GantrySecondSide"
+msgid "Sign Gantry: click the other side (any road or walking path edge across)"
+msgstr ""
+
+#. Key:	GantryFirstSide
+#: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
+msgctxt "RoadMaker,GantryFirstSide"
+msgid "Sign Gantry: click the first side (a road or walking path edge)"
 msgstr ""

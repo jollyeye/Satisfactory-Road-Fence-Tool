@@ -2966,6 +2966,8 @@ namespace
 		FVector Fwd = FVector::ZeroVector; // horizontal direction along the wall (zero on the gantry)
 		float Slope = 0.f;                 // how much the wall climbs along Fwd
 		float Depth = 26.f;                // from the face to the middle of the wall (or beam / column)
+		bool bOriented = false;            // the tunnel's arch: the face may lean, Up is the piece's up in it
+		FVector Up = FVector::UpVector;
 	};
 
 	bool FindWallFace(const FHitResult& Hit, FWallFace& Out)
@@ -2974,6 +2976,14 @@ namespace
 		if (ARMBuildableGantry* Gantry = Cast<ARMBuildableGantry>(Hit.GetActor()))
 		{
 			return Gantry->GetSignFace(Hit.Location, Hit.ImpactNormal, Out.Location, Out.Normal, &Out.Depth);
+		}
+		// The tunnel's arch (1.5.0): nine snap points around it (every eighth of the arc), inside and outside.
+		if (ARMBuildableTunnel* Tunnel = Cast<ARMBuildableTunnel>(Hit.GetActor()))
+		{
+			Out.bOriented = Tunnel->GetAttachFace(Hit.Location, Hit.ImpactNormal, Out.Location, Out.Normal, Out.Up, Out.Depth);
+			Out.Fwd = FVector::ZeroVector;
+			Out.Slope = 0.f;
+			return Out.bOriented;
 		}
 		ARMBuildableFence* Wall = Cast<ARMBuildableFence>(Hit.GetActor());
 		TArray<FRMFrame> Frames;
@@ -3047,7 +3057,7 @@ namespace
 		}
 		// Automatic on fence walls and the gantry; anywhere else the sign places normally (with its leg).
 		FWallFace Face;
-		if (FindWallFace(Hit, Face))
+		if (!Cast<ARMBuildableTunnel>(Hit.GetActor()) && FindWallFace(Hit, Face)) // signs: not on the tunnel's curved faces
 		{
 			FinishSignPlacement(Scope, Hologram, Face.Location, Face.Normal, Face.Fwd, Face.Slope);
 			return true;
@@ -3109,6 +3119,17 @@ namespace
 		{
 			GAttachOnWall.Remove(Hologram);
 			return false;
+		}
+		if (Face.bOriented)
+		{
+			// The tunnel's arch: flat on the (leaning) face, its top up the arch; the scroll wheel turns it on the face.
+			const FQuat OnFace = FRotationMatrix::MakeFromXZ(Face.Normal, Face.Up).ToQuat();
+			const float InArch = IsFaceMountedPiece(Hologram) ? -LadderStandOff : IsWallFloodlight(Hologram) ? 0.f : Face.Depth;
+			Hologram->SetActorLocationAndRotation(Face.Location - Face.Normal * InArch,
+				FQuat(Face.Normal, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram))) * OnFace);
+			GAttachOnWall.Add(Hologram);
+			Scope.Cancel();
+			return true;
 		}
 		const bool bLevel = IsLevelWallPiece(Hologram);
 		const FQuat Base = FRotator(0.f, Face.Normal.Rotation().Yaw + CVarWallAttachYaw.GetValueOnGameThread(), 0.f).Quaternion();
@@ -3455,8 +3476,11 @@ namespace
 			return false;
 		}
 		const FString Name = Hologram->GetBuildClass()->GetName();
+		if (Name.Contains(TEXT("PowerPoleWall")) && Cast<ARMBuildableTunnel>(Hit.GetActor()))
+		{
+			return false; // the wall outlet in a tunnel: on the arch's snap points (PlaceAttachmentOnWall)
+		}
 		FRotator Rotation;
-		if (Name.Contains(TEXT("PowerPoleWall")))
 		{
 			// A wall piece's front is its X axis: pointing down, its top along the road.
 			Rotation = FRotationMatrix::MakeFromXZ(FVector::DownVector, Fwd).Rotator();

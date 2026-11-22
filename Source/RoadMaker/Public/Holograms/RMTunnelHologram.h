@@ -44,8 +44,17 @@ public:
 	 */
 	static bool PairSides(const FRMTunnelSide& A, const FRMTunnelSide& B, TArray<FVector>& OutLeft, TArray<FVector>& OutRight);
 
+	/**
+	 * The side under the aim: a road / walking path edge (Inset cm in from it, on its top), or with bWalls the top of a
+	 * fence wall. Also used by the sign gantry (its columns on the fence lines).
+	 */
+	static bool FindSideAt(const FHitResult& Hit, FRMTunnelSide& Out, float Inset, bool bWalls);
+
 protected:
-	bool FindSide(const FHitResult& Hit, FRMTunnelSide& Out) const;
+	bool FindSide(const FHitResult& Hit, FRMTunnelSide& Out) const
+	{
+		return FindSideAt(Hit, Out, 25.f, true); // the shell's outer face flush with the road's edge
+	}
 	void RebuildPreview();
 	void RebuildOverlay();
 	void UpdateLook();

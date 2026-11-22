@@ -11,6 +11,16 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/World.h"
 #include "Components/StaticMeshComponent.h"
+#include "Holograms/RMOverlayLines.h"
+#include "UI/RMScreenHint.h"
+#include "HAL/PlatformTime.h"
+
+namespace RMGantryTool
+{
+	constexpr float MinSpan = 300.f;
+	constexpr float MaxSpan = 6000.f;
+	constexpr float MaxStep = 300.f; // the two columns' feet at most 3 m apart in height
+}
 
 ARMGantryHologram::ARMGantryHologram()
 {
@@ -25,6 +35,10 @@ ARMGantryHologram::ARMGantryHologram()
 	}
 	mPreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mPreviewMesh->SetCastShadow(false);
+	mOverlayMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("GantryOverlay"));
+	mOverlayMesh->SetupAttachment(GetRootComponent());
+	mOverlayMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mOverlayMesh->SetCastShadow(false);
 	mCanLockHologram = false;
 	mCanNudgeHologram = false;
 }
@@ -44,38 +58,64 @@ int32 ARMGantryHologram::GetBaseCostMultiplier() const
 
 bool ARMGantryHologram::IsValidHitResult(const FHitResult& hitResult) const
 {
-	return mStep == 1 || Super::IsValidHitResult(hitResult);
+	const FHitResult Hit = RMRoadUtils::ThroughMarking(hitResult);
+	return mStep == 2 || Cast<ARMBuildableProcedural>(Hit.GetActor()) != nullptr || Super::IsValidHitResult(hitResult);
+}
+
+void ARMGantryHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	RMScreenHint::Hide();
+	Super::EndPlay(EndPlayReason);
+}
+
+bool ARMGantryHologram::PairColumn(const FRMTunnelSide& Side, FVector& OutColumn) const
+{
+	int32 Seg;
+	float T;
+	if (Side.Line.Num() < 2 || (Side.Source == mFirst.Source && Side.Key == mFirst.Key)
+		|| !RMOverlayLines::Nearest2D(Side.Line, mColumnA, Seg, T, OutColumn))
+	{
+		return false;
+	}
+	const FVector D = OutColumn - mColumnA;
+	const float W = D.Size2D();
+	return W >= RMGantryTool::MinSpan && W <= RMGantryTool::MaxSpan && FMath::Abs(D.Z) <= RMGantryTool::MaxStep
+		&& FMath::Abs(FVector::DotProduct(D.GetSafeNormal2D(), mFirstFwd)) < 0.2f; // straight across
+}
+
+void ARMGantryHologram::ResetTool()
+{
+	mStep = 0;
+	mFirst = FRMTunnelSide();
+	mHasHover = false;
+	mOnRoad = false;
+	mBeamBottom = ARMBuildableGantry::MinClearance;
+	mOverlayMesh->ClearAllMeshSections();
 }
 
 void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
 	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
-	if (mStep == 0)
+	if (mStep > 0 && !mFirst.Source.IsValid())
 	{
-		ARMBuildableRoad* Road = Cast<ARMBuildableRoad>(hitResult.GetActor());
-		TArray<FRMFrame> Frames;
-		if (Road && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed())
+		ResetTool(); // the first road is gone
+	}
+	if (mStep < 2)
+	{
+		// The columns stand on fence lines: ColumnInset in from a road or walking path edge.
+		mHasHover = ARMTunnelHologram::FindSideAt(hitResult, mHover, ARMBuildableGantry::ColumnInset, false);
+		mOnRoad = false;
+		FVector ColumnB;
+		if (mStep == 1 && mHasHover && PairColumn(mHover, ColumnB))
 		{
-			Road->GetWorldFrames(Frames, 25.f);
-		}
-		mOnRoad = Frames.Num() >= 2;
-		if (mOnRoad)
-		{
-			float Best = TNumericLimits<float>::Max();
-			const FRMFrame* Near = &Frames[0];
-			for (const FRMFrame& F : Frames)
-			{
-				const float D = FVector::DistSquared2D(F.Pos, hitResult.Location);
-				if (D < Best)
-				{
-					Best = D;
-					Near = &F;
-				}
-			}
-			// Across the road, level: X along the road (horizontal), Y across.
-			const FVector Fwd = Near->Fwd.GetSafeNormal2D();
-			SetActorLocationAndRotation(Near->Pos, FRotator(0.f, Fwd.Rotation().Yaw, 0.f));
-			mHalfSpan = FMath::Max(100.f, Road->GetRoadWidth() * 0.5f - ARMBuildableGantry::ColumnInset);
+			// Across from column A to column B, level, at the lower foot (the other sinks into its road a little).
+			mOnRoad = true;
+			const FVector Across = (ColumnB - mColumnA).GetSafeNormal2D();
+			const FVector Fwd = FVector::CrossProduct(Across, FVector::UpVector);
+			FVector Mid = (mColumnA + ColumnB) * 0.5f;
+			Mid.Z = FMath::Min(mColumnA.Z, ColumnB.Z);
+			SetActorLocationAndRotation(Mid, FRotator(0.f, Fwd.Rotation().Yaw, 0.f));
+			mHalfSpan = FMath::Max(100.f, FVector::Dist2D(mColumnA, ColumnB) * 0.5f);
 		}
 		else
 		{
@@ -115,19 +155,45 @@ void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		}
 	}
 	RebuildPreview();
+	RebuildOverlay();
+	UpdateHint();
 }
 
 bool ARMGantryHologram::DoMultiStepPlacement(bool isInputFromARelease)
 {
+	// One action per click, even if the game reports the click twice (press and release).
+	const double Now = FPlatformTime::Seconds();
+	if (Now - mLastClickTime < 0.25)
+	{
+		return false;
+	}
+	mLastClickTime = Now;
 	if (mStep == 0)
 	{
-		if (!mOnRoad)
+		if (mHasHover)
 		{
-			return false;
+			// Column A: on the side's fence line where the aim is; the side's direction there.
+			mFirst = mHover;
+			int32 Seg = 0;
+			float T = 0.f;
+			RMOverlayLines::Nearest2D(mFirst.Line, GetActorLocation(), Seg, T, mColumnA);
+			mFirstFwd = (mFirst.Line[Seg + 1] - mFirst.Line[Seg]).GetSafeNormal2D();
+			mStep = 1;
 		}
-		mStep = 1;
-		mBeamBottom = ARMBuildableGantry::MinClearance;
-		UE_LOG(LogRoadMaker, Verbose, TEXT("Gantry: first click, now setting the height"));
+		return false;
+	}
+	if (mStep == 1)
+	{
+		if (mHasHover && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key)
+		{
+			ResetTool();
+		}
+		else if (mOnRoad)
+		{
+			mStep = 2;
+			mBeamBottom = ARMBuildableGantry::MinClearance;
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Gantry: both sides picked (span %.0f), now setting the height"), mHalfSpan * 2.f);
+		}
 		return false;
 	}
 	return true;
@@ -136,10 +202,80 @@ bool ARMGantryHologram::DoMultiStepPlacement(bool isInputFromARelease)
 void ARMGantryHologram::CheckValidPlacement()
 {
 	// No Super call on purpose (see the intersection hologram): the vanilla floor check is for boxes.
-	if (mStep == 0 && !mOnRoad)
+	if (mStep == 1 && mHasHover && !mOnRoad && !(mHover.Source == mFirst.Source && mHover.Key == mFirst.Key))
+	{
+		AddConstructDisqualifier(URMCD_GantryNotAcross::StaticClass());
+	}
+	else if (mStep < 2 && !mHasHover)
 	{
 		AddConstructDisqualifier(URMCD_AimAtRoad::StaticClass());
 	}
+}
+
+void ARMGantryHologram::UpdateHint()
+{
+	if (mStep == 2)
+	{
+		RMScreenHint::Show(GetWorld(), FText::Format(NSLOCTEXT("RoadMaker", "GantryHeightHint", "Sign Gantry: beam {0} m above the road (aim up or down; click to build)"),
+			FText::AsNumber(FMath::RoundToInt(mBeamBottom / 100.f))));
+	}
+	else if (mStep == 1)
+	{
+		if (mHasHover && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key)
+		{
+			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "GantryDropFirst", "Sign Gantry: click to drop this side"));
+		}
+		else if (mHasHover && !mOnRoad)
+		{
+			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "GantryNotAcrossHint", "Sign Gantry: this edge is not straight across from the first column"), true);
+		}
+		else
+		{
+			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "GantrySecondSide", "Sign Gantry: click the other side (any road or walking path edge across)"));
+		}
+	}
+	else
+	{
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "GantryFirstSide", "Sign Gantry: click the first side (a road or walking path edge)"));
+	}
+}
+
+void ARMGantryHologram::RebuildOverlay()
+{
+	mOverlayMesh->ClearAllMeshSections();
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager || mStep == 2 || (mStep == 0 && !mHasHover))
+	{
+		return;
+	}
+	int32 ViewW = 0, ViewH = 0;
+	PC->GetViewportSize(ViewW, ViewH);
+	RMOverlayLines::FOverlay B;
+	B.Base = GetActorLocation();
+	B.Camera = PC->PlayerCameraManager->GetCameraLocation();
+	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+	if (mStep == 1)
+	{
+		B.Polyline(mFirst.Line, FLinearColor(0.f, 1.f, 0.f)); // the first side: green, and its column
+		B.Line(mColumnA, mColumnA + FVector(0.f, 0.f, 300.f), FLinearColor(0.f, 1.f, 0.f));
+	}
+	if (mHasHover)
+	{
+		const bool bBad = mStep == 1 && !mOnRoad && !(mHover.Source == mFirst.Source && mHover.Key == mFirst.Key);
+		B.Polyline(mHover.Line, bBad ? FLinearColor(1.f, 0.05f, 0.05f) : FLinearColor(1.f, 1.f, 1.f));
+	}
+	// The overlay hangs under the hologram, which turns with the gantry: its points are made in world space.
+	const FTransform T = mOverlayMesh->GetComponentTransform();
+	for (FVector& V : B.Vertices)
+	{
+		V = T.InverseTransformPosition(V + B.Base);
+	}
+	mOverlayMesh->CreateMeshSection_LinearColor(0, B.Vertices, B.Triangles, TArray<FVector>(), TArray<FVector2D>(), B.Colors, TArray<FProcMeshTangent>(), false);
+	if (UMaterialInterface* Overlay = RMOverlayLines::OverlayMaterial())
+	{
+		mOverlayMesh->SetMaterial(0, Overlay);
+	}
+	mOverlayMesh->SetRenderCustomDepth(false);
 }
 
 void ARMGantryHologram::ConfigureActor(AFGBuildable* inBuildable) const
@@ -157,14 +293,23 @@ AActor* ARMGantryHologram::Construct(TArray<AActor*>& out_children, FNetConstruc
 	AActor* Built = Super::Construct(out_children, constructionID);
 	if (Built)
 	{
-		mStep = 0; // next one starts over
-		mBeamBottom = ARMBuildableGantry::MinClearance;
+		ResetTool(); // next one starts over
 	}
 	return Built;
 }
 
 void ARMGantryHologram::RebuildPreview()
 {
+	// The gantry shows once both columns are known (and while setting the height).
+	const bool bShow = mStep == 2 || (mStep == 1 && mOnRoad);
+	mPreviewMesh->SetVisibility(bShow, false);
+	for (UStaticMeshComponent* Part : mParts)
+	{
+		if (Part)
+		{
+			Part->SetVisibility(bShow);
+		}
+	}
 	if (FMath::IsNearlyEqual(mShownHalfSpan, mHalfSpan, 0.5f) && FMath::IsNearlyEqual(mShownBottom, mBeamBottom, 0.5f))
 	{
 		return;

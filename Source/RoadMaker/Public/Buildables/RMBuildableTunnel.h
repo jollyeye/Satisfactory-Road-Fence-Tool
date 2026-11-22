@@ -48,6 +48,15 @@ public:
 	/** Recipe units: one per 16 m^2 of shell (the recipe is what a 4 x 4 m piece of the game's concrete wall costs). */
 	static int32 CostUnits(const TArray<FVector>& Left, const TArray<FVector>& Right, float ArcDeg);
 
+	/**
+	 * Wall attachments: the snap point nearest the aim on the face aimed at (inside or outside), world space. Nine points
+	 * around the arch (both feet, the top, and the halves and quarters between: every eighth of the arc), free along the
+	 * tunnel. OutNormal points out of the face; OutUp up the arch (along the tunnel at the top); Depth: face to middle.
+	 */
+	bool GetAttachFace(const FVector& WorldHit, const FVector& ImpactNormal, FVector& OutLocation, FVector& OutNormal, FVector& OutUp,
+		float& OutDepth) const;
+	static constexpr int32 AttachPoints = 9;
+
 	/** The tunnel's direction (level) at the cross-section nearest a world point: ceiling lights hang along it. */
 	FVector GetDirectionAt(const FVector& World) const;
 
