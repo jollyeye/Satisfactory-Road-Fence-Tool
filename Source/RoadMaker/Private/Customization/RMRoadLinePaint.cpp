@@ -1533,6 +1533,16 @@ void RMRoadLinePaint::InstallHooks()
 	// Road Lines shortcuts on the hotbar: their picture (the game leaves it as a blank swatch).
 	// Once a second is enough: a newly bound shortcut is handled by the every-frame burst below (issue #3).
 	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&FixRoadLinesHotbarIcons), 1.0f);
+	// The Quick Switch radial menu (E) of Road Lines options: every frame while a Road Lines option is in hand (the only
+	// time it shows ours), so its icons are there as it opens (once a second took up to a second, 2026-11-22).
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+		{
+			if (RMRoadLinePaint::IsAnyActive())
+			{
+				FixOtherCustomiserIcons();
+			}
+			return true;
+		}));
 	// Right after a shortcut is bound, check every frame for a moment, so the blank swatch is not seen.
 	static int32 GHotbarFastFrames = 0;
 	SUBSCRIBE_METHOD_AFTER(UFGFactoryCustomizationShortcut::SetCustomizationRecipe,

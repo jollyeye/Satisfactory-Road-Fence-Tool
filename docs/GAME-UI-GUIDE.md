@@ -169,6 +169,10 @@ Fix (`FixOtherCustomiserIcons` in `RMRoadLinePaint.cpp`, on the hotbar ticker): 
 whose `mIcon` is bare (no `Texture`, or no instance) gets its option from its own widget or a widget around it (a
 property holding a hotbar shortcut, a customization recipe or the descriptor class), and that option's big icon with
 `IsColor` = 0. Each widget chain is logged once ("Road Lines icons: bare customizer picture in ...").
+*Tested 2026-11-22: works.* It ran on the hotbar's once-a-second timer, so the icons appeared up to a second after the
+menu opened; now it also runs every frame while a Road Lines option is in hand (`RMRoadLinePaint::IsAnyActive()`), the
+only time the menu shows ours. Lesson: menus that open on a key need a per-frame fix while they can be open, not a
+slow timer.
 
 ### Icons themselves
 `Tools/IconSource/render_icons.py` (Python + PIL) draws the pictures into `Tools/Icons`;
