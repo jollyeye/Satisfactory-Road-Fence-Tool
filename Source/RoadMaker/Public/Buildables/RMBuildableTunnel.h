@@ -25,6 +25,13 @@ public:
 	/** Left / Right: the middle of the shell's foot on each side, one point per cross-section (actor space). */
 	void SetShape(const TArray<FVector>& Left, const TArray<FVector>& Right, float ArcDeg);
 	float GetArcDeg() const { return mArcDeg; }
+	const TArray<FVector>& GetLeft() const { return mLeft; }
+	const TArray<FVector>& GetRight() const { return mRight; }
+
+	/** Road Mode: feet with a cross-section at least every Step cm (straight stretches are saved with few). */
+	static void Densify(const TArray<FVector>& InLeft, const TArray<FVector>& InRight, float Step, TArray<FVector>& OutLeft, TArray<FVector>& OutRight);
+	/** Drops cross-sections where both feet run straight (within Tol cm), keeping one at least every MaxGap cm. */
+	static void Thin(TArray<FVector>& Left, TArray<FVector>& Right, float Tol = 3.f, float MaxGap = 2000.f);
 
 	/** Shell thickness (cm), pieces around the arch, arc limits and step (degrees). */
 	static constexpr float Thickness = 50.f;

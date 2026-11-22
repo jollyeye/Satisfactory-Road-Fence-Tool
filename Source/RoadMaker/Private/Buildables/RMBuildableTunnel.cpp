@@ -326,3 +326,64 @@ bool ARMBuildableTunnel::GetAttachFace(const FVector& WorldHit, const FVector& I
 	OutDepth = Thickness * 0.5f + 1.f;
 	return true;
 }
+
+void ARMBuildableTunnel::Densify(const TArray<FVector>& InLeft, const TArray<FVector>& InRight, float Step, TArray<FVector>& OutLeft,
+	TArray<FVector>& OutRight)
+{
+	OutLeft.Reset();
+	OutRight.Reset();
+	const int32 N = FMath::Min(InLeft.Num(), InRight.Num());
+	for (int32 I = 0; I < N; ++I)
+	{
+		if (I > 0)
+		{
+			const float Len = FVector::Dist((InLeft[I] + InRight[I]) * 0.5f, (InLeft[I - 1] + InRight[I - 1]) * 0.5f);
+			const int32 Parts = FMath::Max(1, FMath::CeilToInt(Len / FMath::Max(Step, 1.f)));
+			for (int32 J = 1; J < Parts; ++J)
+			{
+				const float F = float(J) / Parts;
+				OutLeft.Add(FMath::Lerp(InLeft[I - 1], InLeft[I], F));
+				OutRight.Add(FMath::Lerp(InRight[I - 1], InRight[I], F));
+			}
+		}
+		OutLeft.Add(InLeft[I]);
+		OutRight.Add(InRight[I]);
+	}
+}
+
+void ARMBuildableTunnel::Thin(TArray<FVector>& Left, TArray<FVector>& Right, float Tol, float MaxGap)
+{
+	const int32 N = FMath::Min(Left.Num(), Right.Num());
+	if (N <= 2)
+	{
+		return;
+	}
+	auto Deviates = [&](int32 From, int32 To)
+	{
+		for (int32 M = From + 1; M < To; ++M)
+		{
+			const float F = float(M - From) / float(To - From);
+			if (FVector::Dist(FMath::Lerp(Left[From], Left[To], F), Left[M]) > Tol
+				|| FVector::Dist(FMath::Lerp(Right[From], Right[To], F), Right[M]) > Tol)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	TArray<FVector> OutL, OutR;
+	int32 Kept = 0;
+	OutL.Add(Left[0]);
+	OutR.Add(Right[0]);
+	for (int32 J = 2; J <= N; ++J)
+	{
+		if (J == N || Deviates(Kept, J) || FVector::Dist(Left[Kept], Left[J]) > MaxGap)
+		{
+			Kept = J - 1;
+			OutL.Add(Left[Kept]);
+			OutR.Add(Right[Kept]);
+		}
+	}
+	Left = MoveTemp(OutL);
+	Right = MoveTemp(OutR);
+}

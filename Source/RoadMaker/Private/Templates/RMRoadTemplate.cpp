@@ -3,6 +3,7 @@
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableMarking.h"
+#include "Buildables/RMBuildableTunnel.h"
 #include "Buildables/RMBuildableBlueprintRoad.h"
 #include "Holograms/RMHologramLook.h"
 #include "Hologram/FGBlueprintHologram.h"
@@ -142,6 +143,9 @@ namespace RMRoadTemplate
 			TArray<FSplinePointData> SplinePoints; // its points (its actor's space)
 			bool bSplineFull = false; // ...and it runs the blueprint's whole length with both ends free: rebuilt over the whole curve
 			bool bChainPower = false; // a power pole / single wall outlet with no wire in the blueprint: wired to its copy on the next tile
+			bool bTunnel = false;     // a tunnel arch along the arrow: its feet bent with the curve (1.5.0) ...
+			bool bTunnelFull = false; // ... and running the blueprint's whole length: one arch over the whole curve, stretched like the roads
+			TArray<FVector> TunnelL, TunnelR; // its feet in road space, a cross-section every metre
 			/** Preview: per tile, the copies of its spline meshes and their sources. */
 			TArray<TArray<TPair<TWeakObjectPtr<USplineMeshComponent>, TWeakObjectPtr<USplineMeshComponent>>>> SplineCopies;
 		};
@@ -978,6 +982,57 @@ namespace RMRoadTemplate
 							}
 						}
 					}
+					// A tunnel arch along the arrow (1.5.0): bent with the curve like the roads; over the whole curve when it
+					// runs the blueprint's whole length, else one per tile.
+					if (const ARMBuildableTunnel* Tunnel = Cast<ARMBuildableTunnel>(Pair.Key.Get()))
+					{
+						TArray<FVector> Lw, Rw;
+						ARMBuildableTunnel::Densify(Tunnel->GetLeft(), Tunnel->GetRight(), 100.f, Lw, Rw);
+						if (Lw.Num() >= 2)
+						{
+							for (int32 I = 0; I < Lw.Num(); ++I)
+							{
+								Lw[I] = R.Rel.TransformPosition(Lw[I]);
+								Rw[I] = R.Rel.TransformPosition(Rw[I]);
+							}
+							const FVector Course = ((Lw.Last() + Rw.Last()) - (Lw[0] + Rw[0])).GetSafeNormal();
+							if (FMath::Abs(Course.X) > 0.98f)
+							{
+								if (Course.X < 0.f)
+								{
+									Algo::Reverse(Lw); // runs with the arrow (its feet swap sides: the arch is the same)
+									Algo::Reverse(Rw);
+								}
+								R.bTunnel = true;
+								R.TunnelL = Lw;
+								R.TunnelR = Rw;
+								const float XMin = FMath::Min(Lw[0].X, Rw[0].X) - S.X0;
+								const float XMax = FMath::Max(Lw.Last().X, Rw.Last().X) - S.X0;
+								R.bTunnelFull = XMin <= 100.f && XMax >= S.L - 100.f;
+								R.bBentPreview = true;
+								FStretch Mark;
+								Mark.bRigidCount = !R.bTunnelFull;
+								Mark.bFull = R.bTunnelFull;
+								Mark.XMin = XMin;
+								Mark.XMax = XMax;
+								const int32 MarkIndex = S.Stretches.Add(Mark);
+								R.MarkStretch = MarkIndex;
+								for (USceneComponent* C : Children)
+								{
+									UProceduralMeshComponent* Proc = Cast<UProceduralMeshComponent>(C);
+									if (Proc && Proc->IsVisible() && Proc->GetNumSections() > 0)
+									{
+										FBent& B = S.Bents.AddDefaulted_GetRef();
+										B.Src = Proc;
+										B.Rel = Proc->GetComponentTransform().GetRelativeTransform(S.RoadT);
+										B.Stretch = MarkIndex;
+									}
+								}
+							}
+							UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: tunnel %s: %s"), *Tunnel->GetName(), !R.bTunnel ? TEXT("not along the arrow, repeated as it is")
+								: R.bTunnelFull ? TEXT("stretched over the whole curve") : TEXT("repeated, bent with the curve"));
+						}
+					}
 					++Repeated;
 				}
 				// The blueprint's own rigid preview goes away while drawing.
@@ -1538,6 +1593,76 @@ namespace RMRoadTemplate
 			PlanCost(Self, S, Out);
 		}
 
+		/** A tunnel's cross-section at X (road space) in the blueprint, from its feet (sorted along X). */
+		void TunnelSectionAt(const FRigid& R, float X, FVector& OutL, FVector& OutR)
+		{
+			const TArray<FVector>& L = R.TunnelL;
+			const TArray<FVector>& Rt = R.TunnelR;
+			auto MidX = [&](int32 I) { return (L[I].X + Rt[I].X) * 0.5f; };
+			if (X <= MidX(0))
+			{
+				OutL = L[0];
+				OutR = Rt[0];
+				return;
+			}
+			for (int32 I = 1; I < L.Num(); ++I)
+			{
+				if (X <= MidX(I))
+				{
+					const float F = FMath::Clamp((X - MidX(I - 1)) / FMath::Max(MidX(I) - MidX(I - 1), 1.f), 0.f, 1.f);
+					OutL = FMath::Lerp(L[I - 1], L[I], F);
+					OutR = FMath::Lerp(Rt[I - 1], Rt[I], F);
+					return;
+				}
+			}
+			OutL = L.Last();
+			OutR = Rt.Last();
+		}
+
+		/** A full-length tunnel over the whole drawn curve (world): its blueprint cross-sections, stretched like the roads. */
+		void PlanFullTunnel(const FState& S, const FRigid& R, TArray<FVector>& OutL, TArray<FVector>& OutR)
+		{
+			OutL.Reset();
+			OutR.Reset();
+			if (S.Frames.Num() < 2 || R.TunnelL.Num() < 2)
+			{
+				return;
+			}
+			const float Len = FMath::Min(S.Frames.Last().Dist, S.L * MaxTiles);
+			const int32 NFull = FMath::Clamp(FMath::RoundToInt(Len / S.L), 1, MaxTiles);
+			const float Scale = Len / (NFull * S.L);
+			const int32 Steps = FMath::Max(1, FMath::CeilToInt(Len / 100.f));
+			for (int32 I = 0; I <= Steps; ++I)
+			{
+				const float D = Len * I / Steps;
+				const float InTile = D / Scale - FMath::Min(FMath::FloorToFloat(D / Scale / S.L), float(NFull - 1)) * S.L;
+				FVector Lb, Rb;
+				TunnelSectionAt(R, S.X0 + InTile, Lb, Rb);
+				const FRMFrame F = FrameAt(S.Frames, D);
+				OutL.Add(F.Pos + F.Right * (Lb.Y - S.Yc) + F.Up * (Lb.Z - S.Zb));
+				OutR.Add(F.Pos + F.Right * (Rb.Y - S.Yc) + F.Up * (Rb.Z - S.Zb));
+			}
+			ARMBuildableTunnel::Thin(OutL, OutR);
+		}
+
+		/** A repeated tunnel moved onto tile K of the curve (Target: where its actor goes): its feet bent along the curve. */
+		void BendTunnel(const FState& S, const FRigid& R, int32 K, ARMBuildableTunnel* Tunnel, const FTransform& Target)
+		{
+			TArray<FVector> L, Rt;
+			for (int32 I = 0; I < R.TunnelL.Num(); ++I)
+			{
+				for (const bool bLeft : { true, false })
+				{
+					const FVector& P = bLeft ? R.TunnelL[I] : R.TunnelR[I];
+					const FRMFrame F = FrameAt(S.Frames, (P.X - S.X0) + K * S.L);
+					const FVector W = F.Pos + F.Right * (P.Y - S.Yc) + F.Up * (P.Z - S.Zb);
+					(bLeft ? L : Rt).Add(Target.InverseTransformPosition(W));
+				}
+			}
+			ARMBuildableTunnel::Thin(L, Rt);
+			Tunnel->SetShape(L, Rt, Tunnel->GetArcDeg());
+		}
+
 		int32 MakePlans(AFGBlueprintHologram* Self, const FState& S, TArray<FPlan>& Plans, TMap<TSubclassOf<UFGItemDescriptor>, int32>& Cost)
 		{
 			Plans.Reset();
@@ -1646,7 +1771,7 @@ namespace RMRoadTemplate
 						PieceCost(Self, B, Amounts);
 						for (const FItemAmount& Stack : Amounts)
 						{
-							if (R.bSplineFull)
+							if (R.bSplineFull || R.bTunnelFull)
 							{
 								continue; // paid below, by its length over the whole curve
 							}
@@ -1683,6 +1808,25 @@ namespace RMRoadTemplate
 				for (const FItemAmount& A : Amounts)
 				{
 					Cost.FindOrAdd(A.ItemClass) += FMath::CeilToInt(A.Amount * Total / R.SplineLen - 0.01f);
+				}
+			}
+			// Full-length tunnels, one arch over the whole curve: paid by its shell.
+			for (const FRigid& R : S.Rigids)
+			{
+				const ARMBuildableTunnel* Tunnel = Cast<ARMBuildableTunnel>(R.Buildable.Get());
+				if (!Tunnel || !R.bTunnelFull)
+				{
+					continue;
+				}
+				TArray<FVector> Lw, Rw;
+				PlanFullTunnel(S, R, Lw, Rw);
+				const int32 Units = ARMBuildableTunnel::CostUnits(Lw, Rw, Tunnel->GetArcDeg());
+				TArray<FItemAmount> Amounts;
+				PieceCost(Self, const_cast<ARMBuildableTunnel*>(Tunnel), Amounts);
+				const int32 Own = FMath::Max(1, Tunnel->GetCostMultiplier());
+				for (const FItemAmount& A : Amounts)
+				{
+					Cost.FindOrAdd(A.ItemClass) += FMath::CeilToInt(float(A.Amount) / Own * Units - 0.01f);
 				}
 			}
 			return Tiles;
@@ -1805,7 +1949,7 @@ namespace RMRoadTemplate
 		{
 			for (const FRigid& R : S.Rigids)
 			{
-				if (R.bSplineFull && R.Buildable.IsValid())
+				if ((R.bSplineFull || R.bTunnelFull) && R.Buildable.IsValid())
 				{
 					return true;
 				}
@@ -2490,7 +2634,7 @@ namespace RMRoadTemplate
 							break;
 						}
 					}
-					if (Match && Match->bSplineFull)
+					if (Match && (Match->bSplineFull || Match->bTunnelFull))
 					{
 						// Rebuilt over the whole curve instead: this copy never finishes spawning.
 						GSuppressed.Add(B);
@@ -2548,6 +2692,14 @@ namespace RMRoadTemplate
 									Path->SetSplinePointsAndValidatePath(Bent);
 								}
 							}
+						}
+					}
+					// A tunnel along the arrow: its feet follow the curve (before it begins play, which builds its mesh).
+					if (Match && Match->bTunnel)
+					{
+						if (ARMBuildableTunnel* Tunnel = Cast<ARMBuildableTunnel>(B))
+						{
+							BendTunnel(S, *Match, K, Tunnel, Target);
 						}
 					}
 					// A marking along the arrow: the road surface under it follows the curve too.
@@ -2980,6 +3132,46 @@ namespace RMRoadTemplate
 					Proxy->RegisterBuildable(New);
 				}
 				Built += New ? 1 : 0;
+			}
+
+			// Full-length tunnels: one arch over the whole curve, with the blueprint's paint and arc.
+			for (const FRigid& R : S.Rigids)
+			{
+				ARMBuildableTunnel* Source = Cast<ARMBuildableTunnel>(R.Buildable.Get());
+				if (!Source || !R.bTunnelFull)
+				{
+					continue;
+				}
+				TArray<FVector> Lw, Rw;
+				PlanFullTunnel(S, R, Lw, Rw);
+				if (Lw.Num() < 2)
+				{
+					continue;
+				}
+				const FTransform T(FQuat::Identity, (Lw[0] + Rw[0]) * 0.5f);
+				ARMBuildableTunnel* New = World->SpawnActorDeferred<ARMBuildableTunnel>(Source->GetClass(), T, nullptr, nullptr,
+					ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+				if (!New)
+				{
+					continue;
+				}
+				for (int32 I = 0; I < Lw.Num(); ++I)
+				{
+					Lw[I] = T.InverseTransformPosition(Lw[I]);
+					Rw[I] = T.InverseTransformPosition(Rw[I]);
+				}
+				New->SetBuiltWithRecipe(Source->GetBuiltWithRecipe());
+				New->SetCustomizationData_Native(Source->GetCustomizationData_Native());
+				New->SetShape(Lw, Rw, Source->GetArcDeg());
+				New->SetCostMultiplier(ARMBuildableTunnel::CostUnits(Lw, Rw, Source->GetArcDeg()));
+				UGameplayStatics::FinishSpawningActor(New, T);
+				if (Proxy)
+				{
+					New->SetBlueprintProxy(Proxy);
+					Proxy->RegisterBuildable(New);
+				}
+				++Built;
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Road Mode: tunnel %s over the whole curve, %d cross-sections"), *New->GetName(), Lw.Num());
 			}
 
 			// Full-length belts, pipes, rails, hypertubes and vehicle paths: built over the whole curve, in pieces no

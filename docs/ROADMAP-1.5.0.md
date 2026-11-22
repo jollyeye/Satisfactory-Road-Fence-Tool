@@ -63,7 +63,12 @@ Nothing here is decided in detail yet: each item gets its design written down be
     Tested: beam support right; but the mode stayed as at the first click. Now the game always places the start too (a
     hit flat on the face at the snap point), so its state is right; the second end is ours only in the default mode,
     the game's in diagonal / free form (the mode can change between the clicks).
-  - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
+  - Road Mode (asked 2026-11-22, built, to test): a tunnel in a blueprint running along the arrow bends with the
+    curve. Running the blueprint's whole length (within 1 m of both ends): one arch over the whole drawn curve,
+    stretched like the roads (`PlanFullTunnel`: the blueprint's cross-section at each metre, scaled like the road
+    tiles), paid by its shell; shorter: one per tile, its feet bent (`BendTunnel`, before begin play). Preview: its
+    mesh bent like the roads'. Attachments on the arch are still repeated as they are (not bent with it).
+  - Not in this version: stacking on gantries or other arches; tunnels on the map.
 - **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
   several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two
   clicks for its columns like the tunnel: the first side (a road / walking path edge: the column on its fence line,
