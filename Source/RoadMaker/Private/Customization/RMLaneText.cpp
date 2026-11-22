@@ -177,11 +177,11 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 		{
 			for (int32 X = 16; X < GlyphCell; X += 16)
 			{
-				const FLinearColor P = UKismetRenderingLibrary::ReadRenderTargetPixel(World, RT, X0 + X, Y0 + Y);
-				if (P.R > MaxR)
+				const FColor P = UKismetRenderingLibrary::ReadRenderTargetPixel(World, RT, X0 + X, Y0 + Y);
+				if (P.R / 255.f > MaxR)
 				{
-					MaxR = P.R;
-					AtA = P.A;
+					MaxR = P.R / 255.f;
+					AtA = P.A / 255.f;
 				}
 			}
 		}
