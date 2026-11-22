@@ -145,12 +145,12 @@ void ARMBuildableTunnel::BuildTunnelMesh(const TArray<FVector>& Left, const TArr
 		for (const int32 K : { 0, S })
 		{
 			const float PA = A.Angle(K, S), PB = B.Angle(K, S);
-			const FVector N = K == 0 ? -A.Tangent(PA) : A.Tangent(PA);
-			const int32 V0 = Vertex(Out, A.Point(PA, -HalfT), N, UA, 0.f);
-			const int32 V1 = Vertex(Out, A.Point(PA, HalfT), N, UA, Thickness / 100.f);
-			const int32 V2 = Vertex(Out, B.Point(PB, HalfT), N, UB, Thickness / 100.f);
-			const int32 V3 = Vertex(Out, B.Point(PB, -HalfT), N, UB, 0.f);
-			Quad(Out, V0, V1, V2, V3, N);
+			const FVector Foot = K == 0 ? -A.Tangent(PA) : A.Tangent(PA);
+			const int32 V0 = Vertex(Out, A.Point(PA, -HalfT), Foot, UA, 0.f);
+			const int32 V1 = Vertex(Out, A.Point(PA, HalfT), Foot, UA, Thickness / 100.f);
+			const int32 V2 = Vertex(Out, B.Point(PB, HalfT), Foot, UB, Thickness / 100.f);
+			const int32 V3 = Vertex(Out, B.Point(PB, -HalfT), Foot, UB, 0.f);
+			Quad(Out, V0, V1, V2, V3, Foot);
 		}
 	}
 
