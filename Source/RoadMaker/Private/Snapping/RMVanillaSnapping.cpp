@@ -4097,22 +4097,14 @@ void RMVanillaSnapping::InstallHooks()
 					GAttachOnWall.Remove(Hologram);
 					return; // anywhere else: the game's own placement
 				}
-				if (!Hologram->IsCurrentBuildMode(Hologram->GetDefaultBuildGunMode()))
-				{
-					// Diagonal / free form: the game's own placement and angles, its start on the face's snap point
-					// (a hit made flat on the face there), moved to the middle of the wall.
-					GBeamOnFace.Remove(Hologram);
-					FHitResult OnFace = Hit;
-					OnFace.Location = Face.Location;
-					OnFace.ImpactPoint = Face.Location;
-					OnFace.Normal = Face.Normal;
-					OnFace.ImpactNormal = Face.Normal;
-					Scope(Hologram, OnFace);
-					Hologram->SetActorLocation(Face.Location - Face.Normal * Face.Depth);
-					GAttachOnWall.Add(Hologram);
-					Scope.Cancel();
-					return;
-				}
+				// The game places it first for a hit made flat on the face at the snap point, so its own state (start point)
+				// is right for its other build modes, also when the mode changes for the second end.
+				FHitResult OnFace = Hit;
+				OnFace.Location = Face.Location;
+				OnFace.ImpactPoint = Face.Location;
+				OnFace.Normal = Face.Normal;
+				OnFace.ImpactNormal = Face.Normal;
+				Scope(Hologram, OnFace);
 				// The beam's cross-section square to the wall's course: up in the face, tilted with a climbing wall.
 				FVector FaceUp = Face.Up;
 				if (!Face.bOriented)
@@ -4132,8 +4124,15 @@ void RMVanillaSnapping::InstallHooks()
 				const FQuat Base = bAlongZ ? FRotationMatrix::MakeFromZX(Face.Normal, FaceUp).ToQuat() : FRotationMatrix::MakeFromXZ(Face.Normal, FaceUp).ToQuat();
 				const FQuat Rot = FQuat(Face.Normal, FMath::DegreesToRadians(FRMSnapAccess::ScrollDegrees(Hologram))) * Base;
 				const FTransform T(Rot, Face.Location - Face.Normal * Face.Depth);
-				Hologram->SetActorTransform(T);
 				GBeamOnFace.Add(Hologram, T);
+				if (Hologram->IsCurrentBuildMode(Hologram->GetDefaultBuildGunMode()))
+				{
+					Hologram->SetActorTransform(T); // straight out of the face
+				}
+				else
+				{
+					Hologram->SetActorLocation(T.GetLocation()); // diagonal / free form: the game's angles, from the wall's middle
+				}
 				GAttachOnWall.Add(Hologram); // the game's surface checks are dropped (see ValidatePlacementAndCost)
 				if (SignLogDue(Hologram, 60, 3.0))
 				{
@@ -4144,9 +4143,9 @@ void RMVanillaSnapping::InstallHooks()
 				return;
 			}
 			const FTransform* T = GBeamOnFace.Find(Hologram);
-			if (!T)
+			if (!T || !Hologram->IsCurrentBuildMode(Hologram->GetDefaultBuildGunMode()))
 			{
-				return;
+				return; // the second end in diagonal / free form: the game's (the mode can change between the clicks)
 			}
 			// Length: where the view passes closest to the beam's line, in 1 m steps.
 			const FVector Start = T->GetLocation();
