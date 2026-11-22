@@ -60,6 +60,9 @@ Nothing here is decided in detail yet: each item gets its design written down be
     at the snap point, start moved to the wall's middle); the beam support stands on the face like the big pillar
     support (up out of the face, lined up with the wall's course); "surface is uneven" and the like are dropped for every
     piece we place on our faces (one hook after `ValidatePlacementAndCost`).
+    Tested: beam support right; but the mode stayed as at the first click. Now the game always places the start too (a
+    hit flat on the face at the snap point), so its state is right; the second end is ours only in the default mode,
+    the game's in diagonal / free form (the mode can change between the clicks).
   - Not in this version: stacking on gantries or other arches; tunnels on the map; Road Mode copies.
 - **Sign gantry across a whole carriageway** (asked 2026-11-22, built, to test): roads are usually laid first, often
   several roads and walking paths side by side, and one road's width did not cover them. The gantry now takes two
