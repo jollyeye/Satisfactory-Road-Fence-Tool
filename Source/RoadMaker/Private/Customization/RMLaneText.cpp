@@ -33,6 +33,42 @@ namespace
 	TStrongObjectPtr<UTextureRenderTarget2D> GGlyphTexture;
 	TMap<TCHAR, int32> GGlyphCells;
 	TWeakObjectPtr<UFont> GGlyphFont;
+	FName GGlyphTypeface;
+
+	TAutoConsoleVariable<FString> CVarLaneTextTypeface(TEXT("RM.LaneTextTypeface"), TEXT("Bold"),
+		TEXT("Lane Text: typeface inside the font (Regular, Bold, ...); the font's typefaces are logged"));
+
+	// The typeface to draw with: the wanted one when the font has it, else the font's first.
+	FName PickTypeface(const UFont* Font)
+	{
+		const FString Wanted = CVarLaneTextTypeface.GetValueOnGameThread();
+		FName Found, First;
+		TArray<FString> Names;
+		if (Font)
+		{
+			for (const FTypefaceEntry& E : Font->GetCompositeFont()->DefaultTypeface.Fonts)
+			{
+				Names.Add(E.Name.ToString());
+				if (First.IsNone())
+				{
+					First = E.Name;
+				}
+				if (Found.IsNone() && E.Name.ToString().Equals(Wanted, ESearchCase::IgnoreCase))
+				{
+					Found = E.Name;
+				}
+			}
+		}
+		const FName Use = Found.IsNone() ? First : Found;
+		if (Use != GGlyphTypeface)
+		{
+			UE_LOG(LogRoadMaker, Display, TEXT("Lane Text: typefaces in %s: %s; draws with %s"), *GetNameSafe(Font),
+				*FString::Join(Names, TEXT(", ")), *Use.ToString());
+			GGlyphTypeface = Use;
+			GGlyphCells.Reset(); // another typeface: draw again
+		}
+		return Use;
+	}
 
 	TAutoConsoleVariable<FString> CVarLaneTextFont(TEXT("RM.LaneTextFont"), TEXT(""),
 		TEXT("Lane Text: name (part) of the font to draw the characters with; empty = chosen automatically (logged)."));
@@ -124,6 +160,7 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 {
 	UTextureRenderTarget2D* RT = GetGlyphTexture(World);
 	UFont* Font = PickLaneTextFont();
+	const FName Typeface = PickTypeface(Font);
 	if (!RT || !Font || !World)
 	{
 		return false;
@@ -174,10 +211,10 @@ bool RMLaneText::EnsureGlyphs(UWorld* World, const FString& Text)
 		FVector2D Measured(ProbeSize, ProbeSize);
 		if (FSlateApplication::IsInitialized())
 		{
-			Measured = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Str, FSlateFontInfo(Font, ProbeSize));
+			Measured = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Str, FSlateFontInfo(Font, ProbeSize, Typeface));
 		}
 		const float FontSize = ProbeSize * FMath::Min(Fit / FMath::Max(Measured.Y, 1.f), Fit / FMath::Max(Measured.X, 1.f));
-		FCanvasTextItem Item(Centre, FText::FromString(Str), FSlateFontInfo(Font, FontSize), FLinearColor::White);
+		FCanvasTextItem Item(Centre, FText::FromString(Str), FSlateFontInfo(Font, FontSize, Typeface), FLinearColor::White);
 		Item.bCentreX = true;
 		Item.bCentreY = true;
 		Item.BlendMode = SE_BLEND_Translucent;
