@@ -73,7 +73,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
   was updated. Now the fallback repeat is 8 m and the face is rebuilt when the repeat length changes.
 - **Scroll turns a wall stacked on another wall round** (asked 2026-11-21, built, to test): stacking snapped it facing
   like the wall below with no way to turn it; now a scroll step flips it, like on a road edge.
-- **Lane Text** (design decided 2026-11-22; steps 1-3 built 2026-11-22, to test): text painted along a lane, written vertically: one upright
+- **Lane Text** (design decided 2026-11-22; built and tested 2026-11-22): text painted along a lane, written vertically: one upright
   character after another down the lane, each as big as the lane numbers, read from top to bottom looking down the
   lane (the first character farthest, the last nearest; the characters' tops point away from the viewer).
   - Any language (option B): the game's font draws each character into one shared glyph texture of the characters
@@ -96,7 +96,7 @@ Nothing here is decided in detail yet: each item gets its design written down be
     1.2 wide, gap 0.25 (halved after the first look), in half lane widths; first character farthest; centred on the aimed
     spot; cut at the drape samples). No new material: the vehicle icon paint (`M_RoadMarkingIcon` / `...Cyber`) with the
     glyph texture as its `Icon`. Test command: `RM.LaneText [cyber] <text>`.
-  - Steps 2-3 (2026-11-22, built, to test): marking kind `Text` with `mText` (saved, replicated); `Build_LaneText` /
+  - Steps 2-3 (2026-11-22, built, tested: works): marking kind `Text` with `mText` (saved, replicated); `Build_LaneText` /
     `RoadLines_MarkText` (customizer Road Lines > Markings, icon: the lane tile with a blocky A; build icon
     `T_Icon_LaneText`); text box `URMLaneTextBox` (code-built, opens a frame after the pick once the customizer is
     closed, R opens it again, Enter / OK sets it, Esc / Cancel keeps the old text; up to 24 characters, control
