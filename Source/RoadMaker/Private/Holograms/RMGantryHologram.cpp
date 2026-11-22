@@ -110,7 +110,7 @@ void ARMGantryHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		{
 			int32 Seg;
 			float T;
-			RMOverlayLines::Nearest2D(mHover.Line, mStep == 1 ? mColumnA : hitResult.Location, Seg, T, mHoverColumn);
+			RMOverlayLines::Nearest2D(mHover.Line, mStep == 1 ? mColumnA : FVector(hitResult.Location), Seg, T, mHoverColumn);
 		}
 		if (mStep == 1 && mHasHover && PairColumn(mHover, ColumnB))
 		{
