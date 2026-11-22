@@ -748,7 +748,7 @@ namespace
 	// (a glyph cell has margins), with a gap between characters. In units of half the drawn width, like the digits.
 	constexpr float TextTileAlong = 1.8f * 1.8f;
 	constexpr float TextTileAcross = 1.2f;
-	constexpr float TextGap = 0.5f;
+	constexpr float TextGap = 0.25f; // halved after the first look (2026-11-22)
 }
 
 float ARMBuildableMarking::TextLength(int32 NumChars, float LaneWidth)
