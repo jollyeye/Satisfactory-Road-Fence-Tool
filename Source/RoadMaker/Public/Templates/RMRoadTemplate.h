@@ -7,6 +7,8 @@
 #include "CoreMinimal.h"
 
 class AFGBlueprintHologram;
+class AFGBuildable;
+class AFGHologram;
 class ARMBuildableProcedural;
 class UClass;
 
