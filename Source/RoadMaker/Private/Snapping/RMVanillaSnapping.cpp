@@ -46,6 +46,8 @@
 #include "Hologram/FGPoleHologram.h"
 #include "Hologram/FGConveyorBeltHologram.h"
 #include "Hologram/FGWireHologram.h"
+#include "FGFactoryConnectionComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -3208,6 +3210,92 @@ namespace
 	 */
 	bool IsOurWallOrCeiling(const FHitResult& Hit);
 
+	/**
+	 * Test (2026-11-22): force the belt's end support. "RM.BeltSupport" cycles game's choice -> wall mount -> ceiling
+	 * mount; "RM.BeltSupport 0/1/2" sets it. After the game's placement the floor pole at the end being placed is swapped
+	 * for that mount, which is placed by our snapping, given to the belt as its end connection, and the belt re-routes.
+	 */
+	int32 GForcedBeltSupport = 0;
+	FAutoConsoleCommandWithWorldAndArgs GRMBeltSupport(
+		TEXT("RM.BeltSupport"),
+		TEXT("Belt end support: 0 the game's choice, 1 wall mount, 2 ceiling mount; no argument cycles."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld*)
+		{
+			GForcedBeltSupport = Args.Num() > 0 ? FMath::Clamp(FCString::Atoi(*Args[0]), 0, 2) : (GForcedBeltSupport + 1) % 3;
+			UE_LOG(LogRoadMaker, Display, TEXT("Support: forced belt support %d (%s)"), GForcedBeltSupport,
+				GForcedBeltSupport == 1 ? TEXT("wall mount") : GForcedBeltSupport == 2 ? TEXT("ceiling mount") : TEXT("game's choice"));
+		}));
+
+	struct FRMBeltAccess : public AFGConveyorBeltHologram
+	{
+		static void Regenerate(AFGConveyorBeltHologram* Belt, const FHitResult& Hit)
+		{
+			static_cast<FRMBeltAccess*>(Belt)->GenerateAndUpdateSpline(Hit);
+		}
+	};
+
+	/** Element Index of one of the belt's two-element hologram / connection arrays (private in the game, by name). */
+	UObject* GetBeltArray(const AFGConveyorBeltHologram* Belt, const TCHAR* Name, int32 Index)
+	{
+		const FObjectPropertyBase* P = FindFProperty<FObjectPropertyBase>(AFGConveyorBeltHologram::StaticClass(), Name);
+		return P && Index < P->ArrayDim ? P->GetObjectPropertyValue(P->ContainerPtrToValuePtr<void>(Belt, Index)) : nullptr;
+	}
+	void SetBeltArray(AFGConveyorBeltHologram* Belt, const TCHAR* Name, int32 Index, UObject* Value)
+	{
+		const FObjectPropertyBase* P = FindFProperty<FObjectPropertyBase>(AFGConveyorBeltHologram::StaticClass(), Name);
+		if (P && Index < P->ArrayDim)
+		{
+			P->SetObjectPropertyValue(P->ContainerPtrToValuePtr<void>(Belt, Index), Value);
+		}
+	}
+
+	void ForceBeltSupport(AFGConveyorBeltHologram* Belt, const FHitResult& Hit)
+	{
+		if (GForcedBeltSupport == 0)
+		{
+			return;
+		}
+		const TCHAR* TargetName = GForcedBeltSupport == 1 ? TEXT("mChildWallPoleHologram") : TEXT("mChildCeilingPoleHologram");
+		const TCHAR* ConnName = GForcedBeltSupport == 1 ? TEXT("mChildWallPoleSnapConnection") : TEXT("mChildCeilingPoleSnapConnection");
+		for (int32 I = 0; I < 2; ++I)
+		{
+			// The end being placed: the one whose support is shown now.
+			AFGHologram* Shown = nullptr;
+			for (const TCHAR* Name : { TEXT("mChildPoleHologram"), TEXT("mChildWallPoleHologram"), TEXT("mChildCeilingPoleHologram") })
+			{
+				AFGHologram* H = Cast<AFGHologram>(GetBeltArray(Belt, Name, I));
+				if (H && !H->IsDisabled())
+				{
+					Shown = H;
+				}
+			}
+			AFGHologram* Target = Cast<AFGHologram>(GetBeltArray(Belt, TargetName, I));
+			if (!Shown || !Target)
+			{
+				continue;
+			}
+			if (Shown != Target)
+			{
+				Shown->SetDisabled(true);
+				Shown->SetActorHiddenInGame(true);
+				Target->SetDisabled(false);
+				Target->SetActorHiddenInGame(false);
+			}
+			Target->SetHologramLocationAndRotation(Hit); // our snapping: fence wall face / road underside
+			UFGFactoryConnectionComponent* Conn = Target->FindComponentByClass<UFGFactoryConnectionComponent>();
+			SetBeltArray(Belt, ConnName, I, Conn);
+			FRMBeltAccess::Regenerate(Belt, Hit);
+			static double LastLog = 0.0;
+			if (FPlatformTime::Seconds() - LastLog > 1.0)
+			{
+				LastLog = FPlatformTime::Seconds();
+				UE_LOG(LogRoadMaker, Display, TEXT("Support: forced end %d to %s at %s (connection %s at %s)"), I, *Target->GetClass()->GetName(),
+					*Target->GetActorLocation().ToCompactString(), *GetNameSafe(Conn), Conn ? *Conn->GetComponentLocation().ToCompactString() : TEXT("-"));
+			}
+			return;
+		}
+	}
+
 	/** Ceiling lights, the conveyor ceiling mount and the single wall outlets: they go under our roads (1.5.0). */
 	bool IsUnderRoadPiece(const AFGHologram* Hologram)
 	{
@@ -3706,6 +3794,7 @@ void RMVanillaSnapping::InstallHooks()
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGConveyorBeltHologram::PostHologramPlacement, GetMutableDefault<AFGConveyorBeltHologram>(),
 		[](AFGConveyorBeltHologram* Hologram, const FHitResult& Hit, bool bCallForChildren)
 		{
+			ForceBeltSupport(Hologram, Hit);
 			LogSupportChoice(Hologram, Hit);
 		});
 	SUBSCRIBE_METHOD_VIRTUAL_AFTER(AFGWireHologram::PostHologramPlacement, GetMutableDefault<AFGWireHologram>(),
