@@ -3481,6 +3481,7 @@ namespace
 			return false; // the wall outlet in a tunnel: on the arch's snap points (PlaceAttachmentOnWall)
 		}
 		FRotator Rotation;
+		if (Name.Contains(TEXT("PowerPoleWall")))
 		{
 			// A wall piece's front is its X axis: pointing down, its top along the road.
 			Rotation = FRotationMatrix::MakeFromXZ(FVector::DownVector, Fwd).Rotator();
