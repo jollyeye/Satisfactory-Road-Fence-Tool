@@ -749,6 +749,9 @@ void ARMBuildableProcedural::ApplyMaterial(int32 Section, UMaterialInterface* Ma
 
 namespace RMRiders
 {
+	TAutoConsoleVariable<int32> CVarDismantleRiders(TEXT("RM.DismantleRiders"), 1,
+		TEXT("1: dismantling a road or intersection also removes the vehicle paths, tracks and lane markings on it. 0: they stay (issue #11 fallback)."));
+
 	TAutoConsoleVariable<int32> CVarPathsAsChildren(TEXT("RM.DismantlePathsAsChildren"), 0,
 		TEXT("1: vehicle paths on a dismantled road go with it as its children, in the same frame (before 1.5.1). 0: removed after it, one per frame (issue #11)."));
 
@@ -802,8 +805,10 @@ namespace RMRiders
 void ARMBuildableProcedural::RefreshRiders(bool bForce) const
 {
 	UWorld* World = GetWorld();
-	if (!DismantlesRiders() || !mMesh || !World)
+	if (!DismantlesRiders() || !mMesh || !World || RMRiders::CVarDismantleRiders.GetValueOnGameThread() == 0)
 	{
+		mRiderCache.Reset();
+		mPathCache.Reset();
 		return;
 	}
 	const double Now = FPlatformTime::Seconds();

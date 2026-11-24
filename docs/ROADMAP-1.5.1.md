@@ -10,7 +10,7 @@ Started 2026-11-24, after 1.5.0 (released 2026-11-22). Fixes first.
   already being removed (another piece of the same mass dismantle). Now: vehicle path segments are no longer children;
   when a road / intersection is dismantled, the segments on it are removed after it, one per frame, through the game's
   own dismantle, as if dismantled by hand (`RMRiders::QueuePaths`). Tracks and markings stay children, but never ones
-  already destroyed or dismantled (`RMRiders::IsAlive`). `RM.DismantlePathsAsChildren 1` brings back the old way.
+  already destroyed or dismantled (`RMRiders::IsAlive`). `RM.DismantlePathsAsChildren 1` brings back the old way; `RM.DismantleRiders 0` leaves paths, tracks and markings in place altogether. Decided 2026-11-24: if the crash persists, roads stop removing paths and tracks (make that the default).
   The broken save itself cannot be repaired from the mod (the game's network data is corrupt in it).
 - **Multiplayer rubberbanding walking on roads** (issue #10, CoolerTaurtis, 2026-11-23): questions asked, waiting.
   Suspect: long roads (> 125 m) are drawn in sections whose mesh components are made at run time with generated
