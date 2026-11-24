@@ -282,5 +282,9 @@ private:
 
 	/** Paths and tracks found on this piece, kept for a moment (the dismantle highlight asks every frame). */
 	mutable TArray<TWeakObjectPtr<AActor>> mRiderCache;
+	/** Vehicle path segments on this piece: not handed to the game as children (issue #11), removed after it. */
+	mutable TArray<TWeakObjectPtr<AActor>> mPathCache;
 	mutable double mRiderCacheTime = -1.0;
+	/** Finds the tracks, markings (mRiderCache) and vehicle paths (mPathCache) on this piece; cached for 1 s. */
+	void RefreshRiders(bool bForce) const;
 };

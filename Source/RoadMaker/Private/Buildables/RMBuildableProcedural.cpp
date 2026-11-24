@@ -21,6 +21,7 @@
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
 #include "Containers/Ticker.h"
+#include "HAL/IConsoleManager.h"
 
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -338,6 +339,13 @@ void ARMBuildableProcedural::Dismantle_Implementation()
 		}
 	}
 	mDismantling = true;
+	if (HasAuthority() && DismantlesRiders())
+	{
+		// The vehicle paths on it go after it, one per frame (handing them all to the game in the frame of a mass
+		// dismantle broke its vehicle path network: issue #11).
+		RefreshRiders(true);
+		RMRiders::QueuePaths(mPathCache);
+	}
 	Super::Dismantle_Implementation();
 }
 
@@ -733,20 +741,71 @@ void ARMBuildableProcedural::ApplyMaterial(int32 Section, UMaterialInterface* Ma
 	}
 }
 
-void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const
+namespace RMRiders
 {
-	Super::GetChildDismantleActors_Implementation(out_ChildDismantleActors);
+	TAutoConsoleVariable<int32> CVarPathsAsChildren(TEXT("RM.DismantlePathsAsChildren"), 0,
+		TEXT("1: vehicle paths on a dismantled road go with it as its children, in the same frame (before 1.5.1). 0: removed after it, one per frame (issue #11)."));
+
+	/** Not destroyed, not on its way out, not dismantled already (by another piece of the same mass dismantle). */
+	bool IsAlive(const AActor* Actor)
+	{
+		if (!IsValid(Actor) || Actor->IsActorBeingDestroyed())
+		{
+			return false;
+		}
+		const AFGBuildable* Buildable = Cast<AFGBuildable>(Actor);
+		return !Buildable || !Buildable->GetIsDismantled();
+	}
+
+	/** Vehicle paths left by dismantled roads: removed one per frame, as if dismantled by hand (issue #11). */
+	TArray<TWeakObjectPtr<AActor>> GPathQueue;
+	FTSTicker::FDelegateHandle GPathTicker;
+
+	void QueuePaths(const TArray<TWeakObjectPtr<AActor>>& Paths)
+	{
+		for (const TWeakObjectPtr<AActor>& P : Paths)
+		{
+			GPathQueue.AddUnique(P);
+		}
+		if (GPathQueue.Num() == 0 || GPathTicker.IsValid())
+		{
+			return;
+		}
+		GPathTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+		{
+			while (GPathQueue.Num() > 0)
+			{
+				AActor* Path = GPathQueue[0].Get();
+				GPathQueue.RemoveAt(0);
+				if (Path && IsAlive(Path) && Path->Implements<UFGDismantleInterface>())
+				{
+					IFGDismantleInterface::Execute_Dismantle(Path);
+					break; // one per frame
+				}
+			}
+			if (GPathQueue.Num() == 0)
+			{
+				GPathTicker.Reset();
+				return false;
+			}
+			return true;
+		}));
+	}
+}
+
+void ARMBuildableProcedural::RefreshRiders(bool bForce) const
+{
 	UWorld* World = GetWorld();
 	if (!DismantlesRiders() || !mMesh || !World)
 	{
 		return;
 	}
-
 	const double Now = FPlatformTime::Seconds();
-	if (mRiderCacheTime < 0.0 || Now - mRiderCacheTime > 1.0)
+	if (bForce || mRiderCacheTime < 0.0 || Now - mRiderCacheTime > 1.0)
 	{
 		mRiderCacheTime = Now;
 		mRiderCache.Reset();
+		mPathCache.Reset();
 		const FBox Box = GetComponentsBoundingBox().ExpandBy(FVector(200.f, 200.f, 500.f)); // every section of long pieces
 
 		// On this piece = right above its surface (a short trace down hits this piece's mesh).
@@ -780,36 +839,46 @@ void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActo
 			}
 			return On >= 4;
 		};
-		auto Consider = [&](AActor* Actor, const USplineComponent* Spline)
+		auto Consider = [&](AActor* Actor, const USplineComponent* Spline, TArray<TWeakObjectPtr<AActor>>& Into)
 		{
-			if (Actor && Spline && IsValid(Actor) && Box.Intersect(Spline->Bounds.GetBox()) && MostlyOnThis(Spline))
+			if (Actor && Spline && RMRiders::IsAlive(Actor) && Box.Intersect(Spline->Bounds.GetBox()) && MostlyOnThis(Spline))
 			{
-				mRiderCache.Add(Actor);
+				Into.Add(Actor);
 			}
 		};
 		for (TActorIterator<AFGBuildableRailroadTrack> It(World); It; ++It)
 		{
-			Consider(*It, It->GetSplineComponent());
+			Consider(*It, It->GetSplineComponent(), mRiderCache);
 		}
 		for (TActorIterator<AFGVehiclePathSegment> It(World); It; ++It)
 		{
-			Consider(*It, It->GetSplineComponent());
+			Consider(*It, It->GetSplineComponent(), RMRiders::CVarPathsAsChildren.GetValueOnGameThread() != 0 ? mRiderCache : mPathCache);
 		}
 		// Lane markings painted on this piece go with it.
 		for (TActorIterator<ARMBuildableMarking> It(World); It; ++It)
 		{
 			ARMBuildableMarking* Marking = *It;
-			if (Marking && IsValid(Marking) && Marking != this && Box.IsInside(Marking->GetActorLocation()) && IsOnThis(Marking->GetActorLocation()))
+			if (Marking && RMRiders::IsAlive(Marking) && Marking != this && Box.IsInside(Marking->GetActorLocation()) && IsOnThis(Marking->GetActorLocation()))
 			{
 				mRiderCache.Add(Marking);
 			}
 		}
 	}
 
+}
+
+void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActor*>& out_ChildDismantleActors) const
+{
+	Super::GetChildDismantleActors_Implementation(out_ChildDismantleActors);
+	if (!DismantlesRiders())
+	{
+		return;
+	}
+	RefreshRiders(false);
 	for (const TWeakObjectPtr<AActor>& Weak : mRiderCache)
 	{
 		AActor* Actor = Weak.Get();
-		if (!Actor || out_ChildDismantleActors.Contains(Actor))
+		if (!Actor || !RMRiders::IsAlive(Actor) || out_ChildDismantleActors.Contains(Actor))
 		{
 			continue;
 		}
@@ -821,7 +890,10 @@ void ARMBuildableProcedural::GetChildDismantleActors_Implementation(TArray<AActo
 			IFGDismantleInterface::Execute_GetChildDismantleActors(Actor, Sub);
 			for (AActor* S : Sub)
 			{
-				out_ChildDismantleActors.AddUnique(S);
+				if (RMRiders::IsAlive(S))
+				{
+					out_ChildDismantleActors.AddUnique(S);
+				}
 			}
 		}
 	}
