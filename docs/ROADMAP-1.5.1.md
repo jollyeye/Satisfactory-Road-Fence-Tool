@@ -2,7 +2,7 @@
 
 Started 2026-11-24, after 1.5.0 (released 2026-11-22). Fixes first.
 
-**Release prep done 2026-11-24**: the issue #11 fix tested by the user (mass dismantle of roads with paths: no crash),
+**Released 2026-11-24 on ficsit.app; issue #11 answered and closed.** Release prep: the issue #11 fix tested by the user (mass dismantle of roads with paths: no crash),
 zh-Hans complete and compiled (GatherText exit code 0), version 1.5.1, changelog on the ficsit page, README. Issue #10
 (multiplayer rubberbanding) waits for the reporter's answers: not in 1.5.1.
 
