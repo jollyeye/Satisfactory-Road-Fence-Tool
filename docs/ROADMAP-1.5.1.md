@@ -18,4 +18,4 @@ Started 2026-11-24, after 1.5.0 (released 2026-11-22). Fixes first.
   `SetNetAddressable`.
 
 ## Translations
-- zh-Hans complete from muaxl (issue #11 attachment, 200/200): to drop in `Content/Localization/RoadMaker/zh-Hans/RoadMaker.po`.
+- zh-Hans complete from muaxl (issue #11 attachment, 200/200), in the repo 2026-11-24: same entries and source texts as ours, only the 155 empty translations filled, placeholders checked. Next build compiles it (check `localization-editor-log.txt`).

@@ -279,928 +279,928 @@ msgstr "道路"
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingTractor"
 msgid "Tractor"
-msgstr ""
+msgstr "拖拉机"
 
 #. Key:	MarkingTruck
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingTruck"
 msgid "Truck"
-msgstr ""
+msgstr "卡车"
 
 #. Key:	MarkingExplorer
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingExplorer"
 msgid "Explorer"
-msgstr ""
+msgstr "探险者"
 
 #. Key:	MarkingFactoryCart
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingFactoryCart"
 msgid "Factory Cart"
-msgstr ""
+msgstr "工厂推车"
 
 #. Key:	MarkingCyberwagon
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingCyberwagon"
 msgid "Cyberwagon"
-msgstr ""
+msgstr "赛博马车"
 
 #. Key:	ArrowStraight
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowStraight"
 msgid "straight"
-msgstr ""
+msgstr "直行"
 
 #. Key:	ArrowLeft
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowLeft"
 msgid "left"
-msgstr ""
+msgstr "左转"
 
 #. Key:	ArrowRight
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowRight"
 msgid "right"
-msgstr ""
+msgstr "右转"
 
 #. Key:	ArrowStraightOrLeft
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowStraightOrLeft"
 msgid "straight or left"
-msgstr ""
+msgstr "直行或左转"
 
 #. Key:	ArrowStraightOrRight
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowStraightOrRight"
 msgid "straight or right"
-msgstr ""
+msgstr "直行或右转"
 
 #. Key:	ArrowLeftOrRight
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,ArrowLeftOrRight"
 msgid "left or right"
-msgstr ""
+msgstr "左转或右转"
 
 #. Key:	MarkingHud
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,MarkingHud"
 msgid "{0}: {1} (mouse wheel: next, click: paint)"
-msgstr ""
+msgstr "{0}：{1}（滚轮：下一个，点击：涂装）"
 
 #. Key:	BlueprintRoadName
 #: Source/RoadMaker/Private/Buildables/RMBuildableBlueprintRoad.cpp
 msgctxt "RoadMaker,BlueprintRoadName"
 msgid "Blueprint Road ({0} wide)"
-msgstr ""
+msgstr "蓝图道路（{0} 格宽）"
 
 #. Key:	Input.ToggleLimits
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Input.ToggleLimits"
 msgid "Toggle Road Limits"
-msgstr ""
+msgstr "切换道路限制"
 
 #. Key:	Menu.RoadMaker
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.RoadMaker"
 msgid "Road Maker"
-msgstr ""
+msgstr "Road Maker"
 
 #. Key:	BuildMode.Straight
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Straight"
 msgid "Straight"
-msgstr ""
+msgstr "直线"
 
 #. Key:	BuildMode.Default
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Default"
 msgid "Default"
-msgstr ""
+msgstr "默认"
 
 #. Key:	BuildMode.Default.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Default.Desc"
 msgid "Quadratic Bezier curve: the end heads along the line from the start, the mouse wheel turns it."
-msgstr ""
+msgstr "二次贝塞尔曲线：末端沿起点方向延伸，滚轮可转向。"
 
 #. Key:	BuildMode.Zoop
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Zoop"
 msgid "Zoop"
-msgstr ""
+msgstr "Zoop"
 
 #. Key:	BuildMode.Zoop.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Zoop.Desc"
 msgid "Straight on out of the start, keeping its direction and slope: level from a foundation edge or a free start, the road's own slope from a road end. Move the aim along the road to set the length; it stops on the longest road allowed."
-msgstr ""
+msgstr "从起点笔直延伸，保持方向与坡度：从地基边缘或自由起点出发为水平，从道路端点出发则沿用该道路的坡度。沿道路移动准星可设定长度，达到允许的最长道路时停止。"
 
 #. Key:	BuildMode.Smooth
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Smooth"
 msgid "Smooth quadratic Bezier"
-msgstr ""
+msgstr "平滑二次贝塞尔"
 
 #. Key:	BuildMode.Smooth.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.Smooth.Desc"
 msgid "Quadratic Bezier curve (like the default mode), and the height eases in and out, matching the slope of the roads it connects. Up to 45 degrees."
-msgstr ""
+msgstr "二次贝塞尔曲线（与默认模式相同），高度平缓进出，与所连接道路的坡度贴合。最大 45 度。"
 
 #. Key:	BuildMode.CutFences
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.CutFences"
 msgid "Cut also fences"
-msgstr ""
+msgstr "同时切割护栏"
 
 #. Key:	BuildMode.CutFences.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.CutFences.Desc"
 msgid "Also cuts this road's fences at the same place: road fences standing on it and fence walls on its edges (stacked walls too). Other roads and their fences are left alone. Train tracks and vehicle paths on the road are always cut."
-msgstr ""
+msgstr "同时在同一位置切割这条道路的护栏：立在道路上的护栏和位于道路边缘的围栏墙（含叠放的墙体）。其他道路及其护栏不受影响。道路上的铁轨和车辆路径始终会被切割。"
 
 #. Key:	BuildMode.RoadMode
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.RoadMode"
 msgid "Road Mode"
-msgstr ""
+msgstr "道路模式"
 
 #. Key:	BuildMode.RoadMode.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BuildMode.RoadMode.Desc"
 msgid "Builds this blueprint's road along a road you draw (start, end, curves, like the road tool), with the blueprint's fences, fence walls and walking paths beside it all the way."
-msgstr ""
+msgstr "沿你绘制的道路（起点、终点、弯道，与道路工具一致）建造此蓝图中的道路，并全程附带蓝图中的护栏、围栏墙和步行道。"
 
 #. Key:	Road_1x.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_1x.Name"
 msgid "Road (1 wide)"
-msgstr ""
+msgstr "道路（1 格宽）"
 
 #. Key:	Road_1x.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_1x.Desc"
 msgid "A road one foundation wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build."
-msgstr ""
+msgstr "一格地基宽的道路，顶面沥青、侧面混凝土。点击起点，点击终点：它会像车辆路径一样弯曲，可吸附到道路端点和地基边缘，滚轮可转向。按住吸附键并对准已建成的道路（或路口路缘），可一键紧贴其旁建造，边对边、齐平。按 Alt 可开关道路限制（关闭时最长 1 公里，任意转弯或坡度，建造枪可达 1 公里；设置会被记住）。标线在定制器（道路标线）中设置。建造免费。"
 
 #. Key:	Road_2x.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_2x.Name"
 msgid "Road (2 wide)"
-msgstr ""
+msgstr "道路（2 格宽）"
 
 #. Key:	Road_2x.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_2x.Desc"
 msgid "A road two foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build."
-msgstr ""
+msgstr "两格地基宽的道路，顶面沥青、侧面混凝土。点击起点，点击终点：它会像车辆路径一样弯曲，可吸附到道路端点和地基边缘，滚轮可转向。按住吸附键并对准已建成的道路（或路口路缘），可一键紧贴其旁建造，边对边、齐平。按 Alt 可开关道路限制（关闭时最长 1 公里，任意转弯或坡度，建造枪可达 1 公里；设置会被记住）。标线在定制器（道路标线）中设置。建造免费。"
 
 #. Key:	Road_3x.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_3x.Name"
 msgid "Road (3 wide)"
-msgstr ""
+msgstr "道路（3 格宽）"
 
 #. Key:	Road_3x.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_3x.Desc"
 msgid "A road three foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build."
-msgstr ""
+msgstr "三格地基宽的道路，顶面沥青、侧面混凝土。点击起点，点击终点：它会像车辆路径一样弯曲，可吸附到道路端点和地基边缘，滚轮可转向。按住吸附键并对准已建成的道路（或路口路缘），可一键紧贴其旁建造，边对边、齐平。按 Alt 可开关道路限制（关闭时最长 1 公里，任意转弯或坡度，建造枪可达 1 公里；设置会被记住）。标线在定制器（道路标线）中设置。建造免费。"
 
 #. Key:	Road_4x.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_4x.Name"
 msgid "Road (4 wide)"
-msgstr ""
+msgstr "道路（4 格宽）"
 
 #. Key:	Road_4x.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Road_4x.Desc"
 msgid "A road four foundations wide, with asphalt on top and concrete sides. Click the start, click the end: it curves like a vehicle path, snaps to road ends and foundation edges, and the mouse wheel turns it. Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge and flush, in one click. Press Alt to turn the road limits off or on (off: up to 1 km long, any turn or slope, the build gun reaches 1 km; remembered). Lines are set in the customizer (Road Lines). Free to build."
-msgstr ""
+msgstr "四格地基宽的道路，顶面沥青、侧面混凝土。点击起点，点击终点：它会像车辆路径一样弯曲，可吸附到道路端点和地基边缘，滚轮可转向。按住吸附键并对准已建成的道路（或路口路缘），可一键紧贴其旁建造，边对边、齐平。按 Alt 可开关道路限制（关闭时最长 1 公里，任意转弯或坡度，建造枪可达 1 公里；设置会被记住）。标线在定制器（道路标线）中设置。建造免费。"
 
 #. Key:	RoadCut.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadCut.Name"
 msgid "Cut Road"
-msgstr ""
+msgstr "切割道路"
 
 #. Key:	RoadCut.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadCut.Desc"
 msgid "Aim at a road: the orange outline shows where it is cut. Click to split it there into two roads that keep its curve, lines and paint; train tracks and vehicle paths on it are cut too. Build mode \"Cut also fences\" also cuts the road's own fences at the same place (white outlines). Free."
-msgstr ""
+msgstr "对准一条道路：橙色轮廓显示切割位置。点击即在此处将其分为两条道路，保留原有曲线、标线和涂装；道路上的铁轨和车辆路径也会一并切割。建造模式"同时切割护栏"会在同一位置切割这条道路自身的护栏（白色轮廓）。免费。"
 
 #. Key:	RoadSplit.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadSplit.Name"
 msgid "Split Road"
-msgstr ""
+msgstr "拆分道路"
 
 #. Key:	RoadSplit.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadSplit.Desc"
 msgid "Aim across a road 2 or more wide: the cyan line shows where it is split lengthwise, in steps of 8 m. Click to replace it with two roads side by side that keep its curve, lines and paint (a 2 wide road becomes two 1 wide roads, a 4 wide one for example 1 + 3). Free."
-msgstr ""
+msgstr "对准 2 格及以上宽度的道路横向瞄准：青色线显示纵向拆分位置，以 8 米为步进。点击即替换为并排的两条道路，保留原有曲线、标线和涂装（2 格宽的道路变成两条 1 格宽，4 格宽的可拆为例如 1 + 3）。免费。"
 
 #. Key:	RoadJoin.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadJoin.Name"
 msgid "Join Road"
-msgstr ""
+msgstr "连接道路"
 
 #. Key:	RoadJoin.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadJoin.Desc"
 msgid "The opposite of Cut Road. Aim near where two roads meet end to end: the green outline shows the joined road; click to replace the two with one road along both, with the aimed road's lanes, material and paint. They must be the same width, continue smoothly into each other and follow the one curve a single road would have (two pieces of a cut road always do; a straight piece and a curved one cannot be joined), and the joined road must not be too long. Markings, paths, tracks and fences stay where they are. Free."
-msgstr ""
+msgstr "切割道路的反向操作。对准两条道路首尾相接处：绿色轮廓显示连接后的道路；点击即用一条沿两者的道路替换原两条，采用所对准道路的车道、材质和涂装。两者必须宽度相同、平滑衔接，并符合单条道路应遵循的同一条曲线（同一条道路被切开的两段总是满足；一段直线和一段曲线无法连接），连接后的道路也不能过长。标线、路径、铁轨和护栏保持原位。免费。"
 
 #. Key:	RoadMerge.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMerge.Name"
 msgid "Merge Road"
-msgstr ""
+msgstr "合并道路"
 
 #. Key:	RoadMerge.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMerge.Desc"
 msgid "The opposite of Split Road. Click a road to pick it (white outline), then click the road right beside it: edge to edge, at the same height, starting and ending together. The green outline shows the merged road; click to replace the two with one road of their combined width (at most 4 wide), with the first road's lanes, material and paint (side lines on if either had them). Markings, paths, tracks and fences stay where they are. Click the picked road again to drop it. Free."
-msgstr ""
+msgstr "拆分道路的反向操作。点击一条道路选中它（白色轮廓），再点击紧贴其旁的道路：需边对边、同高度、同时起止。绿色轮廓显示合并后的道路；点击即用一条合并宽度的道路替换原两条（最宽 4 格），采用第一条道路的车道、材质和涂装（任一方有边线则开启边线）。标线、路径、铁轨和护栏保持原位。再次点击已选道路可取消选择。免费。"
 
 #. Key:	RoadAdjust.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadAdjust.Name"
 msgid "Adjust Curvature"
-msgstr ""
+msgstr "调整曲率"
 
 #. Key:	RoadAdjust.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadAdjust.Desc"
 msgid "Orange circles mark the road ends near you. Click one to grab that end (and the end of the road joined to it, when two roads meet end to end), then move it like a road end: the mouse wheel turns it, the snap key snaps it to a free road end, hold H to nudge it. The roads follow as holograms; click again to replace them with the new curves, keeping their other ends, lines and paint. Ends joined to an intersection stay. Free."
-msgstr ""
+msgstr "橙色圆圈标记你附近的道路端点。点击一个即可抓住该端点（当两条道路首尾相接时，连同与之连接的那条道路的端点），然后像移动道路端点一样移动它：滚轮可转向，吸附键可吸附到空闲道路端点，按住 H 可微调。道路会以预览形式跟随；再次点击即用新的曲线替换，保留另一端、标线和涂装。连接到路口的端点不会被移动。免费。"
 
 #. Key:	FenceCut.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceCut.Name"
 msgid "Cut Fence"
-msgstr ""
+msgstr "切割护栏"
 
 #. Key:	FenceCut.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceCut.Desc"
 msgid "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free."
-msgstr ""
+msgstr "对准道路护栏或围栏墙：橙色轮廓显示切割位置。点击即在此处将其分为两段，保留原有走向、朝向、材质和涂装。在道路端点附近（例如道路被切开处）按住吸附键，可使切割线与该端点对齐。其他物体不会被切割。免费。"
 
 #. Key:	FenceJoin.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceJoin.Name"
 msgid "Join Fence"
-msgstr ""
+msgstr "连接护栏"
 
 #. Key:	FenceJoin.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceJoin.Desc"
 msgid "The opposite of Cut Fence. Aim near where two road fences or fence walls meet end to end: the green outline shows the joined fence; click to replace the two with one fence along both, with the aimed fence's side, material and paint. They must be the same kind (and look), have the road on the same side, continue smoothly into each other and follow the one curve a single fence would have (two pieces of a cut fence always do; a straight piece and a curved one cannot be joined). Any length up to 1 km. Free."
-msgstr ""
+msgstr "切割护栏的反向操作。对准两段道路护栏或围栏墙首尾相接处：绿色轮廓显示连接后的护栏；点击即用一段沿两者的护栏替换原两段，采用所对准护栏的朝向、材质和涂装。两者必须是同一类型（且外观相同）、道路位于同一侧、平滑衔接，并符合单段护栏应遵循的同一条曲线（同一条护栏被切开的两段总是满足；一段直线和一段曲线无法连接）。任意长度，最长 1 公里。免费。"
 
 #. Key:	Fence_GuardRail.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_GuardRail.Name"
 msgid "Guard Rail"
-msgstr ""
+msgstr "护栏"
 
 #. Key:	Fence_GuardRail.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_GuardRail.Desc"
 msgid "Metal guard rail. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m."
-msgstr ""
+msgstr "金属护栏。对准一条道路即可沿其边缘铺设。按住吸附键并对准另一段道路护栏可将其替换。造价按每 4 米计算。"
 
 #. Key:	Fence_Jersey.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_Jersey.Name"
 msgid "Cement Blocks"
-msgstr ""
+msgstr "水泥墩"
 
 #. Key:	Fence_Jersey.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_Jersey.Desc"
 msgid "Concrete road barrier. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m."
-msgstr ""
+msgstr "混凝土道路隔离墩。对准一条道路即可沿其边缘铺设。按住吸附键并对准另一段道路护栏可将其替换。造价按每 4 米计算。"
 
 #. Key:	Fence_Grid.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_Grid.Name"
 msgid "Metal Grid Fence"
-msgstr ""
+msgstr "金属格栅护栏"
 
 #. Key:	Fence_Grid.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_Grid.Desc"
 msgid "Metal grid fence. Aim at a road to follow its edge. Hold the snap key and aim at another road fence to replace it. Cost is per 4 m."
-msgstr ""
+msgstr "金属格栅护栏。对准一条道路即可沿其边缘铺设。按住吸附键并对准另一段道路护栏可将其替换。造价按每 4 米计算。"
 
 #. Key:	Fence_GridTall.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_GridTall.Name"
 msgid "Steel Mesh Fence Wall"
-msgstr ""
+msgstr "钢网围栏墙"
 
 #. Key:	Fence_GridTall.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Fence_GridTall.Desc"
 msgid "4 m steel frame with a diamond wire mesh. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it, or hold the snap key to replace it. Cost is per 4 m."
-msgstr ""
+msgstr "4 米钢制框架，菱形铁丝网。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放，或按住吸附键将其替换。造价按每 4 米计算。"
 
 #. Key:	FenceWall_Concrete.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Concrete.Name"
 msgid "Concrete Fence Wall"
-msgstr ""
+msgstr "混凝土围栏墙"
 
 #. Key:	FenceWall_Concrete.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Concrete.Desc"
 msgid "4 m concrete wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted. Cost is per 4 m."
-msgstr ""
+msgstr "4 米混凝土墙，厚 0.5 米。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放。可涂装。造价按每 4 米计算。"
 
 #. Key:	FenceWall_Ficsit.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Ficsit.Name"
 msgid "FICSIT Fence Wall"
-msgstr ""
+msgstr "FICSIT 围栏墙"
 
 #. Key:	FenceWall_Ficsit.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Ficsit.Desc"
 msgid "4 m FICSIT wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m."
-msgstr ""
+msgstr "4 米 FICSIT 墙，厚 0.5 米。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放。可涂装；定制器的材质标签页可在混凝土、FICSIT 和钢制之间切换。造价按每 4 米计算。"
 
 #. Key:	FenceWall_Sign.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Sign.Name"
 msgid "Sign Wall"
-msgstr ""
+msgstr "标牌墙"
 
 #. Key:	FenceWall_Sign.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Sign.Desc"
 msgid "4 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of an 8 x 4 m billboard). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it. Ends and top in matte metal, circuit grooves on the back. Cost is per 8 m, like a Small Billboard."
-msgstr ""
+msgstr "4 米墙，厚 0.5 米，沿其整段朝路一侧展示标牌图案，每 8 米重复一次（即 8 x 4 米广告牌的图案）。对它按 E 可用游戏的标牌编辑器编辑图案。对准一条道路即可沿其边缘铺设，或对准路口沿其路缘铺设；按住吸附键滚动可翻转朝向；对准围栏墙的上半或下半可向上或向下叠放。两端和顶部为哑光金属，背面有电路凹槽。造价按每 8 米计算，与小型广告牌相同。"
 
 #. Key:	FenceWall_Steel.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Steel.Name"
 msgid "Steel Fence Wall"
-msgstr ""
+msgstr "钢制围栏墙"
 
 #. Key:	FenceWall_Steel.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_Steel.Desc"
 msgid "4 m steel wall, 0.5 m thick. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it. Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Cost is per 4 m."
-msgstr ""
+msgstr "4 米钢制墙，厚 0.5 米。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放。可涂装；定制器的材质标签页可在混凝土、FICSIT 和钢制之间切换。造价按每 4 米计算。"
 
 #. Key:	SignGantry.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,SignGantry.Name"
 msgid "Sign Gantry"
-msgstr ""
+msgstr "标牌龙门架"
 
 #. Key:	SignGantry.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,SignGantry.Desc"
 msgid "Two steel columns on the fence lines of a road and a beam across it, at least 8 m above the road. Click the first side (a road or walking path edge), then the other side: the same road's other edge, or the far edge of a road or walking path beside it, so one gantry spans the whole carriageway. Then the mouse sets the height of the beam (every 2 m) and a click builds it. Aim a sign at the beam or a column to put it flat on that face, every 2 m (scroll turns it 45 degrees). Cost is per 8 m of steel."
-msgstr ""
+msgstr "两根钢柱立于道路两侧护栏线上，横梁横跨其上，距路面至少 8 米。点击第一侧（道路或步行道边缘），再点击另一侧：同一条道路的另一侧边缘，或旁边道路、步行道的远端边缘，使一座龙门架横跨整条车行道。随后移动鼠标设定横梁高度（每 2 米一档），点击即建造。将标牌对准横梁或立柱，即可平贴在该面上，每 2 米一档（滚动可旋转 45 度）。造价按每 8 米钢材计算。"
 
 #. Key:	LaneArrow.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneArrow.Name"
 msgid "Lane Arrow"
-msgstr ""
+msgstr "车道箭头"
 
 #. Key:	LaneArrow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneArrow.Desc"
 msgid "Paints an arrow on a lane of a road. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the arrow (straight, left, right, straight or left, straight or right, left or right). It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build."
-msgstr ""
+msgstr "在道路的车道上绘制箭头。对准一条道路：它会吸附到你正对的车道中央，并指向你沿道路的视线方向。滚轮可选择箭头样式（直行、左转、右转、直行或左转、直行或右转、左转或右转）。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用涂装枪重新涂装，或在定制器的材质标签页中更换外观。可单独拆除，也可随道路一同拆除。建造免费。"
 
 #. Key:	LaneNumber.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneNumber.Name"
 msgid "Lane Number"
-msgstr ""
+msgstr "车道编号"
 
 #. Key:	LaneNumber.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneNumber.Desc"
 msgid "Paints a single digit (0 to 9) on a lane of a road, for speed limits and lane numbers. Aim at a road: it snaps to the middle of the lane you aim at and reads upright for traffic driving the way you are looking along the road. The mouse wheel picks the digit. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build."
-msgstr ""
+msgstr "在道路的车道上绘制单个数字（0 至 9），可用于限速和车道编号。对准一条道路：它会吸附到你正对的车道中央，并正向显示给沿你的视线方向行驶的车辆。滚轮可选择数字。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用涂装枪重新涂装，或在定制器的材质标签页中更换外观。可单独拆除，也可随道路一同拆除。建造免费。"
 
 #. Key:	LaneVehicle.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneVehicle.Name"
 msgid "Lane Vehicle"
-msgstr ""
+msgstr "车道车辆"
 
 #. Key:	LaneVehicle.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneVehicle.Desc"
 msgid "Paints a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon) on a lane of a road, to mark lanes for one kind of vehicle. Aim at a road: it snaps to the middle of the lane you aim at and points the way you are looking along the road. The mouse wheel picks the vehicle. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with the paint gun, or change its look in the customizer's Material tab. Dismantle it on its own or with the road. Free to build."
-msgstr ""
+msgstr "在道路的车道上绘制车辆地图图标（拖拉机、卡车、探险者、工厂推车或赛博马车），用于标记专属某类车辆的车道。对准一条道路：它会吸附到你正对的车道中央，并指向你沿道路的视线方向。滚轮可选择车辆。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用涂装枪重新涂装，或在定制器的材质标签页中更换外观。可单独拆除，也可随道路一同拆除。建造免费。"
 
 #. Key:	WalkingPath_2m.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,WalkingPath_2m.Name"
 msgid "Walking Path (2 m)"
-msgstr ""
+msgstr "步行道（2 米）"
 
 #. Key:	WalkingPath_2m.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,WalkingPath_2m.Desc"
 msgid "A walking path two metres wide: concrete blocks on top, concrete sides, one dashed middle line. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: with one on each side, a 1-wide road becomes 1.5 foundations wide, and fences snap to the path's outer edge. Click the start, click the end to build one on its own; it snaps to walking path ends. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab, the middle line in Road Lines. Free to build."
-msgstr ""
+msgstr "两米宽的步行道：顶面混凝土块，侧面混凝土，中间一条虚线。按住吸附键并对准一条道路（或路口路缘），即可紧贴道路旁侧建造，边对边、齐平，并贯穿其全长：两侧各一条时，1 格宽的道路会变成 1.5 格地基宽，护栏则吸附到步行道外沿。点击起点、点击终点也可单独建造；它会吸附到步行道端点。其上不会有车辆路径、铁轨或车道标线。向上微调可做出抬高的人行道。外观（混凝土块、沥青、赛博朋克）在定制器的材质标签页中设置，中间线在道路标线中设置。建造免费。"
 
 #. Key:	WalkingPath_4m.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,WalkingPath_4m.Name"
 msgid "Walking Path (4 m)"
-msgstr ""
+msgstr "步行道（4 米）"
 
 #. Key:	WalkingPath_4m.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,WalkingPath_4m.Desc"
 msgid "A walking path four metres wide: concrete blocks on top, concrete sides. Hold the snap key and aim at a road (or an intersection curb) to build it right beside the road, edge to edge and flush, along its whole length: one on a side of a 1-wide road makes it 1.5 foundations wide, and fences snap to the path's outer edge. Or click the start, click the end: it snaps to 4 m walking path ends and to road ends every 2 m across. No vehicle paths, tracks or lane markings on it. Nudge it up for a raised sidewalk. Split Road makes two 2 m paths of it. The look (Concrete Blocks, Asphalt, Cyberpunk) is set in the customizer's Material tab; Road Lines adds a middle line and side lines. Free to build."
-msgstr ""
+msgstr "四米宽的步行道：顶面混凝土块，侧面混凝土。按住吸附键并对准一条道路（或路口路缘），即可紧贴道路旁侧建造，边对边、齐平，并贯穿其全长：1 格宽的道路旁加一条即变成 1.5 格地基宽，护栏则吸附到步行道外沿。也可点击起点、点击终点建造：它会吸附到 4 米步行道端点，以及每隔 2 米一个的道路端点。其上不会有车辆路径、铁轨或车道标线。向上微调可做出抬高的人行道。拆分道路可将其一分为二，成为两条 2 米步行道。外观（混凝土块、沥青、赛博朋克）在定制器的材质标签页中设置；道路标线可添加中间线和边线。建造免费。"
 
 #. Key:	RoadIntersection.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadIntersection.Name"
 msgid "Road Intersection"
-msgstr ""
+msgstr "道路路口"
 
 #. Key:	RoadIntersection.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadIntersection.Desc"
 msgid "Click free road ends (or free intersection ends) to pick them, up to 6, then click away from them to build: they are joined with curved curbs. Click a picked end again to drop it. Side lines are set in the customizer (Road Lines > Sidelines). Free to build."
-msgstr ""
+msgstr "点击空闲的道路端点（或空闲的路口端点）进行选取，最多 6 个，然后在远离它们的位置点击即可建造：它们会以弧形路缘连接。再次点击已选取的端点可取消选取。边线在定制器中设置（道路标线 > 边线）。建造免费。"
 
 #. Key:	RoadFill.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadFill.Name"
 msgid "Gap Fill"
-msgstr ""
+msgstr "空隙填充"
 
 #. Key:	RoadFill.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadFill.Desc"
 msgid "Fills the gap between roads with road surface, at their height. Click road, walking path and intersection edges around the area, in any order: they are cut where they cross, or joined by straight lines, and a yellow line closes the shape where the edges do not meet. Click inside the shape to build it. Click a picked edge again to drop it. It takes the look of the first edge's road; the customizer's Material tab and paint change it. Free to build."
-msgstr ""
+msgstr "以道路面填充道路之间的空隙，高度与它们一致。按任意顺序点击区域四周的道路、步行道和路口边缘：它们会在相交处被切割，或以直线连起来，未闭合处以黄线收口。点击形状内部即可建造。再次点击已选取的边缘可取消选取。外观取自第一条边缘所属的道路；可通过定制器的材质标签页和涂装更改。建造免费。"
 
 #. Key:	Customizer.RoadLines
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Customizer.RoadLines"
 msgid "Road Lines"
-msgstr ""
+msgstr "道路标线"
 
 #. Key:	Customizer.Sidelines
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Customizer.Sidelines"
 msgid "Sidelines"
-msgstr ""
+msgstr "边线"
 
 #. Key:	Customizer.Lanes
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Customizer.Lanes"
 msgid "Lanes"
-msgstr ""
+msgstr "车道"
 
 #. Key:	Customizer.Markings
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Customizer.Markings"
 msgid "Markings"
-msgstr ""
+msgstr "标线"
 
 #. Key:	RoadLines.SidesOff
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.SidesOff"
 msgid "Sidelines off"
-msgstr ""
+msgstr "边线关"
 
 #. Key:	RoadLines.SidesOff.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.SidesOff.Desc"
 msgid "Road Lines: Sidelines off. Aim at a road or intersection and apply."
-msgstr ""
+msgstr "道路标线：边线关。对准一条道路或路口后应用。"
 
 #. Key:	RoadLines.SidesOn
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.SidesOn"
 msgid "Sidelines on"
-msgstr ""
+msgstr "边线开"
 
 #. Key:	RoadLines.SidesOn.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.SidesOn.Desc"
 msgid "Road Lines: Sidelines on. Aim at a road or intersection and apply."
-msgstr ""
+msgstr "道路标线：边线开。对准一条道路或路口后应用。"
 
 #. Key:	RoadLines.Lanes1
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes1"
 msgid "1 lane (no lines)"
-msgstr ""
+msgstr "1 车道（无标线）"
 
 #. Key:	RoadLines.Lanes1.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes1.Desc"
 msgid "Road Lines: 1 lane (no lines). Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：1 车道（无标线）。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes2Dashed
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes2Dashed"
 msgid "2 lanes, dashed"
-msgstr ""
+msgstr "2 车道，虚线"
 
 #. Key:	RoadLines.Lanes2Dashed.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes2Dashed.Desc"
 msgid "Road Lines: 2 lanes, dashed. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：2 车道，虚线。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes2Solid
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes2Solid"
 msgid "2 lanes, continuous"
-msgstr ""
+msgstr "2 车道，实线"
 
 #. Key:	RoadLines.Lanes2Solid.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes2Solid.Desc"
 msgid "Road Lines: 2 lanes, continuous. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：2 车道，实线。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes3Dashed
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes3Dashed"
 msgid "3 lanes, dashed"
-msgstr ""
+msgstr "3 车道，虚线"
 
 #. Key:	RoadLines.Lanes3Dashed.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes3Dashed.Desc"
 msgid "Road Lines: 3 lanes, dashed. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：3 车道，虚线。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes3Solid
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes3Solid"
 msgid "3 lanes, continuous"
-msgstr ""
+msgstr "3 车道，实线"
 
 #. Key:	RoadLines.Lanes3Solid.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes3Solid.Desc"
 msgid "Road Lines: 3 lanes, continuous. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：3 车道，实线。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes4Dashed
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes4Dashed"
 msgid "4 lanes, dashed"
-msgstr ""
+msgstr "4 车道，虚线"
 
 #. Key:	RoadLines.Lanes4Dashed.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes4Dashed.Desc"
 msgid "Road Lines: 4 lanes, dashed. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：4 车道，虚线。对准一条道路后应用。"
 
 #. Key:	RoadLines.Lanes4Solid
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes4Solid"
 msgid "4 lanes, continuous"
-msgstr ""
+msgstr "4 车道，实线"
 
 #. Key:	RoadLines.Lanes4Solid.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.Lanes4Solid.Desc"
 msgid "Road Lines: 4 lanes, continuous. Aim at a road and apply."
-msgstr ""
+msgstr "道路标线：4 车道，实线。对准一条道路后应用。"
 
 #. Key:	RoadLines.MarkArrow
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkArrow"
 msgid "Lane Arrow"
-msgstr ""
+msgstr "车道箭头"
 
 #. Key:	RoadLines.MarkArrow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkArrow.Desc"
 msgid "Paints an arrow on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the arrow, the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."
-msgstr ""
+msgstr "在道路的车道上绘制箭头。对准一条道路：预览会显示在你正对的车道中央，指向你沿道路的视线方向。滚轮可选择箭头，点击即可绘制。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用颜色重新涂装，或在材质标签页中更换外观。可像普通建筑一样拆除。"
 
 #. Key:	RoadLines.MarkNumber
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkNumber"
 msgid "Lane Number"
-msgstr ""
+msgstr "车道编号"
 
 #. Key:	RoadLines.MarkNumber.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkNumber.Desc"
 msgid "Paints a single digit (0 to 9) on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the digit, the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."
-msgstr ""
+msgstr "在道路的车道上绘制单个数字（0 至 9）。对准一条道路：预览会显示在你正对的车道中央，指向你沿道路的视线方向。滚轮可选择数字，点击即可绘制。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用颜色重新涂装，或在材质标签页中更换外观。可像普通建筑一样拆除。"
 
 #. Key:	RoadLines.MarkVehicle
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkVehicle"
 msgid "Lane Vehicle"
-msgstr ""
+msgstr "车道车辆"
 
 #. Key:	RoadLines.MarkVehicle.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkVehicle.Desc"
 msgid "Paints a vehicle's map icon (Tractor, Truck, Explorer, Factory Cart or Cyberwagon) on a lane of a road. Aim at a road: the ghost shows it in the middle of the lane you aim at, pointing the way you look along the road. The mouse wheel picks the vehicle, the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too); repaint it with a colour, or change its look in the Material tab. Dismantle it like any building."
-msgstr ""
+msgstr "在道路的车道上绘制车辆地图图标（拖拉机、卡车、探险者、工厂推车或赛博马车）。对准一条道路：预览会显示在你正对的车道中央，指向你沿道路的视线方向。滚轮可选择车辆，点击即可绘制。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）；可用颜色重新涂装，或在材质标签页中更换外观。可像普通建筑一样拆除。"
 
 #. Key:	Customizer.Roads
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Customizer.Roads"
 msgid "Roads"
-msgstr ""
+msgstr "道路"
 
 #. Key:	Schematic.Schematic_RoadMaker
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Schematic.Schematic_RoadMaker"
 msgid "Road Maker"
-msgstr ""
+msgstr "Road Maker"
 
 #. Key:	Menu.Roads
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.Roads"
 msgid "Roads"
-msgstr ""
+msgstr "道路"
 
 #. Key:	Menu.FenceWalls
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.FenceWalls"
 msgid "Fence Walls"
-msgstr ""
+msgstr "围栏墙"
 
 #. Key:	Menu.RoadTools
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.RoadTools"
 msgid "Road Tools"
-msgstr ""
+msgstr "道路工具"
 
 #. Key:	Menu.EditRoad
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.EditRoad"
 msgid "Edit road"
-msgstr ""
+msgstr "编辑道路"
 
 #. Key:	Menu.EditFence
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Menu.EditFence"
 msgid "Edit fence"
-msgstr ""
+msgstr "编辑护栏"
 
 #. Key:	RoadMaterial.Asphalt
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Asphalt"
 msgid "Asphalt"
-msgstr ""
+msgstr "沥青"
 
 #. Key:	RoadMaterial.Asphalt.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Asphalt.Desc"
 msgid "Dark asphalt with lane markings. The default look of roads and intersections."
-msgstr ""
+msgstr "深色沥青，带车道标线。道路和路口的默认外观。"
 
 #. Key:	RoadMaterial.Concrete
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Concrete"
 msgid "Concrete Blocks"
-msgstr ""
+msgstr "混凝土块"
 
 #. Key:	RoadMaterial.Concrete.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Concrete.Desc"
 msgid "Light concrete blocks. Lane markings stay in the road's line colours."
-msgstr ""
+msgstr "浅色混凝土块。车道标线保持道路标线的颜色。"
 
 #. Key:	RoadMaterial.Cyber
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Cyber"
 msgid "Cyberpunk"
-msgstr ""
+msgstr "赛博朋克"
 
 #. Key:	RoadMaterial.Cyber.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadMaterial.Cyber.Desc"
 msgid "Matte plastic with circuit-board grooves in the primary colour. The lane lines glow in the secondary colour."
-msgstr ""
+msgstr "哑光塑料，带主色调的电路板凹槽。车道标线以副色调发光。"
 
 #. Key:	FenceWall_ConcreteLow.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_ConcreteLow.Name"
 msgid "Concrete Fence Wall 1 m"
-msgstr ""
+msgstr "混凝土围栏墙 1 米"
 
 #. Key:	FenceWall_ConcreteLow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_ConcreteLow.Desc"
 msgid "1 m concrete wall, 0.5 m thick, plain concrete without the panel grooves: kerbs, parking edges, planters. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Costs what the 4 m wall does. Cost is per 4 m."
-msgstr ""
+msgstr "1 米混凝土墙，厚 0.5 米，无板缝的素混凝土：适用于路缘、停车边缘、花坛。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放（1 米与 4 米墙可互相叠放）。可涂装；定制器的材质标签页可在混凝土、FICSIT 和钢制之间切换。造价与 4 米墙相同。造价按每 4 米计算。"
 
 #. Key:	FenceWall_FicsitLow.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_FicsitLow.Name"
 msgid "FICSIT Fence Wall 1 m"
-msgstr ""
+msgstr "FICSIT 围栏墙 1 米"
 
 #. Key:	FenceWall_FicsitLow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_FicsitLow.Desc"
 msgid "1 m FICSIT wall, 0.5 m thick, like the game's 1 m FICSIT wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Costs what the 4 m wall does. Cost is per 4 m."
-msgstr ""
+msgstr "1 米 FICSIT 墙，厚 0.5 米，与游戏内的 1 米 FICSIT 墙一致。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放（1 米与 4 米墙可互相叠放）。可涂装；定制器的材质标签页可在混凝土、FICSIT 和钢制之间切换。造价与 4 米墙相同。造价按每 4 米计算。"
 
 #. Key:	FenceWall_SteelLow.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_SteelLow.Name"
 msgid "Steel Fence Wall 1 m"
-msgstr ""
+msgstr "钢制围栏墙 1 米"
 
 #. Key:	FenceWall_SteelLow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_SteelLow.Desc"
 msgid "1 m steel wall, 0.5 m thick, a solid wall with the look of the game's 1 m steel wall. Aim at a road to follow its edge (centred on the edge), or at an intersection to follow its curb; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Can be painted; the customizer's Material tab switches between concrete, FICSIT and steel. Costs what the 4 m wall does. Cost is per 4 m."
-msgstr ""
+msgstr "1 米钢制墙，厚 0.5 米，实心墙体，外观与游戏内的 1 米钢墙一致。对准一条道路即可沿其边缘铺设（以边缘为中心），或对准路口沿其路缘铺设；对准围栏墙的上半或下半可向上或向下叠放（1 米与 4 米墙可互相叠放）。可涂装；定制器的材质标签页可在混凝土、FICSIT 和钢制之间切换。造价与 4 米墙相同。造价按每 4 米计算。"
 
 #. Key:	FenceWall_SignLow.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_SignLow.Name"
 msgid "Sign Wall 1 m"
-msgstr ""
+msgstr "标牌墙 1 米"
 
 #. Key:	FenceWall_SignLow.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,FenceWall_SignLow.Desc"
 msgid "1 m wall, 0.5 m thick, that shows a sign design along its whole road side, repeated every 8 m (the design of a 4 m Label Sign, scaled up to 8 x 1 m). Press E on it to edit the design with the game's sign editor. Aim at a road to follow its edge, or at an intersection to follow its curb; scroll with the snap key held to turn it round; aim at the upper or lower half of a fence wall to stack another above or below it (1 m and 4 m walls stack together). Ends and top in matte metal, circuit grooves on the back. Costs what the 4 m sign wall does. Cost is per 8 m."
-msgstr ""
+msgstr "1 米墙，厚 0.5 米，沿其整段朝路一侧展示标牌图案，每 8 米重复一次（即 4 米标签牌的图案，放大至 8 x 1 米）。对它按 E 可用游戏的标牌编辑器编辑图案。对准一条道路即可沿其边缘铺设，或对准路口沿其路缘铺设；按住吸附键滚动可翻转朝向；对准围栏墙的上半或下半可向上或向下叠放（1 米与 4 米墙可互相叠放）。两端和顶部为哑光金属，背面有电路凹槽。造价与 4 米标牌墙相同。造价按每 8 米计算。"
 
 #. Key:	LaneTextTitle
 #: Source/RoadMaker/Private/Customization/RMLaneText.cpp
 msgctxt "RoadMaker,LaneTextTitle"
 msgid "Lane Text"
-msgstr ""
+msgstr "车道文字"
 
 #. Key:	LaneTextHelp
 #: Source/RoadMaker/Private/Customization/RMLaneText.cpp
 msgctxt "RoadMaker,LaneTextHelp"
 msgid "Painted down the lane and read from top to bottom: the first character is the farthest. Up to {0} characters, any language."
-msgstr ""
+msgstr "沿车道纵向绘制，自上而下阅读：第一个字符在最远处。最多 {0} 个字符，支持任意语言。"
 
 #. Key:	LaneTextPlaceholder
 #: Source/RoadMaker/Private/Customization/RMLaneText.cpp
 msgctxt "RoadMaker,LaneTextPlaceholder"
 msgid "Type the text"
-msgstr ""
+msgstr "输入文字"
 
 #. Key:	LaneTextOk
 #: Source/RoadMaker/Private/Customization/RMLaneText.cpp
 msgctxt "RoadMaker,LaneTextOk"
 msgid "OK"
-msgstr ""
+msgstr "确定"
 
 #. Key:	LaneTextCancel
 #: Source/RoadMaker/Private/Customization/RMLaneText.cpp
 msgctxt "RoadMaker,LaneTextCancel"
 msgid "Cancel"
-msgstr ""
+msgstr "取消"
 
 #. Key:	LaneTextHudEmpty
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,LaneTextHudEmpty"
 msgid "Lane Text: press R to write the text"
-msgstr ""
+msgstr "车道文字：按 R 输入文字"
 
 #. Key:	LaneTextHud
 #: Source/RoadMaker/Private/Customization/RMRoadLinePaint.cpp
 msgctxt "RoadMaker,LaneTextHud"
 msgid "Lane Text: \"{0}\" (R: change the text, click: paint)"
-msgstr ""
+msgstr "车道文字：\"{0}\"（R：修改文字，点击：绘制）"
 
 #. Key:	LaneText.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneText.Name"
 msgid "Lane Text"
-msgstr ""
+msgstr "车道文字"
 
 #. Key:	LaneText.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,LaneText.Desc"
 msgid "Text painted down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest). Any language. Chosen in the customizer (Road Lines > Markings): write the text in its box (R opens it again), aim at a lane and click. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click copies its text. Free to build."
-msgstr ""
+msgstr "沿道路车道纵向绘制的文字，字符依次正立，沿车道向下看时自上而下阅读（第一个字符在最远处）。支持任意语言。在定制器中设置（道路标线 > 标线）：在文本框中输入文字（按 R 可再次打开），对准车道点击即可绘制。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）。它属于涂装：要修改需先拆除再重新绘制；中键点击可复制其文字。建造免费。"
 
 #. Key:	RoadLines.MarkText
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkText"
 msgid "Lane Text"
-msgstr ""
+msgstr "车道文字"
 
 #. Key:	RoadLines.MarkText.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadLines.MarkText.Desc"
 msgid "Paints text down a lane of a road, one upright character after another, read from top to bottom looking down the lane (the first character is the farthest); any language. Picking it opens a box to write the text (R opens it again). Aim at a road: the ghost shows the text in the middle of the lane you aim at; the click paints it. It takes the colour of the road's lane lines (the cyberpunk road's glow too). A paint job: to change it, dismantle it and paint it again; middle click on painted text copies it."
-msgstr ""
+msgstr "沿道路车道纵向绘制文字，字符依次正立，沿车道向下看时自上而下阅读（第一个字符在最远处）；支持任意语言。选中该项会打开文本框输入文字（按 R 可再次打开）。对准一条道路：预览会显示在你正对的车道中央；点击即可绘制。颜色取自道路的车道标线（赛博朋克道路的发光效果同样适用）。它属于涂装：要修改需先拆除再重新绘制；中键点击已绘制的文字可复制其内容。"
 
 #. Key:	TunnelPickSides
 #: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
 msgctxt "RoadMaker,TunnelPickSides"
 msgid "Click both sides of the tunnel: road or walking path edges, or fence walls"
-msgstr ""
+msgstr "点击隧道的两侧：道路或步行道边缘，或围栏墙"
 
 #. Key:	TunnelNotBeside
 #: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
 msgctxt "RoadMaker,TunnelNotBeside"
 msgid "The two sides do not run side by side (3 to 60 m apart)"
-msgstr ""
+msgstr "两侧并非并行（间距需在 3 至 60 米之间）"
 
 #. Key:	TunnelArcHint
 #: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
 msgctxt "RoadMaker,TunnelArcHint"
 msgid "Arc: {0}° (aim up or down; click to build)"
-msgstr ""
+msgstr "弧度：{0}°（上下瞄准；点击建造）"
 
 #. Key:	TunnelDropFirst
 #: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
 msgctxt "RoadMaker,TunnelDropFirst"
 msgid "Tunnel: click to drop this side"
-msgstr ""
+msgstr "隧道：点击以取消此侧"
 
 #. Key:	TunnelNotBesideHint
 #: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
 msgctxt "RoadMaker,TunnelNotBesideHint"
 msgid "Tunnel: this side does not run beside the first one"
-msgstr ""
+msgstr "隧道：此侧未与第一侧并行"
 
 #. Key:	TunnelSecondSide
 #: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
 msgctxt "RoadMaker,TunnelSecondSide"
 msgid "Tunnel: click the other side"
-msgstr ""
+msgstr "隧道：点击另一侧"
 
 #. Key:	TunnelFirstSide
 #: Source/RoadMaker/Private/Holograms/RMTunnelHologram.cpp
 msgctxt "RoadMaker,TunnelFirstSide"
 msgid "Tunnel: click the first side (a road or walking path edge, or a fence wall)"
-msgstr ""
+msgstr "隧道：点击第一侧（道路或步行道边缘，或围栏墙）"
 
 #. Key:	Tunnel.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Tunnel.Name"
 msgid "Tunnel Arch"
-msgstr ""
+msgstr "隧道拱"
 
 #. Key:	Tunnel.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,Tunnel.Desc"
 msgid "A rounded concrete arch over roads, a tunnel shell following their curve. Click the first side: a road or walking path edge, or a fence wall (the arch then rises from its top). Click the other side: the same road's other edge, the far edge of a road beside it, or another fence wall; the arch spans everything between and runs along the whole stretch where the two sides run side by side (cut the road or fence for a shorter tunnel). Then aim up or down to set the arc, up to a semicircle (the angle is shown on screen), and click to build. Ceiling lights hang inside it; wall attachments snap to nine points around the arch, inside and outside. Paintable. Cost is per 16 m2 of shell."
-msgstr ""
+msgstr "横跨道路的圆拱混凝土结构，隧道外壳贴合道路曲线。点击第一侧：道路或步行道边缘，或围栏墙（此时拱将从墙顶起拱）。点击另一侧：同一条道路的另一侧边缘、旁边道路的远端边缘，或另一道围栏墙；拱将横跨其间，并沿两侧并行的整段延伸（切割道路或护栏可获得更短的隧道）。随后上下瞄准设定弧度，最大半圆（角度会显示在屏幕上），点击即建造。内部顶部悬挂照明灯；墙体附件可吸附到拱周九个点位，内侧外侧均可。可涂装。造价按每 16 平方米壳体计算。"
 
 #. Key:	GantryNotAcross
 #: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
 msgctxt "RoadMaker,GantryNotAcross"
 msgid "Not straight across from the first column (3 to 60 m, at most 3 m higher or lower)"
-msgstr ""
+msgstr "未与第一根立柱正对（需 3 至 60 米，高度差不超过 3 米）"
 
 #. Key:	GantryHeightHint
 #: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
 msgctxt "RoadMaker,GantryHeightHint"
 msgid "Sign Gantry: beam {0} m above the road (aim up or down; click to build)"
-msgstr ""
+msgstr "标牌龙门架：横梁距路面 {0} 米（上下瞄准；点击建造）"
 
 #. Key:	GantryDropFirst
 #: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
 msgctxt "RoadMaker,GantryDropFirst"
 msgid "Sign Gantry: click to drop this side"
-msgstr ""
+msgstr "标牌龙门架：点击以取消此侧"
 
 #. Key:	GantryNotAcrossHint
 #: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
 msgctxt "RoadMaker,GantryNotAcrossHint"
 msgid "Sign Gantry: this edge is not straight across from the first column"
-msgstr ""
+msgstr "标牌龙门架：此边缘未与第一根立柱正对"
 
 #. Key:	GantrySecondSide
 #: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
 msgctxt "RoadMaker,GantrySecondSide"
 msgid "Sign Gantry: click the other side (any road or walking path edge across)"
-msgstr ""
+msgstr "标牌龙门架：点击另一侧（对侧任意道路或步行道边缘）"
 
 #. Key:	GantryFirstSide
 #: Source/RoadMaker/Private/Holograms/RMGantryHologram.cpp
 msgctxt "RoadMaker,GantryFirstSide"
 msgid "Sign Gantry: click the first side (a road or walking path edge)"
-msgstr ""
+msgstr "标牌龙门架：点击第一侧（道路或步行道边缘）"
