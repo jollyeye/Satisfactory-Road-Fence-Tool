@@ -23,6 +23,12 @@
 #include "Containers/Ticker.h"
 #include "HAL/IConsoleManager.h"
 
+namespace RMRiders
+{
+	/** Vehicle paths left by dismantled roads: removed one per frame (defined with the rider code below). */
+	void QueuePaths(const TArray<TWeakObjectPtr<AActor>>& Paths);
+}
+
 ARMBuildableProcedural::ARMBuildableProcedural(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
