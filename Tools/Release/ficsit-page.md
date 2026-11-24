@@ -123,6 +123,13 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
 
+## Changelog for version 1.5.1
+**Fixed**
+- Dismantling many roads at once could crash the game a minute later in its vehicle path code, and an autosave made in between could no longer be loaded (issue #11). The vehicle paths on a dismantled road or intersection are now removed just after it, one at a time, as if dismantled by hand; tracks and lane markings already being dismantled are no longer handed over twice. Console: `RM.DismantleRiders 0` leaves paths, tracks and markings in place when a road is dismantled.
+
+**Translations**
+- Chinese (Simplified) complete: every text, including the 1.5.0 buildings and tools. Thanks to muaxl!
+
 ## Changelog for version 1.5.0
 **Added**
 - Tunnel Arch: a rounded concrete-block arch over roads, following their curve and slope. Click the two sides (road or walking path edges, or fence walls: the arch rises from their top; several parallel roads are covered at once), then aim to set the arc, up to a semicircle, shown on screen. Lights, belt mounts and outlets hang inside; signs, wall attachments, pillars and beams snap to nine points around the arch. Works in Road Mode (a tunnel running the whole blueprint becomes one arch over the whole curve).

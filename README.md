@@ -6,7 +6,7 @@ tools to cut, split and reshape roads, road fences and fence walls, tunnel arche
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.5.0**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
+Manager). Current version: **1.5.1**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
 
 ![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, fences, street lights, chevrons and a tunnel arch with direction signs](docs/screenshots/intro-1.5.jpg)
 

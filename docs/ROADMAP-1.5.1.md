@@ -2,8 +2,12 @@
 
 Started 2026-11-24, after 1.5.0 (released 2026-11-22). Fixes first.
 
+**Release prep done 2026-11-24**: the issue #11 fix tested by the user (mass dismantle of roads with paths: no crash),
+zh-Hans complete and compiled (GatherText exit code 0), version 1.5.1, changelog on the ficsit page, README. Issue #10
+(multiplayer rubberbanding) waits for the reporter's answers: not in 1.5.1.
+
 ## Fixes
-- **Dismantling roads broke the game's vehicle path network** (issue #11, muaxl, on 1.4.1; built 2026-11-24, to test):
+- **Dismantling roads broke the game's vehicle path network** (issue #11, muaxl, on 1.4.1; built 2026-11-24, tested by the user):
   a mass dismantle of roads crashed in `AFGVehicleSubsystem::CleanNetworkIDOnElements` (a dead path element still in
   a network) a minute later, and the autosave in between had a broken network that no longer loads. The roads handed
   every vehicle path segment on them to the game as dismantle children, all in one frame, and could hand one that was
