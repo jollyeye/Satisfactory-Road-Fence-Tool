@@ -70,7 +70,8 @@ void ARMBuildableRoad::RebuildMesh()
 	AddChunkBoundaries(Frames);
 	PrepareChunks();
 	FRMMesh Top, Body;
-	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body);
+	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body,
+		!SlopeCapAt(0), !SlopeCapAt(1));
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
@@ -80,7 +81,7 @@ void ARMBuildableRoad::RebuildMesh()
 	RequestSlopeMeasure();
 	if (mSideSlopes)
 	{
-		BuildSlopeMesh(mSlopeLeft, mSlopeRight, Slopes);
+		BuildSlopeMesh(mSlopeLeft, mSlopeRight, Frames, Slopes);
 	}
 	ApplyNearSection(Slopes, 2, true, BodyMat);
 
@@ -92,7 +93,8 @@ void ARMBuildableRoad::RebuildMesh()
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarTop, FarBody;
-		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody);
+		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody,
+			!SlopeCapAt(0), !SlopeCapAt(1));
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
 		if (!Slopes.IsEmpty())
@@ -845,68 +847,130 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes measured, %d of %d samples with a bank"), *GetName(), Banks, (Steps + 1) * 2);
 }
 
+float ARMBuildableRoad::SlopeDropAt(const TArray<FVector2D>& Samples, float Dist)
+{
+	if (Samples.Num() == 0)
+	{
+		return 0.f;
+	}
+	if (Dist <= Samples[0].X)
+	{
+		return Samples[0].Y;
+	}
+	for (int32 I = 1; I < Samples.Num(); ++I)
+	{
+		if (Samples[I].X >= Dist)
+		{
+			const FVector2D& A = Samples[I - 1];
+			const FVector2D& B = Samples[I];
+			return FMath::Lerp(A.Y, B.Y, (Dist - A.X) / FMath::Max(B.X - A.X, KINDA_SMALL_NUMBER));
+		}
+	}
+	return Samples.Last().Y;
+}
+
+bool ARMBuildableRoad::SlopeCapAt(int32 End) const
+{
+	if (!mSideSlopes)
+	{
+		return false;
+	}
+	for (const TArray<FVector2D>* Samples : { &mSlopeLeft, &mSlopeRight })
+	{
+		if (Samples->Num() > 0 && (End == 0 ? (*Samples)[0].Y : Samples->Last().Y) > 0.5f)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const
 {
+	// As the road mesh's cross-sections (RebuildMesh), without its chunk cuts.
 	TArray<FRMFrame> Frames;
-	GetLocalFrames(Frames, 100.f);
+	GetLocalFrames(Frames, mMeshStep);
+	RMGeometry::ReduceRoadFrames(Frames, IsWalkingPath());
+	BuildSlopeMesh(Left, Right, Frames, Out);
+}
+
+void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out) const
+{
 	if (Frames.Num() < 2)
 	{
 		return;
 	}
-	const FVector UpL = GetActorTransform().InverseTransformVectorNoScale(FVector::UpVector);
+	const float H = GetRoadWidth() * 0.5f;
 	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun);
+	const float Total = Frames.Last().Dist;
 	for (const float Side : { -1.f, 1.f })
 	{
 		const TArray<FVector2D>& Samples = Side < 0.f ? Left : Right;
-		const int32 N = Samples.Num();
-		if (N < 2)
+		if (Samples.Num() < 2)
 		{
 			continue;
 		}
-		// Edge and foot of each sample.
-		TArray<FVector> E, Fo, OutDir;
-		for (const FVector2D& S : Samples)
+		// Points along: every cross-section of the road (the bank's top edge is the road's edge, same corners), and the
+		// samples between them (where the ground under the foot changes; on the chord between the two cross-sections,
+		// so the edge stays the road's).
+		struct FPt { float Dist; float Drop; bool bMust; FVector Edge = FVector::ZeroVector; FVector Foot = FVector::ZeroVector; FVector Out = FVector::ZeroVector; FVector Normal = FVector::UpVector; };
+		TArray<FPt> Pts;
+		int32 S = 0;
+		for (int32 I = 0; I < Frames.Num(); ++I)
 		{
-			const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, S.X);
-			const FVector O = (F.Right - UpL * FVector::DotProduct(F.Right, UpL)).GetSafeNormal() * Side;
-			const FVector Edge = F.Pos + F.Right * (GetRoadWidth() * 0.5f * Side);
-			E.Add(Edge);
-			Fo.Add(Edge + O * (SlopeRun * S.Y) - UpL * S.Y);
-			OutDir.Add(O);
-		}
-		// Kept samples: every start / end of a bank, and where edge or foot bends (within 3 cm), at least every 20 m.
-		auto Deviates = [&](int32 From, int32 To)
-		{
-			for (int32 M = From + 1; M < To; ++M)
+			const float D = Frames[I].Dist;
+			while (S < Samples.Num() && Samples[S].X < D - 5.f)
 			{
-				const float T = float(M - From) / float(To - From);
-				if (FVector::Dist(FMath::Lerp(E[From], E[To], T), E[M]) > 3.f || FVector::Dist(FMath::Lerp(Fo[From], Fo[To], T), Fo[M]) > 3.f)
+				if (I > 0 && Samples[S].X > Frames[I - 1].Dist + 5.f)
 				{
-					return true;
+					Pts.Add({ Samples[S].X, SlopeDropAt(Samples, Samples[S].X), false });
 				}
+				++S;
 			}
-			return false;
-		};
-		auto Has = [&](int32 I) { return Samples[I].Y > 0.f; };
-		TArray<int32> Kept = { 0 };
-		for (int32 J = 2; J <= N; ++J)
-		{
-			const int32 Last = Kept.Last();
-			const bool bEnd = J == N;
-			// A bank starting or ending between J-2 and J-1 keeps J-1 (and the sample before a change).
-			const bool bChange = !bEnd && (Has(J - 1) != Has(J) || Has(J - 1) != Has(Last));
-			if (bEnd || bChange || Deviates(Last, J) || Samples[J].X - Samples[Last].X > 2000.f)
+			while (S < Samples.Num() && Samples[S].X <= D + 5.f)
 			{
-				Kept.Add(J - 1);
+				++S;
+			}
+			Pts.Add({ D, SlopeDropAt(Samples, FMath::Clamp(D / FMath::Max(Total, 1.f) * Samples.Last().X, 0.f, Samples.Last().X)), true });
+		}
+		for (FPt& P : Pts)
+		{
+			const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, P.Dist);
+			P.Out = F.Right * Side;
+			P.Edge = F.Pos + P.Out * H;
+			P.Foot = P.Edge + P.Out * (SlopeRun * P.Drop) - F.Up * P.Drop; // in the cross-section's plane (its cap's too)
+			P.Normal = (P.Out + F.Up * SlopeRun).GetSafeNormal(); // square to the bank, up and out
+		}
+		auto Has = [&](int32 I) { return Pts[I].Drop > 0.5f; };
+		// Optional points kept where the foot bends (10 cm: the foot is 30 cm into the ground) or a bank starts / ends.
+		TArray<int32> Kept = { 0 };
+		for (int32 J = 1; J < Pts.Num(); ++J)
+		{
+			if (Pts[J].bMust || J == Pts.Num() - 1 || Has(J) != Has(J + 1) || Has(J) != Has(J - 1))
+			{
+				Kept.Add(J);
+				continue;
+			}
+			// Skip J if the foot from the last kept point to the next must point stays within 10 cm of it.
+			int32 Next = J + 1;
+			while (Next < Pts.Num() - 1 && !Pts[Next].bMust)
+			{
+				++Next;
+			}
+			const int32 Last = Kept.Last();
+			const float T = (Pts[J].Dist - Pts[Last].Dist) / FMath::Max(Pts[Next].Dist - Pts[Last].Dist, 1.f);
+			if (FVector::Dist(FMath::Lerp(Pts[Last].Foot, Pts[Next].Foot, T), Pts[J].Foot) > 10.f)
+			{
+				Kept.Add(J);
 			}
 		}
-		// One strip per side, vertices shared: edge and foot per kept sample.
 		TArray<int32> VE, VF;
 		for (const int32 I : Kept)
 		{
-			const FVector Normal = (OutDir[I] + UpL * SlopeRun).GetSafeNormal(); // square to the bank, up and out
-			VE.Add(Out.AddVertex(E[I], Normal, FVector2D(Samples[I].X / 400.f, 0.f), FVector::CrossProduct(Normal, OutDir[I]).GetSafeNormal()));
-			VF.Add(Out.AddVertex(Fo[I], Normal, FVector2D(Samples[I].X / 400.f, Samples[I].Y * SlopeLen / 400.f), FVector::CrossProduct(Normal, OutDir[I]).GetSafeNormal()));
+			const FVector& Normal = Pts[I].Normal;
+			const FVector Tangent = FVector::CrossProduct(Normal, Pts[I].Out).GetSafeNormal();
+			VE.Add(Out.AddVertex(Pts[I].Edge, Normal, FVector2D(Pts[I].Dist / 400.f, 0.f), Tangent));
+			VF.Add(Out.AddVertex(Pts[I].Foot, Normal, FVector2D(Pts[I].Dist / 400.f, Pts[I].Drop * SlopeLen / 400.f), Tangent));
 		}
 		for (int32 K = 0; K + 1 < Kept.Num(); ++K)
 		{
@@ -915,7 +979,7 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			{
 				continue;
 			}
-			const FVector Normal = (OutDir[A] + UpL * SlopeRun).GetSafeNormal();
+			const FVector& Normal = Pts[A].Normal;
 			if (Has(B))
 			{
 				Out.AddTriangle(VE[K], VE[K + 1], VF[K + 1], Normal);
@@ -925,5 +989,34 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 				Out.AddTriangle(VE[K], VF[K + 1], VF[K], Normal);
 			}
 		}
+	}
+	// Embankment caps: the road's cross-section widened to the banks' feet (a trapezoid), down to below the road.
+	const float Height = FMath::Max(mRoadHeight, 10.f);
+	for (int32 End = 0; End < 2; ++End)
+	{
+		const float DL = SlopeDropAt(Left, End == 0 ? 0.f : (Left.Num() ? Left.Last().X : 0.f));
+		const float DR = SlopeDropAt(Right, End == 0 ? 0.f : (Right.Num() ? Right.Last().X : 0.f));
+		if (DL <= 0.5f && DR <= 0.5f)
+		{
+			continue;
+		}
+		TArray<FVector2D> Profile = { FVector2D(-H, 0.f), FVector2D(H, 0.f) };
+		if (DR > 0.5f)
+		{
+			Profile.Add(FVector2D(H + SlopeRun * DR, -DR));
+		}
+		if (DR < Height)
+		{
+			Profile.Add(FVector2D(H, -Height));
+		}
+		if (DL < Height)
+		{
+			Profile.Add(FVector2D(-H, -Height));
+		}
+		if (DL > 0.5f)
+		{
+			Profile.Add(FVector2D(-H - SlopeRun * DL, -DL));
+		}
+		RMGeometry::AddProfileCap(End == 0 ? Frames[0] : Frames.Last(), Profile, End == 1, mUVScale, Out);
 	}
 }

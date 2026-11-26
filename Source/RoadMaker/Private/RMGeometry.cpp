@@ -1144,7 +1144,7 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // ---------------------------------------------------------------------------------------------
 
 void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body)
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
@@ -1182,8 +1182,15 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 		false, Centroid, UVScale, Body);
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };
-	AddProfileCap(Frames[0], Section, false, UVScale, Body);
-	AddProfileCap(Frames.Last(), Section, true, UVScale, Body);
+	// Ends with side slopes: the road's cap is part of the bank's wider one (ARMBuildableRoad::BuildSlopeMesh).
+	if (bStartCap)
+	{
+		AddProfileCap(Frames[0], Section, false, UVScale, Body);
+	}
+	if (bEndCap)
+	{
+		AddProfileCap(Frames.Last(), Section, true, UVScale, Body);
+	}
 }
 
 namespace

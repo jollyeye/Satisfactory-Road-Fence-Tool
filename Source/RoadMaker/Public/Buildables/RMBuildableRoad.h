@@ -233,6 +233,16 @@ public:
 	void MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const;
 	/** The banks' mesh in actor space for measured samples (straight runs merged, nothing where there is no bank). */
 	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const;
+	/**
+	 * Same, on the road mesh's own cross-sections (Frames, actor space): the banks start on the road's edge exactly.
+	 * At an end with a bank the cap closes the whole embankment (road and banks, down to the feet; the road's own
+	 * cap is left out there: SlopeCapAt).
+	 */
+	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out) const;
+	/** Whether this end (0 start, 1 end) has a bank on either side: the embankment cap replaces the road's. */
+	bool SlopeCapAt(int32 End) const;
+	/** Bank drop (cm) at a distance along, from samples (linear between them). */
+	static float SlopeDropAt(const TArray<FVector2D>& Samples, float Dist);
 
 	static constexpr float SlopeRun = 1.5f;        // 1 : 1.5 (about 34 degrees)
 	static constexpr float SlopeMaxDrop = 800.f;   // banks down to 8 m below the edge
