@@ -201,26 +201,22 @@ void ARMSplineHologram::UpdateCurve()
 		const FVector Dir = (Flat + FVector(0.f, 0.f, Slope)).GetSafeNormal();
 		RMGeometry::MakeFixedEnds(mStart, Dir, End, Dir, World);
 	}
-	else if (mEndSnapped)
-	{
-		RMGeometry::MakeQuadratic(mStart, mStartDir, mEnd, mEndDir, World);
-	}
 	else if (IsStraightMode())
 	{
-		FVector End = mEnd;
-		if (mStartSnapped)
-		{
-			// Keep going exactly in the direction of the road we started from.
-			const FVector Dir = FVector(mStartDir.X, mStartDir.Y, 0.f).GetSafeNormal();
-			const float Along = FMath::Max(0.f, FVector::DotProduct(End - mStart, Dir));
-			End = FVector(mStart.X, mStart.Y, End.Z) + Dir * Along;
-		}
+		// Straight (1.6.0): a straight line from the start to the aim, in any direction, also out of another road's
+		// end; snapped to a free road end it ends exactly on that end's point, meeting it at an angle (no flush
+		// curve): the corners are rounded later with Smooth Joint.
+		const FVector End = mEnd;
 		FVector Dir = FVector(End.X - mStart.X, End.Y - mStart.Y, 0.f).GetSafeNormal();
 		if (Dir.IsNearlyZero())
 		{
 			Dir = mStartDir;
 		}
 		RMGeometry::MakeFixedEnds(mStart, Dir, End, Dir, World);
+	}
+	else if (mEndSnapped)
+	{
+		RMGeometry::MakeQuadratic(mStart, mStartDir, mEnd, mEndDir, World);
 	}
 	else
 	{
