@@ -1334,7 +1334,7 @@ msgstr ""
 #. Key:	BarrierInfoOpen
 #: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
 msgctxt "RoadMaker,BarrierInfoOpen"
-msgid "On: always open. Off: always closed (vehicles are stopped)."
+msgid "On: always open. Off: back to automatic."
 msgstr ""
 
 #. Key:	BarrierInfoAutomatic
@@ -1376,5 +1376,11 @@ msgstr ""
 #. Key:	BoomBarrier.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BoomBarrier.Desc"
-msgid "A post on a road's fence line with a striped arm across the road. Click the side for the post (a road or walking path edge), then the other side straight across: the arm reaches it (2 to 20 m). Press E on it to change its mode: Automatic (the arm lifts while a vehicle is near), Always open, Always closed (the arm stays down and stops vehicles). Automated Machines can open, close or automate it and knows when a vehicle is waiting."
+msgid "A post on a road's fence line with a striped arm across the road. Click the side for the post (a road or walking path edge), then the other side straight across: the arm reaches it (2 to 20 m). Press E on it to change its mode: Automatic (the arm lifts while a vehicle is near), Always open, Always closed (the arm stays down and blocks the vehicle paths through it: self-driving vehicles wait). Automated Machines can open or close it, put it back to automatic, and knows when a vehicle is waiting."
+msgstr ""
+
+#. Key:	BarrierInfoClose
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierInfoClose"
+msgid "On: always closed, the vehicle paths through it are blocked and self-driving vehicles wait. Off: back to automatic."
 msgstr ""

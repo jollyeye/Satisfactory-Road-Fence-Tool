@@ -1,6 +1,7 @@
 // Boom barrier (1.6.0): a post on a road's fence line and a striped arm across the road, hinged at the post's top.
 // Three modes, cycled with E (a window comes later): Automatic (the arm lifts while a vehicle is near, never blocks),
-// Always Open, Always Closed (the arm is down and stops vehicles: it blocks them, not players). Placed like the Sign
+// Always Open, Always Closed (the arm is down and blocks the vehicle paths through it, as a foundation on a path does:
+// self-driving vehicles stop and wait; players walk through). Placed like the Sign
 // Gantry: click the side for the post, then the other side (the arm reaches it).
 // Automated Machines hooks (AM_ functions, found by name: no dependency): vehicle waiting / open conditions, open and
 // automatic actions.
@@ -64,10 +65,14 @@ public:
 	// --- Automated Machines (found by name; keep the names: rules store them) ---
 	UFUNCTION() bool AM_Condition_Vehicle_Waiting() const { return mVehicleNear; }
 	UFUNCTION() bool AM_Condition_Open() const { return ShouldBeOpen(); }
-	UFUNCTION() void AM_Action_Open(bool On) { SetMode(On ? ERMBarrierMode::Open : ERMBarrierMode::Closed); }
+	/** On: always open; off: back to automatic. */
+	UFUNCTION() void AM_Action_Open(bool On) { SetMode(On ? ERMBarrierMode::Open : ERMBarrierMode::Automatic); }
+	/** On: always closed (paths through it blocked); off: back to automatic. */
+	UFUNCTION() void AM_Action_Close(bool On) { SetMode(On ? ERMBarrierMode::Closed : ERMBarrierMode::Automatic); }
 	UFUNCTION() void AM_Action_Automatic() { SetMode(ERMBarrierMode::Automatic); }
 	UFUNCTION() FText AM_Info_Vehicle_Waiting() const;
 	UFUNCTION() FText AM_Info_Open() const;
+	UFUNCTION() FText AM_Info_Close() const;
 	UFUNCTION() FText AM_Info_Automatic() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")

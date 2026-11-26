@@ -185,9 +185,12 @@ time, nothing is stored.
     every 0.5 m (unlit overlay colours for now), its own component (`mArmMesh`) turning up to 85 degrees (1.5 s).
   - Modes (saved, replicated), E cycles them for now (UI later): Automatic (arm lifts while a wheeled vehicle is within
     12 m along the road and the arm's reach across, checked 4 times a second on the server; never blocks), Always open,
-    Always closed (arm down; its collision blocks vehicles only, not players). Look-at text shows the mode.
+    Always closed (arm down and solid, WorldStatic, players pass: it blocks the vehicle paths through it like a
+    foundation on a path, so self-driving vehicles stop and wait; the paths are re-checked on closing / opening via
+    `RevalidateVehiclePathsSoon`). Look-at text shows the mode.
   - Automated Machines (name convention, no dependency): `AM_Condition_Vehicle_Waiting`, `AM_Condition_Open`,
-    `AM_Action_Open(bool)` (on = always open, off = always closed), `AM_Action_Automatic`, `AM_Info_*`. Its tab only
+    `AM_Action_Open(bool)` and `AM_Action_Close(bool)` (on = always open / closed, off = back to automatic),
+    `AM_Action_Automatic`, `AM_Info_*`. Its tab only
     appears in the game's own building windows: the barrier has none yet (E), so the hooks show once it gets a window
     (or Automated Machines' planned part 3).
 

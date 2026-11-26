@@ -7,6 +7,7 @@
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "RoadMakerModule.h"
+#include "Buildables/RMBuildableRoad.h"
 
 ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -15,11 +16,11 @@ ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitial
 	mArmMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("BarrierArm"));
 	mArmMesh->SetupAttachment(mMesh);
 	mArmMesh->bUseComplexAsSimpleCollision = true;
-	// Blocks vehicles only (players walk under / through), and only while always closed (UpdateArm).
-	mArmMesh->SetCollisionObjectType(ECC_WorldDynamic);
+	// Aimed at by the build gun (dismantle, E); a solid obstacle for vehicles and their paths only while always closed
+	// (UpdateArm). Players walk through.
+	mArmMesh->SetCollisionObjectType(ECC_WorldStatic);
 	mArmMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Vehicle, ECR_Block);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // the build gun can aim at it (dismantle, E)
+	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	mArmMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	mArmMesh->SetCastShadow(true);
 }
@@ -129,10 +130,17 @@ void ARMBuildableBarrier::SetMode(ERMBarrierMode Mode)
 	{
 		return;
 	}
+	const bool bWasClosed = mMode == ERMBarrierMode::Closed;
 	mMode = Mode;
 	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: barrier mode %d"), *GetName(), int32(Mode));
 	ForceNetUpdate();
 	UpdateArm(false);
+	if (bWasClosed != (Mode == ERMBarrierMode::Closed))
+	{
+		// Closed or opened: the game checks the vehicle paths through it again (a closed arm is an obstacle on them,
+		// as a foundation would be: self-driving vehicles stop and wait; opened, the paths are clear again).
+		ARMBuildableRoad::RevalidateVehiclePathsSoon(this);
+	}
 }
 
 void ARMBuildableBarrier::OnUse_Implementation(AFGCharacterPlayer* byCharacter, const FUseState& state)
@@ -169,7 +177,12 @@ FText ARMBuildableBarrier::AM_Info_Vehicle_Waiting() const
 
 FText ARMBuildableBarrier::AM_Info_Open() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoOpen", "On: always open. Off: always closed (vehicles are stopped).");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoOpen", "On: always open. Off: back to automatic.");
+}
+
+FText ARMBuildableBarrier::AM_Info_Close() const
+{
+	return NSLOCTEXT("RoadMaker", "BarrierInfoClose", "On: always closed, the vehicle paths through it are blocked and self-driving vehicles wait. Off: back to automatic.");
 }
 
 FText ARMBuildableBarrier::AM_Info_Automatic() const
@@ -202,9 +215,13 @@ void ARMBuildableBarrier::DetectVehicles()
 
 void ARMBuildableBarrier::UpdateArm(bool bSnap)
 {
-	// Vehicles are stopped only while always closed (automatic never blocks; open is up anyway).
-	mArmMesh->SetCollisionResponseToChannel(ECC_Vehicle, mMode == ERMBarrierMode::Closed ? ECR_Block : ECR_Ignore);
-	mArmMesh->SetCollisionEnabled(mMode == ERMBarrierMode::Closed ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::QueryOnly);
+	// An obstacle only while always closed (automatic never blocks; open is up anyway): solid to vehicles and seen by
+	// the game's vehicle path check, which then blocks the paths through it. Players (pawns) still walk through.
+	const bool bSolid = mMode == ERMBarrierMode::Closed;
+	mArmMesh->SetCollisionResponseToAllChannels(bSolid ? ECR_Block : ECR_Ignore);
+	mArmMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	mArmMesh->SetCollisionEnabled(bSolid ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::QueryOnly);
 	const float Target = ShouldBeOpen() ? OpenAngle : 0.f;
 	if (bSnap || !HasActorBegunPlay())
 	{
