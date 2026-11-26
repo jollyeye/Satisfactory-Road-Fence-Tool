@@ -8,6 +8,7 @@
 
 #include "CoreMinimal.h"
 #include "Hologram/FGBuildableHologram.h"
+#include "RMGeometry.h"
 #include "RMRoadSlopeHologram.generated.h"
 
 class UProceduralMeshComponent;
@@ -64,5 +65,11 @@ protected:
 	TWeakObjectPtr<AActor> mMeasuredFor;
 	uint32 mMeasuredKey = 0;
 	TArray<FVector2D> mMeasuredLeft;
+	/** The aimed road's frames (side picking) and the cage's banks, kept while nothing they depend on changes. */
+	TArray<FRMFrame> mTargetFrames;
+	uint32 mTargetFramesKey = 0;
+	FRMMesh mBanksCache;
+	uint32 mBanksKey = 0;
+	TArray<FVector2D> mPreviewLeftCache, mPreviewRightCache;
 	TArray<FVector2D> mMeasuredRight;
 };

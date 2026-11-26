@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+#include "RMPerf.h"
 #include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -58,6 +59,7 @@ ARMBuildableRoad::ARMBuildableRoad(const FObjectInitializer& ObjectInitializer)
 
 void ARMBuildableRoad::RebuildMesh()
 {
+	RMPerf::FScope Perf(TEXT("road mesh rebuild"), GetName());
 	// Long roads are drawn in sections (each switches detail on its own); every detail level gets a
 	// ring exactly on each section boundary, so the sections meet without a gap.
 	UpdateChunkLayout();
@@ -944,6 +946,7 @@ float ARMBuildableRoad::MeasureBankAt(UWorld* World, const FVector& Edge, const 
 
 void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const
 {
+	RMPerf::FScope Perf(TEXT("side slopes measuring"), GetName());
 	OutLeft.Reset();
 	OutRight.Reset();
 	UWorld* World = GetWorld();

@@ -3,6 +3,7 @@
 #include "Holograms/RMOverlayLines.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "RMPerf.h"
 #include "RMRoadUtils.h"
 #include "RMGeometry.h"
 #include "UI/RMScreenHint.h"
@@ -48,6 +49,7 @@ bool ARMRoadSlopeHologram::IsValidHitResult(const FHitResult& InHit) const
 
 void ARMRoadSlopeHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
+	RMPerf::FScope Perf(TEXT("Side Slopes tool, one frame"), InHit.GetActor() ? InHit.GetActor()->GetName() : FString(TEXT("-")));
 	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	ARMBuildableRoad* Hit = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	mTarget = Hit && !Hit->GetIsDismantled() && !Hit->IsActorBeingDestroyed() && !Hit->IsHidden() ? Hit : nullptr;
@@ -59,11 +61,15 @@ void ARMRoadSlopeHologram::SetHologramLocationAndRotation(const FHitResult& InHi
 	// Road: the side aimed at (the hit seen across the road at its nearest point).
 	if (mTarget)
 	{
-		TArray<FRMFrame> Frames;
-		mTarget->GetWorldFrames(Frames, 200.f);
+		const uint32 FramesKey = HashCombine(GetTypeHash(mTarget), mTarget->SlopeShapeKey());
+		if (FramesKey != mTargetFramesKey)
+		{
+			mTarget->GetWorldFrames(mTargetFrames, 200.f);
+			mTargetFramesKey = FramesKey;
+		}
 		const FRMFrame* Best = nullptr;
 		float BestDist = TNumericLimits<float>::Max();
-		for (const FRMFrame& F : Frames)
+		for (const FRMFrame& F : mTargetFrames)
 		{
 			const float D = FVector::DistSquared(F.Pos, hitResult.Location);
 			if (D < BestDist)
@@ -179,6 +185,7 @@ AActor* ARMRoadSlopeHologram::Construct(TArray<AActor*>& out_children, FNetConst
 	mTarget = nullptr;
 	mTargetX = nullptr;
 	mMeasuredFor = nullptr;
+	mBanksKey = 0;
 	mOverlayMesh->ClearAllMeshSections();
 	return Built;
 }
@@ -199,22 +206,34 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 	}
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	const bool bRemove = TargetHasSlopes();
-	FRMMesh Banks;
-	// Only the sides / curbs the click switches (the others' samples flattened).
-	TArray<FVector2D> PreviewLeft, PreviewRight;
-	if (mTarget)
+	// Only the sides / curbs the click switches (the others' samples flattened). Built again only when the target,
+	// its shape or banks, the side / curb or the snap key change (not every frame).
+	const uint32 Requested = RequestedMask();
+	uint32 BanksKey = HashCombine(GetTypeHash(mTarget ? static_cast<AActor*>(mTarget) : static_cast<AActor*>(mTargetX)), Requested);
+	BanksKey = HashCombine(BanksKey, HashCombine(CurrentMask(), HashCombine(mMeasuredKey, bRemove ? 1u : 2u)));
+	if (BanksKey != mBanksKey)
 	{
-		PreviewLeft = bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft;
-		PreviewRight = bRemove ? mTarget->GetSlopeRight() : mMeasuredRight;
-		ARMBuildableRoad::MaskSlopeSides(PreviewLeft, PreviewRight, uint8(RequestedMask()));
-		mTarget->BuildSlopeMesh(PreviewLeft, PreviewRight, Banks, true); // the banks only: no caps or floor in the cage
+		mBanksKey = BanksKey;
+		mBanksCache = FRMMesh();
+		mPreviewLeftCache.Reset();
+		mPreviewRightCache.Reset();
+		if (mTarget)
+		{
+			mPreviewLeftCache = bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft;
+			mPreviewRightCache = bRemove ? mTarget->GetSlopeRight() : mMeasuredRight;
+			ARMBuildableRoad::MaskSlopeSides(mPreviewLeftCache, mPreviewRightCache, uint8(Requested));
+			mTarget->BuildSlopeMesh(mPreviewLeftCache, mPreviewRightCache, mBanksCache, true); // the banks only: no caps or floor
+		}
+		else
+		{
+			mPreviewLeftCache = bRemove ? mTargetX->GetSlopeSamples() : mMeasuredLeft;
+			mTargetX->MaskSlopeRuns(mPreviewLeftCache, Requested);
+			mTargetX->BuildSlopeMesh(mPreviewLeftCache, mBanksCache, true);
+		}
 	}
-	else
-	{
-		PreviewLeft = bRemove ? mTargetX->GetSlopeSamples() : mMeasuredLeft;
-		mTargetX->MaskSlopeRuns(PreviewLeft, RequestedMask());
-		mTargetX->BuildSlopeMesh(PreviewLeft, Banks, true);
-	}
+	const TArray<FVector2D>& PreviewLeft = mPreviewLeftCache;
+	const TArray<FVector2D>& PreviewRight = mPreviewRightCache;
+	const FRMMesh& Banks = mBanksCache;
 	const bool bTooDeep = !bRemove && ARMBuildableRoad::SlopeTooDeep(PreviewLeft, PreviewRight);
 	if (bRemove && mAll)
 	{

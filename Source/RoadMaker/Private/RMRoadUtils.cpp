@@ -383,3 +383,16 @@ void RMRoadUtils::FindEndSlots(UWorld* World, const FVector& Center, float Radiu
 	}
 	OutSlots.Sort([](const FRMRoadEndRef& A, const FRMRoadEndRef& B) { return A.Distance < B.Distance; });
 }
+
+#include "RMPerf.h"
+
+namespace RMPerf
+{
+	static TAutoConsoleVariable<float> CVarPerfLogMs(TEXT("RM.PerfLogMs"), 8.f,
+		TEXT("Road Maker: log steps of the mod that take at least this long (ms) as 'Slow step'. 0 = off."));
+
+	float ThresholdMs()
+	{
+		return CVarPerfLogMs.GetValueOnGameThread();
+	}
+}

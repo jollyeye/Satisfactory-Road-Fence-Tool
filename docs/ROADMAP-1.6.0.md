@@ -167,5 +167,11 @@ time, nothing is stored.
   `ARMBuildableProcedural::PrepareChunks`: chunks named `RMChunk_<n>` (same on every machine) and `SetNetAddressable`;
   a dropped chunk is renamed out of the way first so the name can be used again.
 
+- **Performance check** (asked 2026-11-26: frames lower lately; a 0.5 s dip opening the dismantle tool on a busy
+  intersection): the Side Slopes tool rebuilt the intersection's whole slab several times a frame (outline lookups) and
+  its cage every frame; now the outline is cached per shape and the cage rebuilt only when something changes. A slow-step
+  log was added (`RMPerf::FScope`, `RM.PerfLogMs`, default 8 ms): mesh rebuilds, side slope measuring, the dismantle
+  tool's rider search (tracks, paths, markings on a piece), the Side Slopes tool. Waiting for a log of the dip.
+
 ## Waiting
 - Issue #10: reply to the reporter once tested (with the user's go-ahead).

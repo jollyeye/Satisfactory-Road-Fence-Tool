@@ -9,6 +9,7 @@
 #include "TimerManager.h"
 #include "Materials/MaterialInterface.h"
 #include "RMRoadUtils.h"
+#include "RMPerf.h"
 #include "EngineUtils.h"
 
 ARMBuildableIntersection::ARMBuildableIntersection(const FObjectInitializer& ObjectInitializer)
@@ -47,6 +48,7 @@ void ARMBuildableIntersection::OnRep_Ends()
 
 void ARMBuildableIntersection::RebuildMesh()
 {
+	RMPerf::FScope Perf(TEXT("intersection mesh rebuild"), GetName());
 	mMesh->ClearAllMeshSections();
 	ClearFarMesh();
 	// Side slopes first: their curb stretches leave out the slab's side there.
@@ -287,9 +289,22 @@ void ARMBuildableIntersection::GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) 
 
 bool ARMBuildableIntersection::LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const
 {
-	FRMMesh Top, Body;
-	return RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Ring, &IsMouth, 2000.f)
-		&& Ring.Num() >= 3 && IsMouth.Num() == Ring.Num();
+	// Cached per shape: the Side Slopes tool asks several times a frame, and building the outline builds the whole slab.
+	const uint32 Key = HashCombine(SlopeShapeKey(), GetTypeHash(mFilletSegments));
+	if (Key != mOutlineCacheKey)
+	{
+		mOutlineCacheRing.Reset();
+		mOutlineCacheMouth.Reset();
+		FRMMesh Top, Body;
+		if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &mOutlineCacheRing, &mOutlineCacheMouth, 2000.f))
+		{
+			mOutlineCacheRing.Reset();
+		}
+		mOutlineCacheKey = Key;
+	}
+	Ring = mOutlineCacheRing;
+	IsMouth = mOutlineCacheMouth;
+	return Ring.Num() >= 3 && IsMouth.Num() == Ring.Num();
 }
 
 void ARMBuildableIntersection::SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter)
@@ -397,6 +412,7 @@ void ARMBuildableIntersection::GetSlopeWorldPoints(TArray<FVector>& Out) const
 
 void ARMBuildableIntersection::MeasureSlopes(TArray<FVector2D>& OutSamples) const
 {
+	RMPerf::FScope Perf(TEXT("side slopes measuring"), GetName());
 	OutSamples.Reset();
 	UWorld* World = GetWorld();
 	TArray<FVector> Ring;

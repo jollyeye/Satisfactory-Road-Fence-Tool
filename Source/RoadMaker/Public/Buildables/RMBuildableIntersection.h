@@ -139,6 +139,9 @@ protected:
 	 */
 	static void SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter);
 	bool LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const;
+	mutable uint32 mOutlineCacheKey = 0;
+	mutable TArray<FVector> mOutlineCacheRing;
+	mutable TArray<bool> mOutlineCacheMouth;
 	void BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples, FRMMesh& Out,
 		TArray<bool>* OutCoveredEdges, bool bBanksOnly = false) const;
 

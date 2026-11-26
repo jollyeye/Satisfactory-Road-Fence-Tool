@@ -20,6 +20,7 @@
 #include "FGDismantleInterface.h"
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
+#include "RMPerf.h"
 #include "Containers/Ticker.h"
 #include "HAL/IConsoleManager.h"
 
@@ -826,6 +827,7 @@ void ARMBuildableProcedural::RefreshRiders(bool bForce) const
 	const double Now = FPlatformTime::Seconds();
 	if (bForce || mRiderCacheTime < 0.0 || Now - mRiderCacheTime > 1.0)
 	{
+		RMPerf::FScope Perf(TEXT("dismantle: finding riders (tracks, paths, markings)"), GetName());
 		mRiderCacheTime = Now;
 		mRiderCache.Reset();
 		mPathCache.Reset();
