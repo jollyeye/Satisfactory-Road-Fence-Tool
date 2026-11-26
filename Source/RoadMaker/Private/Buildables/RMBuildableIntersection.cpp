@@ -66,6 +66,7 @@ void ARMBuildableIntersection::RebuildMesh()
 	{
 		TArray<FVector> SlopeRing;
 		TArray<bool> SlopeMouth;
+		RMPerf::FScope SlopesPerf(TEXT("intersection side slopes mesh"), GetName());
 		if (LocalOutline(SlopeRing, SlopeMouth))
 		{
 			BuildSlopeMeshFrom(SlopeRing, SlopeMouth, mSlopeSamples, Slopes, &Covered);
@@ -671,6 +672,26 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		if (Floor.Num() >= 3 && FVector::Dist2D(Floor.Last(), Floor[0]) <= 1.f)
 		{
 			Floor.Pop();
+		}
+		// Thinned in plan (points within 15 cm of the line between their neighbours dropped): far fewer triangles and a
+		// much quicker triangulation; the floor sits 30 cm into the ground, so the small gaps at the feet are buried.
+		for (bool bDropped = true; bDropped && Floor.Num() > 3;)
+		{
+			bDropped = false;
+			for (int32 I = 0; I < Floor.Num() && Floor.Num() > 3; ++I)
+			{
+				const FVector& A = Floor[(I + Floor.Num() - 1) % Floor.Num()];
+				const FVector& B = Floor[(I + 1) % Floor.Num()];
+				const FVector2D AB(B - A), AP(Floor[I] - A);
+				const float Len = AB.Size();
+				const float Off = Len > 1.f ? FMath::Abs(AB.X * AP.Y - AB.Y * AP.X) / Len : AP.Size();
+				if (Off < 15.f)
+				{
+					Floor.RemoveAt(I);
+					bDropped = true;
+					--I;
+				}
+			}
 		}
 		if (Floor.Num() >= 3)
 		{
