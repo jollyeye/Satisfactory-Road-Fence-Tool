@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+#include "Buildables/RMBuildableIntersection.h"
 
 namespace
 {
@@ -72,6 +73,14 @@ void ARMBuildableRoad::RebuildMesh()
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
 	ApplyNearSection(Body, 1, true, BodyMat);
+	// Side slopes (1.6.0): the banks in the body's concrete, solid.
+	FRMMesh Slopes;
+	RequestSlopeMeasure();
+	if (mSideSlopes)
+	{
+		BuildSlopeMesh(mSlopeLeft, mSlopeRight, Slopes);
+	}
+	ApplyNearSection(Slopes, 2, true, BodyMat);
 
 	// Far version: the same road sampled every 4 m instead of every 1 m.
 	ClearFarMesh();
@@ -84,6 +93,10 @@ void ARMBuildableRoad::RebuildMesh()
 		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody);
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
+		if (!Slopes.IsEmpty())
+		{
+			ApplyFarSection(Slopes, 2, BodyMat);
+		}
 	}
 	ApplyMarkingColors(mCustomizationData);
 
@@ -113,6 +126,9 @@ void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableRoad, mMarkings);
+	DOREPLIFETIME(ARMBuildableRoad, mSideSlopes);
+	DOREPLIFETIME(ARMBuildableRoad, mSlopeLeft);
+	DOREPLIFETIME(ARMBuildableRoad, mSlopeRight);
 }
 
 FRMMarkings ARMBuildableRoad::LimitMarkings(const FRMMarkings& In) const
@@ -597,6 +613,7 @@ void ARMBuildableRoad::CopyCutSettingsTo(ARMBuildableSpline* New) const
 	{
 		Road->SetMarkings(mMarkings);
 		Road->SetLook(mLook);
+		Road->mSideSlopes = mSideSlopes; // measured for its own shape when it begins play
 	}
 }
 
@@ -625,4 +642,258 @@ void ARMBuildableRoad::GetCutSection(float& OutHalfWidth, float& OutBottom, floa
 	OutHalfWidth = GetRoadWidth() * 0.5f;
 	OutBottom = -FMath::Max(mRoadHeight, 10.f);
 	OutTop = 0.f;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Side slopes (1.6.0)
+// ---------------------------------------------------------------------------------------------
+
+uint32 ARMBuildableRoad::SlopeShapeKey() const
+{
+	TArray<FRMFrame> Frames;
+	GetWorldFrames(Frames, 500.f);
+	uint32 Key = GetTypeHash(FMath::RoundToInt(GetRoadWidth()));
+	for (const FRMFrame& F : Frames)
+	{
+		Key = HashCombine(Key, GetTypeHash(FIntVector(FMath::RoundToInt(F.Pos.X), FMath::RoundToInt(F.Pos.Y), FMath::RoundToInt(F.Pos.Z))));
+	}
+	return Key == 0 ? 1 : Key;
+}
+
+void ARMBuildableRoad::RequestSlopeMeasure()
+{
+	// A tick later: a cut or smoothed road's old piece is gone by then (it would read as a neighbour road).
+	if (!HasAuthority() || !mSideSlopes || mSlopeMeasureQueued || IsActorBeingDestroyed() || SlopeShapeKey() == mSlopeKey)
+	{
+		return;
+	}
+	mSlopeMeasureQueued = true;
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		mSlopeMeasureQueued = false;
+		if (!mSideSlopes || IsActorBeingDestroyed())
+		{
+			return;
+		}
+		MeasureSlopes(mSlopeLeft, mSlopeRight);
+		mSlopeKey = SlopeShapeKey();
+		RebuildMesh();
+		ForceNetUpdate();
+	}));
+}
+
+void ARMBuildableRoad::SetSideSlopes(bool bOn)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	mSideSlopes = bOn;
+	if (bOn)
+	{
+		MeasureSlopes(mSlopeLeft, mSlopeRight);
+		mSlopeKey = SlopeShapeKey();
+	}
+	else
+	{
+		mSlopeLeft.Reset();
+		mSlopeRight.Reset();
+	}
+	RebuildMesh();
+	ForceNetUpdate();
+	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes %s"), *GetName(), bOn ? TEXT("on") : TEXT("off"));
+}
+
+namespace RMSideSlopes
+{
+	/** Frame at a distance along the frames (interpolated). */
+	FRMFrame FrameAtDist(const TArray<FRMFrame>& Frames, float Dist)
+	{
+		if (Dist <= Frames[0].Dist)
+		{
+			return Frames[0];
+		}
+		for (int32 I = 1; I < Frames.Num(); ++I)
+		{
+			if (Frames[I].Dist >= Dist)
+			{
+				const FRMFrame& A = Frames[I - 1];
+				const FRMFrame& B = Frames[I];
+				const float T = (Dist - A.Dist) / FMath::Max(B.Dist - A.Dist, KINDA_SMALL_NUMBER);
+				FRMFrame F = A;
+				F.Pos = FMath::Lerp(A.Pos, B.Pos, T);
+				F.Fwd = FMath::Lerp(A.Fwd, B.Fwd, T).GetSafeNormal();
+				F.Right = FMath::Lerp(A.Right, B.Right, T).GetSafeNormal();
+				F.Up = FMath::Lerp(A.Up, B.Up, T).GetSafeNormal();
+				F.Dist = Dist;
+				return F;
+			}
+		}
+		return Frames.Last();
+	}
+
+	/** What a bank trace stops at: the ground (true), or a road / intersection beside it (no bank: false). */
+	enum class EHit { None, Ground, Neighbour };
+
+	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist)
+	{
+		TArray<FHitResult> Hits;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMSideSlope), true, Self);
+		FCollisionObjectQueryParams Objects;
+		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
+		World->LineTraceMultiByObjectType(Hits, From, To, Objects, Params);
+		Hits.Sort([](const FHitResult& A, const FHitResult& B) { return A.Distance < B.Distance; });
+		for (const FHitResult& Hit : Hits)
+		{
+			const AActor* Actor = Hit.GetActor();
+			if (Actor == Self)
+			{
+				continue;
+			}
+			if (!Actor || Actor->IsActorBeingDestroyed())
+			{
+				continue;
+			}
+			if (Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor))
+			{
+				OutDist = Hit.Distance;
+				return EHit::Neighbour;
+			}
+			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor))
+			{
+				continue; // fences, walls, foundations, vehicles...: the bank goes on to the ground
+			}
+			OutDist = Hit.Distance;
+			return EHit::Ground;
+		}
+		return EHit::None;
+	}
+}
+
+void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const
+{
+	OutLeft.Reset();
+	OutRight.Reset();
+	UWorld* World = GetWorld();
+	TArray<FRMFrame> Frames;
+	GetWorldFrames(Frames, 100.f);
+	if (!World || Frames.Num() < 2)
+	{
+		return;
+	}
+	const float Total = Frames.Last().Dist;
+	const int32 Steps = FMath::Max(1, FMath::CeilToInt(Total / SlopeSampleStep));
+	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun); // along the bank per cm of drop
+	int32 Banks = 0;
+	for (int32 K = 0; K <= Steps; ++K)
+	{
+		const float D = Total * K / Steps;
+		const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, D);
+		for (const float Side : { -1.f, 1.f })
+		{
+			const FVector Out = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal() * Side;
+			const FVector Edge = F.Pos + F.Right * (GetRoadWidth() * 0.5f * Side);
+			float Drop = 0.f;
+			float Dist = 0.f;
+			// The ground at or above the edge (the road runs in a dip or a cutting): no bank.
+			const RMSideSlopes::EHit Above = RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), this, Dist);
+			if (Above == RMSideSlopes::EHit::None)
+			{
+				// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
+				const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
+				const FVector Start = Edge + Out * 2.f;
+				if (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist) == RMSideSlopes::EHit::Ground)
+				{
+					Drop = FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
+					++Banks;
+				}
+			}
+			(Side < 0.f ? OutLeft : OutRight).Add(FVector2D(D, Drop));
+		}
+	}
+	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes measured, %d of %d samples with a bank"), *GetName(), Banks, (Steps + 1) * 2);
+}
+
+void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const
+{
+	TArray<FRMFrame> Frames;
+	GetLocalFrames(Frames, 100.f);
+	if (Frames.Num() < 2)
+	{
+		return;
+	}
+	const FVector UpL = GetActorTransform().InverseTransformVectorNoScale(FVector::UpVector);
+	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun);
+	for (const float Side : { -1.f, 1.f })
+	{
+		const TArray<FVector2D>& Samples = Side < 0.f ? Left : Right;
+		const int32 N = Samples.Num();
+		if (N < 2)
+		{
+			continue;
+		}
+		// Edge and foot of each sample.
+		TArray<FVector> E, Fo, OutDir;
+		for (const FVector2D& S : Samples)
+		{
+			const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, S.X);
+			const FVector O = (F.Right - UpL * FVector::DotProduct(F.Right, UpL)).GetSafeNormal() * Side;
+			const FVector Edge = F.Pos + F.Right * (GetRoadWidth() * 0.5f * Side);
+			E.Add(Edge);
+			Fo.Add(Edge + O * (SlopeRun * S.Y) - UpL * S.Y);
+			OutDir.Add(O);
+		}
+		// Kept samples: every start / end of a bank, and where edge or foot bends (within 3 cm), at least every 20 m.
+		auto Deviates = [&](int32 From, int32 To)
+		{
+			for (int32 M = From + 1; M < To; ++M)
+			{
+				const float T = float(M - From) / float(To - From);
+				if (FVector::Dist(FMath::Lerp(E[From], E[To], T), E[M]) > 3.f || FVector::Dist(FMath::Lerp(Fo[From], Fo[To], T), Fo[M]) > 3.f)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		auto Has = [&](int32 I) { return Samples[I].Y > 0.f; };
+		TArray<int32> Kept = { 0 };
+		for (int32 J = 2; J <= N; ++J)
+		{
+			const int32 Last = Kept.Last();
+			const bool bEnd = J == N;
+			// A bank starting or ending between J-2 and J-1 keeps J-1 (and the sample before a change).
+			const bool bChange = !bEnd && (Has(J - 1) != Has(J) || Has(J - 1) != Has(Last));
+			if (bEnd || bChange || Deviates(Last, J) || Samples[J].X - Samples[Last].X > 2000.f)
+			{
+				Kept.Add(J - 1);
+			}
+		}
+		// One strip per side, vertices shared: edge and foot per kept sample.
+		TArray<int32> VE, VF;
+		for (const int32 I : Kept)
+		{
+			const FVector Normal = (OutDir[I] + UpL * SlopeRun).GetSafeNormal(); // square to the bank, up and out
+			VE.Add(Out.AddVertex(E[I], Normal, FVector2D(Samples[I].X / 400.f, 0.f), FVector::CrossProduct(Normal, OutDir[I]).GetSafeNormal()));
+			VF.Add(Out.AddVertex(Fo[I], Normal, FVector2D(Samples[I].X / 400.f, Samples[I].Y * SlopeLen / 400.f), FVector::CrossProduct(Normal, OutDir[I]).GetSafeNormal()));
+		}
+		for (int32 K = 0; K + 1 < Kept.Num(); ++K)
+		{
+			const int32 A = Kept[K], B = Kept[K + 1];
+			if (!Has(A) && !Has(B))
+			{
+				continue;
+			}
+			const FVector Normal = (OutDir[A] + UpL * SlopeRun).GetSafeNormal();
+			if (Has(B))
+			{
+				Out.AddTriangle(VE[K], VE[K + 1], VF[K + 1], Normal);
+			}
+			if (Has(A)) // where one end has no bank its foot is its edge: a wedge
+			{
+				Out.AddTriangle(VE[K], VF[K + 1], VF[K], Normal);
+			}
+		}
+	}
 }

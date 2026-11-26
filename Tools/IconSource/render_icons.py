@@ -704,6 +704,28 @@ def smooth_glyph(path):
     img.save(path)
 
 
+def slopes_glyph(path):
+    """Side Slopes icon: white flat glyph, a road seen end on (slab with a dashed middle line) on an embankment whose
+    two banks run down to the ground line."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    C = (0, 0, 0, 0)
+    # The bank (trapezoid) under the road, a gap line between them.
+    d.polygon([(300, 470), (724, 470), (990, 800), (34, 800)], fill=W)
+    d.rectangle([300, 420, 724, 470], fill=C)
+    # The road slab.
+    d.rectangle([300, 330, 724, 430], fill=W)
+    # Ground line.
+    d.rectangle([20, 830, 1004, 880], fill=W)
+    # Lane line cut out of the slab.
+    d.rectangle([496, 355, 528, 405], fill=C)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def fence_cut_glyph(path):
     """Cut Fence icon: white flat glyph, a brick wall split by a vertical cut line."""
     from PIL import Image as _I, ImageDraw as _D
@@ -871,6 +893,8 @@ if what == "adjustglyph":
     adjust_glyph(out); sys.exit(0)
 if what == "smoothglyph":
     smooth_glyph(out); sys.exit(0)
+if what == "slopesglyph":
+    slopes_glyph(out); sys.exit(0)
 if what == "fencecutglyph":
     fence_cut_glyph(out); sys.exit(0)
 if what == "fencejoinglyph":

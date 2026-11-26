@@ -280,6 +280,7 @@ RMFillHologram = native_class("RMFillHologram")
 RMRoadCutHologram = native_class("RMRoadCutHologram")
 RMRoadAdjustHologram = native_class("RMRoadAdjustHologram")
 RMRoadSmoothHologram = native_class("RMRoadSmoothHologram")
+RMRoadSlopeHologram = native_class("RMRoadSlopeHologram")
 RMRoadMergeHologram = native_class("RMRoadMergeHologram")
 RMRoadJoinHologram = native_class("RMRoadJoinHologram")
 RMFenceJoinHologram = native_class("RMFenceJoinHologram")
@@ -437,6 +438,8 @@ holo_adjust = make_bp("Holograms", "Holo_RoadAdjust", RMRoadAdjustHologram)
 finish(holo_adjust)
 holo_smooth = make_bp("Holograms", "Holo_RoadSmooth", RMRoadSmoothHologram)
 finish(holo_smooth)
+holo_slopes = make_bp("Holograms", "Holo_RoadSlopes", RMRoadSlopeHologram)
+finish(holo_slopes)
 
 holo_gantry = make_bp("Holograms", "Holo_SignGantry", RMGantryHologram)
 finish(holo_gantry)
@@ -552,7 +555,7 @@ if VehiclePathSubCat:
     lane_marking_subcat = None
 # Road Tools entries and their section.
 MARKING_TOOLS = ("LaneArrow", "LaneNumber", "LaneVehicle", "LaneText")  # painted from the customizer (Road Lines), not in the build menu
-ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "RoadSmooth": "road", "FenceCut": "fence", "FenceJoin": "fence"}
+ROAD_TOOLS_MENU = {"RoadCut": "road", "RoadJoin": "road", "RoadSplit": "road", "RoadMerge": "road", "RoadAdjust": "road", "RoadSmooth": "road", "RoadSlopes": "road", "FenceCut": "fence", "FenceJoin": "fence"}
 
 base_building = None
 for sname in ("Schematic_1-1", "Schematic_1-2", "Schematic_1-3"):
@@ -590,6 +593,8 @@ TOOLS = [
     ("RoadAdjust", RMBuildableRoadTool, holo_adjust, "Adjust Joint", "Orange circles mark the road ends near you. Click one to grab that end (and the end of the road joined to it, when two roads meet end to end), then move it like a road end: the snap key snaps it to a free road end, hold H to nudge it. A straight road stays straight, turning round its other end; a curved road follows as a curve and meets a straight one flush (between two curved roads the mouse wheel turns the joint). The roads follow as holograms; click again to replace them, keeping their other ends, lines and paint. Ends joined to an intersection stay. Free.",
      {}, [], road_icons, {}),
     ("RoadSmooth", RMBuildableRoadTool, holo_smooth, "Smooth Joint", "Rounds the corner where two roads meet. Orange circles mark the joints of two road ends near you. Click one, then aim away from it: both roads are cut back by the same distance (shown on screen, in metres) and a new curve joins them, meeting both flush. The roads and the curve show as holograms; click again to build it. The curve takes the first road's width, lines, material and paint. Works on bends that are already smooth too, to widen them. Not at intersections. Free.",
+     {}, [], road_icons, {}),
+    ("RoadSlopes", RMBuildableRoadTool, holo_slopes, "Side Slopes", "Banks a raised road or walking path down to the terrain on both sides (concrete, solid to walk and drive on; 1 : 1.5, at most 8 m down). Aim at a road: the cyan cage shows its banks; click to add them. None where the road meets the ground or another road. Aim at a road with banks (red cage) and click to remove them. Off on new roads; cut, adjusted and copied roads keep them and are measured again. Free.",
      {}, [], road_icons, {}),
     ("FenceCut", RMBuildableRoadTool, holo_fence_cut, "Cut Fence", "Aim at a road fence or fence wall: the orange outline shows where it is cut. Click to split it there into two that keep its course, side, material and paint. Hold the snap key near a road end (for example where the road was cut) to snap the cut in line with it. Nothing else is cut. Free.",
      {}, [], fence_icons, {}),
@@ -641,7 +646,7 @@ TOOLS = [
      {}, [], road_icons, {"m_top_material": mat_asphalt, "m_body_material": mat_concrete}),
 ]
 
-MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "RoadSmooth": 6, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
+MENU_ORDER = {"RoadCut": 1, "RoadJoin": 2, "RoadSplit": 3, "RoadMerge": 4, "RoadAdjust": 5, "RoadSmooth": 6, "RoadSlopes": 7, "FenceCut": 3, "FenceJoin": 4, "Road_1x": 1, "Road_2x": 2, "Road_3x": 3, "Road_4x": 4, "RoadIntersection": 5, "RoadFill": 5.2, "WalkingPath_2m": 5.5, "WalkingPath_4m": 5.6,
               "Fence_GuardRail": 6, "Fence_Jersey": 7, "Fence_Grid": 8, "SignGantry": 9, "Tunnel": 10,
               "LaneArrow": 1, "LaneNumber": 2, "LaneVehicle": 3, "LaneText": 4, "Fence_GridTall": 1, "FenceWall_Concrete": 2, "FenceWall_Ficsit": 3, "FenceWall_Steel": 4, "FenceWall_Sign": 5,
               "FenceWall_ConcreteLow": 6, "FenceWall_FicsitLow": 7, "FenceWall_SteelLow": 8, "FenceWall_SignLow": 9}

@@ -1228,3 +1228,39 @@ msgstr ""
 msgctxt "RoadMakerAssets,RoadSmooth.Desc"
 msgid "Rounds the corner where two roads meet. Orange circles mark the joints of two road ends near you. Click one, then aim away from it: both roads are cut back by the same distance (shown on screen, in metres) and a new curve joins them, meeting both flush. The roads and the curve show as holograms; click again to build it. The curve takes the first road's width, lines, material and paint. Works on bends that are already smooth too, to widen them. Not at intersections. Free."
 msgstr ""
+
+#. Key:	SlopeAimHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeAimHint"
+msgid "Side Slopes: aim at a road or walking path"
+msgstr ""
+
+#. Key:	SlopeRemoveHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeRemoveHint"
+msgid "Side Slopes: click to remove this road's banks"
+msgstr ""
+
+#. Key:	SlopeNoneHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeNoneHint"
+msgid "Side Slopes: no banks needed here (ground level with the road, or over 8 m below). Click to turn them on anyway"
+msgstr ""
+
+#. Key:	SlopeAddHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeAddHint"
+msgid "Side Slopes: click to add banks down to the ground (cyan)"
+msgstr ""
+
+#. Key:	RoadSlopes.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadSlopes.Name"
+msgid "Side Slopes"
+msgstr ""
+
+#. Key:	RoadSlopes.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadSlopes.Desc"
+msgid "Banks a raised road or walking path down to the terrain on both sides (concrete, solid to walk and drive on; 1 : 1.5, at most 8 m down). Aim at a road: the cyan cage shows its banks; click to add them. None where the road meets the ground or another road. Aim at a road with banks (red cage) and click to remove them. Off on new roads; cut, adjusted and copied roads keep them and are measured again. Free."
+msgstr ""

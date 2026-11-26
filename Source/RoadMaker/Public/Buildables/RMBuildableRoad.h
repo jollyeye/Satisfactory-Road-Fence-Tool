@@ -214,6 +214,31 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mBodyMaterial = nullptr;
 
+	// --- Side slopes (1.6.0) -------------------------------------------------------------------
+	// Banks from a raised road's edges down to the terrain (fill only), per road, off by default (Side Slopes tool).
+	// Measured once (server) when switched on or when the piece is made, and saved; the mesh is built from that.
+
+	bool HasSideSlopes() const { return mSideSlopes; }
+	const TArray<FVector2D>& GetSlopeLeft() const { return mSlopeLeft; }
+	const TArray<FVector2D>& GetSlopeRight() const { return mSlopeRight; }
+	/** Server: switches the banks on (measured now) or off, and rebuilds the mesh. */
+	void SetSideSlopes(bool bOn);
+	/** The road's shape and place, for knowing when its banks must be measured again. */
+	uint32 SlopeShapeKey() const;
+	/**
+	 * Measures the banks as the road stands now (world traces): every SlopeSampleStep cm along each edge,
+	 * (distance along cm, drop cm); 0 = no bank there (ground at or above the edge, a road / intersection beside it,
+	 * or no ground within SlopeMaxDrop).
+	 */
+	void MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const;
+	/** The banks' mesh in actor space for measured samples (straight runs merged, nothing where there is no bank). */
+	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const;
+
+	static constexpr float SlopeRun = 1.5f;        // 1 : 1.5 (about 34 degrees)
+	static constexpr float SlopeMaxDrop = 800.f;   // banks down to 8 m below the edge
+	static constexpr float SlopeSampleStep = 200.f;
+	static constexpr float SlopeEmbed = 30.f;      // the foot goes this far into the ground (no gaps on bumps)
+
 	/** Pushes the resolved customizer colours to the mesh for the marking material. */
 	void ApplyMarkingColors(const FFactoryCustomizationData& Data);
 
@@ -224,6 +249,20 @@ protected:
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
 	FRMMarkings mMarkings;
+
+	/** Side slopes on, and their measured samples per side (distance along, drop), cm. */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
+	bool mSideSlopes = false;
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
+	TArray<FVector2D> mSlopeLeft;
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
+	TArray<FVector2D> mSlopeRight;
+	/** The shape and place the banks were measured for: a reshaped piece, a cut one or a copy elsewhere (a blueprint)
+	 *  measures again, a tick later on the server (once the pieces it replaces are gone). */
+	UPROPERTY(SaveGame)
+	uint32 mSlopeKey = 0;
+	void RequestSlopeMeasure();
+	bool mSlopeMeasureQueued = false;
 
 	TOptional<FRMMarkings> mPreviewMarkings;
 
