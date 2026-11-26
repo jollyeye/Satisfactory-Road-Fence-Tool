@@ -62,7 +62,7 @@ time, nothing is stored.
   not pushed); the road hologram, Adjust Joint and Smooth Joint previews set their own. Existing roads change their
   dash positions once. Needs the materials step (`make_materials.py`).
 
-- **Road side slopes (embankments)** (built 2026-11-26, to test): a bank from a raised road's edge down to the
+- **Road side slopes (embankments)** (built 2026-11-26, **complete and tested 2026-11-26**): a bank from a raised road's edge down to the
   terrain, so roads on fill look built into the landscape.
   - Tool **Side Slopes** (Road Tools, key `RoadSlopes`, `ARMRoadSlopeHologram`, menu order 7, icon `slopesglyph`):
     aim at a road or walking path; a cyan cage shows the banks it would get (measured on the client while aiming,
