@@ -112,8 +112,12 @@ protected:
 		int32 Run = 0;
 		bool bRunStart = false;
 		bool bRunEnd = false;
+		int32 Vertex = -1; // outline point it sits on (-1: between two)
 	};
-	/** Curb points about every 2 m, run by run (a run: the curb between two road mouths). */
+	/**
+	 * Curb points about every 2 m, run by run (a run: the curb between two road mouths). A run's end points go out along
+	 * the mouth's line (as the joined road's own bank at its end: the two meet flush).
+	 */
 	static void SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter);
 	bool LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const;
 	void BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples, FRMMesh& Out,

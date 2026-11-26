@@ -320,9 +320,10 @@ void ARMBuildableIntersection::SlopePoints(const TArray<FVector>& Ring, const TA
 	{
 		return; // no road mouth: not an intersection outline
 	}
-	auto Point = [](const FVector& Pos, const FVector& Dir, float S, int32 Edge, int32 Run, bool bStart, bool bEnd)
+	auto Point = [](const FVector& Pos, const FVector& Dir, float S, int32 Edge, int32 Run, bool bStart, bool bEnd, int32 Vertex = -1)
 	{
 		FSlopePoint P;
+		P.Vertex = Vertex;
 		P.Pos = Pos;
 		P.Out = Dir;
 		P.S = S;
@@ -344,10 +345,18 @@ void ARMBuildableIntersection::SlopePoints(const TArray<FVector>& Ring, const TA
 		const FVector B = Ring[(K + 1) % N];
 		const float Len = FVector::Dist(A, B);
 		const FVector NK = Normal(K);
+		// Along the mouth's line, away from the mouth (level): the joined road's sideways direction at its end.
+		auto AlongMouth = [&](int32 Corner, int32 OtherCorner, const FVector& Fallback)
+		{
+			const FVector D = Ring[Corner] - Ring[OtherCorner];
+			const FVector L = FVector(D.X, D.Y, 0.f).GetSafeNormal();
+			return L.IsNearlyZero() ? Fallback : L;
+		};
 		if (IsMouth[(K + N - 1) % N] || Run < 0)
 		{
 			++Run;
-			Out.Add(Point(A, NK, EdgeS[K], K, Run, true, false));
+			const FVector StartOut = IsMouth[(K + N - 1) % N] ? AlongMouth(K, (K + N - 1) % N, NK) : NK;
+			Out.Add(Point(A, StartOut, EdgeS[K], K, Run, true, false, K));
 		}
 		const int32 Parts = FMath::Max(1, FMath::CeilToInt(Len / ARMBuildableRoad::SlopeSampleStep));
 		for (int32 I = 1; I < Parts; ++I)
@@ -356,8 +365,8 @@ void ARMBuildableIntersection::SlopePoints(const TArray<FVector>& Ring, const TA
 			Out.Add(Point(FMath::Lerp(A, B, T), NK, EdgeS[K] + Len * T, K, Run, false, false));
 		}
 		const bool bEnd = IsMouth[(K + 1) % N];
-		const FVector EndOut = bEnd ? NK : (NK + Normal((K + 1) % N)).GetSafeNormal();
-		Out.Add(Point(B, EndOut.IsNearlyZero() ? NK : EndOut, EdgeS[K] + Len, K, Run, false, bEnd));
+		const FVector EndOut = bEnd ? AlongMouth((K + 1) % N, (K + 2) % N, NK) : (NK + Normal((K + 1) % N)).GetSafeNormal();
+		Out.Add(Point(B, EndOut.IsNearlyZero() ? NK : EndOut, EdgeS[K] + Len, K, Run, false, bEnd, (K + 1) % N));
 	}
 }
 
@@ -520,27 +529,85 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 			Out.AddTriangle(VE[I], VF[I + 1], VF[I], Normal);
 		}
 	}
-	// Run ends (at the road mouths): the bank closed in the mouth's plane, down below the slab (a road with banks
-	// joined there has its own cap back to back with this one).
-	for (int32 I = 0; I < Points.Num(); ++I)
+	// Road mouths next to banks: the slab's end face widened to the banks' feet (a trapezoid, as a road's cap; the
+	// slab's own face there is left out). A road with banks joined there has its own back to back with it.
+	const int32 N = Ring.Num();
+	float Area = 0.f;
+	for (int32 K = 0; K < N; ++K)
 	{
-		const FSlopePoint& P = Points[I];
-		if ((!P.bRunStart && !P.bRunEnd) || !Has(I))
+		Area += Ring[K].X * Ring[(K + 1) % N].Y - Ring[(K + 1) % N].X * Ring[K].Y;
+	}
+	const float OutSign = Area >= 0.f ? 1.f : -1.f;
+	for (int32 K = 0; K < N; ++K)
+	{
+		if (!IsMouth[K])
 		{
 			continue;
 		}
-		const int32 K = P.Edge;
-		const FVector Along = (Ring[(K + 1) % Ring.Num()] - Ring[K]).GetSafeNormal();
-		const FVector Facing = P.bRunStart ? -Along : Along;
-		const float D = DropOf(I);
-		const float Low = FMath::Max(D, mHeight);
-		const int32 A = Out.AddVertex(P.Pos, Facing, FVector2D(0.f, 0.f), P.Out);
-		RMGeometry::AddSideUV(Out, Layout, 0.f, P.S / 100.f, true);
-		const int32 B = Out.AddVertex(P.Pos + P.Out * (Run * D) - Up * D, Facing, FVector2D(Run * D / 400.f, D / 400.f), P.Out);
-		RMGeometry::AddSideUV(Out, Layout, D / 100.f, P.S / 100.f, true);
-		const int32 C = Out.AddVertex(P.Pos - Up * Low, Facing, FVector2D(0.f, Low / 400.f), P.Out);
-		RMGeometry::AddSideUV(Out, Layout, Low / 100.f, P.S / 100.f, true);
-		Out.AddTriangle(A, B, C, Facing);
+		const int32 KB = (K + 1) % N;
+		float DA = 0.f, DB = 0.f;
+		int32 IA = INDEX_NONE, IB = INDEX_NONE;
+		for (int32 I = 0; I < Points.Num(); ++I)
+		{
+			if (Points[I].bRunEnd && Points[I].Vertex == K)
+			{
+				IA = I;
+				DA = DropOf(I);
+			}
+			if (Points[I].bRunStart && Points[I].Vertex == KB)
+			{
+				IB = I;
+				DB = DropOf(I);
+			}
+		}
+		if (DA <= 0.5f && DB <= 0.5f)
+		{
+			continue; // no bank at either corner: the slab's own mouth face
+		}
+		const FVector CA = Ring[K], CB = Ring[KB];
+		const FVector Edge = CB - CA;
+		FRMFrame F;
+		F.Pos = CA;
+		F.Right = FVector(Edge.X, Edge.Y, 0.f).GetSafeNormal();
+		F.Up = Up;
+		F.Fwd = (FVector(Edge.Y, -Edge.X, 0.f) * OutSign).GetSafeNormal(); // out of the intersection
+		if (F.Right.IsNearlyZero() || F.Fwd.IsNearlyZero())
+		{
+			continue;
+		}
+		TArray<FVector> Corners3D = { CA, CB };
+		if (DB > 0.5f && IB != INDEX_NONE)
+		{
+			Corners3D.Add(CB + Points[IB].Out * (Run * DB) - Up * DB);
+		}
+		if (DB < mHeight)
+		{
+			Corners3D.Add(CB - Up * mHeight);
+		}
+		if (DA < mHeight)
+		{
+			Corners3D.Add(CA - Up * mHeight);
+		}
+		if (DA > 0.5f && IA != INDEX_NONE)
+		{
+			Corners3D.Add(CA + Points[IA].Out * (Run * DA) - Up * DA);
+		}
+		TArray<FVector2D> Profile;
+		for (const FVector& C : Corners3D)
+		{
+			Profile.Add(FVector2D(FVector::DotProduct(C - CA, F.Right), FVector::DotProduct(C - CA, F.Up)));
+		}
+		const int32 CapFirst = Out.Vertices.Num();
+		RMGeometry::AddProfileCap(F, Profile, true, mUVScale, Out);
+		for (int32 V = 0; V < Corners3D.Num() && CapFirst + V < Out.Vertices.Num(); ++V)
+		{
+			Out.Vertices[CapFirst + V] = Corners3D[V]; // the exact corners (feet), triangulated in the mouth's plane
+		}
+		RMGeometry::SideUVsFromCap(Out, Layout, CapFirst, mUVScale);
+		if (OutCoveredEdges)
+		{
+			(*OutCoveredEdges)[K] = true; // this cap replaces the slab's mouth face
+		}
 	}
 	RMGeometry::WrapSideUV(Out, Layout, First, FirstTriangle);
 }

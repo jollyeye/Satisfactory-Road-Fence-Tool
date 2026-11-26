@@ -105,6 +105,10 @@ time, nothing is stored.
     pass through the roads joined there. Curb edges covered all along leave out the slab's side (`CoveredEdges`). Each
     run's ends close with a triangle in the mouth's plane down below the slab. Roads now pass through an intersection
     joined to their end too, so their banks run on to the mouth. Too deep anywhere: no banks (as roads).
+  - Tested 2026-11-26: gaps / overlaps where a road's bank met the intersection's, and the run ends were triangles.
+    Now a run's end point goes out along the mouth's line (the joined road's sideways direction at its end), so the two
+    banks meet flush; and each mouth next to a bank gets a trapezoid cap like a road's (slab end face widened to the
+    banks' feet; the slab's own mouth face left out there).
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
