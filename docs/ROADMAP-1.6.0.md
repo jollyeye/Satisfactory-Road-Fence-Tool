@@ -135,6 +135,8 @@ time, nothing is stored.
     measure again half a second later (`NudgeSlopeNeighbours`, from `RebuildMesh` when the piece's shape key differs
     from the saved `mSlopeNeighbourKey`: not on loading): its bank on that side goes. Dismantling the new piece leaves
     the side as it is (decided).
+  - Asked 2026-11-26: only a road side by side stops a bank (about parallel, within 20 degrees, its slab within 1.5 m
+    of the edge: `IsParallelNeighbour`); intersections and roads at an angle are ground the bank runs onto.
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):
