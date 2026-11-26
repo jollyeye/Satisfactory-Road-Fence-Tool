@@ -258,32 +258,23 @@ void ARMRoadAdjustHologram::SetHologramLocationAndRotation(const FHitResult& InH
 	{
 		return;
 	}
-	mEndSnapped = false;
-	// Level at the joint's height: where the aim crosses that height; the ground only lifts it (it never sinks).
-	const FVector Ground = hitResult.Location + FVector(0.f, 0.f, GetSurfaceOffset());
+	// Level at the joint's height: where the aim crosses that height in the air. Where the ground (or anything) is in
+	// the way first, the joint stops at its last place: it neither drops nor climbs (H + nudge up / down changes the
+	// height).
 	const FVector From = hitResult.TraceStart;
 	const FVector Dir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
 	const float HitDist = hitResult.bBlockingHit ? FVector::Dist(From, hitResult.Location) : TNumericLimits<float>::Max();
-	FVector Point(Ground.X, Ground.Y, mJointZ);
-	bool bInAir = false;
-	if (FMath::Abs(Dir.Z) > 1e-3f)
+	if (FMath::Abs(Dir.Z) < 1e-3f)
 	{
-		const float T = (mJointZ - From.Z) / Dir.Z;
-		if (T > 0.f && T < HitDist)
-		{
-			Point = From + Dir * T; // the aim reaches the joint's height in the air, before the ground
-			bInAir = true;
-		}
+		return;
 	}
-	if (!bInAir && !hitResult.bBlockingHit)
+	const float T = (mJointZ - From.Z) / Dir.Z;
+	if (T <= 0.f || T >= HitDist)
 	{
-		return; // at the sky, never crossing the joint's height: it stays where it is
+		return;
 	}
-	if (hitResult.bBlockingHit && FVector::Dist2D(Point, Ground) < 1.f)
-	{
-		Point.Z = FMath::Max(mJointZ, Ground.Z); // on the ground there: lifted by it if it is higher
-	}
-	mEnd = Point;
+	mEndSnapped = false;
+	mEnd = From + Dir * T;
 	UpdateCurve();
 }
 

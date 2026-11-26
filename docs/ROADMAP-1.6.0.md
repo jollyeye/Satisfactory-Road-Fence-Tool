@@ -27,8 +27,9 @@ time, nothing is stored.
     `ARMRoadAdjustHologram::ComputeCurves`; a straight road becomes a straight 3D line from its far end to the joint
     (constant slope). Description updated in the string table (key kept) and the PO msgid (translation out of date).
   - Height (asked 2026-11-26, built, to test): the joint no longer drops onto the ground under the aim. It moves
-    level at its own height (where the aim crosses that height); where the ground is higher it rides up on it (never
-    into it); H + nudge up / down changes the height it then keeps (`mJointZ`). Snapping to a road end / foundation
+    level at its own height (where the aim crosses that height); where the ground or anything else is in the way
+    first, it stops at its last place (tested 2026-11-26: climbing onto the ground was not wanted); H + nudge up / down
+    changes the height it then keeps (`mJointZ`). Snapping to a road end / foundation
     unchanged.
   - Unchanged: three or more ends at one point, or an end joined to an intersection, cannot be grabbed.
 - **Smooth Joint** (new tool, Road Tools next to Adjust Joint; asked 2026-11-26, built 2026-11-26, to test): rounds the corner where
