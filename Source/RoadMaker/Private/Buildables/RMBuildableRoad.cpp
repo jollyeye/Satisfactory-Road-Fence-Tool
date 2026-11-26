@@ -660,7 +660,7 @@ uint32 ARMBuildableRoad::SlopeShapeKey() const
 {
 	TArray<FRMFrame> Frames;
 	GetWorldFrames(Frames, 500.f);
-	uint32 Key = GetTypeHash(FMath::RoundToInt(GetRoadWidth()));
+	uint32 Key = HashCombine(SlopeVersion, GetTypeHash(FMath::RoundToInt(GetRoadWidth())));
 	for (const FRMFrame& F : Frames)
 	{
 		Key = HashCombine(Key, GetTypeHash(FIntVector(FMath::RoundToInt(F.Pos.X), FMath::RoundToInt(F.Pos.Y), FMath::RoundToInt(F.Pos.Z))));
@@ -1041,8 +1041,10 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, P.Dist);
 			P.Out = F.Right * Side;
 			P.Edge = F.Pos + P.Out * H;
-			P.Foot = P.Edge + P.Out * (SlopeRun * P.Drop) - F.Up * P.Drop; // in the cross-section's plane (its cap's too)
-			P.Normal = (P.Out + F.Up * SlopeRun).GetSafeNormal(); // square to the bank, up and out
+			// Straight down and level out (as measured, and as an intersection's banks): on a sloped road the foot is not
+			// shifted along the road, so the banks of two pieces (or a road and an intersection) meet flush.
+			P.Foot = P.Edge + P.Out * (SlopeRun * P.Drop) - FVector::UpVector * P.Drop;
+			P.Normal = (P.Out + FVector::UpVector * SlopeRun).GetSafeNormal(); // square to the bank, up and out
 		}
 		auto Has = [&](int32 I) { return Pts[I].Drop > 0.5f; };
 		// Optional points kept where the foot bends (10 cm: the foot is 30 cm into the ground) or a bank starts / ends.
@@ -1105,9 +1107,12 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		{
 			continue;
 		}
+		const FRMFrame& EF = End == 0 ? Frames[0] : Frames.Last();
 		TArray<FVector2D> Profile = { FVector2D(-H, 0.f), FVector2D(H, 0.f) };
+		int32 FootR = INDEX_NONE, FootL = INDEX_NONE;
 		if (DR > 0.5f)
 		{
+			FootR = Profile.Num();
 			Profile.Add(FVector2D(H + SlopeRun * DR, -DR));
 		}
 		if (DR < Height)
@@ -1120,10 +1125,20 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		}
 		if (DL > 0.5f)
 		{
+			FootL = Profile.Num();
 			Profile.Add(FVector2D(-H - SlopeRun * DL, -DL));
 		}
 		const int32 CapFirst = Out.Vertices.Num();
-		RMGeometry::AddProfileCap(End == 0 ? Frames[0] : Frames.Last(), Profile, End == 1, mUVScale, Out);
+		RMGeometry::AddProfileCap(EF, Profile, End == 1, mUVScale, Out);
+		// The feet exactly where the banks end (straight down, see above), not in the tilted cross-section's plane.
+		if (FootR != INDEX_NONE)
+		{
+			Out.Vertices[CapFirst + FootR] = EF.Pos + EF.Right * (H + SlopeRun * DR) - FVector::UpVector * DR;
+		}
+		if (FootL != INDEX_NONE)
+		{
+			Out.Vertices[CapFirst + FootL] = EF.Pos - EF.Right * (H + SlopeRun * DL) - FVector::UpVector * DL;
+		}
 		RMGeometry::SideUVsFromCap(Out, Layout, CapFirst, mUVScale);
 	}
 	RMGeometry::WrapSideUV(Out, Layout, OutFirst, OutFirstTriangle);

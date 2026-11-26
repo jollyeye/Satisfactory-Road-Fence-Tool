@@ -616,7 +616,7 @@ uint32 ARMBuildableIntersection::SlopeShapeKey() const
 {
 	TArray<FRMRoadEnd> Ends;
 	GetWorldEnds(Ends);
-	uint32 Key = GetTypeHash(FMath::RoundToInt(mHeight));
+	uint32 Key = HashCombine(ARMBuildableRoad::SlopeVersion, GetTypeHash(FMath::RoundToInt(mHeight)));
 	for (const FRMRoadEnd& E : Ends)
 	{
 		Key = HashCombine(Key, GetTypeHash(FIntVector(FMath::RoundToInt(E.Center.X), FMath::RoundToInt(E.Center.Y), FMath::RoundToInt(E.Center.Z))));

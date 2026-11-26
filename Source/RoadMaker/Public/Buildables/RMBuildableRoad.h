@@ -252,6 +252,8 @@ public:
 	/** A sample with no ground within SlopeMaxDrop (its drop is SlopeTooDeepMark): such a road gets no banks at all. */
 	static bool SlopeTooDeep(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right);
 	static constexpr float SlopeTooDeepMark = -1.f;
+	/** Part of every slope key: raised when the measuring changes, so banks saved by older builds are measured again. */
+	static constexpr uint32 SlopeVersion = 2;
 	/** Per stretch between two frames and side: true where a bank covers the road's side all along (no side face there). */
 	void SlopeCovered(const TArray<FRMFrame>& Frames, TArray<bool>& OutLeft, TArray<bool>& OutRight) const;
 
