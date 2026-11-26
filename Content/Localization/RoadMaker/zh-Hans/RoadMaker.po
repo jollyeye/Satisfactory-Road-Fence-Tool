@@ -530,13 +530,13 @@ msgstr "拆分道路的反向操作。点击一条道路选中它（白色轮廓
 #. Key:	RoadAdjust.Name
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadAdjust.Name"
-msgid "Adjust Curvature"
+msgid "Adjust Joint"
 msgstr "调整曲率"
 
 #. Key:	RoadAdjust.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadAdjust.Desc"
-msgid "Orange circles mark the road ends near you. Click one to grab that end (and the end of the road joined to it, when two roads meet end to end), then move it like a road end: the mouse wheel turns it, the snap key snaps it to a free road end, hold H to nudge it. The roads follow as holograms; click again to replace them with the new curves, keeping their other ends, lines and paint. Ends joined to an intersection stay. Free."
+msgid "Orange circles mark the road ends near you. Click one to grab that end (and the end of the road joined to it, when two roads meet end to end), then move it like a road end: the snap key snaps it to a free road end, hold H to nudge it. A straight road stays straight, turning round its other end; a curved road follows as a curve and meets a straight one flush (between two curved roads the mouse wheel turns the joint). The roads follow as holograms; click again to replace them, keeping their other ends, lines and paint. Ends joined to an intersection stay. Free."
 msgstr "橙色圆圈标记你附近的道路端点。点击一个即可抓住该端点（当两条道路首尾相接时，连同与之连接的那条道路的端点），然后像移动道路端点一样移动它：滚轮可转向，吸附键可吸附到空闲道路端点，按住 H 可微调。道路会以预览形式跟随；再次点击即用新的曲线替换，保留另一端、标线和涂装。连接到路口的端点不会被移动。免费。"
 
 #. Key:	FenceCut.Name

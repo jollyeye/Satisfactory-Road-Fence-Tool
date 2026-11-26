@@ -1,8 +1,9 @@
-// Adjust Curvature tool (build menu Road Tools > Edit road): orange circles mark the road ends near
+// Adjust Joint tool (was Adjust Curvature until 1.6.0; build menu Road Tools > Edit road): orange circles mark the road ends near
 // you. Click one to grab the end (and the end of the road joined to it, when two roads meet end to end
 // at their middle); move it like a normal road end (aim, snap to a free road end, mouse wheel turns
 // it, hold H and nudge), the curves of the road(s) follow as holograms; the second click replaces them
-// with the new curves, keeping their other ends, width, lines and paint.
+// with the new curves, keeping their other ends, width, lines and paint. 1.6.0: a straight road stays straight
+// (turned round its far end); a curved road meets a straight partner flush.
 #pragma once
 
 #include "CoreMinimal.h"

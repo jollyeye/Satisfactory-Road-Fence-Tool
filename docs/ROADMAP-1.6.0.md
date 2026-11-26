@@ -9,7 +9,7 @@ the other (`RMRoadUtils::JoinTolerance`), whatever their directions; this is che
 time, nothing is stored.
 
 ## Planned
-- **Adjust Curvature becomes Adjust Joint** (decided 2026-11-26, not built): English name changed only; its string
+- **Adjust Curvature becomes Adjust Joint** (decided 2026-11-26, built 2026-11-26, to test): English name changed only; its string
   table key stays (translations are marked out of date, not lost).
   - Straight roads stay straight: a road whose whole course lies on a line (within a few cm) swings around its far
     end, a straight line from the far end to the moved joint. Its far end turns with it (a joint there gets a small
@@ -19,6 +19,9 @@ time, nothing is stored.
   - Straight + curved: the straight one swings and stays straight; the curved one keeps its far end (place and
     direction) and meets the straight one flush, in its direction (no kink).
   - Two curved roads: as today (both curves meet in the joint direction; the scroll wheel turns it).
+  - Built: `IsStraightRoad` (course within 5 cm of the line between its ends, seen from above) in
+    `ARMRoadAdjustHologram::ComputeCurves`; a straight road becomes a straight 3D line from its far end to the joint
+    (constant slope). Description updated in the string table (key kept) and the PO msgid (translation out of date).
   - Unchanged: three or more ends at one point, or an end joined to an intersection, cannot be grabbed.
 - **Smooth Joint** (new tool, Road Tools next to Adjust Joint; asked 2026-11-26, not built): rounds the corner where
   two roads meet. Click the joint (circles on joints of exactly two road ends), drag away from it: both roads are cut
@@ -26,8 +29,8 @@ time, nothing is stored.
   Bezier curve with the old corner as its control point: symmetric, close to a circular arc; on slopes the height
   eases between the two). The distance is shown on screen (1 m steps), at most each road's length minus a little.
   Second click: both roads shortened, the new curve built with their width, lines, material and paint; markings and
-  vehicle paths on the cut-away parts handled like the Cut tool. To decide: different widths / materials (refuse, or
-  take the first road's), joints already flush (allowed, to widen a bend?), intersections (left out at first).
+  vehicle paths on the cut-away parts handled like the Cut tool. Decided 2026-11-26: different materials: one of the
+  two roads' (the clicked first); joints already flush: allowed (widens a bend); intersections: left out.
 
 ## Waiting
 - Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections

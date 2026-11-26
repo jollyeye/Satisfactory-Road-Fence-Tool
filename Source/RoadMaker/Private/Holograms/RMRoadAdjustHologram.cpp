@@ -25,6 +25,37 @@ namespace
 	{
 		Tangent.Z = FVector(Tangent.X, Tangent.Y, 0.f).Size() * Slope;
 	}
+
+	/** Straight (1.6.0, Adjust Joint): the whole course on the line between its ends, seen from above (within 5 cm). */
+	bool IsStraightRoad(const ARMBuildableRoad* Road)
+	{
+		if (!Road)
+		{
+			return false;
+		}
+		TArray<FRMFrame> Frames;
+		Road->GetWorldFrames(Frames, 200.f);
+		if (Frames.Num() < 2)
+		{
+			return false;
+		}
+		const FVector A = Frames[0].Pos, B = Frames.Last().Pos;
+		const FVector2D AB(B - A);
+		const float Len = AB.Size();
+		if (Len < 1.f)
+		{
+			return false;
+		}
+		for (const FRMFrame& F : Frames)
+		{
+			const FVector2D AP(F.Pos - A);
+			if (FMath::Abs(AB.X * AP.Y - AB.Y * AP.X) / Len > 5.f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 ARMRoadAdjustHologram::ARMRoadAdjustHologram()
@@ -422,10 +453,62 @@ bool ARMRoadAdjustHologram::ComputeCurves(TArray<FRMSplinePoint>& OutA, TArray<F
 			SetAdjustTangentSlope(Out.Last().Tangent, AdjustSlopeOf(EndDir));
 		}
 	};
-	Curve(mRoadA, mEndA, mJointDir, OutA);
+	// Adjust Joint (1.6.0): a straight road stays straight, swung round its far end to the joint; a curved one
+	// meets a straight partner flush (in its direction). Two curved roads: the joint direction as set.
+	auto Straight = [this](const ARMBuildableRoad* Road, int32 GrabbedEnd, TArray<FRMSplinePoint>& Out)
+	{
+		FVector FarLoc, FarOutward;
+		Road->GetEndWorld(1 - GrabbedEnd, FarLoc, FarOutward);
+		const FVector Dir = (mJoint - FarLoc).GetSafeNormal(); // from the far end to the joint
+		if (Dir.IsNearlyZero())
+		{
+			return;
+		}
+		if (GrabbedEnd == 1)
+		{
+			RMGeometry::MakeFixedEnds(FarLoc, Dir, mJoint, Dir, Out);
+		}
+		else
+		{
+			RMGeometry::MakeFixedEnds(mJoint, -Dir, FarLoc, -Dir, Out);
+		}
+	};
+	auto FarToJoint = [this](const ARMBuildableRoad* Road, int32 GrabbedEnd)
+	{
+		FVector FarLoc, FarOutward;
+		Road->GetEndWorld(1 - GrabbedEnd, FarLoc, FarOutward);
+		return (mJoint - FarLoc).GetSafeNormal();
+	};
+	const bool bStraightA = IsStraightRoad(mRoadA);
+	const bool bStraightB = mRoadB && IsStraightRoad(mRoadB);
+	// Road A's outward direction at the joint (B's is the opposite).
+	FVector JointDir = mJointDir;
+	if (bStraightA)
+	{
+		JointDir = FarToJoint(mRoadA, mEndA);
+	}
+	else if (bStraightB)
+	{
+		JointDir = -FarToJoint(mRoadB, mEndB);
+	}
+	if (bStraightA)
+	{
+		Straight(mRoadA, mEndA, OutA);
+	}
+	else
+	{
+		Curve(mRoadA, mEndA, JointDir, OutA);
+	}
 	if (mRoadB)
 	{
-		Curve(mRoadB, mEndB, -mJointDir, OutB);
+		if (bStraightB)
+		{
+			Straight(mRoadB, mEndB, OutB);
+		}
+		else
+		{
+			Curve(mRoadB, mEndB, -JointDir, OutB);
+		}
 	}
 	return OutA.Num() >= 2 && (!mRoadB || OutB.Num() >= 2);
 }
