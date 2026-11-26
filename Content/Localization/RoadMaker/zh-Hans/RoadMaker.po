@@ -1300,3 +1300,81 @@ msgstr ""
 msgctxt "RoadMaker,SlopeAddCurbHint"
 msgid "Side Slopes: click to add a bank on this curb, down to the ground (cyan; hold the snap key for all curbs)"
 msgstr ""
+
+#. Key:	BarrierModeAuto
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierModeAuto"
+msgid "Automatic"
+msgstr ""
+
+#. Key:	BarrierModeOpen
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierModeOpen"
+msgid "Always open"
+msgstr ""
+
+#. Key:	BarrierModeClosed
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierModeClosed"
+msgid "Always closed"
+msgstr ""
+
+#. Key:	BarrierLookAt
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierLookAt"
+msgid "Boom Barrier: {0} (change)"
+msgstr ""
+
+#. Key:	BarrierInfoWaiting
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierInfoWaiting"
+msgid "A vehicle is near the barrier, on either side of the arm."
+msgstr ""
+
+#. Key:	BarrierInfoOpen
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierInfoOpen"
+msgid "On: always open. Off: always closed (vehicles are stopped)."
+msgstr ""
+
+#. Key:	BarrierInfoAutomatic
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierInfoAutomatic"
+msgid "The arm lifts by itself while a vehicle is near."
+msgstr ""
+
+#. Key:	BarrierFirstSide
+#: Source/RoadMaker/Private/Holograms/RMBarrierHologram.cpp
+msgctxt "RoadMaker,BarrierFirstSide"
+msgid "Boom Barrier: click the side for the post (a road or walking path edge)"
+msgstr ""
+
+#. Key:	BarrierSecondSide
+#: Source/RoadMaker/Private/Holograms/RMBarrierHologram.cpp
+msgctxt "RoadMaker,BarrierSecondSide"
+msgid "Boom Barrier: aim at the other side (any road or walking path edge straight across)"
+msgstr ""
+
+#. Key:	BarrierBuildHint
+#: Source/RoadMaker/Private/Holograms/RMBarrierHologram.cpp
+msgctxt "RoadMaker,BarrierBuildHint"
+msgid "Boom Barrier: arm {0} m (click to build)"
+msgstr ""
+
+#. Key:	BarrierDropFirst
+#: Source/RoadMaker/Private/Holograms/RMBarrierHologram.cpp
+msgctxt "RoadMaker,BarrierDropFirst"
+msgid "Boom Barrier: click to drop this side"
+msgstr ""
+
+#. Key:	BoomBarrier.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,BoomBarrier.Name"
+msgid "Boom Barrier"
+msgstr ""
+
+#. Key:	BoomBarrier.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,BoomBarrier.Desc"
+msgid "A post on a road's fence line with a striped arm across the road. Click the side for the post (a road or walking path edge), then the other side straight across: the arm reaches it (2 to 20 m). Press E on it to change its mode: Automatic (the arm lifts while a vehicle is near), Always open, Always closed (the arm stays down and stops vehicles). Automated Machines can open, close or automate it and knows when a vehicle is waiting."
+msgstr ""

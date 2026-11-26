@@ -829,6 +829,18 @@ def sign_gantry(sc):
     sc.quad((xf, 1.5, 6.9), (xf, 3.7, 6.9), (xf, 2.6, 6.2), (xf, 2.6, 6.2), W, layer=2, two=True, shade=False)
 
 
+def boom_barrier(sc):
+    """A straight road with a boom barrier: a dark post on the near edge, the red and white arm across the road."""
+    road(sc, 16, 2, length=18.0, bend=0.0)
+    DARK = np.array([58, 60, 66.0]); RED = np.array([205, 32, 26.0]); W = np.array([242, 242, 238.0])
+    x = 9.0; yp = 7.6
+    box(sc, (x, yp, 1.0), 0.7, 0.7, 1.0, DARK, layer=1)              # post
+    box(sc, (x, yp, 2.2), 0.85, 0.85, 0.2, ORANGE, layer=1)          # housing on top
+    n = 9; y1 = -7.2; y0 = yp - 0.75; step = (y0 - y1) / n
+    for k in range(n):
+        yc = y0 - step * (k + 0.5)
+        box(sc, (x, yc, 1.75), 0.24, step / 2.0, 0.24, RED if k % 2 == 0 else W, layer=1)
+
 def tunnel_icon(sc):
     """A straight road under a rounded concrete arch (the Tunnel Arch), the road running out of both ends."""
     road(sc, 16, 2, length=20.0, bend=0.0)
@@ -917,6 +929,7 @@ elif what == "grid": grid_fence(sc, 1.0)
 elif what == "gridtall": grid_fence(sc, 2.0)
 elif what == "cross": intersection(sc)
 elif what == "gantry": sign_gantry(sc)
+elif what == "barrier": boom_barrier(sc)
 elif what == "tunnel": tunnel_icon(sc)
 elif what == "lanearrow": marking_icon(sc, "arrow")
 elif what == "lanenumber": marking_icon(sc, "digit")

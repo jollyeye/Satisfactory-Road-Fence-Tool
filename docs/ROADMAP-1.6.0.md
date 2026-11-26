@@ -177,5 +177,19 @@ time, nothing is stored.
   in plan (15 cm, one pass) and the slopes part timed on its own. Frame drop looking at a busy intersection: the game
   drawing its many vehicle paths, not the mod.
 
+- **Boom barrier** (asked 2026-11-27, built, to test): `ARMBuildableBarrier` + `ARMBarrierHologram`, `Build_BoomBarrier`
+  (build menu next to the Sign Gantry, menu order 11; cost 2 steel pipes, 2 copper sheets; icon `render_icons.py barrier`).
+  - Placement like the gantry's first two steps: click the side for the post (fence line, white arrow), aim at the other
+    side straight across (same road's other edge or a road beside it): the arm reaches it (2 to 20 m); click builds.
+  - Temporary meshes: a 40 x 40 cm, 1.1 m post (metal material) and a 12 x 12 cm arm hinged at 1 m, red / white stripes
+    every 0.5 m (unlit overlay colours for now), its own component (`mArmMesh`) turning up to 85 degrees (1.5 s).
+  - Modes (saved, replicated), E cycles them for now (UI later): Automatic (arm lifts while a wheeled vehicle is within
+    12 m along the road and the arm's reach across, checked 4 times a second on the server; never blocks), Always open,
+    Always closed (arm down; its collision blocks vehicles only, not players). Look-at text shows the mode.
+  - Automated Machines (name convention, no dependency): `AM_Condition_Vehicle_Waiting`, `AM_Condition_Open`,
+    `AM_Action_Open(bool)` (on = always open, off = always closed), `AM_Action_Automatic`, `AM_Info_*`. Its tab only
+    appears in the game's own building windows: the barrier has none yet (E), so the hooks show once it gets a window
+    (or Automated Machines' planned part 3).
+
 ## Waiting
 - Issue #10: reply to the reporter once tested (with the user's go-ahead).
