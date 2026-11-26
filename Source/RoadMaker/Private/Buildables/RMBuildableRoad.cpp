@@ -882,9 +882,15 @@ namespace RMSideSlopes
 				const ARMBuildableRoad* OtherRoad = Cast<ARMBuildableRoad>(Actor);
 				const bool bBank = Section == (OtherRoad ? 2 : 3);
 				OutDist = Hit.Distance;
-				// Only a road side by side with this edge stops the bank (asked 2026-11-26); its bank, an intersection or a
-				// road crossing / running off at an angle is ground the bank runs onto.
-				return !bBank && OtherRoad && IsParallelNeighbour(OtherRoad, Hit.ImpactPoint, Edge, Out) ? EHit::Neighbour : EHit::Ground;
+				if (bBank)
+				{
+					return EHit::Ground; // another piece's bank: this one runs into it
+				}
+				if (OtherRoad && IsParallelNeighbour(OtherRoad, Hit.ImpactPoint, Edge, Out))
+				{
+					return EHit::Neighbour; // a road side by side with this edge: no bank there
+				}
+				continue; // other roads and intersections (at an angle, crossing, further off): ignored (asked 2026-11-26)
 			}
 			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor) || !IsGround(Actor, Hit.GetComponent()))
 			{
