@@ -1179,7 +1179,7 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 
 	// Concrete: right side, bottom, left side.
 	// Concrete: right side, bottom, left side, each face on its own (rows counted down from the top), in blocks.
-	const FRMSideUV Layout = MakeSideUV(bCircuitSides, Frames.Last().Dist);
+	const FRMSideUV Sides = MakeSideUV(bCircuitSides, Frames.Last().Dist);
 	PadSideUV(Body);
 	const int32 BodyFirst = Body.Vertices.Num();
 	const int32 BodyFirstTriangle = Body.Triangles.Num();
@@ -1188,7 +1188,7 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	{
 		const int32 First = Body.Vertices.Num();
 		ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
-		SideUVsFromExtrude(Body, Layout, First, UVScale);
+		SideUVsFromExtrude(Body, Sides, First, UVScale);
 	}
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };
@@ -1202,8 +1202,8 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	{
 		AddProfileCap(Frames.Last(), Section, true, UVScale, Body);
 	}
-	SideUVsFromCap(Body, Layout, CapFirst, UVScale);
-	WrapSideUV(Body, Layout, BodyFirst, BodyFirstTriangle);
+	SideUVsFromCap(Body, Sides, CapFirst, UVScale);
+	WrapSideUV(Body, Sides, BodyFirst, BodyFirstTriangle);
 }
 
 RMGeometry::FRMSideUV RMGeometry::MakeSideUV(bool bCircuit, float LengthCm)
