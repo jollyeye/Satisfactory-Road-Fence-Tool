@@ -47,7 +47,7 @@ void ARMBuildableIntersection::RebuildMesh()
 	FRMMesh Top, Body;
 	TArray<FVector> Outline;
 	TArray<bool> IsMouth;
-	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth))
+	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth, 250.f, GetShownLook() == 2))
 	{
 		UE_LOG(LogRoadMaker, Warning, TEXT("%s: could not rebuild intersection from %d saved ends"), *GetName(), mEnds.Num());
 		return;
@@ -95,7 +95,7 @@ void ARMBuildableIntersection::RebuildMesh()
 	FRMMesh FarTop, FarBody;
 	TArray<FVector> FarOutline;
 	TArray<bool> FarIsMouth;
-	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth, 500.f))
+	if (RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, FMath::Min(mFilletSegments, 3), FarTop, FarBody, &FarOutline, &FarIsMouth, 500.f, GetShownLook() == 2))
 	{
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
@@ -231,7 +231,7 @@ void ARMBuildableIntersection::GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) 
 	FRMMesh Top, Body;
 	TArray<FVector> Outline;
 	TArray<bool> IsMouth;
-	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth))
+	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth, 250.f, GetShownLook() == 2))
 	{
 		return;
 	}

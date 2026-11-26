@@ -1144,7 +1144,7 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // ---------------------------------------------------------------------------------------------
 
 void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap)
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap, bool bCircuitSides)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
@@ -1179,10 +1179,8 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 
 	// Concrete: right side, bottom, left side.
 	// Concrete: right side, bottom, left side, each face on its own (rows counted down from the top), in blocks.
-	const float AlongScale = BlockAlongScale(Frames.Last().Dist);
-	Body.MarkUV1.SetNumZeroed(Body.Vertices.Num());
-	Body.MarkUV2.SetNumZeroed(Body.Vertices.Num());
-	Body.MarkUV3.SetNumZeroed(Body.Vertices.Num());
+	const FRMSideUV Layout = MakeSideUV(bCircuitSides, Frames.Last().Dist);
+	PadSideUV(Body);
 	const int32 BodyFirst = Body.Vertices.Num();
 	const int32 BodyFirstTriangle = Body.Triangles.Num();
 	for (const TArray<FVector2D>& Face : { TArray<FVector2D>{ FVector2D(H, 0.f), FVector2D(H, -Height) },
@@ -1190,7 +1188,7 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	{
 		const int32 First = Body.Vertices.Num();
 		ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
-		BlockUVsFromExtrude(Body, First, UVScale, AlongScale);
+		SideUVsFromExtrude(Body, Layout, First, UVScale);
 	}
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };
@@ -1204,40 +1202,71 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	{
 		AddProfileCap(Frames.Last(), Section, true, UVScale, Body);
 	}
-	BlockUVsFromCap(Body, CapFirst, UVScale);
-	// Long roads: material metres along kept small (half-float UVs), the rest carried in UV3.y (see the top).
-	Body.WrapUV1X(BodyFirst, BodyFirstTriangle, 4.f, true, true);
+	SideUVsFromCap(Body, Layout, CapFirst, UVScale);
+	WrapSideUV(Body, Layout, BodyFirst, BodyFirstTriangle);
 }
 
-float RMGeometry::BlockAlongScale(float LengthCm)
+RMGeometry::FRMSideUV RMGeometry::MakeSideUV(bool bCircuit, float LengthCm)
 {
+	FRMSideUV L;
+	L.bCircuit = bCircuit;
 	const float Blocks = FMath::Max(1.f, FMath::RoundToFloat(LengthCm / 300.f));
-	return 4.f * Blocks / FMath::Max(LengthCm / 100.f, 0.01f);
+	const float LengthM = FMath::Max(LengthCm / 100.f, 0.01f);
+	L.BlockM = LengthM / Blocks;
+	L.AlongScale = 4.f * Blocks / LengthM; // the circuit's 4 m period fitted too
+	return L;
 }
 
-void RMGeometry::AddBlockUV(FRMMesh& Mesh, float RowM, float AlongM)
+void RMGeometry::PadSideUV(FRMMesh& Mesh)
 {
-	Mesh.MarkUV1.Add(FVector2D(RowM, AlongM));
-	Mesh.MarkUV2.Add(FVector2D(10.f, 0.f)); // > 0.5: the material uses UV1 (not a world projection)
+	Mesh.MarkUV1.SetNumZeroed(Mesh.Vertices.Num());
+	Mesh.MarkUV2.SetNumZeroed(Mesh.Vertices.Num());
+	Mesh.MarkUV3.SetNumZeroed(Mesh.Vertices.Num());
+}
+
+void RMGeometry::AddSideUV(FRMMesh& Mesh, const FRMSideUV& Layout, float RowM, float AlongM, bool bPlain)
+{
+	if (Layout.bCircuit)
+	{
+		Mesh.MarkUV1.Add(FVector2D(RowM, AlongM * Layout.AlongScale));
+		Mesh.MarkUV2.Add(FVector2D(10.f, 0.f)); // > 0.5: the material uses UV1 (not a world projection)
+	}
+	else
+	{
+		Mesh.MarkUV1.Add(FVector2D(AlongM, bPlain ? 1.f : 0.f));
+		Mesh.MarkUV2.Add(FVector2D(Layout.BlockM, 0.f));
+	}
 	Mesh.MarkUV3.Add(FVector2D::ZeroVector); // no lane lines
 }
 
-void RMGeometry::BlockUVsFromExtrude(FRMMesh& Mesh, int32 First, float UVScale, float AlongScale)
+void RMGeometry::WrapSideUV(FRMMesh& Mesh, const FRMSideUV& Layout, int32 FirstVertex, int32 FirstTriangle)
+{
+	if (Layout.bCircuit)
+	{
+		Mesh.WrapUV1X(FirstVertex, FirstTriangle, 4.f, true, true); // whole 4 m kept in UV3.y (the material adds them)
+	}
+	else
+	{
+		Mesh.WrapUV1X(FirstVertex, FirstTriangle, Layout.BlockM); // the joints repeat every block
+	}
+}
+
+void RMGeometry::SideUVsFromExtrude(FRMMesh& Mesh, const FRMSideUV& Layout, int32 First, float UVScale, bool bPlain)
 {
 	const float M = UVScale / 100.f;
 	for (int32 V = First; V < Mesh.Vertices.Num(); ++V)
 	{
-		AddBlockUV(Mesh, Mesh.UVs[V].X * M, Mesh.UVs[V].Y * M * AlongScale);
+		AddSideUV(Mesh, Layout, Mesh.UVs[V].X * M, Mesh.UVs[V].Y * M, bPlain);
 		Mesh.UVs[V] = FVector2D(Mesh.UVs[V].Y, Mesh.UVs[V].X); // UV0 along / down as well
 	}
 }
 
-void RMGeometry::BlockUVsFromCap(FRMMesh& Mesh, int32 First, float UVScale)
+void RMGeometry::SideUVsFromCap(FRMMesh& Mesh, const FRMSideUV& Layout, int32 First, float UVScale)
 {
 	const float M = UVScale / 100.f;
 	for (int32 V = First; V < Mesh.Vertices.Num(); ++V)
 	{
-		AddBlockUV(Mesh, -Mesh.UVs[V].Y * M, Mesh.UVs[V].X * M);
+		AddSideUV(Mesh, Layout, -Mesh.UVs[V].Y * M, Mesh.UVs[V].X * M, true);
 	}
 }
 
@@ -1982,7 +2011,7 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 // ---------------------------------------------------------------------------------------------
 
 bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth, float GridSpacing)
+	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth, float GridSpacing, bool bCircuitSides)
 {
 	if (Ends.Num() < 2)
 	{
@@ -2201,12 +2230,23 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 			Top.AddTriangle(Base + TopTris[T], Base + TopTris[T + 1], Base + TopTris[T + 2], FVector::UpVector);
 		}
 	}
+	// Sides in the road sides' cement blocks (or circuit): blocks counted round the outline.
+	float Perimeter = 0.f;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		Perimeter += FVector::Dist(Ring[K], Ring[(K + 1) % Ring.Num()]);
+	}
+	const FRMSideUV Layout = MakeSideUV(bCircuitSides, Perimeter);
+	PadSideUV(Body);
+	const int32 BodyFirst = Body.Vertices.Num();
+	const int32 BodyFirstTriangle = Body.Triangles.Num();
 	{
 		const FVector Down(0.f, 0.f, -Height);
 		const int32 Base = Body.Vertices.Num();
 		for (const FVector& P : Ring)
 		{
 			Body.AddVertex(P + Down, FVector::DownVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
+			AddSideUV(Body, Layout, P.Y / 100.f, P.X / 100.f, true); // underside: no joints
 		}
 		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
 		{
@@ -2238,9 +2278,17 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 			const float U1 = U + EdgeLen * S;
 			Body.AddQuad(A, B, B + Down, A + Down, N,
 				FVector2D(U, 0.f), FVector2D(U1, 0.f), FVector2D(U1, Height * S), FVector2D(U, Height * S));
+			// Road mouths are end faces: no joints (a road's own cap meets them).
+			const bool bMouth = EdgeIsMouth.IsValidIndex(K) && EdgeIsMouth[K];
+			const float UM = U / S / 100.f, U1M = U1 / S / 100.f, HM = Height / 100.f;
+			AddSideUV(Body, Layout, 0.f, UM, bMouth);
+			AddSideUV(Body, Layout, 0.f, U1M, bMouth);
+			AddSideUV(Body, Layout, HM, U1M, bMouth);
+			AddSideUV(Body, Layout, HM, UM, bMouth);
 		}
 		U += EdgeLen * S;
 	}
+	WrapSideUV(Body, Layout, BodyFirst, BodyFirstTriangle);
 
 	if (OutOutline)
 	{
@@ -2576,7 +2624,7 @@ void RMGeometry::BuildSignWallFace(const TArray<FRMFrame>& Frames, FRMMesh& Face
 	(void)Height;
 }
 
-bool RMGeometry::BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing)
+bool RMGeometry::BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing, bool bCircuitSides)
 {
 	if (Ring.Num() < 3)
 	{
@@ -2626,12 +2674,23 @@ bool RMGeometry::BuildSlab(const TArray<FVector>& Ring, float Height, float UVSc
 		}
 	}
 	// Bottom.
+	// Sides in the road sides' cement blocks (or circuit): blocks counted round the outline.
+	float Perimeter = 0.f;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		Perimeter += FVector::Dist(Ring[K], Ring[(K + 1) % Ring.Num()]);
+	}
+	const FRMSideUV Layout = MakeSideUV(bCircuitSides, Perimeter);
+	PadSideUV(Body);
+	const int32 BodyFirst = Body.Vertices.Num();
+	const int32 BodyFirstTriangle = Body.Triangles.Num();
 	{
 		const FVector Down(0.f, 0.f, -Height);
 		const int32 Base = Body.Vertices.Num();
 		for (const FVector& P : Ring)
 		{
 			Body.AddVertex(P + Down, FVector::DownVector, FVector2D(P.X, P.Y) * S, FVector::ForwardVector);
+			AddSideUV(Body, Layout, P.Y / 100.f, P.X / 100.f, true); // underside: no joints
 		}
 		for (int32 T = 0; T + 2 < Tris.Num(); T += 3)
 		{
@@ -2659,8 +2718,15 @@ bool RMGeometry::BuildSlab(const TArray<FVector>& Ring, float Height, float UVSc
 			const float U1 = U + EdgeLen * S;
 			Body.AddQuad(A, B, B + Down, A + Down, N,
 				FVector2D(U, 0.f), FVector2D(U1, 0.f), FVector2D(U1, Height * S), FVector2D(U, Height * S));
+			const bool bMouth = false;
+			const float UM = U / S / 100.f, U1M = U1 / S / 100.f, HM = Height / 100.f;
+			AddSideUV(Body, Layout, 0.f, UM, bMouth);
+			AddSideUV(Body, Layout, 0.f, U1M, bMouth);
+			AddSideUV(Body, Layout, HM, U1M, bMouth);
+			AddSideUV(Body, Layout, HM, UM, bMouth);
 		}
 		U += EdgeLen * S;
 	}
+	WrapSideUV(Body, Layout, BodyFirst, BodyFirstTriangle);
 	return true;
 }

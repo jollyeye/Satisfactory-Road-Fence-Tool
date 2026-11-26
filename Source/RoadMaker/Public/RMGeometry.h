@@ -223,25 +223,37 @@ namespace RMGeometry
 	ROADMAKER_API void AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& Profile, bool bFacingForward, float UVScale, FRMMesh& Out);
 
 	/**
+	 * Texture layout of road / intersection sides and side slopes (UV1-3), for one of two materials:
+	 * - cement blocks (M_RoadJersey, the cement barrier's joints): UV1 = (metres along, 1 = no joints), UV2.x = block
+	 *   length: 3 m blocks fitted to whole blocks per piece (as the grid fence's posts);
+	 * - cyberpunk circuit (M_RoadCyber, the cyberpunk look): UV1 = (metres down / across, material metres along),
+	 *   UV2.x = 10 (UV1, not a world projection), UV3 = no lane lines.
+	 */
+	struct FRMSideUV
+	{
+		bool bCircuit = false;
+		float BlockM = 3.f;      // cement blocks: block length (m)
+		float AlongScale = 1.f;  // circuit: material metres per metre along
+	};
+	ROADMAKER_API FRMSideUV MakeSideUV(bool bCircuit, float LengthCm);
+	/** One vertex's side UVs: RowM down from the top (or across), AlongM metres along; bPlain: no joints (caps). */
+	ROADMAKER_API void AddSideUV(FRMMesh& Mesh, const FRMSideUV& Layout, float RowM, float AlongM, bool bPlain = false);
+	/** Keeps the side UVs small on long pieces (half floats), for vertices / triangles from First on. */
+	ROADMAKER_API void WrapSideUV(FRMMesh& Mesh, const FRMSideUV& Layout, int32 FirstVertex, int32 FirstTriangle);
+	/** Side UVs of extruded faces from First on (UV0 = (cm round the profile, cm along) / UVScale; turned to along / down). */
+	ROADMAKER_API void SideUVsFromExtrude(FRMMesh& Mesh, const FRMSideUV& Layout, int32 First, float UVScale, bool bPlain = false);
+	/** Side UVs of cap vertices from First on (UV0 = profile cm / UVScale: across, up). */
+	ROADMAKER_API void SideUVsFromCap(FRMMesh& Mesh, const FRMSideUV& Layout, int32 First, float UVScale);
+	/** Makes sure a mesh's UV1-3 cover every vertex (zeros) before side UVs are added. */
+	ROADMAKER_API void PadSideUV(FRMMesh& Mesh);
+
+	/**
 	 * Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre.
-	 * The body (sides, bottom, caps) carries the blocks' UV1-3 (AddBlockUV).
+	 * The body (sides, bottom, caps) carries the side UVs (FRMSideUV: cement blocks, or the circuit with bCircuitSides).
 	 * Markings and EdgeLineInset (cm from the road edge, leaves room for fences) go into the top's UV1-3.
 	 */
-	/**
-	 * Road sides and side slopes in the concrete blocks (M_RoadPavers) or the cyberpunk circuit: their blocks / circuit
-	 * laid by UV1 = (metres down / across: rows, material metres along), UV2.x = 10 (UV1, not a world projection), UV3 =
-	 * no lane lines. The material's blocks are 4 m long: BlockAlongScale stretches them to whole 3 m blocks per road
-	 * (as the grid fence's posts), material metres per metre along.
-	 */
-	ROADMAKER_API float BlockAlongScale(float LengthCm);
-	ROADMAKER_API void AddBlockUV(FRMMesh& Mesh, float RowM, float AlongM);
-	/** UV1 of the vertices from First on, from their UV0 (extruded faces: UV0 = (cm round the profile, cm along) / UVScale). */
-	ROADMAKER_API void BlockUVsFromExtrude(FRMMesh& Mesh, int32 First, float UVScale, float AlongScale);
-	/** UV1 of cap vertices from First on (UV0 = profile cm / UVScale: across, up). */
-	ROADMAKER_API void BlockUVsFromCap(FRMMesh& Mesh, int32 First, float UVScale);
-
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true);
+		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true, bool bCircuitSides = false);
 
 	// Fence builders all use one convention: the road is on the +Right side of the frames.
 	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.
@@ -323,7 +335,7 @@ namespace RMGeometry
 	 */
 	ROADMAKER_API bool BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
 		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr, TArray<bool>* OutEdgeIsMouth = nullptr,
-		float GridSpacing = 250.f);
+		float GridSpacing = 250.f, bool bCircuitSides = false);
 
 	/**
 	 * The curved curbs of an intersection: each is the outline run between two neighbouring road
@@ -345,5 +357,5 @@ namespace RMGeometry
 	 * points every GridSpacing inside, their heights smoothed between the outline's (like an intersection top), the
 	 * bottom Height below the outline, and vertical sides. False if the outline crosses itself or is too small.
 	 */
-	ROADMAKER_API bool BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing = 250.f);
+	ROADMAKER_API bool BuildSlab(const TArray<FVector>& Ring, float Height, float UVScale, FRMMesh& Top, FRMMesh& Body, float GridSpacing = 250.f, bool bCircuitSides = false);
 }

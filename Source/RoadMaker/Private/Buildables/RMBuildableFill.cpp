@@ -36,7 +36,7 @@ void ARMBuildableFill::RebuildMesh()
 	mMesh->ClearAllMeshSections();
 	ClearFarMesh();
 	FRMMesh Top, Body;
-	if (!RMGeometry::BuildSlab(mOutline, mHeight, mUVScale, Top, Body, 250.f))
+	if (!RMGeometry::BuildSlab(mOutline, mHeight, mUVScale, Top, Body, 250.f, GetShownLook() == 2))
 	{
 		UE_LOG(LogRoadMaker, Warning, TEXT("%s: could not build the fill from %d outline points"), *GetName(), mOutline.Num());
 		return;
@@ -49,7 +49,7 @@ void ARMBuildableFill::RebuildMesh()
 	ApplyMaterial(1, BodyMat);
 	// Far: fewer points inside.
 	FRMMesh FarTop, FarBody;
-	if (RMGeometry::BuildSlab(mOutline, mHeight, mUVScale, FarTop, FarBody, 800.f))
+	if (RMGeometry::BuildSlab(mOutline, mHeight, mUVScale, FarTop, FarBody, 800.f, GetShownLook() == 2))
 	{
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
