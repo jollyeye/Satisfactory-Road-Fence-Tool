@@ -65,7 +65,7 @@ public:
 	/** The samples (perimeter distance, drop) for the intersection as it stands (world traces). */
 	void MeasureSlopes(TArray<FVector2D>& OutSamples) const;
 	/** The banks' mesh (actor space) for these samples. */
-	void BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out) const;
+	void BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out, bool bBanksOnly = false) const;
 	/** World positions of the curb points the samples belong to (in sample order). */
 	void GetSlopeWorldPoints(TArray<FVector>& Out) const;
 	const TArray<FVector2D>& GetSlopeSamples() const { return mSlopeSamples; }
@@ -140,7 +140,7 @@ protected:
 	static void SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter);
 	bool LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const;
 	void BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples, FRMMesh& Out,
-		TArray<bool>* OutCoveredEdges) const;
+		TArray<bool>* OutCoveredEdges, bool bBanksOnly = false) const;
 
 	/** Build animation: the surface spreads from the road mouths to the middle (see ARMBuildableProcedural). */
 	virtual bool UsesReveal() const override { return mEnds.Num() >= 2; }

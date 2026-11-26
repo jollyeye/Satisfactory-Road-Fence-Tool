@@ -152,7 +152,11 @@ time, nothing is stored.
   - Floors (asked 2026-11-26: the hollow under the embankment could be seen and walked into): roads carry the cap's lower
     edge along (foot to foot, or the slab's bottom corner on a side without a bank) as a floor facing down; intersections
     get one polygon through every foot (slab bottom under curbs without a bank), triangulated in plan.
-  - Open: with a curb bank on, some vehicle paths on the intersection turn red (asked to run `RM.PathCheck`).
+  - Red vehicle paths after switching a curb's bank (RM.PathCheck: stored "NoFloor", checked now "Valid"): rebuilding the
+    mesh takes the collision away until it is cooked again, and paths checked in between stayed red. Now 1.5 s after a
+    slope change the server asks the game to check the paths over the piece again
+    (`AFGVehicleSubsystem::InvalidateVehiclePathsInVolume`, `RevalidateVehiclePathsSoon`).
+  - The tool's cage shows the banks only (no caps, no floor: `bBanksOnly`).
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):

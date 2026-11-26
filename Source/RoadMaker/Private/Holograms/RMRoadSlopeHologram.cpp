@@ -207,13 +207,13 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 		PreviewLeft = bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft;
 		PreviewRight = bRemove ? mTarget->GetSlopeRight() : mMeasuredRight;
 		ARMBuildableRoad::MaskSlopeSides(PreviewLeft, PreviewRight, uint8(RequestedMask()));
-		mTarget->BuildSlopeMesh(PreviewLeft, PreviewRight, Banks);
+		mTarget->BuildSlopeMesh(PreviewLeft, PreviewRight, Banks, true); // the banks only: no caps or floor in the cage
 	}
 	else
 	{
 		PreviewLeft = bRemove ? mTargetX->GetSlopeSamples() : mMeasuredLeft;
 		mTargetX->MaskSlopeRuns(PreviewLeft, RequestedMask());
-		mTargetX->BuildSlopeMesh(PreviewLeft, Banks);
+		mTargetX->BuildSlopeMesh(PreviewLeft, Banks, true);
 	}
 	const bool bTooDeep = !bRemove && ARMBuildableRoad::SlopeTooDeep(PreviewLeft, PreviewRight);
 	if (bRemove && mAll)

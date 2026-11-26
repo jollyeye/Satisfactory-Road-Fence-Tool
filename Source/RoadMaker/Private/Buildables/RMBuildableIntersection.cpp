@@ -461,18 +461,18 @@ void ARMBuildableIntersection::MeasureSlopes(TArray<FVector2D>& OutSamples) cons
 	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes measured, %d of %d samples with a bank"), *GetName(), Banks, OutSamples.Num());
 }
 
-void ARMBuildableIntersection::BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out) const
+void ARMBuildableIntersection::BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out, bool bBanksOnly) const
 {
 	TArray<FVector> Ring;
 	TArray<bool> IsMouth;
 	if (LocalOutline(Ring, IsMouth))
 	{
-		BuildSlopeMeshFrom(Ring, IsMouth, Samples, Out, nullptr);
+		BuildSlopeMeshFrom(Ring, IsMouth, Samples, Out, nullptr, bBanksOnly);
 	}
 }
 
 void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples,
-	FRMMesh& Out, TArray<bool>* OutCoveredEdges) const
+	FRMMesh& Out, TArray<bool>* OutCoveredEdges, bool bBanksOnly) const
 {
 	TArray<FSlopePoint> Points;
 	float Perimeter = 0.f;
@@ -563,7 +563,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		Area += Ring[K].X * Ring[(K + 1) % N].Y - Ring[(K + 1) % N].X * Ring[K].Y;
 	}
 	const float OutSign = Area >= 0.f ? 1.f : -1.f;
-	for (int32 K = 0; K < N; ++K)
+	for (int32 K = 0; !bBanksOnly && K < N; ++K)
 	{
 		if (!IsMouth[K])
 		{
@@ -641,7 +641,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 	{
 		bAnyBank |= Has(I);
 	}
-	if (bAnyBank)
+	if (bAnyBank && !bBanksOnly)
 	{
 		TArray<FVector> Floor;
 		for (int32 I = 0; I < Points.Num(); ++I)
@@ -720,6 +720,7 @@ void ARMBuildableIntersection::RequestSlopeMeasure()
 		}
 		RebuildMesh();
 		ForceNetUpdate();
+		ARMBuildableRoad::RevalidateVehiclePathsSoon(this);
 	}));
 }
 
@@ -820,6 +821,7 @@ void ARMBuildableIntersection::SetSlopeRuns(uint32 Runs)
 	}
 	RebuildMesh();
 	ForceNetUpdate();
+	ARMBuildableRoad::RevalidateVehiclePathsSoon(this);
 }
 
 void ARMBuildableIntersection::RemeasureSlopes(float Delay)

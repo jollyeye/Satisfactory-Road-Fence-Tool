@@ -15,6 +15,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Buildables/RMBuildableIntersection.h"
@@ -708,6 +709,7 @@ void ARMBuildableRoad::RequestSlopeMeasure()
 		}
 		RebuildMesh();
 		ForceNetUpdate();
+		RevalidateVehiclePathsSoon(this);
 	}));
 }
 
@@ -762,6 +764,7 @@ void ARMBuildableRoad::SetSlopeSides(uint8 Sides)
 	}
 	RebuildMesh();
 	ForceNetUpdate();
+	RevalidateVehiclePathsSoon(this);
 	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes, sides %d"), *GetName(), int32(Sides));
 }
 
@@ -1104,16 +1107,17 @@ void ARMBuildableRoad::SlopeCovered(const TArray<FRMFrame>& Frames, TArray<bool>
 	}
 }
 
-void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const
+void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out, bool bBanksOnly) const
 {
 	// As the road mesh's cross-sections (RebuildMesh), without its chunk cuts.
 	TArray<FRMFrame> Frames;
 	GetLocalFrames(Frames, mMeshStep);
 	RMGeometry::ReduceRoadFrames(Frames, IsWalkingPath());
-	BuildSlopeMesh(Left, Right, Frames, Out);
+	BuildSlopeMesh(Left, Right, Frames, Out, bBanksOnly);
 }
 
-void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out) const
+void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out,
+	bool bBanksOnly) const
 {
 	if (Frames.Num() < 2)
 	{
@@ -1256,6 +1260,7 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 				bAnyBank |= D > 0.5f;
 			}
 		}
+		bAnyBank &= !bBanksOnly; // the tool's cage: the banks only
 		const int32 FloorFirst = bAnyBank ? Out.Vertices.Num() : INDEX_NONE;
 		TArray<int32> VL, VR;
 		TArray<bool> Any;
@@ -1287,7 +1292,7 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		(void)FloorFirst;
 	}
 	// Embankment caps: the road's cross-section widened to the banks' feet (a trapezoid), down to below the road.
-	for (int32 End = 0; End < 2; ++End)
+	for (int32 End = 0; !bBanksOnly && End < 2; ++End)
 	{
 		const float DL = SlopeDropAt(Left, End == 0 ? 0.f : (Left.Num() ? Left.Last().X : 0.f));
 		const float DR = SlopeDropAt(Right, End == 0 ? 0.f : (Right.Num() ? Right.Last().X : 0.f));
@@ -1376,4 +1381,21 @@ void ARMBuildableRoad::NudgeSlopeNeighbours(AActor* Piece)
 	{
 		UE_LOG(LogRoadMaker, Verbose, TEXT("%s: %d banked neighbours measure again"), *Piece->GetName(), Nudged);
 	}
+}
+
+void ARMBuildableRoad::RevalidateVehiclePathsSoon(AActor* Piece)
+{
+	UWorld* World = Piece ? Piece->GetWorld() : nullptr;
+	if (!World || !Piece->HasAuthority())
+	{
+		return;
+	}
+	FTimerHandle Handle;
+	World->GetTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(Piece, [Piece]()
+	{
+		if (AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(Piece->GetWorld()))
+		{
+			Vehicles->InvalidateVehiclePathsInVolume(Piece->GetComponentsBoundingBox(true).ExpandBy(200.f));
+		}
+	}), 1.5f, false);
 }

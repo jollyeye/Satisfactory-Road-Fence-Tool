@@ -246,15 +246,21 @@ public:
 	 */
 	/** Server: banked roads and intersections near Piece (within a bank's reach) measure again shortly. */
 	static void NudgeSlopeNeighbours(AActor* Piece);
+	/**
+	 * Server: the game checks the vehicle paths over Piece again a moment later. Rebuilding the mesh takes its collision
+	 * away until it is cooked again; paths checked in between were stored as "no floor" (red) and stayed so.
+	 */
+	static void RevalidateVehiclePathsSoon(AActor* Piece);
 	static float MeasureBankAt(UWorld* World, const FVector& Edge, const FVector& Out, const AActor* Self, const TArray<const AActor*>& Pass);
 	/** The banks' mesh in actor space for measured samples (straight runs merged, nothing where there is no bank). */
-	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const;
+	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out, bool bBanksOnly = false) const;
 	/**
 	 * Same, on the road mesh's own cross-sections (Frames, actor space): the banks start on the road's edge exactly.
 	 * At an end with a bank the cap closes the whole embankment (road and banks, down to the feet; the road's own
 	 * cap is left out there: SlopeCapAt).
 	 */
-	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out) const;
+	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, const TArray<FRMFrame>& Frames, FRMMesh& Out,
+		bool bBanksOnly = false) const;
 	/** Whether this end (0 start, 1 end) has a bank on either side: the embankment cap replaces the road's. */
 	bool SlopeCapAt(int32 End) const;
 	/** Bank drop (cm) at a distance along, from samples (linear between them). */
