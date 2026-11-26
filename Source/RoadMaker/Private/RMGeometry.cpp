@@ -1246,6 +1246,42 @@ RMGeometry::FRMSideUV RMGeometry::MakeSideUV(bool bCircuit, float LengthCm)
 	return L;
 }
 
+void RMGeometry::UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last)
+{
+	auto Crossing = [](const FVector& A, const FVector& B, const FVector& C, const FVector& D, float& OutT)
+	{
+		const FVector2D R(B - A), S(D - C), AC(C - A);
+		const float Den = R.X * S.Y - R.Y * S.X;
+		if (FMath::Abs(Den) < 1e-6f)
+		{
+			return false;
+		}
+		const float T = (AC.X * S.Y - AC.Y * S.X) / Den;
+		const float U = (AC.X * R.Y - AC.Y * R.X) / Den;
+		OutT = T;
+		return T > 0.f && T < 1.f && U > 0.f && U < 1.f;
+	};
+	Last = FMath::Min(Last, Feet.Num() - 1);
+	for (int32 I = FMath::Max(First, 0); I + 2 <= Last; ++I)
+	{
+		// The farthest later foot segment this one crosses: everything between is the loop.
+		for (int32 J = Last - 1; J >= I + 2; --J)
+		{
+			float T = 0.f;
+			if (Crossing(Feet[I], Feet[I + 1], Feet[J], Feet[J + 1], T))
+			{
+				const FVector X = FMath::Lerp(Feet[I], Feet[I + 1], T);
+				for (int32 K = I + 1; K <= J; ++K)
+				{
+					Feet[K] = X;
+				}
+				I = J - 1;
+				break;
+			}
+		}
+	}
+}
+
 void RMGeometry::PadSideUV(FRMMesh& Mesh)
 {
 	Mesh.MarkUV1.SetNumZeroed(Mesh.Vertices.Num());

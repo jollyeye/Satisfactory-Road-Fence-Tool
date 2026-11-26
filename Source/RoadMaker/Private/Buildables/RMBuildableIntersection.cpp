@@ -486,6 +486,22 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 	const int32 FirstTriangle = Out.Triangles.Num();
 	auto DropOf = [&](int32 I) { return FMath::Max(0.f, float(Samples[I].Y)); };
 	auto Has = [&](int32 I) { return DropOf(I) > 0.5f; };
+	// Feet, untangled run by run (inside corners: the curb fillets between two roads bend towards the banks).
+	TArray<FVector> Feet;
+	for (int32 I = 0; I < Points.Num(); ++I)
+	{
+		Feet.Add(Points[I].Pos + Points[I].Out * (Run * DropOf(I)) - Up * DropOf(I));
+	}
+	for (int32 I = 0; I < Points.Num();)
+	{
+		int32 J = I;
+		while (J + 1 < Points.Num() && Points[J + 1].Run == Points[I].Run)
+		{
+			++J;
+		}
+		RMGeometry::UntangleFeet(Feet, I, J);
+		I = J + 1;
+	}
 	TArray<int32> VE, VF;
 	for (int32 I = 0; I < Points.Num(); ++I)
 	{
@@ -495,7 +511,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		const FVector Tangent = FVector::CrossProduct(Normal, P.Out).GetSafeNormal();
 		VE.Add(Out.AddVertex(P.Pos, Normal, FVector2D(P.S / 400.f, 0.f), Tangent));
 		RMGeometry::AddSideUV(Out, Layout, 0.f, P.S / 100.f);
-		VF.Add(Out.AddVertex(P.Pos + P.Out * (Run * D) - Up * D, Normal, FVector2D(P.S / 400.f, D * SlopeLen / 400.f), Tangent));
+		VF.Add(Out.AddVertex(Feet[I], Normal, FVector2D(P.S / 400.f, D * SlopeLen / 400.f), Tangent));
 		RMGeometry::AddSideUV(Out, Layout, D * SlopeLen / 100.f, P.S / 100.f);
 	}
 	if (OutCoveredEdges)
@@ -578,7 +594,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		TArray<FVector> Corners3D = { CA, CB };
 		if (DB > 0.5f && IB != INDEX_NONE)
 		{
-			Corners3D.Add(CB + Points[IB].Out * (Run * DB) - Up * DB);
+			Corners3D.Add(Feet[IB]);
 		}
 		if (DB < mHeight)
 		{
@@ -590,7 +606,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		}
 		if (DA > 0.5f && IA != INDEX_NONE)
 		{
-			Corners3D.Add(CA + Points[IA].Out * (Run * DA) - Up * DA);
+			Corners3D.Add(Feet[IA]);
 		}
 		TArray<FVector2D> Profile;
 		for (const FVector& C : Corners3D)

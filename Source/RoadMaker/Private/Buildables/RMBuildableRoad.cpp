@@ -1046,6 +1046,19 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			P.Foot = P.Edge + P.Out * (SlopeRun * P.Drop) - FVector::UpVector * P.Drop;
 			P.Normal = (P.Out + FVector::UpVector * SlopeRun).GetSafeNormal(); // square to the bank, up and out
 		}
+		// The inner side of a tight curve: feet that would cross are pulled together (a valley line, no bow tie).
+		{
+			TArray<FVector> Feet;
+			for (const FPt& P : Pts)
+			{
+				Feet.Add(P.Foot);
+			}
+			RMGeometry::UntangleFeet(Feet, 0, Feet.Num() - 1);
+			for (int32 I = 0; I < Pts.Num(); ++I)
+			{
+				Pts[I].Foot = Feet[I];
+			}
+		}
 		auto Has = [&](int32 I) { return Pts[I].Drop > 0.5f; };
 		// Optional points kept where the foot bends (10 cm: the foot is 30 cm into the ground) or a bank starts / ends.
 		TArray<int32> Kept = { 0 };

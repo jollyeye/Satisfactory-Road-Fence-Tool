@@ -109,6 +109,10 @@ time, nothing is stored.
     Now a run's end point goes out along the mouth's line (the joined road's sideways direction at its end), so the two
     banks meet flush; and each mouth next to a bank gets a trapezoid cap like a road's (slab end face widened to the
     banks' feet; the slab's own mouth face left out there).
+  - Tested 2026-11-26: flush now (the road's feet went along a sloped road; now straight down everywhere; `SlopeVersion`
+    in the keys re-measures saved banks). Next: at inside corners (curb fillets) the feet crossed into a bow tie; now
+    feet that would cross are pulled onto the crossing (`RMGeometry::UntangleFeet`, also on roads' tight inner curves):
+    the banks meet along a valley line.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
