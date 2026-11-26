@@ -144,6 +144,7 @@ void ARMBuildableRoad::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMBuildableRoad, mMarkings);
 	DOREPLIFETIME(ARMBuildableRoad, mSideSlopes);
+	DOREPLIFETIME(ARMBuildableRoad, mSlopeSides);
 	DOREPLIFETIME(ARMBuildableRoad, mSlopeLeft);
 	DOREPLIFETIME(ARMBuildableRoad, mSlopeRight);
 }
@@ -631,6 +632,7 @@ void ARMBuildableRoad::CopyCutSettingsTo(ARMBuildableSpline* New) const
 		Road->SetMarkings(mMarkings);
 		Road->SetLook(mLook);
 		Road->mSideSlopes = mSideSlopes; // measured for its own shape when it begins play
+		Road->mSlopeSides = mSlopeSides;
 	}
 }
 
@@ -693,10 +695,12 @@ void ARMBuildableRoad::RequestSlopeMeasure()
 			return;
 		}
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
+		MaskSlopeSides(mSlopeLeft, mSlopeRight, GetSlopeSides());
 		mSlopeKey = SlopeShapeKey();
 		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
 		{
 			// Reshaped or copied where the ground is too far below: the banks go (no half banks).
+			mSlopeSides = 0;
 			mSideSlopes = false;
 			mSlopeLeft.Reset();
 			mSlopeRight.Reset();
@@ -707,33 +711,55 @@ void ARMBuildableRoad::RequestSlopeMeasure()
 	}));
 }
 
-void ARMBuildableRoad::SetSideSlopes(bool bOn)
+void ARMBuildableRoad::MaskSlopeSides(TArray<FVector2D>& Left, TArray<FVector2D>& Right, uint8 Sides)
 {
-	if (!HasAuthority())
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		if (!(Sides & (1 << Side)))
+		{
+			for (FVector2D& S : Side == 0 ? Left : Right)
+			{
+				S.Y = 0.;
+			}
+		}
+	}
+}
+
+void ARMBuildableRoad::SetSlopeSide(int32 Side, bool bOn)
+{
+	if (!HasAuthority() || Side < 0 || Side > 1)
 	{
 		return;
 	}
-	mSideSlopes = bOn;
-	if (bOn)
+	uint8 Sides = GetSlopeSides();
+	Sides = bOn ? (Sides | (1 << Side)) : (Sides & ~(1 << Side));
+	if (Sides != 0)
 	{
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
+		MaskSlopeSides(mSlopeLeft, mSlopeRight, Sides);
 		mSlopeKey = SlopeShapeKey();
 		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
 		{
-			// The ground is too far below somewhere: no banks at all rather than half (the tool refuses it first).
-			mSideSlopes = false;
-			mSlopeLeft.Reset();
-			mSlopeRight.Reset();
+			// The ground is too far below somewhere on this side: no bank there at all rather than half (the tool
+			// refuses it first).
+			Sides &= ~(1 << Side);
+			MaskSlopeSides(mSlopeLeft, mSlopeRight, Sides);
+			if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
+			{
+				Sides = 0;
+			}
 		}
 	}
-	else
+	mSlopeSides = Sides;
+	mSideSlopes = Sides != 0;
+	if (!mSideSlopes)
 	{
 		mSlopeLeft.Reset();
 		mSlopeRight.Reset();
 	}
 	RebuildMesh();
 	ForceNetUpdate();
-	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes %s"), *GetName(), bOn ? TEXT("on") : TEXT("off"));
+	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes, sides %d"), *GetName(), int32(Sides));
 }
 
 namespace RMSideSlopes
@@ -817,37 +843,6 @@ namespace RMSideSlopes
 		return true;
 	}
 
-	/**
-	 * Whether a road hit at Point runs side by side with the bank's edge (Edge, going out along Out): about parallel
-	 * (within 5 degrees), level with the edge (50 cm) and its slab right at the edge (60 cm, seen from above). Only such a road stops a bank, and
-	 * only found by the check straight down beside the edge; down the bank line every road is passed through.
-	 */
-	bool IsParallelNeighbour(const ARMBuildableRoad* Other, const FVector& Point, const FVector& Edge, const FVector& Out)
-	{
-		// Right at the edge seen from above (not "anywhere down the bank line": a parallel road a few metres off and lower
-		// is ignored, the bank goes on past it).
-		// Snapped side by side: level with this edge too (a lower or higher road passing close is not).
-		if (FVector::Dist2D(Point, Edge) > 60.f || FMath::Abs(Point.Z - Edge.Z) > 50.f)
-		{
-			return false;
-		}
-		TArray<FRMFrame> Frames;
-		Other->GetWorldFrames(Frames, 200.f);
-		const FRMFrame* Best = nullptr;
-		float BestDist = TNumericLimits<float>::Max();
-		for (const FRMFrame& F : Frames)
-		{
-			const float D = FVector::DistSquared(F.Pos, Point);
-			if (D < BestDist)
-			{
-				BestDist = D;
-				Best = &F;
-			}
-		}
-		const FVector Fwd = Best ? FVector(Best->Fwd.X, Best->Fwd.Y, 0.f).GetSafeNormal() : FVector::ZeroVector;
-		return !Fwd.IsNearlyZero() && FMath::Abs(FVector::DotProduct(Fwd, Out)) < 0.09f; // within 5 degrees of along the edge
-	}
-
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough,
 		const FVector& Edge, const FVector& Out, bool bNeighbours)
 	{
@@ -883,19 +878,13 @@ namespace RMSideSlopes
 						Mesh->GetMaterialFromCollisionFaceIndex(Hit.FaceIndex, Section);
 					}
 				}
-				const ARMBuildableRoad* OtherRoad = Cast<ARMBuildableRoad>(Actor);
-				const bool bBank = Section == (OtherRoad ? 2 : 3);
+				const bool bBank = Section == (Cast<ARMBuildableRoad>(Actor) ? 2 : 3);
 				OutDist = Hit.Distance;
 				if (bBank)
 				{
 					return EHit::Ground; // another piece's bank: this one runs into it
 				}
-				if (bNeighbours && OtherRoad && IsParallelNeighbour(OtherRoad, Hit.ImpactPoint, Edge, Out))
-				{
-					UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: %s side by side, no bank at %s"), *OtherRoad->GetName(), *Edge.ToCompactString());
-					return EHit::Neighbour; // a road side by side with this edge: no bank there
-				}
-				continue; // other roads and intersections (at an angle, crossing, further off): ignored (asked 2026-11-26)
+continue; // other roads and intersections are ignored: the player picks the sides with banks (asked 2026-11-26)
 			}
 			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor) || !IsGround(Actor, Hit.GetComponent()))
 			{

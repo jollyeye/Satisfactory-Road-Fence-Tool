@@ -34,6 +34,7 @@ void ARMRoadSlopeHologram::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ARMRoadSlopeHologram, mTarget);
 	DOREPLIFETIME(ARMRoadSlopeHologram, mTargetX);
+	DOREPLIFETIME(ARMRoadSlopeHologram, mSide);
 }
 
 bool ARMRoadSlopeHologram::IsValidHitResult(const FHitResult& InHit) const
@@ -53,7 +54,25 @@ void ARMRoadSlopeHologram::SetHologramLocationAndRotation(const FHitResult& InHi
 	AActor* Target = mTarget ? static_cast<AActor*>(mTarget) : static_cast<AActor*>(mTargetX);
 	SetActorLocation(Target ? Target->GetActorLocation() : FVector(hitResult.Location));
 	SetActorRotation(FRotator::ZeroRotator);
-	if (Target && !TargetHasSlopes())
+	// Road: the side aimed at (the hit seen across the road at its nearest point).
+	if (mTarget)
+	{
+		TArray<FRMFrame> Frames;
+		mTarget->GetWorldFrames(Frames, 200.f);
+		const FRMFrame* Best = nullptr;
+		float BestDist = TNumericLimits<float>::Max();
+		for (const FRMFrame& F : Frames)
+		{
+			const float D = FVector::DistSquared(F.Pos, hitResult.Location);
+			if (D < BestDist)
+			{
+				BestDist = D;
+				Best = &F;
+			}
+		}
+		mSide = Best && FVector::DotProduct(FVector(hitResult.Location) - Best->Pos, Best->Right) > 0.f ? 1 : 0;
+	}
+	if (Target)
 	{
 		const uint32 Key = mTarget ? mTarget->SlopeShapeKey() : mTargetX->SlopeShapeKey();
 		if (mMeasuredFor.Get() != Target || mMeasuredKey != Key)
@@ -76,7 +95,8 @@ void ARMRoadSlopeHologram::SetHologramLocationAndRotation(const FHitResult& InHi
 
 bool ARMRoadSlopeHologram::TargetHasSlopes() const
 {
-	return mTarget ? mTarget->HasSideSlopes() : (mTargetX && mTargetX->HasSideSlopes());
+	// Road: the aimed side.
+	return mTarget ? (mTarget->GetSlopeSides() & (1 << mSide)) != 0 : (mTargetX && mTargetX->HasSideSlopes());
 }
 
 void ARMRoadSlopeHologram::CheckValidPlacement()
@@ -86,7 +106,8 @@ void ARMRoadSlopeHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_AimAtRoad::StaticClass());
 	}
-	else if (!TargetHasSlopes() && ARMBuildableRoad::SlopeTooDeep(mMeasuredLeft, mMeasuredRight))
+	else if (!TargetHasSlopes() && ARMBuildableRoad::SlopeTooDeep(mTarget && mSide == 1 ? TArray<FVector2D>() : mMeasuredLeft,
+		mTarget && mSide == 0 ? TArray<FVector2D>() : mMeasuredRight))
 	{
 		AddConstructDisqualifier(URMCD_SlopeTooDeep::StaticClass()); // no half banks
 	}
@@ -101,7 +122,7 @@ AActor* ARMRoadSlopeHologram::Construct(TArray<AActor*>& out_children, FNetConst
 	ARMBuildableIntersection* Junction = mTargetX;
 	if (IsValid(Road) && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed())
 	{
-		Road->SetSideSlopes(!Road->HasSideSlopes());
+		Road->SetSlopeSide(mSide, (Road->GetSlopeSides() & (1 << mSide)) == 0);
 		Built = Road;
 	}
 	else if (IsValid(Junction) && !Junction->GetIsDismantled() && !Junction->IsActorBeingDestroyed())
@@ -133,16 +154,26 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	const bool bRemove = TargetHasSlopes();
 	FRMMesh Banks;
+	// Road: only the aimed side (the other side's samples left out).
+	TArray<FVector2D> PreviewLeft, PreviewRight;
 	if (mTarget)
 	{
-		mTarget->BuildSlopeMesh(bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft, bRemove ? mTarget->GetSlopeRight() : mMeasuredRight, Banks);
+		const TArray<FVector2D>& L = bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft;
+		const TArray<FVector2D>& R = bRemove ? mTarget->GetSlopeRight() : mMeasuredRight;
+		(mSide == 0 ? PreviewLeft : PreviewRight) = mSide == 0 ? L : R;
+		mTarget->BuildSlopeMesh(PreviewLeft, PreviewRight, Banks);
 	}
 	else
 	{
+		PreviewLeft = mMeasuredLeft;
 		mTargetX->BuildSlopeMesh(bRemove ? mTargetX->GetSlopeSamples() : mMeasuredLeft, Banks);
 	}
-	const bool bTooDeep = !bRemove && ARMBuildableRoad::SlopeTooDeep(mMeasuredLeft, mMeasuredRight);
-	if (bRemove)
+	const bool bTooDeep = !bRemove && ARMBuildableRoad::SlopeTooDeep(PreviewLeft, PreviewRight);
+	if (bRemove && mTarget)
+	{
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeRemoveSideHint", "Side Slopes: click to remove the bank on this side (red)"));
+	}
+	else if (bRemove)
 	{
 		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeRemoveHint", "Side Slopes: click to remove the banks"));
 	}
@@ -153,6 +184,10 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 	else if (Banks.IsEmpty())
 	{
 		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeNoneHint", "Side Slopes: no banks needed here (the ground is level with it). Click to turn them on anyway"));
+	}
+	else if (mTarget)
+	{
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeAddSideHint", "Side Slopes: click to add a bank on this side, down to the ground (cyan)"));
 	}
 	else
 	{
@@ -207,7 +242,7 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 		const float H = mTarget->GetRoadWidth() * 0.5f;
 		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
 		{
-			for (const FVector2D& S : SideIndex == 0 ? mMeasuredLeft : mMeasuredRight)
+			for (const FVector2D& S : SideIndex == 0 ? PreviewLeft : PreviewRight)
 			{
 				FRMFrame F;
 				if (S.Y < 0.f && mTarget->GetFrameAt(float(S.X), F))

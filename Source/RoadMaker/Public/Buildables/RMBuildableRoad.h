@@ -219,10 +219,14 @@ public:
 	// Measured once (server) when switched on or when the piece is made, and saved; the mesh is built from that.
 
 	bool HasSideSlopes() const { return mSideSlopes; }
+	/** Sides with a bank: bit 0 left, bit 1 right (banks from before the sides could be chosen: both). */
+	uint8 GetSlopeSides() const { return mSideSlopes ? (mSlopeSides != 0 ? mSlopeSides : 3) : 0; }
+	/** Server: one side's bank on or off (Side 0 left, 1 right); measured now, refused when that side is too deep. */
+	void SetSlopeSide(int32 Side, bool bOn);
+	/** Samples of the sides that are off made flat (no bank, not too deep). */
+	static void MaskSlopeSides(TArray<FVector2D>& Left, TArray<FVector2D>& Right, uint8 Sides);
 	const TArray<FVector2D>& GetSlopeLeft() const { return mSlopeLeft; }
 	const TArray<FVector2D>& GetSlopeRight() const { return mSlopeRight; }
-	/** Server: switches the banks on (measured now) or off, and rebuilds the mesh. */
-	void SetSideSlopes(bool bOn);
 	/** The road's shape and place, for knowing when its banks must be measured again. */
 	uint32 SlopeShapeKey() const;
 	/** Server: measure the banks again after Delay s (a piece was built or reshaped next to it). */
@@ -257,7 +261,7 @@ public:
 	static bool SlopeTooDeep(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right);
 	static constexpr float SlopeTooDeepMark = -1.f;
 	/** Part of every slope key: raised when the measuring changes, so banks saved by older builds are measured again. */
-	static constexpr uint32 SlopeVersion = 11;
+	static constexpr uint32 SlopeVersion = 12;
 	/** Per stretch between two frames and side: true where a bank covers the road's side all along (no side face there). */
 	void SlopeCovered(const TArray<FRMFrame>& Frames, TArray<bool>& OutLeft, TArray<bool>& OutRight) const;
 
@@ -280,6 +284,10 @@ protected:
 	/** Side slopes on, and their measured samples per side (distance along, drop), cm. */
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
 	bool mSideSlopes = false;
+
+	/** Which sides (bit 0 left, bit 1 right; 0 with mSideSlopes = both, from before sides could be chosen). */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
+	uint8 mSlopeSides = 0;
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)
 	TArray<FVector2D> mSlopeLeft;
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Markings)

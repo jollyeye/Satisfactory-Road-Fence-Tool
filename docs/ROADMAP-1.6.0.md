@@ -139,6 +139,12 @@ time, nothing is stored.
     of the edge: `IsParallelNeighbour`; tightened to 5 degrees, 60 cm and level within 50 cm, and only by the check straight down beside the edge, the trace
     down the bank passes every road); intersections and roads at an angle are ignored (the bank goes on through
     them to the ground; asked 2026-11-26 after trying them as ground). Other pieces' banks are still ground.
+  - **Sides chosen by the player** (asked 2026-11-26, replaces the neighbour rules above): the detection of roads beside
+    the edge never worked well (roads at a shallow angle, curving or lower counted as neighbours). Now the tool
+    switches the bank on the aimed side of a road (`SetSlopeSide`, `mSlopeSides` bit 0 left / 1 right, saved and
+    replicated, copied to cut pieces; old banks without sides = both), and every other road and intersection is ignored
+    by the traces (other pieces' banks still count as ground). Too deep is checked per side. Intersections still
+    switch all their curbs at once. Hints `SlopeAddSideHint`, `SlopeRemoveSideHint`; description updated.
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):

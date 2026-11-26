@@ -1,5 +1,5 @@
-// Side Slopes tool (1.6.0, build menu Road Tools > Edit road): turns the banks of a road, walking path or intersection
-// on or off.
+// Side Slopes tool (1.6.0, build menu Road Tools > Edit road): turns the bank on the aimed side of a road or walking
+// path on or off (each side on its own: the player decides; other roads are ignored), or an intersection's banks.
 // Aim at one: a cyan cage shows the banks it would get (from its edges down to the terrain, 1 : 1.5, at most 8 m;
 // none where it meets the ground or another road), a red one the banks it would lose. Click to switch. The banks are
 // part of the road (its concrete, solid), measured once on the server and saved (ARMBuildableRoad::SetSideSlopes).
@@ -42,6 +42,9 @@ protected:
 	ARMBuildableRoad* mTarget = nullptr;
 	UPROPERTY(Replicated, CustomSerialization)
 	ARMBuildableIntersection* mTargetX = nullptr;
+	/** Road: the side aimed at (0 left, 1 right), whose bank the click switches. Sent to the server with the click. */
+	UPROPERTY(Replicated, CustomSerialization)
+	int32 mSide = 0;
 	bool HasTarget() const { return mTarget || mTargetX; }
 	bool TargetHasSlopes() const;
 

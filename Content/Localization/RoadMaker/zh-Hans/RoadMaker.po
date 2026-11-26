@@ -1262,7 +1262,7 @@ msgstr ""
 #. Key:	RoadSlopes.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadSlopes.Desc"
-msgid "Banks a raised road, walking path or intersection down to the terrain on its sides (cement blocks, solid to walk and drive on; 1 : 1.5). Aim at one: the cyan cage shows its banks; click to add them. None where it meets the ground or another road; not possible where the ground is more than 8 m below (red lines). Aim at one with banks (red cage) and click to remove them. Off on new pieces; cut, adjusted and copied roads keep them and are measured again. Free."
+msgid "Banks a raised road, walking path or intersection down to the terrain (cement blocks, solid to walk and drive on; 1 : 1.5). Roads: aim at the side you want, the cyan cage shows its bank; click to add it (each side on its own, other roads are ignored). Intersections: all their curbs at once. None where the ground is level with the edge; not possible where the ground is more than 8 m below (red lines). Aim at a bank (red cage) and click to remove it. Off on new pieces; cut, adjusted and copied roads keep them and are measured again. Free."
 msgstr ""
 
 #. Key:	SlopeTooDeepHint
@@ -1275,4 +1275,16 @@ msgstr ""
 #: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
 msgctxt "RoadMaker,SlopeTooDeep"
 msgid "The ground is more than 8 m below in places (red): no side slopes"
+msgstr ""
+
+#. Key:	SlopeRemoveSideHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeRemoveSideHint"
+msgid "Side Slopes: click to remove the bank on this side (red)"
+msgstr ""
+
+#. Key:	SlopeAddSideHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeAddSideHint"
+msgid "Side Slopes: click to add a bank on this side, down to the ground (cyan)"
 msgstr ""
