@@ -772,9 +772,10 @@ namespace RMSideSlopes
 	}
 
 	/**
-	 * Ground for the banks: the landscape and the map's own static scenery (cliffs, rock formations: engine static
-	 * meshes). Not the game's own objects (resource nodes, wells, geysers, pickups such as Beryl Nuts, creatures: their
-	 * nearest native class is in FactoryGame) nor plants and trees (foliage the chainsaw removes).
+	 * Ground for the banks: everything solid in the world except what the game places on it that is not ground:
+	 * resource nodes / deposits / wells / geysers, pickups (Beryl Nuts...), plants and trees (foliage), creatures,
+	 * vehicles and buildings. Named by class (and their parents), so the map's rocks and cliffs, whatever kind of actor
+	 * they are, stay ground. Each pass-through is logged (Verbose) to find what else should be on the list.
 	 */
 	bool IsGround(const AActor* Actor, const UPrimitiveComponent* Component)
 	{
@@ -782,16 +783,22 @@ namespace RMSideSlopes
 		{
 			return true; // world geometry without an actor
 		}
-		if (IsKindOf(Actor->GetClass(), TEXT("InstancedFoliageActor")) || (Component && IsKindOf(Component->GetClass(), TEXT("FoliageInstancedStaticMeshComponent"))))
+		static const TCHAR* NotGround[] = { TEXT("FGResourceNodeBase"), TEXT("FGResourceNode"), TEXT("FGResourceDeposit"),
+			TEXT("FGItemPickup"), TEXT("FGBuildable"), TEXT("Pawn"), TEXT("InstancedFoliageActor") };
+		for (const TCHAR* Name : NotGround)
 		{
+			if (IsKindOf(Actor->GetClass(), Name))
+			{
+				UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: passing through %s (%s)"), *Actor->GetName(), Name);
+				return false;
+			}
+		}
+		if (Component && IsKindOf(Component->GetClass(), TEXT("FoliageInstancedStaticMeshComponent")))
+		{
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: passing through foliage %s"), *Component->GetName());
 			return false;
 		}
-		const UClass* Native = Actor->GetClass();
-		while (Native && !Native->HasAnyClassFlags(CLASS_Native))
-		{
-			Native = Native->GetSuperClass();
-		}
-		return !(Native && Native->GetOutermost()->GetName() == TEXT("/Script/FactoryGame"));
+		return true;
 	}
 
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough)

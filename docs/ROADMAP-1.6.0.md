@@ -121,6 +121,10 @@ time, nothing is stored.
     the landscape and the map's static scenery (cliffs, rock formations); passed through: the game's own objects (nearest
     native class in FactoryGame: resource nodes, wells, geysers, pickups, creatures, buildings) and foliage (plants,
     trees). Trees and pickups standing where a bank goes poke through it. `SlopeVersion` 4.
+  - Tested: a big rock mesh the road sat on was passed through (its nearest native class is in FactoryGame). Now a
+    list of what is not ground instead (by class name and parents: FGResourceNodeBase / FGResourceNode /
+    FGResourceDeposit, FGItemPickup, FGBuildable, Pawn, InstancedFoliageActor, FoliageInstancedStaticMeshComponent);
+    everything else is ground. Pass-throughs logged (Verbose). `SlopeVersion` 5.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
