@@ -16,6 +16,8 @@
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "Buildables/RMBuildableIntersection.h"
+#include "RMRoadUtils.h"
+#include "EngineUtils.h"
 
 namespace
 {
@@ -735,7 +737,7 @@ namespace RMSideSlopes
 	/** What a bank trace stops at: the ground (true), or a road / intersection beside it (no bank: false). */
 	enum class EHit { None, Ground, Neighbour };
 
-	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist)
+	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough)
 	{
 		TArray<FHitResult> Hits;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMSideSlope), true, Self);
@@ -751,7 +753,7 @@ namespace RMSideSlopes
 			{
 				continue;
 			}
-			if (!Actor || Actor->IsActorBeingDestroyed())
+			if (!Actor || Actor->IsActorBeingDestroyed() || PassThrough.Contains(Actor))
 			{
 				continue;
 			}
@@ -785,11 +787,39 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 	const float Total = Frames.Last().Dist;
 	const int32 Steps = FMath::Max(1, FMath::CeilToInt(Total / SlopeSampleStep));
 	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun); // along the bank per cm of drop
+	// Roads joined to each end (end to end): near that end the traces pass through them (the trace at the joint itself
+	// would meet the next road's end and leave the bank out there).
+	TArray<const AActor*> Joined[2];
+	for (int32 End = 0; End < 2; ++End)
+	{
+		FVector EndPos, EndOut;
+		GetEndWorld(End, EndPos, EndOut);
+		for (TActorIterator<ARMBuildableRoad> It(World); It; ++It)
+		{
+			const ARMBuildableRoad* Other = *It;
+			if (Other == this || Other->IsActorBeingDestroyed() || FVector::Dist(Other->GetActorLocation(), EndPos) > Other->GetLength() + 3000.f)
+			{
+				continue;
+			}
+			for (int32 OtherEnd = 0; OtherEnd < 2; ++OtherEnd)
+			{
+				FVector P, O;
+				Other->GetEndWorld(OtherEnd, P, O);
+				if (FVector::Dist(P, EndPos) <= RMRoadUtils::JoinTolerance)
+				{
+					Joined[End].AddUnique(Other);
+				}
+			}
+		}
+	}
+	const TArray<const AActor*> NoPass;
+	const float JoinReach = 300.f; // how far from the end the joined roads are passed through
 	int32 Banks = 0;
 	for (int32 K = 0; K <= Steps; ++K)
 	{
 		const float D = Total * K / Steps;
 		const FRMFrame F = RMSideSlopes::FrameAtDist(Frames, D);
+		const TArray<const AActor*>& Pass = D <= JoinReach ? Joined[0] : (D >= Total - JoinReach ? Joined[1] : NoPass);
 		for (const float Side : { -1.f, 1.f })
 		{
 			const FVector Out = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal() * Side;
@@ -797,13 +827,13 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 			float Drop = 0.f;
 			float Dist = 0.f;
 			// The ground at or above the edge (the road runs in a dip or a cutting): no bank.
-			const RMSideSlopes::EHit Above = RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), this, Dist);
+			const RMSideSlopes::EHit Above = RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), this, Dist, Pass);
 			if (Above == RMSideSlopes::EHit::None)
 			{
 				// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
 				const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
 				const FVector Start = Edge + Out * 2.f;
-				if (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist) == RMSideSlopes::EHit::Ground)
+				if (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist, Pass) == RMSideSlopes::EHit::Ground)
 				{
 					Drop = FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
 					++Banks;
