@@ -71,15 +71,17 @@ void ARMRoadSlopeHologram::CheckValidPlacement()
 
 AActor* ARMRoadSlopeHologram::Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID)
 {
-	// The switch itself (server): measured there, saved with the road and sent to everyone.
-	if (IsValid(mTarget) && !mTarget->GetIsDismantled() && !mTarget->IsActorBeingDestroyed())
+	// The switch itself (server): measured there, saved with the road and sent to everyone. The road is handed back
+	// as "what was built": the build gun reads the returned actor and crashes on none.
+	ARMBuildableRoad* Road = mTarget;
+	if (IsValid(Road) && !Road->GetIsDismantled() && !Road->IsActorBeingDestroyed())
 	{
-		mTarget->SetSideSlopes(!mTarget->HasSideSlopes());
+		Road->SetSideSlopes(!Road->HasSideSlopes());
 	}
 	mTarget = nullptr;
 	mMeasuredFor = nullptr;
 	mOverlayMesh->ClearAllMeshSections();
-	return nullptr;
+	return Road;
 }
 
 void ARMRoadSlopeHologram::EndPlay(const EEndPlayReason::Type EndPlayReason)
