@@ -71,7 +71,7 @@ void ARMBuildableRoad::RebuildMesh()
 	PrepareChunks();
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body,
-		!SlopeCapAt(0), !SlopeCapAt(1));
+		!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() != 2);
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
@@ -94,7 +94,7 @@ void ARMBuildableRoad::RebuildMesh()
 	{
 		FRMMesh FarTop, FarBody;
 		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody,
-			!SlopeCapAt(0), !SlopeCapAt(1));
+			!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() != 2);
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
 		if (!Slopes.IsEmpty())
@@ -923,7 +923,7 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			{
 				if (I > 0 && Samples[S].X > Frames[I - 1].Dist + 5.f)
 				{
-					Pts.Add({ Samples[S].X, SlopeDropAt(Samples, Samples[S].X), false });
+					Pts.Add({ float(Samples[S].X), SlopeDropAt(Samples, float(Samples[S].X)), false });
 				}
 				++S;
 			}

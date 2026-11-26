@@ -1144,7 +1144,8 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // ---------------------------------------------------------------------------------------------
 
 void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap)
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap,
+	bool bSidesAlong)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
@@ -1178,8 +1179,25 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	Top.WrapUV1X(TopBase, TopFirstTriangle, 4.f, true, true);
 
 	// Concrete: right side, bottom, left side.
-	ExtrudeProfile(Frames, { FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height), FVector2D(-H, 0.f) },
-		false, Centroid, UVScale, Body);
+	if (bSidesAlong)
+	{
+		// Each face on its own, its texture along the road and down from the top (as the side slopes): U and V swapped.
+		for (const TArray<FVector2D>& Face : { TArray<FVector2D>{ FVector2D(H, 0.f), FVector2D(H, -Height) },
+			TArray<FVector2D>{ FVector2D(H, -Height), FVector2D(-H, -Height) }, TArray<FVector2D>{ FVector2D(-H, 0.f), FVector2D(-H, -Height) } })
+		{
+			const int32 First = Body.Vertices.Num();
+			ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
+			for (int32 V = First; V < Body.Vertices.Num(); ++V)
+			{
+				Body.UVs[V] = FVector2D(Body.UVs[V].Y, Body.UVs[V].X);
+			}
+		}
+	}
+	else
+	{
+		ExtrudeProfile(Frames, { FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height), FVector2D(-H, 0.f) },
+			false, Centroid, UVScale, Body);
+	}
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };
 	// Ends with side slopes: the road's cap is part of the bank's wider one (ARMBuildableRoad::BuildSlopeMesh).

@@ -224,10 +224,13 @@ namespace RMGeometry
 
 	/**
 	 * Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre.
+	 * bSidesAlong: the sides' texture laid as on the side slopes (U = metres along / 4, V = down from the top / 4)
+	 * instead of turned 90 degrees (the cyberpunk body keeps the old layout).
 	 * Markings and EdgeLineInset (cm from the road edge, leaves room for fences) go into the top's UV1-3.
 	 */
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true);
+		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true,
+		bool bSidesAlong = true);
 
 	// Fence builders all use one convention: the road is on the +Right side of the frames.
 	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.
