@@ -225,6 +225,8 @@ public:
 	void SetSideSlopes(bool bOn);
 	/** The road's shape and place, for knowing when its banks must be measured again. */
 	uint32 SlopeShapeKey() const;
+	/** Server: measure the banks again after Delay s (a piece was built or reshaped next to it). */
+	void RemeasureSlopes(float Delay);
 	/**
 	 * Measures the banks as the road stands now (world traces): every SlopeSampleStep cm along each edge,
 	 * (distance along cm, drop cm); 0 = no bank there (ground at or above the edge, a road / intersection beside it,
@@ -236,6 +238,8 @@ public:
 	 * Returns the drop (cm, > 0), 0 = no bank (ground at or above the edge, or a road / intersection in the way), or
 	 * SlopeTooDeepMark (no ground within SlopeMaxDrop). Traces ignore Self and pass through Pass.
 	 */
+	/** Server: banked roads and intersections near Piece (within a bank's reach) measure again shortly. */
+	static void NudgeSlopeNeighbours(AActor* Piece);
 	static float MeasureBankAt(UWorld* World, const FVector& Edge, const FVector& Out, const AActor* Self, const TArray<const AActor*>& Pass);
 	/** The banks' mesh in actor space for measured samples (straight runs merged, nothing where there is no bank). */
 	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const;
@@ -284,6 +288,10 @@ protected:
 	 *  measures again, a tick later on the server (once the pieces it replaces are gone). */
 	UPROPERTY(SaveGame)
 	uint32 mSlopeKey = 0;
+	/** The shape neighbours were last told about (a new / reshaped / copied piece tells banked pieces nearby once). */
+	UPROPERTY(SaveGame)
+	uint32 mSlopeNeighbourKey = 0;
+	FTimerHandle mSlopeRemeasureTimer;
 	void RequestSlopeMeasure();
 	bool mSlopeMeasureQueued = false;
 

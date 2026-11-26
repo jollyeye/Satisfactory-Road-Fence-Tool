@@ -50,6 +50,13 @@ void ARMBuildableIntersection::RebuildMesh()
 	ClearFarMesh();
 	// Side slopes first: their curb stretches leave out the slab's side there.
 	RequestSlopeMeasure();
+	if (HasAuthority() && !IsActorBeingDestroyed() && SlopeShapeKey() != mSlopeNeighbourKey)
+	{
+		// New, reshaped or copied: banked pieces next to it measure again (their bank on this side goes). Not on
+		// loading (the key is saved) nor on dismantling (a removed neighbour leaves their side as it is).
+		mSlopeNeighbourKey = SlopeShapeKey();
+		ARMBuildableRoad::NudgeSlopeNeighbours(this);
+	}
 	FRMMesh Slopes;
 	TArray<bool> Covered;
 	if (mSideSlopes && mSlopeSamples.Num() > 0)
@@ -690,4 +697,17 @@ void ARMBuildableIntersection::SetSideSlopes(bool bOn)
 	}
 	RebuildMesh();
 	ForceNetUpdate();
+}
+
+void ARMBuildableIntersection::RemeasureSlopes(float Delay)
+{
+	if (!HasAuthority() || !mSideSlopes)
+	{
+		return;
+	}
+	GetWorldTimerManager().SetTimer(mSlopeRemeasureTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		mSlopeKey = 0; // measured again on the next tick
+		RequestSlopeMeasure();
+	}), FMath::Max(Delay, 0.01f), false);
 }

@@ -83,6 +83,13 @@ void ARMBuildableRoad::RebuildMesh()
 	// Side slopes (1.6.0): the banks in the body's concrete, solid.
 	FRMMesh Slopes;
 	RequestSlopeMeasure();
+	if (HasAuthority() && !IsActorBeingDestroyed() && SlopeShapeKey() != mSlopeNeighbourKey)
+	{
+		// New, reshaped or copied: banked pieces next to it measure again (their bank on this side goes). Not on
+		// loading (the key is saved) nor on dismantling (a removed neighbour leaves their side as it is).
+		mSlopeNeighbourKey = SlopeShapeKey();
+		ARMBuildableRoad::NudgeSlopeNeighbours(this);
+	}
 	if (mSideSlopes)
 	{
 		BuildSlopeMesh(mSlopeLeft, mSlopeRight, Frames, Slopes);
@@ -1236,4 +1243,50 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		RMGeometry::SideUVsFromCap(Out, Layout, CapFirst, mUVScale);
 	}
 	RMGeometry::WrapSideUV(Out, Layout, OutFirst, OutFirstTriangle);
+}
+
+void ARMBuildableRoad::RemeasureSlopes(float Delay)
+{
+	if (!HasAuthority() || !mSideSlopes)
+	{
+		return;
+	}
+	GetWorldTimerManager().SetTimer(mSlopeRemeasureTimer, FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		mSlopeKey = 0; // measured again on the next tick
+		RequestSlopeMeasure();
+	}), FMath::Max(Delay, 0.01f), false);
+}
+
+void ARMBuildableRoad::NudgeSlopeNeighbours(AActor* Piece)
+{
+	UWorld* World = Piece ? Piece->GetWorld() : nullptr;
+	if (!World)
+	{
+		return;
+	}
+	// Within a bank's reach (8 m down, 12 m out) of the piece's bounds. Half a second later: the new piece's collision
+	// is cooked by then.
+	const FBox Area = Piece->GetComponentsBoundingBox(true).ExpandBy(SlopeRun * SlopeMaxDrop + 100.f);
+	int32 Nudged = 0;
+	for (TActorIterator<ARMBuildableRoad> It(World); It; ++It)
+	{
+		if (*It != Piece && It->HasSideSlopes() && !It->IsActorBeingDestroyed() && Area.Intersect(It->GetComponentsBoundingBox(true)))
+		{
+			It->RemeasureSlopes(0.5f);
+			++Nudged;
+		}
+	}
+	for (TActorIterator<ARMBuildableIntersection> It(World); It; ++It)
+	{
+		if (*It != Piece && It->HasSideSlopes() && !It->IsActorBeingDestroyed() && Area.Intersect(It->GetComponentsBoundingBox(true)))
+		{
+			It->RemeasureSlopes(0.5f);
+			++Nudged;
+		}
+	}
+	if (Nudged > 0)
+	{
+		UE_LOG(LogRoadMaker, Verbose, TEXT("%s: %d banked neighbours measure again"), *Piece->GetName(), Nudged);
+	}
 }

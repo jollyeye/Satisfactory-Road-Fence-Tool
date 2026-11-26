@@ -61,6 +61,8 @@ public:
 	const TArray<FVector2D>& GetSlopeSamples() const { return mSlopeSamples; }
 	/** The intersection's shape and place, for knowing when its banks must be measured again. */
 	uint32 SlopeShapeKey() const;
+	/** Server: measure the banks again after Delay s (a piece was built or reshaped next to it). */
+	void RemeasureSlopes(float Delay);
 
 	/** Same as roads: side lines sit this far in from the curb (cm). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
@@ -99,6 +101,10 @@ protected:
 	TArray<FVector2D> mSlopeSamples;
 	UPROPERTY(SaveGame)
 	uint32 mSlopeKey = 0;
+	/** The shape neighbours were last told about (a new / reshaped / copied piece tells banked pieces nearby once). */
+	UPROPERTY(SaveGame)
+	uint32 mSlopeNeighbourKey = 0;
+	FTimerHandle mSlopeRemeasureTimer;
 	bool mSlopeMeasureQueued = false;
 	void RequestSlopeMeasure();
 

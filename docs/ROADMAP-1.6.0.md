@@ -131,6 +131,10 @@ time, nothing is stored.
     `SlopeVersion` 6.
   - Tested and working 2026-11-26. Decided 2026-11-26: a road whose bank line runs past a rock's edge into more than
     8 m of drop (an upside-down-pyramid rock) stays refused (no half banks); the 16 m wall would not help there.
+  - Neighbours (asked 2026-11-26): a road or intersection built, reshaped or copied next to a banked piece makes it
+    measure again half a second later (`NudgeSlopeNeighbours`, from `RebuildMesh` when the piece's shape key differs
+    from the saved `mSlopeNeighbourKey`: not on loading): its bank on that side goes. Dismantling the new piece leaves
+    the side as it is (decided).
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):
