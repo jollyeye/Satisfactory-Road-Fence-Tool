@@ -823,7 +823,9 @@ namespace RMSideSlopes
 	 */
 	bool IsParallelNeighbour(const ARMBuildableRoad* Other, const FVector& Point, const FVector& Edge, const FVector& Out)
 	{
-		if (FVector::Dist2D(Point, Edge) > 150.f + FMath::Abs(Point.Z - Edge.Z) * ARMBuildableRoad::SlopeRun)
+		// Right at the edge seen from above (not "anywhere down the bank line": a parallel road a few metres off and lower
+		// is ignored, the bank goes on past it).
+		if (FVector::Dist2D(Point, Edge) > 150.f)
 		{
 			return false;
 		}
