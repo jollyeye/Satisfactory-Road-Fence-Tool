@@ -15,6 +15,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Buildables/RMBuildableIntersection.h"
 #include "RMRoadUtils.h"
 #include "EngineUtils.h"
@@ -844,6 +846,21 @@ namespace RMSideSlopes
 				continue; // buildings, vehicles, plants, pickups, resource nodes...: the bank goes on to the ground
 			}
 			OutDist = Hit.Distance;
+			if (UE_LOG_ACTIVE(LogRoadMaker, Verbose))
+			{
+				// What the banks stand on (once per thing): to find things that should be passed through.
+				static TSet<FString> Seen;
+				const UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(Hit.GetComponent());
+				const FString What = FString::Printf(TEXT("%s (%s), component %s (%s), mesh %s"), Actor ? *Actor->GetName() : TEXT("-"),
+					Actor ? *Actor->GetClass()->GetPathName() : TEXT("-"), Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("-"),
+					Hit.GetComponent() ? *Hit.GetComponent()->GetClass()->GetName() : TEXT("-"),
+					SM && SM->GetStaticMesh() ? *SM->GetStaticMesh()->GetPathName() : TEXT("-"));
+				if (!Seen.Contains(What))
+				{
+					Seen.Add(What);
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: ground = %s"), *What);
+				}
+			}
 			return EHit::Ground;
 		}
 		return EHit::None;
