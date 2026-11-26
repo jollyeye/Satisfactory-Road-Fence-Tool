@@ -2040,7 +2040,8 @@ void RMGeometry::BuildFenceWall(const TArray<FRMFrame>& Frames, float UVScale, F
 // ---------------------------------------------------------------------------------------------
 
 bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
-	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth, float GridSpacing, bool bCircuitSides)
+	FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline, TArray<bool>* OutEdgeIsMouth, float GridSpacing, bool bCircuitSides,
+	const TArray<bool>* CoveredEdges)
 {
 	if (Ends.Num() < 2)
 	{
@@ -2299,7 +2300,9 @@ bool RMGeometry::BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height,
 		const FVector A = Ring[K];
 		const FVector B = Ring[(K + 1) % Ring.Num()];
 		const float EdgeLen = FVector::Dist(A, B);
-		if (EdgeLen > 0.5f)
+		// Covered by a side slope all along (ARMBuildableIntersection::BuildSlopeMesh): the bank is the side there.
+		const bool bCovered = CoveredEdges && CoveredEdges->Num() == Ring.Num() && (*CoveredEdges)[K];
+		if (EdgeLen > 0.5f && !bCovered)
 		{
 			const FVector Edge = B - A;
 			const FVector N = (FVector(Edge.Y, -Edge.X, 0.f) * OutSign).GetSafeNormal();

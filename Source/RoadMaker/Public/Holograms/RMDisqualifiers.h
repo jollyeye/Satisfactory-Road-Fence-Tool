@@ -132,7 +132,7 @@ class ROADMAKER_API URMCD_SlopeTooDeep : public UFGConstructDisqualifier
 {
 	GENERATED_BODY()
 public:
-	URMCD_SlopeTooDeep() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "SlopeTooDeep", "The ground is more than 8 m below the road in places (red): no side slopes"); }
+	URMCD_SlopeTooDeep() { mDisqfualifyingText = NSLOCTEXT("RoadMaker", "SlopeTooDeep", "The ground is more than 8 m below in places (red): no side slopes"); }
 };
 
 UCLASS()

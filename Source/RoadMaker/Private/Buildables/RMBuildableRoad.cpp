@@ -794,6 +794,30 @@ namespace RMSideSlopes
 	}
 }
 
+float ARMBuildableRoad::MeasureBankAt(UWorld* World, const FVector& Edge, const FVector& Out, const AActor* Self, const TArray<const AActor*>& Pass)
+{
+	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun); // along the bank per cm of drop
+	float Dist = 0.f;
+	// The ground at or above the edge (the road runs in a dip or a cutting) or a road beside it: no bank.
+	if (RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), Self, Dist, Pass)
+		!= RMSideSlopes::EHit::None)
+	{
+		return 0.f;
+	}
+	// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
+	const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
+	const FVector Start = Edge + Out * 2.f;
+	switch (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, Self, Dist, Pass))
+	{
+	case RMSideSlopes::EHit::Ground:
+		return FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
+	case RMSideSlopes::EHit::None:
+		return SlopeTooDeepMark; // no ground within the limit: no banks at all (no half banks)
+	default:
+		return 0.f;
+	}
+}
+
 void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const
 {
 	OutLeft.Reset();
@@ -807,7 +831,6 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 	}
 	const float Total = Frames.Last().Dist;
 	const int32 Steps = FMath::Max(1, FMath::CeilToInt(Total / SlopeSampleStep));
-	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun); // along the bank per cm of drop
 	// Roads joined to each end (end to end): near that end the traces pass through them (the trace at the joint itself
 	// would meet the next road's end and leave the bank out there).
 	TArray<const AActor*> Joined[2];
@@ -832,6 +855,23 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 				}
 			}
 		}
+		// An intersection this end joins (one of its mouths here): its banks carry on from the road's.
+		for (TActorIterator<ARMBuildableIntersection> It(World); It; ++It)
+		{
+			if (It->IsActorBeingDestroyed() || FVector::Dist(It->GetActorLocation(), EndPos) > 20000.f)
+			{
+				continue;
+			}
+			TArray<FRMRoadEnd> Ends;
+			It->GetWorldEnds(Ends);
+			for (const FRMRoadEnd& E : Ends)
+			{
+				if (FVector::Dist(E.Center, EndPos) <= RMRoadUtils::JoinTolerance)
+				{
+					Joined[End].AddUnique(*It);
+				}
+			}
+		}
 	}
 	const TArray<const AActor*> NoPass;
 	const float JoinReach = 300.f; // how far from the end the joined roads are passed through
@@ -845,26 +885,8 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 		{
 			const FVector Out = FVector(F.Right.X, F.Right.Y, 0.f).GetSafeNormal() * Side;
 			const FVector Edge = F.Pos + F.Right * (GetRoadWidth() * 0.5f * Side);
-			float Drop = 0.f;
-			float Dist = 0.f;
-			// The ground at or above the edge (the road runs in a dip or a cutting): no bank.
-			const RMSideSlopes::EHit Above = RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), this, Dist, Pass);
-			if (Above == RMSideSlopes::EHit::None)
-			{
-				// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
-				const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
-				const FVector Start = Edge + Out * 2.f;
-				const RMSideSlopes::EHit Down = RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist, Pass);
-				if (Down == RMSideSlopes::EHit::Ground)
-				{
-					Drop = FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
-					++Banks;
-				}
-				else if (Down == RMSideSlopes::EHit::None)
-				{
-					Drop = SlopeTooDeepMark; // no ground within the limit: the road cannot have banks (no half banks)
-				}
-			}
+			const float Drop = MeasureBankAt(World, Edge, Out, this, Pass);
+			Banks += Drop > 0.f ? 1 : 0;
 			(Side < 0.f ? OutLeft : OutRight).Add(FVector2D(D, Drop));
 		}
 	}

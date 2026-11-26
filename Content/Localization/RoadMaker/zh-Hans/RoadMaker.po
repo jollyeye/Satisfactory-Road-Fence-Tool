@@ -1232,19 +1232,19 @@ msgstr ""
 #. Key:	SlopeAimHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeAimHint"
-msgid "Side Slopes: aim at a road or walking path"
+msgid "Side Slopes: aim at a road, walking path or intersection"
 msgstr ""
 
 #. Key:	SlopeRemoveHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeRemoveHint"
-msgid "Side Slopes: click to remove this road's banks"
+msgid "Side Slopes: click to remove the banks"
 msgstr ""
 
 #. Key:	SlopeNoneHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeNoneHint"
-msgid "Side Slopes: no banks needed here (the ground is level with the road). Click to turn them on anyway"
+msgid "Side Slopes: no banks needed here (the ground is level with it). Click to turn them on anyway"
 msgstr ""
 
 #. Key:	SlopeAddHint
@@ -1262,17 +1262,17 @@ msgstr ""
 #. Key:	RoadSlopes.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadSlopes.Desc"
-msgid "Banks a raised road or walking path down to the terrain on both sides (concrete, solid to walk and drive on; 1 : 1.5, at most 8 m down). Aim at a road: the cyan cage shows its banks; click to add them. None where the road meets the ground or another road. Aim at a road with banks (red cage) and click to remove them. Off on new roads; cut, adjusted and copied roads keep them and are measured again. Free."
+msgid "Banks a raised road, walking path or intersection down to the terrain on its sides (cement blocks, solid to walk and drive on; 1 : 1.5). Aim at one: the cyan cage shows its banks; click to add them. None where it meets the ground or another road; not possible where the ground is more than 8 m below (red lines). Aim at one with banks (red cage) and click to remove them. Off on new pieces; cut, adjusted and copied roads keep them and are measured again. Free."
 msgstr ""
 
 #. Key:	SlopeTooDeepHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeTooDeepHint"
-msgid "Side Slopes: the ground is more than 8 m below the road where the red lines are: this road cannot have banks"
+msgid "Side Slopes: the ground is more than 8 m below where the red lines are: no banks here"
 msgstr ""
 
 #. Key:	SlopeTooDeep
 #: Source/RoadMaker/Public/Holograms/RMDisqualifiers.h
 msgctxt "RoadMaker,SlopeTooDeep"
-msgid "The ground is more than 8 m below the road in places (red): no side slopes"
+msgid "The ground is more than 8 m below in places (red): no side slopes"
 msgstr ""

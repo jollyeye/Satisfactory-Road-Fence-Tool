@@ -337,7 +337,7 @@ namespace RMGeometry
 	 */
 	ROADMAKER_API bool BuildIntersection(const TArray<FRMRoadEnd>& Ends, float Height, float UVScale, int32 FilletSegments,
 		FRMMesh& Top, FRMMesh& Body, TArray<FVector>* OutOutline = nullptr, TArray<bool>* OutEdgeIsMouth = nullptr,
-		float GridSpacing = 250.f, bool bCircuitSides = false);
+		float GridSpacing = 250.f, bool bCircuitSides = false, const TArray<bool>* CoveredEdges = nullptr);
 
 	/**
 	 * The curved curbs of an intersection: each is the outline run between two neighbouring road

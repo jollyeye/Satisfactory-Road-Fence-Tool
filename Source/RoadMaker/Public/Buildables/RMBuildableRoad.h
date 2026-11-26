@@ -231,6 +231,12 @@ public:
 	 * or no ground within SlopeMaxDrop).
 	 */
 	void MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2D>& OutRight) const;
+	/**
+	 * One bank sample (roads and intersections): from a world edge point going out along the level direction Out.
+	 * Returns the drop (cm, > 0), 0 = no bank (ground at or above the edge, or a road / intersection in the way), or
+	 * SlopeTooDeepMark (no ground within SlopeMaxDrop). Traces ignore Self and pass through Pass.
+	 */
+	static float MeasureBankAt(UWorld* World, const FVector& Edge, const FVector& Out, const AActor* Self, const TArray<const AActor*>& Pass);
 	/** The banks' mesh in actor space for measured samples (straight runs merged, nothing where there is no bank). */
 	void BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const;
 	/**

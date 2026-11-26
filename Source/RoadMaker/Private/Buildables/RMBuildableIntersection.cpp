@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "Materials/MaterialInterface.h"
+#include "RMRoadUtils.h"
+#include "EngineUtils.h"
 
 ARMBuildableIntersection::ARMBuildableIntersection(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -23,6 +25,8 @@ void ARMBuildableIntersection::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	DOREPLIFETIME(ARMBuildableIntersection, mEnds);
 	DOREPLIFETIME(ARMBuildableIntersection, mHeight);
 	DOREPLIFETIME(ARMBuildableIntersection, mSideLines);
+	DOREPLIFETIME(ARMBuildableIntersection, mSideSlopes);
+	DOREPLIFETIME(ARMBuildableIntersection, mSlopeSamples);
 }
 
 void ARMBuildableIntersection::SetEnds(const TArray<FRMRoadEnd>& LocalEnds, float Height)
@@ -44,10 +48,24 @@ void ARMBuildableIntersection::RebuildMesh()
 {
 	mMesh->ClearAllMeshSections();
 	ClearFarMesh();
+	// Side slopes first: their curb stretches leave out the slab's side there.
+	RequestSlopeMeasure();
+	FRMMesh Slopes;
+	TArray<bool> Covered;
+	if (mSideSlopes && mSlopeSamples.Num() > 0)
+	{
+		TArray<FVector> SlopeRing;
+		TArray<bool> SlopeMouth;
+		if (LocalOutline(SlopeRing, SlopeMouth))
+		{
+			BuildSlopeMeshFrom(SlopeRing, SlopeMouth, mSlopeSamples, Slopes, &Covered);
+		}
+	}
 	FRMMesh Top, Body;
 	TArray<FVector> Outline;
 	TArray<bool> IsMouth;
-	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth, 250.f, GetShownLook() == 2))
+	if (!RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Outline, &IsMouth, 250.f, GetShownLook() == 2,
+		Covered.Num() > 0 ? &Covered : nullptr))
 	{
 		UE_LOG(LogRoadMaker, Warning, TEXT("%s: could not rebuild intersection from %d saved ends"), *GetName(), mEnds.Num());
 		return;
@@ -80,6 +98,11 @@ void ARMBuildableIntersection::RebuildMesh()
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyMaterial(0, TopMat);
 	ApplyMaterial(1, BodyMat);
+	Slopes.ApplyToSection(mMesh, 3, true);
+	if (!Slopes.IsEmpty())
+	{
+		ApplyMaterial(3, BodyMat);
+	}
 
 	if (mPreviewSideLines.Get(mSideLines))
 	{
@@ -99,6 +122,10 @@ void ARMBuildableIntersection::RebuildMesh()
 	{
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
+		if (!Slopes.IsEmpty())
+		{
+			ApplyFarSection(Slopes, 3, BodyMat);
+		}
 		if (mPreviewSideLines.Get(mSideLines))
 		{
 			TArray<TArray<FVector>> FarCurbs;
@@ -244,4 +271,339 @@ void ARMBuildableIntersection::GetWorldCurbs(TArray<TArray<FVector>>& OutCurbs) 
 			P = T.TransformPosition(P);
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Side slopes (1.6.0)
+// ---------------------------------------------------------------------------------------------
+
+bool ARMBuildableIntersection::LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const
+{
+	FRMMesh Top, Body;
+	return RMGeometry::BuildIntersection(mEnds, mHeight, mUVScale, mFilletSegments, Top, Body, &Ring, &IsMouth, 2000.f)
+		&& Ring.Num() >= 3 && IsMouth.Num() == Ring.Num();
+}
+
+void ARMBuildableIntersection::SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter)
+{
+	Out.Reset();
+	OutPerimeter = 0.f;
+	const int32 N = Ring.Num();
+	if (N < 3 || IsMouth.Num() != N)
+	{
+		return;
+	}
+	// Outward side from the winding (as the slab's sides), and each edge's distance round the outline from point 0
+	// (the slab's side blocks are counted the same way, so the joints run on into the banks).
+	float Area = 0.f;
+	TArray<float> EdgeS;
+	for (int32 K = 0; K < N; ++K)
+	{
+		const FVector& A = Ring[K];
+		const FVector& B = Ring[(K + 1) % N];
+		Area += A.X * B.Y - B.X * A.Y;
+		EdgeS.Add(OutPerimeter);
+		OutPerimeter += FVector::Dist(A, B);
+	}
+	const float OutSign = Area >= 0.f ? 1.f : -1.f;
+	auto Normal = [&](int32 K)
+	{
+		const FVector E = Ring[(K + 1) % N] - Ring[K];
+		return (FVector(E.Y, -E.X, 0.f) * OutSign).GetSafeNormal();
+	};
+	int32 Start = 0;
+	while (Start < N && !IsMouth[Start])
+	{
+		++Start;
+	}
+	if (Start == N)
+	{
+		return; // no road mouth: not an intersection outline
+	}
+	auto Point = [](const FVector& Pos, const FVector& Dir, float S, int32 Edge, int32 Run, bool bStart, bool bEnd)
+	{
+		FSlopePoint P;
+		P.Pos = Pos;
+		P.Out = Dir;
+		P.S = S;
+		P.Edge = Edge;
+		P.Run = Run;
+		P.bRunStart = bStart;
+		P.bRunEnd = bEnd;
+		return P;
+	};
+	int32 Run = -1;
+	for (int32 Step = 1; Step <= N; ++Step)
+	{
+		const int32 K = (Start + Step) % N;
+		if (IsMouth[K])
+		{
+			continue;
+		}
+		const FVector A = Ring[K];
+		const FVector B = Ring[(K + 1) % N];
+		const float Len = FVector::Dist(A, B);
+		const FVector NK = Normal(K);
+		if (IsMouth[(K + N - 1) % N] || Run < 0)
+		{
+			++Run;
+			Out.Add(Point(A, NK, EdgeS[K], K, Run, true, false));
+		}
+		const int32 Parts = FMath::Max(1, FMath::CeilToInt(Len / ARMBuildableRoad::SlopeSampleStep));
+		for (int32 I = 1; I < Parts; ++I)
+		{
+			const float T = float(I) / Parts;
+			Out.Add(Point(FMath::Lerp(A, B, T), NK, EdgeS[K] + Len * T, K, Run, false, false));
+		}
+		const bool bEnd = IsMouth[(K + 1) % N];
+		const FVector EndOut = bEnd ? NK : (NK + Normal((K + 1) % N)).GetSafeNormal();
+		Out.Add(Point(B, EndOut.IsNearlyZero() ? NK : EndOut, EdgeS[K] + Len, K, Run, false, bEnd));
+	}
+}
+
+void ARMBuildableIntersection::GetSlopeWorldPoints(TArray<FVector>& Out) const
+{
+	Out.Reset();
+	TArray<FVector> Ring;
+	TArray<bool> IsMouth;
+	TArray<FSlopePoint> Points;
+	float Perimeter = 0.f;
+	if (LocalOutline(Ring, IsMouth))
+	{
+		SlopePoints(Ring, IsMouth, Points, Perimeter);
+	}
+	for (const FSlopePoint& P : Points)
+	{
+		Out.Add(GetActorTransform().TransformPosition(P.Pos));
+	}
+}
+
+void ARMBuildableIntersection::MeasureSlopes(TArray<FVector2D>& OutSamples) const
+{
+	OutSamples.Reset();
+	UWorld* World = GetWorld();
+	TArray<FVector> Ring;
+	TArray<bool> IsMouth;
+	if (!World || !LocalOutline(Ring, IsMouth))
+	{
+		return;
+	}
+	TArray<FSlopePoint> Points;
+	float Perimeter = 0.f;
+	SlopePoints(Ring, IsMouth, Points, Perimeter);
+	const FTransform& T = GetActorTransform();
+	// The roads joined to the mouths: near a mouth's corners the traces pass through them (their ends and banks).
+	TArray<FRMRoadEnd> Ends;
+	GetWorldEnds(Ends);
+	TArray<const AActor*> Joined;
+	for (TActorIterator<ARMBuildableRoad> It(World); It; ++It)
+	{
+		const ARMBuildableRoad* Road = *It;
+		if (Road->IsActorBeingDestroyed() || FVector::Dist(Road->GetActorLocation(), GetActorLocation()) > Road->GetLength() + 20000.f)
+		{
+			continue;
+		}
+		for (int32 End = 0; End < 2; ++End)
+		{
+			FVector P, O;
+			Road->GetEndWorld(End, P, O);
+			for (const FRMRoadEnd& E : Ends)
+			{
+				if (FVector::Dist(P, E.Center) <= RMRoadUtils::JoinTolerance)
+				{
+					Joined.AddUnique(Road);
+				}
+			}
+		}
+	}
+	TArray<FVector> Corners;
+	for (int32 K = 0; K < Ring.Num(); ++K)
+	{
+		if (IsMouth[K])
+		{
+			Corners.Add(T.TransformPosition(Ring[K]));
+			Corners.Add(T.TransformPosition(Ring[(K + 1) % Ring.Num()]));
+		}
+	}
+	const TArray<const AActor*> NoPass;
+	int32 Banks = 0;
+	for (const FSlopePoint& P : Points)
+	{
+		const FVector Edge = T.TransformPosition(P.Pos);
+		const FVector OutW = T.TransformVectorNoScale(P.Out);
+		const FVector Out = FVector(OutW.X, OutW.Y, 0.f).GetSafeNormal();
+		bool bNearMouth = false;
+		for (const FVector& C : Corners)
+		{
+			bNearMouth |= FVector::Dist(C, Edge) < 300.f;
+		}
+		const float Drop = ARMBuildableRoad::MeasureBankAt(World, Edge, Out, this, bNearMouth ? Joined : NoPass);
+		Banks += Drop > 0.f ? 1 : 0;
+		OutSamples.Add(FVector2D(P.S, Drop));
+	}
+	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slopes measured, %d of %d samples with a bank"), *GetName(), Banks, OutSamples.Num());
+}
+
+void ARMBuildableIntersection::BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out) const
+{
+	TArray<FVector> Ring;
+	TArray<bool> IsMouth;
+	if (LocalOutline(Ring, IsMouth))
+	{
+		BuildSlopeMeshFrom(Ring, IsMouth, Samples, Out, nullptr);
+	}
+}
+
+void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples,
+	FRMMesh& Out, TArray<bool>* OutCoveredEdges) const
+{
+	TArray<FSlopePoint> Points;
+	float Perimeter = 0.f;
+	SlopePoints(Ring, IsMouth, Points, Perimeter);
+	if (OutCoveredEdges)
+	{
+		OutCoveredEdges->Init(false, Ring.Num());
+	}
+	if (Points.Num() == 0 || Points.Num() != Samples.Num())
+	{
+		return; // measured for another shape: measured again shortly
+	}
+	const float Run = ARMBuildableRoad::SlopeRun;
+	const float SlopeLen = FMath::Sqrt(1.f + Run * Run);
+	const FVector Up = FVector::UpVector;
+	const RMGeometry::FRMSideUV Layout = RMGeometry::MakeSideUV(GetShownLook() == 2, Perimeter);
+	RMGeometry::PadSideUV(Out);
+	const int32 First = Out.Vertices.Num();
+	const int32 FirstTriangle = Out.Triangles.Num();
+	auto DropOf = [&](int32 I) { return FMath::Max(0.f, float(Samples[I].Y)); };
+	auto Has = [&](int32 I) { return DropOf(I) > 0.5f; };
+	TArray<int32> VE, VF;
+	for (int32 I = 0; I < Points.Num(); ++I)
+	{
+		const FSlopePoint& P = Points[I];
+		const float D = DropOf(I);
+		const FVector Normal = (P.Out + Up * Run).GetSafeNormal();
+		const FVector Tangent = FVector::CrossProduct(Normal, P.Out).GetSafeNormal();
+		VE.Add(Out.AddVertex(P.Pos, Normal, FVector2D(P.S / 400.f, 0.f), Tangent));
+		RMGeometry::AddSideUV(Out, Layout, 0.f, P.S / 100.f);
+		VF.Add(Out.AddVertex(P.Pos + P.Out * (Run * D) - Up * D, Normal, FVector2D(P.S / 400.f, D * SlopeLen / 400.f), Tangent));
+		RMGeometry::AddSideUV(Out, Layout, D * SlopeLen / 100.f, P.S / 100.f);
+	}
+	if (OutCoveredEdges)
+	{
+		for (const FSlopePoint& P : Points)
+		{
+			(*OutCoveredEdges)[P.Edge] = true; // cleared below by any stretch of it without a bank
+		}
+	}
+	for (int32 I = 0; I + 1 < Points.Num(); ++I)
+	{
+		if (Points[I].Run != Points[I + 1].Run)
+		{
+			continue;
+		}
+		if (OutCoveredEdges && !(Has(I) && Has(I + 1)))
+		{
+			(*OutCoveredEdges)[Points[I + 1].Edge] = false;
+		}
+		if (!Has(I) && !Has(I + 1))
+		{
+			continue;
+		}
+		const FVector Normal = (Points[I].Out + Up * Run).GetSafeNormal();
+		if (Has(I + 1))
+		{
+			Out.AddTriangle(VE[I], VE[I + 1], VF[I + 1], Normal);
+		}
+		if (Has(I)) // where one end has no bank its foot is its edge: a wedge
+		{
+			Out.AddTriangle(VE[I], VF[I + 1], VF[I], Normal);
+		}
+	}
+	// Run ends (at the road mouths): the bank closed in the mouth's plane, down below the slab (a road with banks
+	// joined there has its own cap back to back with this one).
+	for (int32 I = 0; I < Points.Num(); ++I)
+	{
+		const FSlopePoint& P = Points[I];
+		if ((!P.bRunStart && !P.bRunEnd) || !Has(I))
+		{
+			continue;
+		}
+		const int32 K = P.Edge;
+		const FVector Along = (Ring[(K + 1) % Ring.Num()] - Ring[K]).GetSafeNormal();
+		const FVector Facing = P.bRunStart ? -Along : Along;
+		const float D = DropOf(I);
+		const float Low = FMath::Max(D, mHeight);
+		const int32 A = Out.AddVertex(P.Pos, Facing, FVector2D(0.f, 0.f), P.Out);
+		RMGeometry::AddSideUV(Out, Layout, 0.f, P.S / 100.f, true);
+		const int32 B = Out.AddVertex(P.Pos + P.Out * (Run * D) - Up * D, Facing, FVector2D(Run * D / 400.f, D / 400.f), P.Out);
+		RMGeometry::AddSideUV(Out, Layout, D / 100.f, P.S / 100.f, true);
+		const int32 C = Out.AddVertex(P.Pos - Up * Low, Facing, FVector2D(0.f, Low / 400.f), P.Out);
+		RMGeometry::AddSideUV(Out, Layout, Low / 100.f, P.S / 100.f, true);
+		Out.AddTriangle(A, B, C, Facing);
+	}
+	RMGeometry::WrapSideUV(Out, Layout, First, FirstTriangle);
+}
+
+uint32 ARMBuildableIntersection::SlopeShapeKey() const
+{
+	TArray<FRMRoadEnd> Ends;
+	GetWorldEnds(Ends);
+	uint32 Key = GetTypeHash(FMath::RoundToInt(mHeight));
+	for (const FRMRoadEnd& E : Ends)
+	{
+		Key = HashCombine(Key, GetTypeHash(FIntVector(FMath::RoundToInt(E.Center.X), FMath::RoundToInt(E.Center.Y), FMath::RoundToInt(E.Center.Z))));
+		Key = HashCombine(Key, GetTypeHash(FIntVector(FMath::RoundToInt(E.Inward.X * 1000.f), FMath::RoundToInt(E.Inward.Y * 1000.f), FMath::RoundToInt(E.Width))));
+	}
+	return Key == 0 ? 1 : Key;
+}
+
+void ARMBuildableIntersection::RequestSlopeMeasure()
+{
+	// A tick later, as roads (pieces being replaced are gone by then).
+	if (!HasAuthority() || !mSideSlopes || mSlopeMeasureQueued || IsActorBeingDestroyed() || SlopeShapeKey() == mSlopeKey)
+	{
+		return;
+	}
+	mSlopeMeasureQueued = true;
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		mSlopeMeasureQueued = false;
+		if (!mSideSlopes || IsActorBeingDestroyed())
+		{
+			return;
+		}
+		MeasureSlopes(mSlopeSamples);
+		mSlopeKey = SlopeShapeKey();
+		if (ARMBuildableRoad::SlopeTooDeep(mSlopeSamples, TArray<FVector2D>()))
+		{
+			mSideSlopes = false;
+			mSlopeSamples.Reset();
+			UE_LOG(LogRoadMaker, Log, TEXT("%s: side slopes off, the ground is too far below in places"), *GetName());
+		}
+		RebuildMesh();
+		ForceNetUpdate();
+	}));
+}
+
+void ARMBuildableIntersection::SetSideSlopes(bool bOn)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	mSideSlopes = bOn;
+	mSlopeSamples.Reset();
+	if (bOn)
+	{
+		MeasureSlopes(mSlopeSamples);
+		mSlopeKey = SlopeShapeKey();
+		if (ARMBuildableRoad::SlopeTooDeep(mSlopeSamples, TArray<FVector2D>()))
+		{
+			mSideSlopes = false; // no half banks (the tool refuses it first)
+			mSlopeSamples.Reset();
+		}
+	}
+	RebuildMesh();
+	ForceNetUpdate();
 }

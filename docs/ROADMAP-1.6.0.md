@@ -96,6 +96,15 @@ time, nothing is stored.
     marked `SlopeTooDeepMark`; the tool refuses with red lines there, `URMCD_SlopeTooDeep`, `SlopeTooDeepHint`; a
     reshaped or copied road with banks loses them). The road's side face is left out wherever a bank covers it all
     along (`SlopeCovered`, `BuildRoad(..., CoveredLeft, CoveredRight)`): the bank is the side there.
+  - Tested and working 2026-11-26.
+  - **Intersections** (asked 2026-11-26, built, to test): the same tool switches an intersection's banks
+    (`ARMBuildableIntersection::SetSideSlopes`, `mSideSlopes`, `mSlopeSamples`, `mSlopeKey`, mesh section 3). Samples
+    about every 2 m along each curb run between two road mouths (`SlopePoints`: outline from `BuildIntersection`,
+    outward from its winding, mitred at curb corners; distance round the outline as the slab's side blocks), measured
+    with the roads' `MeasureBankAt` (shared: the "above" and "down the bank" traces); near a mouth's corners the traces
+    pass through the roads joined there. Curb edges covered all along leave out the slab's side (`CoveredEdges`). Each
+    run's ends close with a triangle in the mouth's plane down below the slab. Roads now pass through an intersection
+    joined to their end too, so their banks run on to the mouth. Too deep anywhere: no banks (as roads).
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting

@@ -46,6 +46,22 @@ public:
 	virtual void ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData) override;
 	void ApplyMarkingColors(const FFactoryCustomizationData& Data);
 
+	// Side slopes (1.6.0): banks from the curbs down to the terrain, as on roads (ARMBuildableRoad: same slope,
+	// limit, traces, material), switched with the Side Slopes tool. Measured on the server and saved: one sample about
+	// every 2 m along the curbs (SlopePoints), none on the road mouths. Mouths of roads with banks carry on into them.
+	bool HasSideSlopes() const { return mSideSlopes; }
+	/** Server: on (measured now; refused when the ground is too far below somewhere) or off. */
+	void SetSideSlopes(bool bOn);
+	/** The samples (perimeter distance, drop) for the intersection as it stands (world traces). */
+	void MeasureSlopes(TArray<FVector2D>& OutSamples) const;
+	/** The banks' mesh (actor space) for these samples. */
+	void BuildSlopeMesh(const TArray<FVector2D>& Samples, FRMMesh& Out) const;
+	/** World positions of the curb points the samples belong to (in sample order). */
+	void GetSlopeWorldPoints(TArray<FVector>& Out) const;
+	const TArray<FVector2D>& GetSlopeSamples() const { return mSlopeSamples; }
+	/** The intersection's shape and place, for knowing when its banks must be measured again. */
+	uint32 SlopeShapeKey() const;
+
 	/** Same as roads: side lines sit this far in from the curb (cm). */
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	float mEdgeLineInset = 90.f;
@@ -75,6 +91,33 @@ protected:
 	bool mSideLines = false;
 
 	TOptional<bool> mPreviewSideLines;
+
+	/** Side slopes on, their samples (perimeter distance cm, drop cm; see ARMBuildableRoad) and the shape they are for. */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
+	bool mSideSlopes = false;
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
+	TArray<FVector2D> mSlopeSamples;
+	UPROPERTY(SaveGame)
+	uint32 mSlopeKey = 0;
+	bool mSlopeMeasureQueued = false;
+	void RequestSlopeMeasure();
+
+	/** A curb point banks start from (actor space): level outward direction, distance round the outline, its edge. */
+	struct FSlopePoint
+	{
+		FVector Pos = FVector::ZeroVector;
+		FVector Out = FVector::ForwardVector;
+		float S = 0.f;
+		int32 Edge = 0;
+		int32 Run = 0;
+		bool bRunStart = false;
+		bool bRunEnd = false;
+	};
+	/** Curb points about every 2 m, run by run (a run: the curb between two road mouths). */
+	static void SlopePoints(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, TArray<FSlopePoint>& Out, float& OutPerimeter);
+	bool LocalOutline(TArray<FVector>& Ring, TArray<bool>& IsMouth) const;
+	void BuildSlopeMeshFrom(const TArray<FVector>& Ring, const TArray<bool>& IsMouth, const TArray<FVector2D>& Samples, FRMMesh& Out,
+		TArray<bool>* OutCoveredEdges) const;
 
 	/** Build animation: the surface spreads from the road mouths to the middle (see ARMBuildableProcedural). */
 	virtual bool UsesReveal() const override { return mEnds.Num() >= 2; }

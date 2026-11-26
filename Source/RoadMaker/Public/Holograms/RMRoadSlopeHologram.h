@@ -1,4 +1,5 @@
-// Side Slopes tool (1.6.0, build menu Road Tools > Edit road): turns the banks of a road or walking path on or off.
+// Side Slopes tool (1.6.0, build menu Road Tools > Edit road): turns the banks of a road, walking path or intersection
+// on or off.
 // Aim at one: a cyan cage shows the banks it would get (from its edges down to the terrain, 1 : 1.5, at most 8 m;
 // none where it meets the ground or another road), a red one the banks it would lose. Click to switch. The banks are
 // part of the road (its concrete, solid), measured once on the server and saved (ARMBuildableRoad::SetSideSlopes).
@@ -10,6 +11,7 @@
 
 class UProceduralMeshComponent;
 class ARMBuildableRoad;
+class ARMBuildableIntersection;
 
 UCLASS()
 class ROADMAKER_API ARMRoadSlopeHologram : public AFGBuildableHologram
@@ -35,12 +37,16 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mOverlayMesh;
 
-	/** Road to switch. Sent to the server with the click. */
+	/** Road (or intersection) to switch. Sent to the server with the click. */
 	UPROPERTY(Replicated, CustomSerialization)
 	ARMBuildableRoad* mTarget = nullptr;
+	UPROPERTY(Replicated, CustomSerialization)
+	ARMBuildableIntersection* mTargetX = nullptr;
+	bool HasTarget() const { return mTarget || mTargetX; }
+	bool TargetHasSlopes() const;
 
-	/** The banks the aimed road would get, measured once per road (and again when it changes). */
-	TWeakObjectPtr<ARMBuildableRoad> mMeasuredFor;
+	/** The banks the aimed road would get, measured once per road (and again when it changes); an intersection's in Left. */
+	TWeakObjectPtr<AActor> mMeasuredFor;
 	uint32 mMeasuredKey = 0;
 	TArray<FVector2D> mMeasuredLeft;
 	TArray<FVector2D> mMeasuredRight;
