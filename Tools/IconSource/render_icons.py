@@ -664,6 +664,46 @@ def adjust_glyph(path):
     img.save(path)
 
 
+def smooth_glyph(path):
+    """Smooth Joint icon: white flat glyph, two straight roads meeting at a corner, the corner rounded off by a
+    curve (the cut corner shown as a thin outline)."""
+    from PIL import Image as _I, ImageDraw as _D
+    n = 1024
+    img = _I.new("RGBA", (n, n), (0, 0, 0, 0))
+    d = _D.Draw(img)
+    W = (255, 255, 255, 255)
+    C = (0, 0, 0, 0)
+    corner = (230.0, 300.0)
+    a0, b0 = (230.0, 900.0), (840.0, 300.0)   # far ends of the two roads
+    a1, b1 = (230.0, 620.0), (520.0, 300.0)   # where the curve starts / ends
+    def bez(t):
+        u = 1 - t
+        return (u * u * a1[0] + 2 * u * t * corner[0] + t * t * b1[0], u * u * a1[1] + 2 * u * t * corner[1] + t * t * b1[1])
+    pts = [a0] + [bez(i / 60) for i in range(61)] + [b0]
+    def thick(points, r, fill):
+        for i in range(len(points) - 1):
+            (x0, y0), (x1, y1) = points[i], points[i + 1]
+            steps = max(1, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 / 8))
+            for k in range(steps + 1):
+                x = x0 + (x1 - x0) * k / steps; y = y0 + (y1 - y0) * k / steps
+                d.ellipse([x - r, y - r, x + r, y + r], fill=fill)
+    # The old corner: an outline of the cut-away road (a ring round its shape), then the rounded road over it.
+    thick([a1, corner, b1], 78, W)
+    thick([a1, corner, b1], 60, C)
+    thick(pts, 78, W)
+    # Dashed middle line cut out along the road.
+    dense = []
+    for i in range(len(pts) - 1):
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        steps = max(1, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 / 6))
+        dense += [(x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps) for k in range(steps)]
+    for i in range(12, len(dense) - 12, 16):
+        for x, y in dense[i:i + 8]:
+            d.ellipse([x - 11, y - 11, x + 11, y + 11], fill=C)
+    img = img.resize((512, 512), _I.LANCZOS)
+    img.save(path)
+
+
 def fence_cut_glyph(path):
     """Cut Fence icon: white flat glyph, a brick wall split by a vertical cut line."""
     from PIL import Image as _I, ImageDraw as _D
@@ -829,6 +869,8 @@ if what == "mergeglyph":
     merge_glyph(out); sys.exit(0)
 if what == "adjustglyph":
     adjust_glyph(out); sys.exit(0)
+if what == "smoothglyph":
+    smooth_glyph(out); sys.exit(0)
 if what == "fencecutglyph":
     fence_cut_glyph(out); sys.exit(0)
 if what == "fencejoinglyph":

@@ -27,7 +27,7 @@ time, nothing is stored.
     `ARMRoadAdjustHologram::ComputeCurves`; a straight road becomes a straight 3D line from its far end to the joint
     (constant slope). Description updated in the string table (key kept) and the PO msgid (translation out of date).
   - Unchanged: three or more ends at one point, or an end joined to an intersection, cannot be grabbed.
-- **Smooth Joint** (new tool, Road Tools next to Adjust Joint; asked 2026-11-26, not built): rounds the corner where
+- **Smooth Joint** (new tool, Road Tools next to Adjust Joint; asked 2026-11-26, built 2026-11-26, to test): rounds the corner where
   two roads meet. Click the joint (circles on joints of exactly two road ends), drag away from it: both roads are cut
   back by the same distance along their course and a new road joins the two cut points, meeting each flush (a
   Bezier curve with the old corner as its control point: symmetric, close to a circular arc; on slopes the height
@@ -35,6 +35,15 @@ time, nothing is stored.
   Second click: both roads shortened, the new curve built with their width, lines, material and paint; markings and
   vehicle paths on the cut-away parts handled like the Cut tool. Decided 2026-11-26: different materials: one of the
   two roads' (the clicked first); joints already flush: allowed (widens a bend); intersections: left out.
+  - Built: `ARMRoadSmoothHologram` (on Adjust Joint: its circles, hidden roads, previews), `Holo_RoadSmooth`,
+    `Build_RoadSmooth` (menu order 6), icon `T_Icon_RoadSmooth` (`render_icons.py smoothglyph`). Full hologram preview
+    (both roads cut back and the curve, as road holograms; asked 2026-11-26 instead of a wireframe). Step 0: circles
+    on joints of two road ends only; step 1: setback = the aim's distance from the joint (seen from above), 1 m steps,
+    first 8 m, at most each road's length minus its minimum; on-screen text. The curve: `MakeQuadratic` from road A's cut
+    towards the joint to road B's cut away from it, each road's slope at its end; checked like a road (length, turn
+    radius, grade; red when not). Build: `CutAt` on each road (its tracks and paths split there like the Cut tool),
+    the piece at the joint dismantled with its markings / tracks (paths go after it), the curve spawned like road A
+    (`SpawnLike`), cost by length like road A. PO entries added.
 
 ## Waiting
 - Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections

@@ -1204,3 +1204,27 @@ msgstr "标牌龙门架：点击另一侧（对侧任意道路或步行道边缘
 msgctxt "RoadMaker,GantryFirstSide"
 msgid "Sign Gantry: click the first side (a road or walking path edge)"
 msgstr "标牌龙门架：点击第一侧（道路或步行道边缘）"
+
+#. Key:	SmoothPickHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSmoothHologram.cpp
+msgctxt "RoadMaker,SmoothPickHint"
+msgid "Smooth Joint: click a joint where two roads meet"
+msgstr ""
+
+#. Key:	SmoothSetbackHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSmoothHologram.cpp
+msgctxt "RoadMaker,SmoothSetbackHint"
+msgid "Smooth Joint: {0} m from the joint (aim nearer or further; click to build)"
+msgstr ""
+
+#. Key:	RoadSmooth.Name
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadSmooth.Name"
+msgid "Smooth Joint"
+msgstr ""
+
+#. Key:	RoadSmooth.Desc
+#: Content/Text/ST_RoadMaker.uasset
+msgctxt "RoadMakerAssets,RoadSmooth.Desc"
+msgid "Rounds the corner where two roads meet. Orange circles mark the joints of two road ends near you. Click one, then aim away from it: both roads are cut back by the same distance (shown on screen, in metres) and a new curve joins them, meeting both flush. The roads and the curve show as holograms; click again to build it. The curve takes the first road's width, lines, material and paint. Works on bends that are already smooth too, to widen them. Not at intersections. Free."
+msgstr ""
