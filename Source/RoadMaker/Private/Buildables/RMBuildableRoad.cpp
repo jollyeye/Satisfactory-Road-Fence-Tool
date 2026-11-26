@@ -819,13 +819,14 @@ namespace RMSideSlopes
 
 	/**
 	 * Whether a road hit at Point runs side by side with the bank's edge (Edge, going out along Out): about parallel
-	 * (within 20 degrees) and its slab right at the edge (1.5 m). Only such a road stops a bank; others are ground.
+	 * (within 20 degrees) and its slab right at the edge (60 cm, seen from above). Only such a road stops a bank, and
+	 * only found by the check straight down beside the edge; down the bank line every road is passed through.
 	 */
 	bool IsParallelNeighbour(const ARMBuildableRoad* Other, const FVector& Point, const FVector& Edge, const FVector& Out)
 	{
 		// Right at the edge seen from above (not "anywhere down the bank line": a parallel road a few metres off and lower
 		// is ignored, the bank goes on past it).
-		if (FVector::Dist2D(Point, Edge) > 150.f)
+		if (FVector::Dist2D(Point, Edge) > 60.f)
 		{
 			return false;
 		}
@@ -847,7 +848,7 @@ namespace RMSideSlopes
 	}
 
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough,
-		const FVector& Edge, const FVector& Out)
+		const FVector& Edge, const FVector& Out, bool bNeighbours)
 	{
 		TArray<FHitResult> Hits;
 		// Complex traces with face indices: a hit on another piece's side slope (its own mesh section) is told apart
@@ -888,8 +889,9 @@ namespace RMSideSlopes
 				{
 					return EHit::Ground; // another piece's bank: this one runs into it
 				}
-				if (OtherRoad && IsParallelNeighbour(OtherRoad, Hit.ImpactPoint, Edge, Out))
+				if (bNeighbours && OtherRoad && IsParallelNeighbour(OtherRoad, Hit.ImpactPoint, Edge, Out))
 				{
+					UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: %s side by side, no bank at %s"), *OtherRoad->GetName(), *Edge.ToCompactString());
 					return EHit::Neighbour; // a road side by side with this edge: no bank there
 				}
 				continue; // other roads and intersections (at an angle, crossing, further off): ignored (asked 2026-11-26)
@@ -925,7 +927,7 @@ float ARMBuildableRoad::MeasureBankAt(UWorld* World, const FVector& Edge, const 
 	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun); // along the bank per cm of drop
 	float Dist = 0.f;
 	// The ground at or above the edge (the road runs in a dip or a cutting) or a road beside it: no bank.
-	if (RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), Self, Dist, Pass, Edge, Out)
+	if (RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), Self, Dist, Pass, Edge, Out, true)
 		!= RMSideSlopes::EHit::None)
 	{
 		return 0.f;
@@ -933,7 +935,7 @@ float ARMBuildableRoad::MeasureBankAt(UWorld* World, const FVector& Edge, const 
 	// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
 	const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
 	const FVector Start = Edge + Out * 2.f;
-	switch (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, Self, Dist, Pass, Edge, Out))
+	switch (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, Self, Dist, Pass, Edge, Out, false))
 	{
 	case RMSideSlopes::EHit::Ground:
 		return FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
