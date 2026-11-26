@@ -1527,17 +1527,22 @@ log("Map roads material %s" % map_ok)
 ROAD_LOOKS = {"m_top_material": asphalt, "m_body_material": concrete,
               "m_look_top_materials": [pavers, cyber],
               "m_look_body_materials": [concrete, cyber_body]}
+# Roads and walking paths (1.6.0): sides, underside and side slopes in the concrete blocks (3 m blocks, 2 m rows,
+# UV1 set in code), the cyberpunk look's in its circuit. Intersections and gap fills keep the plain concrete.
+ROAD_SLAB_LOOKS = {"m_top_material": asphalt, "m_body_material": pavers,
+                   "m_look_top_materials": [pavers, cyber],
+                   "m_look_body_materials": [pavers, cyber]}
 MARKING_LOOKS = {"m_marking_material": marking, "m_look_top_materials": [marking, marking_cyber]}
 VEHICLE_MARKING_LOOKS = {"m_marking_material": marking_icon, "m_look_top_materials": [marking_icon, marking_icon_cyber]}
 ASSIGN = {
-    "Build_Road_1x": ROAD_LOOKS,
-    "Build_Road_2x": ROAD_LOOKS,
-    "Build_Road_3x": ROAD_LOOKS,
-    "Build_Road_4x": ROAD_LOOKS,
+    "Build_Road_1x": ROAD_SLAB_LOOKS,
+    "Build_Road_2x": ROAD_SLAB_LOOKS,
+    "Build_Road_3x": ROAD_SLAB_LOOKS,
+    "Build_Road_4x": ROAD_SLAB_LOOKS,
     "Build_RoadIntersection": ROAD_LOOKS,
     "Build_RoadFill": ROAD_LOOKS,
-    "Build_WalkingPath_2m": ROAD_LOOKS,
-    "Build_WalkingPath_4m": ROAD_LOOKS,
+    "Build_WalkingPath_2m": ROAD_SLAB_LOOKS,
+    "Build_WalkingPath_4m": ROAD_SLAB_LOOKS,
     "Build_SignGantry": {"m_main_material": steel},
     "Build_Tunnel": {"m_shell_material": pavers},  # the walking path's concrete blocks, turned 90 degrees (UV1 in code)
     "Build_LaneArrow": MARKING_LOOKS,

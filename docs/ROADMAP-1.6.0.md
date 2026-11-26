@@ -82,6 +82,15 @@ time, nothing is stored.
   - Mesh (`BuildSlopeMesh`): one strip per side, edge and foot vertices shared; samples kept only where a bank starts
     or ends, where edge or foot bends more than 3 cm, and at least every 20 m; triangles only where there is a bank
     (a wedge back to the edge where it ends). UV0 = metres along / down the bank / 4.
+  - Tested 2026-11-26: gaps on curves (the bank had its own 2 m points) and an open end. Now the bank is built on the
+    road mesh's own cross-sections (same edge), and at an end with a bank the road's cap widens into a trapezoid down
+    to the banks' feet (`SlopeCapAt`, `BuildRoad(..., bStartCap, bEndCap)`).
+  - Look (asked 2026-11-26): road and walking path sides, underside, caps and banks in the concrete blocks
+    (`M_RoadPavers`, with its grooves and bump) instead of plain concrete: 3 m blocks fitted to whole blocks per road
+    (as the grid fence's posts, `RMGeometry::BlockAlongScale`), 2 m rows counted down from the top edge (on to the
+    banks), UV1 set in code (`AddBlockUV`, wrapped for long roads). The cyberpunk look's sides and banks in its
+    circuit material (was plain). Intersections and gap fills keep the plain concrete (`ROAD_LOOKS`; roads use
+    `ROAD_SLAB_LOOKS`). Needs the materials step.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting

@@ -71,7 +71,7 @@ void ARMBuildableRoad::RebuildMesh()
 	PrepareChunks();
 	FRMMesh Top, Body;
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body,
-		!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() != 2);
+		!SlopeCapAt(0), !SlopeCapAt(1));
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
@@ -94,7 +94,7 @@ void ARMBuildableRoad::RebuildMesh()
 	{
 		FRMMesh FarTop, FarBody;
 		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody,
-			!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() != 2);
+			!SlopeCapAt(0), !SlopeCapAt(1));
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
 		if (!Slopes.IsEmpty())
@@ -903,6 +903,13 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 	const float H = GetRoadWidth() * 0.5f;
 	const float SlopeLen = FMath::Sqrt(1.f + SlopeRun * SlopeRun);
 	const float Total = Frames.Last().Dist;
+	// The road body's blocks carried on: rows counted down the bank from the edge, the same blocks along.
+	const float AlongScale = RMGeometry::BlockAlongScale(Total);
+	Out.MarkUV1.SetNumZeroed(Out.Vertices.Num());
+	Out.MarkUV2.SetNumZeroed(Out.Vertices.Num());
+	Out.MarkUV3.SetNumZeroed(Out.Vertices.Num());
+	const int32 OutFirst = Out.Vertices.Num();
+	const int32 OutFirstTriangle = Out.Triangles.Num();
 	for (const float Side : { -1.f, 1.f })
 	{
 		const TArray<FVector2D>& Samples = Side < 0.f ? Left : Right;
@@ -970,7 +977,9 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			const FVector& Normal = Pts[I].Normal;
 			const FVector Tangent = FVector::CrossProduct(Normal, Pts[I].Out).GetSafeNormal();
 			VE.Add(Out.AddVertex(Pts[I].Edge, Normal, FVector2D(Pts[I].Dist / 400.f, 0.f), Tangent));
+			RMGeometry::AddBlockUV(Out, 0.f, Pts[I].Dist / 100.f * AlongScale);
 			VF.Add(Out.AddVertex(Pts[I].Foot, Normal, FVector2D(Pts[I].Dist / 400.f, Pts[I].Drop * SlopeLen / 400.f), Tangent));
+			RMGeometry::AddBlockUV(Out, Pts[I].Drop * SlopeLen / 100.f, Pts[I].Dist / 100.f * AlongScale);
 		}
 		for (int32 K = 0; K + 1 < Kept.Num(); ++K)
 		{
@@ -1017,6 +1026,9 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		{
 			Profile.Add(FVector2D(-H - SlopeRun * DL, -DL));
 		}
+		const int32 CapFirst = Out.Vertices.Num();
 		RMGeometry::AddProfileCap(End == 0 ? Frames[0] : Frames.Last(), Profile, End == 1, mUVScale, Out);
+		RMGeometry::BlockUVsFromCap(Out, CapFirst, mUVScale);
 	}
+	Out.WrapUV1X(OutFirst, OutFirstTriangle, 4.f, true, true);
 }

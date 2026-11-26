@@ -1144,8 +1144,7 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // ---------------------------------------------------------------------------------------------
 
 void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap,
-	bool bSidesAlong)
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
@@ -1179,28 +1178,24 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	Top.WrapUV1X(TopBase, TopFirstTriangle, 4.f, true, true);
 
 	// Concrete: right side, bottom, left side.
-	if (bSidesAlong)
+	// Concrete: right side, bottom, left side, each face on its own (rows counted down from the top), in blocks.
+	const float AlongScale = BlockAlongScale(Frames.Last().Dist);
+	Body.MarkUV1.SetNumZeroed(Body.Vertices.Num());
+	Body.MarkUV2.SetNumZeroed(Body.Vertices.Num());
+	Body.MarkUV3.SetNumZeroed(Body.Vertices.Num());
+	const int32 BodyFirst = Body.Vertices.Num();
+	const int32 BodyFirstTriangle = Body.Triangles.Num();
+	for (const TArray<FVector2D>& Face : { TArray<FVector2D>{ FVector2D(H, 0.f), FVector2D(H, -Height) },
+		TArray<FVector2D>{ FVector2D(H, -Height), FVector2D(-H, -Height) }, TArray<FVector2D>{ FVector2D(-H, 0.f), FVector2D(-H, -Height) } })
 	{
-		// Each face on its own, its texture along the road and down from the top (as the side slopes): U and V swapped.
-		for (const TArray<FVector2D>& Face : { TArray<FVector2D>{ FVector2D(H, 0.f), FVector2D(H, -Height) },
-			TArray<FVector2D>{ FVector2D(H, -Height), FVector2D(-H, -Height) }, TArray<FVector2D>{ FVector2D(-H, 0.f), FVector2D(-H, -Height) } })
-		{
-			const int32 First = Body.Vertices.Num();
-			ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
-			for (int32 V = First; V < Body.Vertices.Num(); ++V)
-			{
-				Body.UVs[V] = FVector2D(Body.UVs[V].Y, Body.UVs[V].X);
-			}
-		}
-	}
-	else
-	{
-		ExtrudeProfile(Frames, { FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height), FVector2D(-H, 0.f) },
-			false, Centroid, UVScale, Body);
+		const int32 First = Body.Vertices.Num();
+		ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
+		BlockUVsFromExtrude(Body, First, UVScale, AlongScale);
 	}
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };
 	// Ends with side slopes: the road's cap is part of the bank's wider one (ARMBuildableRoad::BuildSlopeMesh).
+	const int32 CapFirst = Body.Vertices.Num();
 	if (bStartCap)
 	{
 		AddProfileCap(Frames[0], Section, false, UVScale, Body);
@@ -1208,6 +1203,41 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	if (bEndCap)
 	{
 		AddProfileCap(Frames.Last(), Section, true, UVScale, Body);
+	}
+	BlockUVsFromCap(Body, CapFirst, UVScale);
+	// Long roads: material metres along kept small (half-float UVs), the rest carried in UV3.y (see the top).
+	Body.WrapUV1X(BodyFirst, BodyFirstTriangle, 4.f, true, true);
+}
+
+float RMGeometry::BlockAlongScale(float LengthCm)
+{
+	const float Blocks = FMath::Max(1.f, FMath::RoundToFloat(LengthCm / 300.f));
+	return 4.f * Blocks / FMath::Max(LengthCm / 100.f, 0.01f);
+}
+
+void RMGeometry::AddBlockUV(FRMMesh& Mesh, float RowM, float AlongM)
+{
+	Mesh.MarkUV1.Add(FVector2D(RowM, AlongM));
+	Mesh.MarkUV2.Add(FVector2D(10.f, 0.f)); // > 0.5: the material uses UV1 (not a world projection)
+	Mesh.MarkUV3.Add(FVector2D::ZeroVector); // no lane lines
+}
+
+void RMGeometry::BlockUVsFromExtrude(FRMMesh& Mesh, int32 First, float UVScale, float AlongScale)
+{
+	const float M = UVScale / 100.f;
+	for (int32 V = First; V < Mesh.Vertices.Num(); ++V)
+	{
+		AddBlockUV(Mesh, Mesh.UVs[V].X * M, Mesh.UVs[V].Y * M * AlongScale);
+		Mesh.UVs[V] = FVector2D(Mesh.UVs[V].Y, Mesh.UVs[V].X); // UV0 along / down as well
+	}
+}
+
+void RMGeometry::BlockUVsFromCap(FRMMesh& Mesh, int32 First, float UVScale)
+{
+	const float M = UVScale / 100.f;
+	for (int32 V = First; V < Mesh.Vertices.Num(); ++V)
+	{
+		AddBlockUV(Mesh, -Mesh.UVs[V].Y * M, Mesh.UVs[V].X * M);
 	}
 }
 

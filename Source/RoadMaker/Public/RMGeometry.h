@@ -224,13 +224,24 @@ namespace RMGeometry
 
 	/**
 	 * Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre.
-	 * bSidesAlong: the sides' texture laid as on the side slopes (U = metres along / 4, V = down from the top / 4)
-	 * instead of turned 90 degrees (the cyberpunk body keeps the old layout).
+	 * The body (sides, bottom, caps) carries the blocks' UV1-3 (AddBlockUV).
 	 * Markings and EdgeLineInset (cm from the road edge, leaves room for fences) go into the top's UV1-3.
 	 */
+	/**
+	 * Road sides and side slopes in the concrete blocks (M_RoadPavers) or the cyberpunk circuit: their blocks / circuit
+	 * laid by UV1 = (metres down / across: rows, material metres along), UV2.x = 10 (UV1, not a world projection), UV3 =
+	 * no lane lines. The material's blocks are 4 m long: BlockAlongScale stretches them to whole 3 m blocks per road
+	 * (as the grid fence's posts), material metres per metre along.
+	 */
+	ROADMAKER_API float BlockAlongScale(float LengthCm);
+	ROADMAKER_API void AddBlockUV(FRMMesh& Mesh, float RowM, float AlongM);
+	/** UV1 of the vertices from First on, from their UV0 (extruded faces: UV0 = (cm round the profile, cm along) / UVScale). */
+	ROADMAKER_API void BlockUVsFromExtrude(FRMMesh& Mesh, int32 First, float UVScale, float AlongScale);
+	/** UV1 of cap vertices from First on (UV0 = profile cm / UVScale: across, up). */
+	ROADMAKER_API void BlockUVsFromCap(FRMMesh& Mesh, int32 First, float UVScale);
+
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true,
-		bool bSidesAlong = true);
+		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true);
 
 	// Fence builders all use one convention: the road is on the +Right side of the frames.
 	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.
