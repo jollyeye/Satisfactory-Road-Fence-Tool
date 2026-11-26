@@ -133,6 +133,13 @@ time, nothing is stored.
     8 m of drop (an upside-down-pyramid rock) stays refused (no half banks); the 16 m wall would not help there.
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
+- **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):
+  the reporter answered: only roads over the length limit (limit toggle off), the whole road, only joining players
+  (not the host), driving is fine. Cause: a road past the limit gets extra mesh components (chunks) at run time with
+  made-up names (`NewObject` with `NAME_None`), so a walking client's movement base was a component the server could
+  not find by name; the server kept correcting the player (vehicles do not send a movement base this way). Fix in
+  `ARMBuildableProcedural::PrepareChunks`: chunks named `RMChunk_<n>` (same on every machine) and `SetNetAddressable`;
+  a dropped chunk is renamed out of the way first so the name can be used again.
+
 ## Waiting
-- Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections
-  on long roads have run-time component names a client cannot name to the server.
+- Issue #10: reply to the reporter once tested (with the user's go-ahead).

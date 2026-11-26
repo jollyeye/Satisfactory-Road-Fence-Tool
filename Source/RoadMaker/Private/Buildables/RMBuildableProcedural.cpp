@@ -460,6 +460,9 @@ void ARMBuildableProcedural::PrepareChunks()
 	{
 		if (UProceduralMeshComponent* M = mChunkMeshes.Pop())
 		{
+			// Its stable name freed now (a destroyed component keeps it until garbage collection): a later chunk with
+			// the same index gets the name again.
+			M->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
 			M->DestroyComponent();
 		}
 	}
@@ -471,7 +474,16 @@ void ARMBuildableProcedural::PrepareChunks()
 	while (mChunkMeshes.Num() < WantedExtra)
 	{
 		const int32 Level = mChunkMeshes.Num() % 3;
-		UProceduralMeshComponent* M = NewObject<UProceduralMeshComponent>(this, NAME_None, RF_Transient);
+		// Same name on the server and every client, and net addressable (issue #10): a player walking on a long road's
+		// later piece stands on this component, and the client names it to the server as its movement base. With a
+		// made-up name the server could not find it and kept correcting the player (rubber banding while walking).
+		const FName Name(*FString::Printf(TEXT("RMChunk_%d"), mChunkMeshes.Num()));
+		if (UObject* Old = StaticFindObjectFast(nullptr, this, Name))
+		{
+			Old->Rename(nullptr, nullptr, REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
+		}
+		UProceduralMeshComponent* M = NewObject<UProceduralMeshComponent>(this, Name, RF_Transient);
+		M->SetNetAddressable();
 		M->SetupAttachment(mMesh);
 		if (Level == 0)
 		{
