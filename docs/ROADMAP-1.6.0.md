@@ -113,6 +113,10 @@ time, nothing is stored.
     in the keys re-measures saved banks). Next: at inside corners (curb fillets) the feet crossed into a bow tie; now
     feet that would cross are pulled onto the crossing (`RMGeometry::UntangleFeet`, also on roads' tight inner curves):
     the banks meet along a valley line.
+  - Tested 2026-11-26: a road's banks stopped short beside another road's banks (the trace hit the other's bank and
+    took it for a road beside it). Now a hit on another piece's bank (its mesh section, from the collision face index)
+    counts as ground: banks run into each other. Feet that fold back against their edge (not crossing) are held too
+    (`UntangleFeet` with the tops). `SlopeVersion` 3: saved banks measured again.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting

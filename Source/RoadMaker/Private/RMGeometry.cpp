@@ -1246,7 +1246,7 @@ RMGeometry::FRMSideUV RMGeometry::MakeSideUV(bool bCircuit, float LengthCm)
 	return L;
 }
 
-void RMGeometry::UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last)
+void RMGeometry::UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last, const TArray<FVector>* Edges)
 {
 	auto Crossing = [](const FVector& A, const FVector& B, const FVector& C, const FVector& D, float& OutT)
 	{
@@ -1277,6 +1277,19 @@ void RMGeometry::UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last)
 				}
 				I = J - 1;
 				break;
+			}
+		}
+	}
+	// Folds: a foot stretch running against its edge stretch (seen from above) is turned inside out.
+	if (Edges && Edges->Num() == Feet.Num())
+	{
+		for (int32 K = FMath::Max(First, 0) + 1; K <= Last; ++K)
+		{
+			const FVector2D F(Feet[K] - Feet[K - 1]);
+			const FVector2D E((*Edges)[K] - (*Edges)[K - 1]);
+			if (FVector2D::DotProduct(F, E) < 0.f)
+			{
+				Feet[K] = Feet[K - 1];
 			}
 		}
 	}

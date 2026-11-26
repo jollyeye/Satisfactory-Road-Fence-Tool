@@ -240,9 +240,10 @@ namespace RMGeometry
 	 * Side slopes' feet along a curb or road edge that bends towards the banks (an inside corner, the inner side of a
 	 * tight curve): where the feet would cross each other (a bow tie, seen from above), the feet of the loop are pulled
 	 * together onto the crossing point, so the banks meet along a valley line there instead. Feet[I] in order along
-	 * the edge; works seen from above (Z taken from the crossing).
+	 * the edge; works seen from above (Z taken from the crossing). With Edges (the bank tops, same order), a foot that
+	 * still runs backwards against its edge (a fold, not a crossing) is held at the foot before it.
 	 */
-	ROADMAKER_API void UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last);
+	ROADMAKER_API void UntangleFeet(TArray<FVector>& Feet, int32 First, int32 Last, const TArray<FVector>* Edges = nullptr);
 	/** One vertex's side UVs: RowM down from the top (or across), AlongM metres along; bPlain: no joints (caps). */
 	ROADMAKER_API void AddSideUV(FRMMesh& Mesh, const FRMSideUV& Layout, float RowM, float AlongM, bool bPlain = false);
 	/** Keeps the side UVs small on long pieces (half floats), for vertices / triangles from First on. */

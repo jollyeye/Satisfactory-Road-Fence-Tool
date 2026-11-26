@@ -487,10 +487,11 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 	auto DropOf = [&](int32 I) { return FMath::Max(0.f, float(Samples[I].Y)); };
 	auto Has = [&](int32 I) { return DropOf(I) > 0.5f; };
 	// Feet, untangled run by run (inside corners: the curb fillets between two roads bend towards the banks).
-	TArray<FVector> Feet;
+	TArray<FVector> Feet, Tops;
 	for (int32 I = 0; I < Points.Num(); ++I)
 	{
 		Feet.Add(Points[I].Pos + Points[I].Out * (Run * DropOf(I)) - Up * DropOf(I));
+		Tops.Add(Points[I].Pos);
 	}
 	for (int32 I = 0; I < Points.Num();)
 	{
@@ -499,7 +500,7 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		{
 			++J;
 		}
-		RMGeometry::UntangleFeet(Feet, I, J);
+		RMGeometry::UntangleFeet(Feet, I, J, &Tops);
 		I = J + 1;
 	}
 	TArray<int32> VE, VF;

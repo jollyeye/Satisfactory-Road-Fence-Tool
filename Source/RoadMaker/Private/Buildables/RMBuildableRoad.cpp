@@ -761,7 +761,10 @@ namespace RMSideSlopes
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough)
 	{
 		TArray<FHitResult> Hits;
+		// Complex traces with face indices: a hit on another piece's side slope (its own mesh section) is told apart
+		// from its slab.
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(RMSideSlope), true, Self);
+		Params.bReturnFaceIndex = true;
 		FCollisionObjectQueryParams Objects;
 		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
 		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
@@ -780,8 +783,18 @@ namespace RMSideSlopes
 			}
 			if (Cast<ARMBuildableRoad>(Actor) || Cast<ARMBuildableIntersection>(Actor))
 			{
+				// Another piece's bank (roads: section 2, intersections: 3): this bank runs into it, as into the ground.
+				int32 Section = INDEX_NONE;
+				if (const UProceduralMeshComponent* Mesh = Cast<UProceduralMeshComponent>(Hit.GetComponent()))
+				{
+					if (Hit.FaceIndex != INDEX_NONE)
+					{
+						Mesh->GetMaterialFromCollisionFaceIndex(Hit.FaceIndex, Section);
+					}
+				}
+				const bool bBank = Section == (Cast<ARMBuildableRoad>(Actor) ? 2 : 3);
 				OutDist = Hit.Distance;
-				return EHit::Neighbour;
+				return bBank ? EHit::Ground : EHit::Neighbour;
 			}
 			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor))
 			{
@@ -1048,12 +1061,13 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 		}
 		// The inner side of a tight curve: feet that would cross are pulled together (a valley line, no bow tie).
 		{
-			TArray<FVector> Feet;
+			TArray<FVector> Feet, Tops;
 			for (const FPt& P : Pts)
 			{
 				Feet.Add(P.Foot);
+				Tops.Add(P.Edge);
 			}
-			RMGeometry::UntangleFeet(Feet, 0, Feet.Num() - 1);
+			RMGeometry::UntangleFeet(Feet, 0, Feet.Num() - 1, &Tops);
 			for (int32 I = 0; I < Pts.Num(); ++I)
 			{
 				Pts[I].Foot = Feet[I];
