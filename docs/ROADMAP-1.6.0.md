@@ -117,6 +117,10 @@ time, nothing is stored.
     took it for a road beside it). Now a hit on another piece's bank (its mesh section, from the collision face index)
     counts as ground: banks run into each other. Feet that fold back against their edge (not crossing) are held too
     (`UntangleFeet` with the tops). `SlopeVersion` 3: saved banks measured again.
+  - Tested and working 2026-11-26. Next: banks stopped on a Beryl Nut bush and an ore deposit. Now the ground is only
+    the landscape and the map's static scenery (cliffs, rock formations); passed through: the game's own objects (nearest
+    native class in FactoryGame: resource nodes, wells, geysers, pickups, creatures, buildings) and foliage (plants,
+    trees). Trees and pickups standing where a bank goes poke through it. `SlopeVersion` 4.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting

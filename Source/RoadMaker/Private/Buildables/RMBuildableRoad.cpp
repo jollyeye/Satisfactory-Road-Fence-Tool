@@ -758,6 +758,42 @@ namespace RMSideSlopes
 	/** What a bank trace stops at: the ground (true), or a road / intersection beside it (no bank: false). */
 	enum class EHit { None, Ground, Neighbour };
 
+	/** Whether a class or one of its parents has this name (no module dependency for foliage). */
+	bool IsKindOf(const UClass* Class, const TCHAR* Name)
+	{
+		for (; Class; Class = Class->GetSuperClass())
+		{
+			if (Class->GetFName() == FName(Name))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Ground for the banks: the landscape and the map's own static scenery (cliffs, rock formations: engine static
+	 * meshes). Not the game's own objects (resource nodes, wells, geysers, pickups such as Beryl Nuts, creatures: their
+	 * nearest native class is in FactoryGame) nor plants and trees (foliage the chainsaw removes).
+	 */
+	bool IsGround(const AActor* Actor, const UPrimitiveComponent* Component)
+	{
+		if (!Actor)
+		{
+			return true; // world geometry without an actor
+		}
+		if (IsKindOf(Actor->GetClass(), TEXT("InstancedFoliageActor")) || (Component && IsKindOf(Component->GetClass(), TEXT("FoliageInstancedStaticMeshComponent"))))
+		{
+			return false;
+		}
+		const UClass* Native = Actor->GetClass();
+		while (Native && !Native->HasAnyClassFlags(CLASS_Native))
+		{
+			Native = Native->GetSuperClass();
+		}
+		return !(Native && Native->GetOutermost()->GetName() == TEXT("/Script/FactoryGame"));
+	}
+
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough)
 	{
 		TArray<FHitResult> Hits;
@@ -796,9 +832,9 @@ namespace RMSideSlopes
 				OutDist = Hit.Distance;
 				return bBank ? EHit::Ground : EHit::Neighbour;
 			}
-			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor))
+			if (Cast<AFGBuildable>(Actor) || Cast<APawn>(Actor) || !IsGround(Actor, Hit.GetComponent()))
 			{
-				continue; // fences, walls, foundations, vehicles...: the bank goes on to the ground
+				continue; // buildings, vehicles, plants, pickups, resource nodes...: the bank goes on to the ground
 			}
 			OutDist = Hit.Distance;
 			return EHit::Ground;
