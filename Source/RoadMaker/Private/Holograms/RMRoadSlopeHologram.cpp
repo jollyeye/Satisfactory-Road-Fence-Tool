@@ -67,6 +67,10 @@ void ARMRoadSlopeHologram::CheckValidPlacement()
 	{
 		AddConstructDisqualifier(URMCD_AimAtRoad::StaticClass());
 	}
+	else if (!mTarget->HasSideSlopes() && ARMBuildableRoad::SlopeTooDeep(mMeasuredLeft, mMeasuredRight))
+	{
+		AddConstructDisqualifier(URMCD_SlopeTooDeep::StaticClass()); // no half banks
+	}
 }
 
 AActor* ARMRoadSlopeHologram::Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID)
@@ -102,19 +106,24 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 	const bool bRemove = mTarget->HasSideSlopes();
 	FRMMesh Banks;
 	mTarget->BuildSlopeMesh(bRemove ? mTarget->GetSlopeLeft() : mMeasuredLeft, bRemove ? mTarget->GetSlopeRight() : mMeasuredRight, Banks);
+	const bool bTooDeep = !bRemove && ARMBuildableRoad::SlopeTooDeep(mMeasuredLeft, mMeasuredRight);
 	if (bRemove)
 	{
 		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeRemoveHint", "Side Slopes: click to remove this road's banks"));
 	}
+	else if (bTooDeep)
+	{
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeTooDeepHint", "Side Slopes: the ground is more than 8 m below the road where the red lines are: this road cannot have banks"), true);
+	}
 	else if (Banks.IsEmpty())
 	{
-		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeNoneHint", "Side Slopes: no banks needed here (ground level with the road, or over 8 m below). Click to turn them on anyway"));
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeNoneHint", "Side Slopes: no banks needed here (the ground is level with the road). Click to turn them on anyway"));
 	}
 	else
 	{
 		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "SlopeAddHint", "Side Slopes: click to add banks down to the ground (cyan)"));
 	}
-	if (!PC || !PC->PlayerCameraManager || Banks.IsEmpty())
+	if (!PC || !PC->PlayerCameraManager || (Banks.IsEmpty() && !bTooDeep))
 	{
 		return;
 	}
@@ -142,6 +151,23 @@ void ARMRoadSlopeHologram::RebuildOverlay()
 			if (!bSeen)
 			{
 				O.Line(T.TransformPosition(Banks.Vertices[A]) - FVector(0.f, 0.f, 8.f), T.TransformPosition(Banks.Vertices[B]) - FVector(0.f, 0.f, 8.f), Color);
+			}
+		}
+	}
+	// Too deep: a red line 8 m down from the edge at each such sample.
+	if (bTooDeep)
+	{
+		const float H = mTarget->GetRoadWidth() * 0.5f;
+		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+		{
+			for (const FVector2D& S : SideIndex == 0 ? mMeasuredLeft : mMeasuredRight)
+			{
+				FRMFrame F;
+				if (S.Y < 0.f && mTarget->GetFrameAt(float(S.X), F))
+				{
+					const FVector Edge = F.Pos + F.Right * (SideIndex == 0 ? -H : H);
+					O.Line(Edge, Edge - FVector(0.f, 0.f, ARMBuildableRoad::SlopeMaxDrop), FLinearColor(1.f, 0.05f, 0.05f));
+				}
 			}
 		}
 	}

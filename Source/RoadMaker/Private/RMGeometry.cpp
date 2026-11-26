@@ -1144,7 +1144,8 @@ void RMGeometry::AddProfileCap(const FRMFrame& Frame, const TArray<FVector2D>& P
 // ---------------------------------------------------------------------------------------------
 
 void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap, bool bCircuitSides)
+	const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap, bool bEndCap, bool bCircuitSides,
+	const TArray<bool>* CoveredLeft, const TArray<bool>* CoveredRight)
 {
 	const float H = Width * 0.5f;
 	const FVector2D Centroid(0.f, -Height * 0.5f);
@@ -1177,8 +1178,8 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	// materials add them back, so every pattern (lines, blocks, circuit, asphalt) stays exactly as it was.
 	Top.WrapUV1X(TopBase, TopFirstTriangle, 4.f, true, true);
 
-	// Concrete: right side, bottom, left side.
-	// Concrete: right side, bottom, left side, each face on its own (rows counted down from the top), in blocks.
+	// Concrete: right side, bottom, left side, each face on its own (rows counted down from the top), in blocks. A side
+	// is left out where a side slope covers it (runs of stretches not covered are extruded on their own).
 	const FRMSideUV Sides = MakeSideUV(bCircuitSides, Frames.Last().Dist);
 	PadSideUV(Body);
 	const int32 BodyFirst = Body.Vertices.Num();
@@ -1186,9 +1187,37 @@ void RMGeometry::BuildRoad(const TArray<FRMFrame>& Frames, float Width, float He
 	for (const TArray<FVector2D>& Face : { TArray<FVector2D>{ FVector2D(H, 0.f), FVector2D(H, -Height) },
 		TArray<FVector2D>{ FVector2D(H, -Height), FVector2D(-H, -Height) }, TArray<FVector2D>{ FVector2D(-H, 0.f), FVector2D(-H, -Height) } })
 	{
-		const int32 First = Body.Vertices.Num();
-		ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
-		SideUVsFromExtrude(Body, Sides, First, UVScale);
+		const TArray<bool>* Covered = Face[0].Y < 0.f ? nullptr : (Face[0].X > 0.f ? CoveredRight : CoveredLeft);
+		if (!Covered || Covered->Num() != Frames.Num() - 1)
+		{
+			const int32 First = Body.Vertices.Num();
+			ExtrudeProfile(Frames, Face, false, Centroid, UVScale, Body);
+			SideUVsFromExtrude(Body, Sides, First, UVScale);
+			continue;
+		}
+		TArray<FRMFrame> Run;
+		for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+		{
+			if (!(*Covered)[I])
+			{
+				if (Run.Num() == 0)
+				{
+					Run.Add(Frames[I]);
+				}
+				Run.Add(Frames[I + 1]);
+			}
+			if (((*Covered)[I] || I + 2 == Frames.Num()) && Run.Num() >= 2)
+			{
+				const int32 First = Body.Vertices.Num();
+				ExtrudeProfile(Run, Face, false, Centroid, UVScale, Body);
+				SideUVsFromExtrude(Body, Sides, First, UVScale);
+				Run.Reset();
+			}
+			else if ((*Covered)[I])
+			{
+				Run.Reset();
+			}
+		}
 	}
 
 	const TArray<FVector2D> Section = { FVector2D(-H, 0.f), FVector2D(H, 0.f), FVector2D(H, -Height), FVector2D(-H, -Height) };

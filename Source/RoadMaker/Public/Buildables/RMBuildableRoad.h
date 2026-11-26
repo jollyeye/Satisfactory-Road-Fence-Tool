@@ -243,6 +243,11 @@ public:
 	bool SlopeCapAt(int32 End) const;
 	/** Bank drop (cm) at a distance along, from samples (linear between them). */
 	static float SlopeDropAt(const TArray<FVector2D>& Samples, float Dist);
+	/** A sample with no ground within SlopeMaxDrop (its drop is SlopeTooDeepMark): such a road gets no banks at all. */
+	static bool SlopeTooDeep(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right);
+	static constexpr float SlopeTooDeepMark = -1.f;
+	/** Per stretch between two frames and side: true where a bank covers the road's side all along (no side face there). */
+	void SlopeCovered(const TArray<FRMFrame>& Frames, TArray<bool>& OutLeft, TArray<bool>& OutRight) const;
 
 	static constexpr float SlopeRun = 1.5f;        // 1 : 1.5 (about 34 degrees)
 	static constexpr float SlopeMaxDrop = 800.f;   // banks down to 8 m below the edge

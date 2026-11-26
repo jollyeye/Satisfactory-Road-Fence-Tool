@@ -250,10 +250,12 @@ namespace RMGeometry
 	/**
 	 * Road slab: asphalt top into Top, concrete sides, bottom and end caps into Body. Frames are top-centre.
 	 * The body (sides, bottom, caps) carries the side UVs (FRMSideUV: cement blocks, or the circuit with bCircuitSides).
+	 * CoveredLeft / Right (one per stretch between two frames): true = no side face there (a side slope takes its place).
 	 * Markings and EdgeLineInset (cm from the road edge, leaves room for fences) go into the top's UV1-3.
 	 */
 	ROADMAKER_API void BuildRoad(const TArray<FRMFrame>& Frames, float Width, float Height, float UVScale,
-		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true, bool bCircuitSides = false);
+		const FRMMarkings& Markings, float EdgeLineInset, FRMMesh& Top, FRMMesh& Body, bool bStartCap = true, bool bEndCap = true, bool bCircuitSides = false,
+		const TArray<bool>* CoveredLeft = nullptr, const TArray<bool>* CoveredRight = nullptr);
 
 	// Fence builders all use one convention: the road is on the +Right side of the frames.
 	// ARMBuildableFence::BuildFenceMesh mirrors the frames for fences whose road is on the other side.

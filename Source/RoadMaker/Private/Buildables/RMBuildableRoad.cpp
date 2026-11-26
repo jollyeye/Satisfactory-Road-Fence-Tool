@@ -70,8 +70,10 @@ void ARMBuildableRoad::RebuildMesh()
 	AddChunkBoundaries(Frames);
 	PrepareChunks();
 	FRMMesh Top, Body;
+	TArray<bool> CoveredL, CoveredR;
+	SlopeCovered(Frames, CoveredL, CoveredR);
 	RMGeometry::BuildRoad(Frames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, Top, Body,
-		!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() == 2);
+		!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() == 2, &CoveredL, &CoveredR);
 	UMaterialInterface* TopMat = LookMaterial(mLookTopMaterials, mTopMaterial);
 	UMaterialInterface* BodyMat = LookMaterial(mLookBodyMaterials, mBodyMaterial);
 	ApplyNearSection(Top, 0, true, TopMat);
@@ -93,8 +95,10 @@ void ARMBuildableRoad::RebuildMesh()
 	if (FarFrames.Num() >= 2)
 	{
 		FRMMesh FarTop, FarBody;
+		TArray<bool> FarCoveredL, FarCoveredR;
+		SlopeCovered(FarFrames, FarCoveredL, FarCoveredR);
 		RMGeometry::BuildRoad(FarFrames, GetRoadWidth(), mRoadHeight, mUVScale, LimitMarkings(mPreviewMarkings.Get(mMarkings)), mEdgeLineInset, FarTop, FarBody,
-			!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() == 2);
+			!SlopeCapAt(0), !SlopeCapAt(1), GetShownLook() == 2, &FarCoveredL, &FarCoveredR);
 		ApplyFarSection(FarTop, 0, TopMat);
 		ApplyFarSection(FarBody, 1, BodyMat);
 		if (!Slopes.IsEmpty())
@@ -681,6 +685,14 @@ void ARMBuildableRoad::RequestSlopeMeasure()
 		}
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
 		mSlopeKey = SlopeShapeKey();
+		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
+		{
+			// Reshaped or copied where the ground is too far below: the banks go (no half banks).
+			mSideSlopes = false;
+			mSlopeLeft.Reset();
+			mSlopeRight.Reset();
+			UE_LOG(LogRoadMaker, Log, TEXT("%s: side slopes off, the ground is more than %.0f m below in places"), *GetName(), SlopeMaxDrop / 100.f);
+		}
 		RebuildMesh();
 		ForceNetUpdate();
 	}));
@@ -697,6 +709,13 @@ void ARMBuildableRoad::SetSideSlopes(bool bOn)
 	{
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
 		mSlopeKey = SlopeShapeKey();
+		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
+		{
+			// The ground is too far below somewhere: no banks at all rather than half (the tool refuses it first).
+			mSideSlopes = false;
+			mSlopeLeft.Reset();
+			mSlopeRight.Reset();
+		}
 	}
 	else
 	{
@@ -835,10 +854,15 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 				// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
 				const FVector Dir = (Out * SlopeRun - FVector(0.f, 0.f, 1.f)).GetSafeNormal();
 				const FVector Start = Edge + Out * 2.f;
-				if (RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist, Pass) == RMSideSlopes::EHit::Ground)
+				const RMSideSlopes::EHit Down = RMSideSlopes::FirstHit(World, Start, Start + Dir * SlopeMaxDrop * SlopeLen, this, Dist, Pass);
+				if (Down == RMSideSlopes::EHit::Ground)
 				{
 					Drop = FMath::Min(Dist / SlopeLen + SlopeEmbed, SlopeMaxDrop + SlopeEmbed);
 					++Banks;
+				}
+				else if (Down == RMSideSlopes::EHit::None)
+				{
+					Drop = SlopeTooDeepMark; // no ground within the limit: the road cannot have banks (no half banks)
 				}
 			}
 			(Side < 0.f ? OutLeft : OutRight).Add(FVector2D(D, Drop));
@@ -853,9 +877,10 @@ float ARMBuildableRoad::SlopeDropAt(const TArray<FVector2D>& Samples, float Dist
 	{
 		return 0.f;
 	}
+	// Too-deep marks (negative) count as no bank.
 	if (Dist <= Samples[0].X)
 	{
-		return Samples[0].Y;
+		return FMath::Max(0.f, float(Samples[0].Y));
 	}
 	for (int32 I = 1; I < Samples.Num(); ++I)
 	{
@@ -863,10 +888,10 @@ float ARMBuildableRoad::SlopeDropAt(const TArray<FVector2D>& Samples, float Dist
 		{
 			const FVector2D& A = Samples[I - 1];
 			const FVector2D& B = Samples[I];
-			return FMath::Lerp(A.Y, B.Y, (Dist - A.X) / FMath::Max(B.X - A.X, KINDA_SMALL_NUMBER));
+			return FMath::Lerp(FMath::Max(0.f, float(A.Y)), FMath::Max(0.f, float(B.Y)), float((Dist - A.X) / FMath::Max(B.X - A.X, double(KINDA_SMALL_NUMBER))));
 		}
 	}
-	return Samples.Last().Y;
+	return FMath::Max(0.f, float(Samples.Last().Y));
 }
 
 bool ARMBuildableRoad::SlopeCapAt(int32 End) const
@@ -883,6 +908,57 @@ bool ARMBuildableRoad::SlopeCapAt(int32 End) const
 		}
 	}
 	return false;
+}
+
+bool ARMBuildableRoad::SlopeTooDeep(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right)
+{
+	for (const TArray<FVector2D>* Samples : { &Left, &Right })
+	{
+		for (const FVector2D& S : *Samples)
+		{
+			if (S.Y < 0.f)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void ARMBuildableRoad::SlopeCovered(const TArray<FRMFrame>& Frames, TArray<bool>& OutLeft, TArray<bool>& OutRight) const
+{
+	OutLeft.Reset();
+	OutRight.Reset();
+	if (!mSideSlopes || Frames.Num() < 2)
+	{
+		return;
+	}
+	const float Total = FMath::Max(Frames.Last().Dist, 1.f);
+	for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+	{
+		const TArray<FVector2D>& Samples = SideIndex == 0 ? mSlopeLeft : mSlopeRight;
+		TArray<bool>& Out = SideIndex == 0 ? OutLeft : OutRight;
+		if (Samples.Num() < 2)
+		{
+			continue;
+		}
+		// As BuildSlopeMesh: frame distances mapped onto the samples' length.
+		const float Scale = float(Samples.Last().X) / Total;
+		for (int32 I = 0; I + 1 < Frames.Num(); ++I)
+		{
+			const float A = Frames[I].Dist * Scale, B = Frames[I + 1].Dist * Scale;
+			float MinDrop = FMath::Min(SlopeDropAt(Samples, A), SlopeDropAt(Samples, B));
+			for (const FVector2D& S : Samples)
+			{
+				if (S.X > A && S.X < B)
+				{
+					MinDrop = FMath::Min(MinDrop, FMath::Max(0.f, float(S.Y)));
+				}
+			}
+			// Covered by the bank all along: the side face is hidden (the bank starts on its top edge), left out.
+			Out.Add(MinDrop > 0.5f);
+		}
+	}
 }
 
 void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArray<FVector2D>& Right, FRMMesh& Out) const

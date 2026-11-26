@@ -91,6 +91,11 @@ time, nothing is stored.
     no joints on caps, road mouths and undersides. The cyberpunk look's sides and banks in its circuit material
     (was plain). Layout in code: `RMGeometry::FRMSideUV` (`MakeSideUV`, `AddSideUV`, `WrapSideUV`; the circuit
     layout when the shown look is cyberpunk). Materials: `ROAD_SLAB_LOOKS`. Needs the materials step.
+  - Tested 2026-11-26: where the ground was more than 8 m below, the bank just stopped (half banks, odd caps), and the
+    road's side showed as well as the bank. Now: no ground within 8 m anywhere = the road gets no banks at all (samples
+    marked `SlopeTooDeepMark`; the tool refuses with red lines there, `URMCD_SlopeTooDeep`, `SlopeTooDeepHint`; a
+    reshaped or copied road with banks loses them). The road's side face is left out wherever a bank covers it all
+    along (`SlopeCovered`, `BuildRoad(..., CoveredLeft, CoveredRight)`): the bank is the side there.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
