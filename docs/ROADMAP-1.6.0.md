@@ -149,6 +149,10 @@ time, nothing is stored.
     curb by curb otherwise (`mSlopeRuns`, a bit per run between two mouths, `RunAt`, `SetSlopeRuns`; old banks = all).
     Too deep now drops only the side / curb concerned (`DropTooDeepSides`, `DropTooDeepRuns`), also when re-measured.
     Hints `SlopeAddCurbHint`, `SlopeRemoveCurbHint`; the "all" case uses `SlopeAddHint` / `SlopeRemoveHint`.
+  - Floors (asked 2026-11-26: the hollow under the embankment could be seen and walked into): roads carry the cap's lower
+    edge along (foot to foot, or the slab's bottom corner on a side without a bank) as a floor facing down; intersections
+    get one polygon through every foot (slab bottom under curbs without a bank), triangulated in plan.
+  - Open: with a curb bank on, some vehicle paths on the intersection turn red (asked to run `RM.PathCheck`).
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):

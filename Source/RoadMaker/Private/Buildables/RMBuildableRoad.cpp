@@ -1127,6 +1127,9 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 	RMGeometry::PadSideUV(Out);
 	const int32 OutFirst = Out.Vertices.Num();
 	const int32 OutFirstTriangle = Out.Triangles.Num();
+	// Each side's foot and drop at every cross-section, for the floor under the embankment.
+	TArray<FVector> FrameFoot[2];
+	TArray<float> FrameDrop[2];
 	for (const float Side : { -1.f, 1.f })
 	{
 		const TArray<FVector2D>& Samples = Side < 0.f ? Left : Right;
@@ -1181,6 +1184,14 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 				Pts[I].Foot = Feet[I];
 			}
 		}
+		for (const FPt& P : Pts)
+		{
+			if (P.bMust)
+			{
+				FrameFoot[Side < 0.f ? 0 : 1].Add(P.Foot);
+				FrameDrop[Side < 0.f ? 0 : 1].Add(P.Drop);
+			}
+		}
 		auto Has = [&](int32 I) { return Pts[I].Drop > 0.5f; };
 		// Optional points kept where the foot bends (10 cm: the foot is 30 cm into the ground) or a bank starts / ends.
 		TArray<int32> Kept = { 0 };
@@ -1232,8 +1243,50 @@ void ARMBuildableRoad::BuildSlopeMesh(const TArray<FVector2D>& Left, const TArra
 			}
 		}
 	}
-	// Embankment caps: the road's cross-section widened to the banks' feet (a trapezoid), down to below the road.
 	const float Height = FMath::Max(mRoadHeight, 10.f);
+	// Floor: the embankment closed underneath, foot to foot (or to the slab's bottom corner on a side without a bank),
+	// facing down: the cap's lower edge carried along the road. No hollow to see or walk into where the ground dips.
+	{
+		const float SideFloor[2] = { -1.f, 1.f };
+		bool bAnyBank = false;
+		for (int32 S = 0; S < 2; ++S)
+		{
+			for (const float D : FrameDrop[S])
+			{
+				bAnyBank |= D > 0.5f;
+			}
+		}
+		const int32 FloorFirst = bAnyBank ? Out.Vertices.Num() : INDEX_NONE;
+		TArray<int32> VL, VR;
+		TArray<bool> Any;
+		for (int32 I = 0; bAnyBank && I < Frames.Num(); ++I)
+		{
+			FVector P[2];
+			bool bAny = false;
+			for (int32 S = 0; S < 2; ++S)
+			{
+				const bool bBank = FrameDrop[S].IsValidIndex(I) && FrameDrop[S][I] > 0.5f && FrameFoot[S].IsValidIndex(I);
+				P[S] = bBank ? FrameFoot[S][I] : Frames[I].Pos + Frames[I].Right * (H * SideFloor[S]) - Frames[I].Up * Height;
+				bAny |= bBank;
+			}
+			Any.Add(bAny);
+			const FVector Tangent = Frames[I].Fwd;
+			VL.Add(Out.AddVertex(P[0], FVector::DownVector, FVector2D(Frames[I].Dist / 400.f, 0.f), Tangent));
+			RMGeometry::AddSideUV(Out, Layout, (P[0] - Frames[I].Pos).Size() / 100.f, Frames[I].Dist / 100.f, true);
+			VR.Add(Out.AddVertex(P[1], FVector::DownVector, FVector2D(Frames[I].Dist / 400.f, FVector::Dist(P[0], P[1]) / 400.f), Tangent));
+			RMGeometry::AddSideUV(Out, Layout, (P[1] - Frames[I].Pos).Size() / 100.f, Frames[I].Dist / 100.f, true);
+		}
+		for (int32 I = 0; I + 1 < Any.Num(); ++I)
+		{
+			if (Any[I] || Any[I + 1])
+			{
+				Out.AddTriangle(VL[I], VR[I], VR[I + 1], FVector::DownVector);
+				Out.AddTriangle(VL[I], VR[I + 1], VL[I + 1], FVector::DownVector);
+			}
+		}
+		(void)FloorFirst;
+	}
+	// Embankment caps: the road's cross-section widened to the banks' feet (a trapezoid), down to below the road.
 	for (int32 End = 0; End < 2; ++End)
 	{
 		const float DL = SlopeDropAt(Left, End == 0 ? 0.f : (Left.Num() ? Left.Last().X : 0.f));

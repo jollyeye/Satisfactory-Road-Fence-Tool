@@ -634,6 +634,49 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 			(*OutCoveredEdges)[K] = true; // this cap replaces the slab's mouth face
 		}
 	}
+	// Floor: the embankment closed underneath, one polygon through every foot (the slab's bottom under curbs without a
+	// bank), facing down. Seen from above it is the feet's outline, triangulated in plan.
+	bool bAnyBank = false;
+	for (int32 I = 0; I < Points.Num(); ++I)
+	{
+		bAnyBank |= Has(I);
+	}
+	if (bAnyBank)
+	{
+		TArray<FVector> Floor;
+		for (int32 I = 0; I < Points.Num(); ++I)
+		{
+			const FVector P = Has(I) ? Feet[I] : Points[I].Pos - Up * mHeight;
+			if (Floor.Num() == 0 || FVector::Dist2D(Floor.Last(), P) > 1.f)
+			{
+				Floor.Add(P);
+			}
+		}
+		if (Floor.Num() >= 3 && FVector::Dist2D(Floor.Last(), Floor[0]) <= 1.f)
+		{
+			Floor.Pop();
+		}
+		if (Floor.Num() >= 3)
+		{
+			FRMFrame F;
+			F.Pos = FVector::ZeroVector;
+			F.Right = FVector::ForwardVector;
+			F.Up = FVector::RightVector;
+			F.Fwd = FVector::DownVector;
+			TArray<FVector2D> Plan;
+			for (const FVector& P : Floor)
+			{
+				Plan.Add(FVector2D(P.X, P.Y));
+			}
+			const int32 FloorFirst = Out.Vertices.Num();
+			RMGeometry::AddProfileCap(F, Plan, true, mUVScale, Out);
+			for (int32 V = 0; V < Floor.Num() && FloorFirst + V < Out.Vertices.Num(); ++V)
+			{
+				Out.Vertices[FloorFirst + V] = Floor[V];
+			}
+			RMGeometry::SideUVsFromCap(Out, Layout, FloorFirst, mUVScale);
+		}
+	}
 	RMGeometry::WrapSideUV(Out, Layout, First, FirstTriangle);
 }
 
