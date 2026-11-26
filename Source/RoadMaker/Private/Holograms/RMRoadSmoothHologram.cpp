@@ -277,6 +277,7 @@ void ARMRoadSmoothHologram::RebuildSmoothPreviews()
 		RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, Road->GetMarkings(), Road->mEdgeLineInset, Top, Body);
 		Top.ApplyToSection(Mesh, 0, false);
 		Body.ApplyToSection(Mesh, 1, false);
+		Mesh->SetCustomPrimitiveDataFloat(ARMBuildableRoad::DashScaleIndex, ARMBuildableRoad::DashScaleFor(Frames.Last().Dist - Frames[0].Dist));
 	};
 	Build(mRoadA, A.Kept, mPreviewMesh);
 	Build(mRoadB, B.Kept, mPreviewMeshB);
@@ -308,7 +309,7 @@ void ARMRoadSmoothHologram::ApplyRoadSurfaces()
 		if (const UPrimitiveComponent* Source = Road->GetProceduralMesh())
 		{
 			const TArray<float>& Data = Source->GetCustomPrimitiveData().Data;
-			for (int32 I = 0; I < Data.Num(); ++I)
+			for (int32 I = 0; I < Data.Num() && I < ARMBuildableRoad::DashScaleIndex; ++I) // the dash scale is the preview's own
 			{
 				Mesh->SetCustomPrimitiveDataFloat(I, Data[I]);
 			}

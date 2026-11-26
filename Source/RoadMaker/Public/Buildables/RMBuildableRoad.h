@@ -50,6 +50,17 @@ public:
 	/** Custom primitive data slots read by M_RoadAsphalt (after the 20 floats the game itself uses). */
 	static constexpr int32 PrimaryColorIndex = 24;
 	static constexpr int32 SecondaryColorIndex = 28;
+	/**
+	 * Dashed lane lines (1.6.0): custom primitive data slot of the dash scale. Each road fits a whole number of 9 m
+	 * dash cycles (3 m dash between half gaps), stretched to its length like the grid fence's panels, so the dashes
+	 * meet the next road's evenly whichever way it runs.
+	 */
+	static constexpr int32 DashScaleIndex = 32;
+	static float DashScaleFor(float LengthCm)
+	{
+		const int32 Cycles = FMath::Max(1, FMath::RoundToInt(LengthCm / 900.f));
+		return FMath::Max(LengthCm, 1.f) / (Cycles * 900.f);
+	}
 
 	/** The resolved paint colours: primary = dashed middle lines, secondary = side lines (and the cyberpunk glow). */
 	void GetLineColours(FLinearColor& OutPrimary, FLinearColor& OutSecondary) const;

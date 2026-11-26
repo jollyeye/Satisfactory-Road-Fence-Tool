@@ -331,13 +331,25 @@ if (N > 1.5 && L > 0.1)
     float k = clamp(round(t), 1, N - 1);
     float d = abs(t - k) * L / N;
     float lineMask = 1 - smoothstep(hw - aa, hw + aa, d);
-    float p = frac(v / 9.0) * 9.0;      // 3 m dash, 6 m gap
-    float av = max(fwidth(v), 0.002);
+    // 3 m dash, 6 m gap; each road fits whole cycles, stretched by DS (custom primitive data 32, set per road), and
+    // starts and ends half way through a gap (3 m dash centred in each cycle): the next road's dashes follow evenly.
+    float ds = DS > 0.01 ? DS : 1.0;
+    float vd = v / ds;
+    float p = frac((vd + 6.0) / 9.0) * 9.0;
+    float av = max(fwidth(vd), 0.002);
     float dash = smoothstep(0, av, p) * (1 - smoothstep(3 - av, 3 + av, p));
     mid = lineMask * max(dash, continuous);
 }
 return float2(saturate(mid), saturate(side));
 """
+
+def dash_scale(mat, x, y):
+    """The road's dash scale (ARMBuildableRoad::DashScaleIndex = 32), 1 where none is pushed."""
+    p = node(mat, unreal.MaterialExpressionScalarParameter, x, y, parameter_name="DashScale", default_value=1.0)
+    p.set_editor_property("use_custom_primitive_data", True)
+    p.set_editor_property("primitive_data_index", 32)
+    return p
+
 
 asphalt = new_material("M_RoadAsphalt")
 tex_bc = load_tex(ASPHALT_BC)
@@ -358,7 +370,7 @@ marks.set_editor_property("code", MARKINGS_HLSL)
 marks.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT2)
 marks.set_editor_property("description", "LaneMarkings")
 inputs = []
-for name in ("UV1", "UV2", "UV3"):
+for name in ("UV1", "UV2", "UV3", "DS"):
     ci = unreal.CustomInput()
     ci.set_editor_property("input_name", name)
     inputs.append(ci)
@@ -366,6 +378,7 @@ marks.set_editor_property("inputs", inputs)
 link(uv1, "", marks, "UV1")
 link(uv2, "", marks, "UV2")
 link(uv3, "", marks, "UV3")
+link(dash_scale(asphalt, -1100, 900), "", marks, "DS")
 
 # Customizer colours, pushed by ARMBuildableRoad as custom primitive data (24 = primary, 28 =
 # secondary). The defaults (off-white) show when no colour has been pushed.
@@ -872,10 +885,11 @@ def lane_masks(mat, x, y):
     u1 = full_uv1(mat, x - 300, y)
     u2 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 100, coordinate_index=2)
     u3 = node(mat, unreal.MaterialExpressionTextureCoordinate, x, y + 200, coordinate_index=3)
-    m = custom(mat, MARKINGS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "UV3"], x + 300, y, "LaneMarkings")
+    m = custom(mat, MARKINGS_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV1", "UV2", "UV3", "DS"], x + 300, y, "LaneMarkings")
     link(u1, "", m, "UV1")
     link(u2, "", m, "UV2")
     link(u3, "", m, "UV3")
+    link(dash_scale(mat, x, y + 300), "", m, "DS")
     mid = node(mat, unreal.MaterialExpressionComponentMask, x + 550, y, r=True, g=False, b=False, a=False)
     side = node(mat, unreal.MaterialExpressionComponentMask, x + 550, y + 100, r=False, g=True, b=False, a=False)
     link(m, "", mid, "")

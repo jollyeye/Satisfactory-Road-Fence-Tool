@@ -564,6 +564,7 @@ void ARMRoadAdjustHologram::RebuildRoadPreviews()
 		RMGeometry::BuildRoad(Frames, Road->GetRoadWidth(), Road->GetRoadHeight(), 400.f, Road->GetMarkings(), Road->mEdgeLineInset, Top, Body);
 		Top.ApplyToSection(Mesh, 0, false);
 		Body.ApplyToSection(Mesh, 1, false);
+		Mesh->SetCustomPrimitiveDataFloat(ARMBuildableRoad::DashScaleIndex, ARMBuildableRoad::DashScaleFor(Frames.Last().Dist - Frames[0].Dist));
 	};
 	Build(mRoadA, A, mPreviewMesh);
 	if (mRoadB)

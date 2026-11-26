@@ -195,10 +195,12 @@ void ARMBuildableRoad::ApplyMarkingColors(const FFactoryCustomizationData& Data)
 	FLinearColor P = Resolved.PrimaryColor;
 	FLinearColor S = Resolved.SecondaryColor;
 	AdjustColorsForLook(Data, P, S);
-	ForEachMeshComponent([&P, &S](UProceduralMeshComponent* M)
+	const float DashScale = DashScaleFor(GetLength());
+	ForEachMeshComponent([&P, &S, DashScale](UProceduralMeshComponent* M)
 	{
 		M->SetCustomPrimitiveDataVector4(PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
 		M->SetCustomPrimitiveDataVector4(SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+		M->SetCustomPrimitiveDataFloat(DashScaleIndex, DashScale);
 	});
 }
 

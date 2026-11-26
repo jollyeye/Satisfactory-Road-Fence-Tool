@@ -54,6 +54,14 @@ time, nothing is stored.
     is left); an orange bar across each road at the cut with posts at its edges (where the curve starts / ends); the
     three previews in the roads' real surface (look material, paint) with the valid / invalid state as their outline.
 
+- **Dashed lane lines meet evenly** (asked 2026-11-26, built, to test): the dashes (3 m dash, 6 m gap) ran from each
+  road's start, so where a road ended mid-cycle the next one's dashes did not follow on. Now, like the grid fence's
+  panels, each road fits a whole number of 9 m cycles, stretched to its length (`ARMBuildableRoad::DashScaleFor`:
+  cycles = round(length / 9 m), at least 1), and starts and ends half way through a gap: two roads meet with a 6 m gap
+  (stretched) whichever way each runs. The scale goes to the materials as custom primitive data 32 (`DashScale`, 1 when
+  not pushed); the road hologram, Adjust Joint and Smooth Joint previews set their own. Existing roads change their
+  dash positions once. Needs the materials step (`make_materials.py`).
+
 ## Waiting
 - Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections
   on long roads have run-time component names a client cannot name to the server.

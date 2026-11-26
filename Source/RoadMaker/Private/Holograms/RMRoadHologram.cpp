@@ -354,6 +354,7 @@ void ARMRoadHologram::RebuildPreview()
 	{
 		Top.ApplyToSection(mPreviewMesh, 0, false);
 		Body.ApplyToSection(mPreviewMesh, 1, false);
+		mPreviewMesh->SetCustomPrimitiveDataFloat(ARMBuildableRoad::DashScaleIndex, ARMBuildableRoad::DashScaleFor(Frames.Last().Dist - Frames[0].Dist));
 	}
 	RebuildDirectionArrow(Frames);
 }
