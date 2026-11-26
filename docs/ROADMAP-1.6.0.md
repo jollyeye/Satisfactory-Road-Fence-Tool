@@ -129,7 +129,9 @@ time, nothing is stored.
     `NodeMeshActor_C` with a `BoxComponent` hit box bigger than the rock: hit boxes (`ShapeComponent`) are passed
     through now, the rock's own mesh behind still counts. What the banks stand on is logged (Verbose, once each).
     `SlopeVersion` 6.
-  - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
+  - Tested and working 2026-11-26. Decided 2026-11-26: a road whose bank line runs past a rock's edge into more than
+    8 m of drop (an upside-down-pyramid rock) stays refused (no half banks); the 16 m wall would not help there.
+  - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
 - Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections
