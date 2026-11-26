@@ -259,8 +259,41 @@ void ARMRoadAdjustHologram::SetHologramLocationAndRotation(const FHitResult& InH
 		return;
 	}
 	mEndSnapped = false;
-	mEnd = hitResult.Location + FVector(0.f, 0.f, GetSurfaceOffset());
+	// Level at the joint's height: where the aim crosses that height; the ground only lifts it (it never sinks).
+	const FVector Ground = hitResult.Location + FVector(0.f, 0.f, GetSurfaceOffset());
+	const FVector From = hitResult.TraceStart;
+	const FVector Dir = (hitResult.TraceEnd - hitResult.TraceStart).GetSafeNormal();
+	const float HitDist = hitResult.bBlockingHit ? FVector::Dist(From, hitResult.Location) : TNumericLimits<float>::Max();
+	FVector Point(Ground.X, Ground.Y, mJointZ);
+	bool bInAir = false;
+	if (FMath::Abs(Dir.Z) > 1e-3f)
+	{
+		const float T = (mJointZ - From.Z) / Dir.Z;
+		if (T > 0.f && T < HitDist)
+		{
+			Point = From + Dir * T; // the aim reaches the joint's height in the air, before the ground
+			bInAir = true;
+		}
+	}
+	if (!bInAir && !hitResult.bBlockingHit)
+	{
+		return; // at the sky, never crossing the joint's height: it stays where it is
+	}
+	if (hitResult.bBlockingHit && FVector::Dist2D(Point, Ground) < 1.f)
+	{
+		Point.Z = FMath::Max(mJointZ, Ground.Z); // on the ground there: lifted by it if it is higher
+	}
+	mEnd = Point;
 	UpdateCurve();
+}
+
+void ARMRoadAdjustHologram::SetHologramNudgeLocation()
+{
+	Super::SetHologramNudgeLocation();
+	if (mStep != 0 && IsHologramLocked())
+	{
+		mJointZ = mEnd.Z; // a nudge up / down sets the height the joint then keeps
+	}
 }
 
 bool ARMRoadAdjustHologram::TrySnapToRoadEnd(const FHitResult& hitResult)
@@ -371,6 +404,7 @@ bool ARMRoadAdjustHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		mStep = 1;
 		mScrollAtStepStart = GetScrollRotateValue();
 		mEnd = End.Location;
+		mJointZ = End.Location.Z;
 		mEndSnapped = false;
 		SetGrabbedRoadsHidden(true);
 		UpdateCurve();

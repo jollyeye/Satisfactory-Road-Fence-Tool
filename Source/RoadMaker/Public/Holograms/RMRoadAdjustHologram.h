@@ -28,6 +28,7 @@ public:
 	virtual AActor* Construct(TArray<AActor*>& out_children, FNetConstructionID constructionID) override;
 	virtual void SetMaterialState(EHologramMaterialState state) override;
 	virtual void Destroyed() override;
+	virtual void SetHologramNudgeLocation() override;
 
 protected:
 	virtual bool TrySnapToRoadEnd(const FHitResult& hitResult) override;
@@ -93,6 +94,12 @@ protected:
 	FVector mJoint = FVector::ZeroVector;
 	UPROPERTY(Replicated, CustomSerialization)
 	FVector mJointDir = FVector::ForwardVector;
+
+	/**
+	 * The joint's height (road top) while it is moved (1.6.0): the aim moves it level, at this height (not down onto
+	 * the ground); it only rises where the ground is higher. H + nudge up / down changes it.
+	 */
+	float mJointZ = 0.f;
 
 	TArray<FEnd> mEnds;
 	FVector mCircleBase = FVector::ZeroVector;
