@@ -9,11 +9,11 @@ the other (`RMRoadUtils::JoinTolerance`), whatever their directions; this is che
 time, nothing is stored.
 
 ## Planned
-- **Straight build mode really straight** (asked 2026-11-26, built, to test): it was locked to the direction of the
+- **Straight build mode really straight** (asked 2026-11-26, built, tested 2026-11-26): it was locked to the direction of the
   road it started from, and an end snapped to another road end made a flush curve. Now a straight line from the start
   to the aim in any direction, ending exactly on a snapped road end's point at an angle (corners meet; Smooth Joint
   rounds them). Roads, walking paths and fences (they share `ARMSplineHologram::UpdateCurve`).
-- **Adjust Curvature becomes Adjust Joint** (decided 2026-11-26, built 2026-11-26, to test): English name changed only; its string
+- **Adjust Curvature becomes Adjust Joint** (decided 2026-11-26, built, tested 2026-11-26): English name changed only; its string
   table key stays (translations are marked out of date, not lost).
   - Straight roads stay straight: a road whose whole course lies on a line (within a few cm) swings around its far
     end, a straight line from the far end to the moved joint. Its far end turns with it (a joint there gets a small
