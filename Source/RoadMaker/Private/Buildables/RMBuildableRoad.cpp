@@ -795,6 +795,13 @@ namespace RMSideSlopes
 				return false;
 			}
 		}
+		// Invisible hit boxes (a resource node's NodeMeshActor has a box bigger than its rock): not a surface. The
+		// rock's own mesh behind it, if solid, is.
+		if (Component && IsKindOf(Component->GetClass(), TEXT("ShapeComponent")))
+		{
+			UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: passing through hit box %s of %s"), *Component->GetName(), *Actor->GetName());
+			return false;
+		}
 		if (Component && IsKindOf(Component->GetClass(), TEXT("FoliageInstancedStaticMeshComponent")))
 		{
 			UE_LOG(LogRoadMaker, Verbose, TEXT("Side slopes: passing through foliage %s"), *Component->GetName());

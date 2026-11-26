@@ -125,6 +125,10 @@ time, nothing is stored.
     list of what is not ground instead (by class name and parents: FGResourceNodeBase / FGResourceNode /
     FGResourceDeposit, FGItemPickup, FGBuildable, Pawn, InstancedFoliageActor, FoliageInstancedStaticMeshComponent);
     everything else is ground. Pass-throughs logged (Verbose). `SlopeVersion` 5.
+  - Rocks are `FGCliffActor` (a FactoryGame class, why the first rule failed). Resource nodes' rocks are
+    `NodeMeshActor_C` with a `BoxComponent` hit box bigger than the rock: hit boxes (`ShapeComponent`) are passed
+    through now, the rock's own mesh behind still counts. What the banks stand on is logged (Verbose, once each).
+    `SlopeVersion` 6.
   - Later: past 8 m a straight-down wall at the foot, to 16 m in all.
 
 ## Waiting
