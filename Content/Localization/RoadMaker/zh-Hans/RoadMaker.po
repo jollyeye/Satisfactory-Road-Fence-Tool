@@ -1262,7 +1262,7 @@ msgstr ""
 #. Key:	RoadSlopes.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,RoadSlopes.Desc"
-msgid "Banks a raised road, walking path or intersection down to the terrain (cement blocks, solid to walk and drive on; 1 : 1.5). Roads: aim at the side you want, the cyan cage shows its bank; click to add it (each side on its own, other roads are ignored). Intersections: all their curbs at once. None where the ground is level with the edge; not possible where the ground is more than 8 m below (red lines). Aim at a bank (red cage) and click to remove it. Off on new pieces; cut, adjusted and copied roads keep them and are measured again. Free."
+msgid "Banks a raised road, walking path or intersection down to the terrain (cement blocks, solid to walk and drive on; 1 : 1.5). Roads: aim at the side you want, the cyan cage shows its bank; click to add it (each side on its own, other roads are ignored). Intersections: curb by curb. Hold the snap key for both sides / all curbs. None where the ground is level with the edge; not possible where the ground is more than 8 m below (red lines). Aim at a bank (red cage) and click to remove it. Off on new pieces; cut, adjusted and copied roads keep them and are measured again. Free."
 msgstr ""
 
 #. Key:	SlopeTooDeepHint
@@ -1280,11 +1280,23 @@ msgstr ""
 #. Key:	SlopeRemoveSideHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeRemoveSideHint"
-msgid "Side Slopes: click to remove the bank on this side (red)"
+msgid "Side Slopes: click to remove the bank on this side (red; hold the snap key for both sides)"
 msgstr ""
 
 #. Key:	SlopeAddSideHint
 #: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
 msgctxt "RoadMaker,SlopeAddSideHint"
-msgid "Side Slopes: click to add a bank on this side, down to the ground (cyan)"
+msgid "Side Slopes: click to add a bank on this side, down to the ground (cyan; hold the snap key for both sides)"
+msgstr ""
+
+#. Key:	SlopeRemoveCurbHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeRemoveCurbHint"
+msgid "Side Slopes: click to remove the bank on this curb (red; hold the snap key for all curbs)"
+msgstr ""
+
+#. Key:	SlopeAddCurbHint
+#: Source/RoadMaker/Private/Holograms/RMRoadSlopeHologram.cpp
+msgctxt "RoadMaker,SlopeAddCurbHint"
+msgid "Side Slopes: click to add a bank on this curb, down to the ground (cyan; hold the snap key for all curbs)"
 msgstr ""

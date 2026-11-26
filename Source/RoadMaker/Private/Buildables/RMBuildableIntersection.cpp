@@ -26,6 +26,7 @@ void ARMBuildableIntersection::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 	DOREPLIFETIME(ARMBuildableIntersection, mHeight);
 	DOREPLIFETIME(ARMBuildableIntersection, mSideLines);
 	DOREPLIFETIME(ARMBuildableIntersection, mSideSlopes);
+	DOREPLIFETIME(ARMBuildableIntersection, mSlopeRuns);
 	DOREPLIFETIME(ARMBuildableIntersection, mSlopeSamples);
 }
 
@@ -666,7 +667,9 @@ void ARMBuildableIntersection::RequestSlopeMeasure()
 		}
 		MeasureSlopes(mSlopeSamples);
 		mSlopeKey = SlopeShapeKey();
-		if (ARMBuildableRoad::SlopeTooDeep(mSlopeSamples, TArray<FVector2D>()))
+		// A curb too deep somewhere loses its bank (no half banks), the others keep theirs.
+		mSlopeRuns = DropTooDeepRuns(mSlopeSamples, GetSlopeRuns());
+		if (mSlopeRuns == 0)
 		{
 			mSideSlopes = false;
 			mSlopeSamples.Reset();
@@ -677,23 +680,95 @@ void ARMBuildableIntersection::RequestSlopeMeasure()
 	}));
 }
 
-void ARMBuildableIntersection::SetSideSlopes(bool bOn)
+void ARMBuildableIntersection::SampleRuns(TArray<int32>& OutRuns, int32& OutNumRuns) const
+{
+	OutRuns.Reset();
+	OutNumRuns = 0;
+	TArray<FVector> Ring;
+	TArray<bool> IsMouth;
+	TArray<FSlopePoint> Points;
+	float Perimeter = 0.f;
+	if (LocalOutline(Ring, IsMouth))
+	{
+		SlopePoints(Ring, IsMouth, Points, Perimeter);
+	}
+	for (const FSlopePoint& P : Points)
+	{
+		OutRuns.Add(P.Run);
+		OutNumRuns = FMath::Max(OutNumRuns, P.Run + 1);
+	}
+}
+
+int32 ARMBuildableIntersection::RunAt(const FVector& World) const
+{
+	TArray<FVector> Points;
+	GetSlopeWorldPoints(Points);
+	TArray<int32> Runs;
+	int32 NumRuns = 0;
+	SampleRuns(Runs, NumRuns);
+	int32 Best = INDEX_NONE;
+	float BestDist = TNumericLimits<float>::Max();
+	for (int32 I = 0; I < Points.Num() && I < Runs.Num(); ++I)
+	{
+		const float D = FVector::DistSquared(Points[I], World);
+		if (D < BestDist)
+		{
+			BestDist = D;
+			Best = Runs[I];
+		}
+	}
+	return Best;
+}
+
+void ARMBuildableIntersection::MaskSlopeRuns(TArray<FVector2D>& Samples, uint32 Runs) const
+{
+	TArray<int32> SampleRun;
+	int32 NumRuns = 0;
+	SampleRuns(SampleRun, NumRuns);
+	for (int32 I = 0; I < Samples.Num() && I < SampleRun.Num(); ++I)
+	{
+		if (SampleRun[I] >= 32 || !(Runs & (1u << SampleRun[I])))
+		{
+			Samples[I].Y = 0.;
+		}
+	}
+}
+
+uint32 ARMBuildableIntersection::DropTooDeepRuns(TArray<FVector2D>& Samples, uint32 Runs) const
+{
+	MaskSlopeRuns(Samples, Runs);
+	TArray<int32> SampleRun;
+	int32 NumRuns = 0;
+	SampleRuns(SampleRun, NumRuns);
+	for (int32 I = 0; I < Samples.Num() && I < SampleRun.Num(); ++I)
+	{
+		if (Samples[I].Y < 0.f && SampleRun[I] < 32)
+		{
+			Runs &= ~(1u << SampleRun[I]);
+		}
+	}
+	MaskSlopeRuns(Samples, Runs);
+	return Runs;
+}
+
+void ARMBuildableIntersection::SetSlopeRuns(uint32 Runs)
 {
 	if (!HasAuthority())
 	{
 		return;
 	}
-	mSideSlopes = bOn;
 	mSlopeSamples.Reset();
-	if (bOn)
+	if (Runs != 0)
 	{
 		MeasureSlopes(mSlopeSamples);
 		mSlopeKey = SlopeShapeKey();
-		if (ARMBuildableRoad::SlopeTooDeep(mSlopeSamples, TArray<FVector2D>()))
-		{
-			mSideSlopes = false; // no half banks (the tool refuses it first)
-			mSlopeSamples.Reset();
-		}
+		Runs = DropTooDeepRuns(mSlopeSamples, Runs); // the tool refuses it first
+	}
+	mSlopeRuns = Runs;
+	mSideSlopes = Runs != 0;
+	if (!mSideSlopes)
+	{
+		mSlopeSamples.Reset();
 	}
 	RebuildMesh();
 	ForceNetUpdate();

@@ -221,8 +221,10 @@ public:
 	bool HasSideSlopes() const { return mSideSlopes; }
 	/** Sides with a bank: bit 0 left, bit 1 right (banks from before the sides could be chosen: both). */
 	uint8 GetSlopeSides() const { return mSideSlopes ? (mSlopeSides != 0 ? mSlopeSides : 3) : 0; }
-	/** Server: one side's bank on or off (Side 0 left, 1 right); measured now, refused when that side is too deep. */
-	void SetSlopeSide(int32 Side, bool bOn);
+	/** Server: the sides with a bank (bit 0 left, bit 1 right); measured now, a side too deep somewhere is left off. */
+	void SetSlopeSides(uint8 Sides);
+	/** Clears the sides with a too-deep sample (and flattens them); returns the sides left. */
+	static uint8 DropTooDeepSides(TArray<FVector2D>& Left, TArray<FVector2D>& Right, uint8 Sides);
 	/** Samples of the sides that are off made flat (no bank, not too deep). */
 	static void MaskSlopeSides(TArray<FVector2D>& Left, TArray<FVector2D>& Right, uint8 Sides);
 	const TArray<FVector2D>& GetSlopeLeft() const { return mSlopeLeft; }

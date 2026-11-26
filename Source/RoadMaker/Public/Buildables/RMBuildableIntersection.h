@@ -50,8 +50,18 @@ public:
 	// limit, traces, material), switched with the Side Slopes tool. Measured on the server and saved: one sample about
 	// every 2 m along the curbs (SlopePoints), none on the road mouths. Mouths of roads with banks carry on into them.
 	bool HasSideSlopes() const { return mSideSlopes; }
-	/** Server: on (measured now; refused when the ground is too far below somewhere) or off. */
-	void SetSideSlopes(bool bOn);
+	/** Curbs (runs between two road mouths, in outline order) with a bank: bit per curb; old banks = all. */
+	uint32 GetSlopeRuns() const { return mSideSlopes ? (mSlopeRuns != 0 ? mSlopeRuns : ~0u) : 0; }
+	/** Server: the curbs with a bank; measured now, a curb too deep somewhere is left off. */
+	void SetSlopeRuns(uint32 Runs);
+	/** The curb nearest a world point (INDEX_NONE: none). */
+	int32 RunAt(const FVector& World) const;
+	/** The curb of each sample (sample order), and how many curbs. */
+	void SampleRuns(TArray<int32>& OutRuns, int32& OutNumRuns) const;
+	/** Samples of curbs that are off made flat. */
+	void MaskSlopeRuns(TArray<FVector2D>& Samples, uint32 Runs) const;
+	/** Clears the curbs with a too-deep sample (and flattens them); returns the curbs left. */
+	uint32 DropTooDeepRuns(TArray<FVector2D>& Samples, uint32 Runs) const;
 	/** The samples (perimeter distance, drop) for the intersection as it stands (world traces). */
 	void MeasureSlopes(TArray<FVector2D>& OutSamples) const;
 	/** The banks' mesh (actor space) for these samples. */
@@ -97,6 +107,9 @@ protected:
 	/** Side slopes on, their samples (perimeter distance cm, drop cm; see ARMBuildableRoad) and the shape they are for. */
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
 	bool mSideSlopes = false;
+	/** Which curbs (bit per run between two mouths; 0 with mSideSlopes = all, from before curbs could be chosen). */
+	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
+	uint32 mSlopeRuns = 0;
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Ends)
 	TArray<FVector2D> mSlopeSamples;
 	UPROPERTY(SaveGame)

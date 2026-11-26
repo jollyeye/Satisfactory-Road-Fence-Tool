@@ -697,10 +697,10 @@ void ARMBuildableRoad::RequestSlopeMeasure()
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
 		MaskSlopeSides(mSlopeLeft, mSlopeRight, GetSlopeSides());
 		mSlopeKey = SlopeShapeKey();
-		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
+		// Reshaped or copied where the ground is too far below on a side: that side's bank goes (no half banks).
+		mSlopeSides = DropTooDeepSides(mSlopeLeft, mSlopeRight, GetSlopeSides());
+		if (mSlopeSides == 0)
 		{
-			// Reshaped or copied where the ground is too far below: the banks go (no half banks).
-			mSlopeSides = 0;
 			mSideSlopes = false;
 			mSlopeLeft.Reset();
 			mSlopeRight.Reset();
@@ -725,30 +725,33 @@ void ARMBuildableRoad::MaskSlopeSides(TArray<FVector2D>& Left, TArray<FVector2D>
 	}
 }
 
-void ARMBuildableRoad::SetSlopeSide(int32 Side, bool bOn)
+uint8 ARMBuildableRoad::DropTooDeepSides(TArray<FVector2D>& Left, TArray<FVector2D>& Right, uint8 Sides)
 {
-	if (!HasAuthority() || Side < 0 || Side > 1)
+	// A side with ground too far below somewhere has no bank at all (no half banks); the other side keeps its own.
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		if ((Sides & (1 << Side)) && SlopeTooDeep(Side == 0 ? Left : TArray<FVector2D>(), Side == 1 ? Right : TArray<FVector2D>()))
+		{
+			Sides &= ~(1 << Side);
+		}
+	}
+	MaskSlopeSides(Left, Right, Sides);
+	return Sides;
+}
+
+void ARMBuildableRoad::SetSlopeSides(uint8 Sides)
+{
+	if (!HasAuthority())
 	{
 		return;
 	}
-	uint8 Sides = GetSlopeSides();
-	Sides = bOn ? (Sides | (1 << Side)) : (Sides & ~(1 << Side));
+	Sides &= 3;
 	if (Sides != 0)
 	{
 		MeasureSlopes(mSlopeLeft, mSlopeRight);
 		MaskSlopeSides(mSlopeLeft, mSlopeRight, Sides);
 		mSlopeKey = SlopeShapeKey();
-		if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
-		{
-			// The ground is too far below somewhere on this side: no bank there at all rather than half (the tool
-			// refuses it first).
-			Sides &= ~(1 << Side);
-			MaskSlopeSides(mSlopeLeft, mSlopeRight, Sides);
-			if (SlopeTooDeep(mSlopeLeft, mSlopeRight))
-			{
-				Sides = 0;
-			}
-		}
+		Sides = DropTooDeepSides(mSlopeLeft, mSlopeRight, Sides); // the tool refuses it first
 	}
 	mSlopeSides = Sides;
 	mSideSlopes = Sides != 0;
