@@ -45,7 +45,7 @@ void ARMRoadSlopeHologram::SetHologramLocationAndRotation(const FHitResult& InHi
 	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
 	ARMBuildableRoad* Hit = Cast<ARMBuildableRoad>(hitResult.GetActor());
 	mTarget = Hit && !Hit->GetIsDismantled() && !Hit->IsActorBeingDestroyed() && !Hit->IsHidden() ? Hit : nullptr;
-	SetActorLocation(mTarget ? mTarget->GetActorLocation() : hitResult.Location);
+	SetActorLocation(mTarget ? mTarget->GetActorLocation() : FVector(hitResult.Location));
 	SetActorRotation(FRotator::ZeroRotator);
 	if (mTarget && !mTarget->HasSideSlopes())
 	{
