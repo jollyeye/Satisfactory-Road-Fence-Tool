@@ -44,6 +44,10 @@ time, nothing is stored.
     radius, grade; red when not). Build: `CutAt` on each road (its tracks and paths split there like the Cut tool),
     the piece at the joint dismantled with its markings / tracks (paths go after it), the curve spawned like road A
     (`SpawnLike`), cost by length like road A. PO entries added.
+  - Tested 2026-11-26: works; the preview was hard to read (the light outline of the whole old roads stayed, the
+    curve's ends not visible, hologram colour only). Now: no outline of the old roads in step 1 (the previews show what
+    is left); an orange bar across each road at the cut with posts at its edges (where the curve starts / ends); the
+    three previews in the roads' real surface (look material, paint) with the valid / invalid state as their outline.
 
 ## Waiting
 - Issue #10 (multiplayer rubberbanding walking on roads): waiting for the reporter's answers. Suspect: road sections

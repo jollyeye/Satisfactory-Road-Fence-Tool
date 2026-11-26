@@ -36,6 +36,7 @@ protected:
 		TArray<FRMSplinePoint> Kept;
 		FVector Cut = FVector::ZeroVector;
 		FVector TowardJoint = FVector::ForwardVector;
+		FVector Right = FVector::RightVector; // across the road at the cut
 		float CutDist = 0.f;  // along the road from its start
 		float Length = 0.f;
 	};
@@ -46,7 +47,10 @@ protected:
 	/** The longest setback both roads allow (each keeps at least its minimum length). */
 	float MaxSetback() const;
 	void RebuildSmoothPreviews();
-	void ApplyLookToCurve();
+	/** The previews in the roads' real surface (material, look, paint), with the hologram's outline colour on top. */
+	void ApplyRoadSurfaces();
+	/** Where the curve starts and ends: a bar across each road at the cut, with posts at its edges. */
+	void RebuildCutMarks(const FTrim& A, const FTrim& B);
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mPreviewMeshC;

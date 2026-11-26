@@ -3,6 +3,9 @@
 #include "Holograms/RMHologramLook.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "UI/RMScreenHint.h"
+#include "Holograms/RMOverlayLines.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "FGDismantleInterface.h"
 #include "RMRoadUtils.h"
 #include "RMGeometry.h"
@@ -130,8 +133,7 @@ void ARMRoadSmoothHologram::UpdateCurve()
 		return;
 	}
 	SetActorLocationAndRotation(mJoint, FRotator::ZeroRotator);
-	RebuildSmoothPreviews();
-	RebuildCircles();
+	RebuildSmoothPreviews(); // also the cut marks (no outline of the old roads: the previews show what is left)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -205,6 +207,7 @@ bool ARMRoadSmoothHologram::TrimRoad(const ARMBuildableRoad* Road, int32 JointEn
 	RMGeometry::OffsetCurve(Kept, 0.f, 200.f, Out.Kept);
 	Out.Cut = Cut.Pos;
 	Out.TowardJoint = JointEnd == 1 ? Cut.Fwd : -Cut.Fwd;
+	Out.Right = Cut.Right;
 	return Out.Kept.Num() >= 2;
 }
 
@@ -246,7 +249,7 @@ float ARMRoadSmoothHologram::MaxSetback() const
 
 void ARMRoadSmoothHologram::RebuildSmoothPreviews()
 {
-	for (UProceduralMeshComponent* Mesh : { mPreviewMesh, mPreviewMeshB, mPreviewMeshC })
+	for (UProceduralMeshComponent* Mesh : { mPreviewMesh, mPreviewMeshB, mPreviewMeshC, mCircleMesh })
 	{
 		Mesh->ClearAllMeshSections();
 	}
@@ -256,6 +259,7 @@ void ARMRoadSmoothHologram::RebuildSmoothPreviews()
 	{
 		return;
 	}
+	RebuildCutMarks(A, B);
 	auto Build = [this](const ARMBuildableRoad* Road, const TArray<FRMSplinePoint>& Points, UProceduralMeshComponent* Mesh)
 	{
 		TArray<FRMFrame> Frames;
@@ -277,22 +281,74 @@ void ARMRoadSmoothHologram::RebuildSmoothPreviews()
 	Build(mRoadA, A.Kept, mPreviewMesh);
 	Build(mRoadB, B.Kept, mPreviewMeshB);
 	Build(mRoadA, Curve, mPreviewMeshC); // the new curve is made like road A
-	UpdateHologramLook();
-	ApplyLookToSecondRoad();
-	ApplyLookToCurve();
+	ApplyRoadSurfaces();
 }
 
 void ARMRoadSmoothHologram::SetMaterialState(EHologramMaterialState state)
 {
-	Super::SetMaterialState(state);
-	ApplyLookToCurve();
+	Super::SetMaterialState(state); // the game's hologram material ...
+	ApplyRoadSurfaces();            // ... replaced by the roads' own surfaces, the state shown by the outline
 }
 
-void ARMRoadSmoothHologram::ApplyLookToCurve()
+void ARMRoadSmoothHologram::ApplyRoadSurfaces()
 {
-	UMaterialInterface* Material = (mPlacementMaterialState == EHologramMaterialState::HMS_ERROR && mInvalidPlacementMaterial)
-		? mInvalidPlacementMaterial.Get() : mValidPlacementMaterial.Get();
-	RMHologramLook::Apply(mPreviewMeshC, Material, GetStencilForHologramMaterialState(mPlacementMaterialState));
+	const uint8 Stencil = GetStencilForHologramMaterialState(mPlacementMaterialState);
+	auto Surface = [Stencil](UProceduralMeshComponent* Mesh, const ARMBuildableRoad* Road)
+	{
+		if (!Mesh || !IsValid(Road) || Mesh->GetNumSections() == 0)
+		{
+			return;
+		}
+		Mesh->SetMaterial(0, Road->GetLookMaterialFor(Road->GetShownLook(), true, Road->mTopMaterial));
+		if (Mesh->GetNumSections() > 1)
+		{
+			Mesh->SetMaterial(1, Road->GetLookMaterialFor(Road->GetShownLook(), false, Road->mBodyMaterial));
+		}
+		// Its paint (lane line colours, the cyberpunk glow), as the road's own mesh has it.
+		if (const UPrimitiveComponent* Source = Road->GetProceduralMesh())
+		{
+			const TArray<float>& Data = Source->GetCustomPrimitiveData().Data;
+			for (int32 I = 0; I < Data.Num(); ++I)
+			{
+				Mesh->SetCustomPrimitiveDataFloat(I, Data[I]);
+			}
+		}
+		RMHologramLook::Apply(Mesh, nullptr, Stencil);
+	};
+	Surface(mPreviewMesh, mRoadA);
+	Surface(mPreviewMeshB, mRoadB);
+	Surface(mPreviewMeshC, mRoadA);
+}
+
+void ARMRoadSmoothHologram::RebuildCutMarks(const FTrim& A, const FTrim& B)
+{
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager || !mRoadA || !mRoadB)
+	{
+		return;
+	}
+	int32 ViewW = 0, ViewH = 0;
+	PC->GetViewportSize(ViewW, ViewH);
+	RMOverlayLines::FOverlay O;
+	O.Base = GetActorLocation();
+	O.Camera = PC->PlayerCameraManager->GetCameraLocation();
+	O.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
+	const FLinearColor Color(1.f, 0.55f, 0.f); // the tool's orange
+	for (const TPair<const FTrim*, const ARMBuildableRoad*>& Cut : { TPair<const FTrim*, const ARMBuildableRoad*>(&A, mRoadA), TPair<const FTrim*, const ARMBuildableRoad*>(&B, mRoadB) })
+	{
+		const float Half = Cut.Value->GetRoadWidth() * 0.5f;
+		const FVector Left = Cut.Key->Cut - Cut.Key->Right * Half;
+		const FVector Right = Cut.Key->Cut + Cut.Key->Right * Half;
+		O.Line(Left, Right, Color);
+		O.Line(Left, Left + FVector(0.f, 0.f, 250.f), Color);
+		O.Line(Right, Right + FVector(0.f, 0.f, 250.f), Color);
+	}
+	mCircleMesh->CreateMeshSection_LinearColor(0, O.Vertices, O.Triangles, TArray<FVector>(), TArray<FVector2D>(), O.Colors, TArray<FProcMeshTangent>(), false);
+	if (UMaterialInterface* Overlay = RMOverlayLines::OverlayMaterial())
+	{
+		mCircleMesh->SetMaterial(0, Overlay);
+	}
+	mCircleMesh->SetRenderCustomDepth(false);
 }
 
 void ARMRoadSmoothHologram::CheckValidPlacement()
