@@ -819,14 +819,15 @@ namespace RMSideSlopes
 
 	/**
 	 * Whether a road hit at Point runs side by side with the bank's edge (Edge, going out along Out): about parallel
-	 * (within 20 degrees) and its slab right at the edge (60 cm, seen from above). Only such a road stops a bank, and
+	 * (within 5 degrees), level with the edge (50 cm) and its slab right at the edge (60 cm, seen from above). Only such a road stops a bank, and
 	 * only found by the check straight down beside the edge; down the bank line every road is passed through.
 	 */
 	bool IsParallelNeighbour(const ARMBuildableRoad* Other, const FVector& Point, const FVector& Edge, const FVector& Out)
 	{
 		// Right at the edge seen from above (not "anywhere down the bank line": a parallel road a few metres off and lower
 		// is ignored, the bank goes on past it).
-		if (FVector::Dist2D(Point, Edge) > 60.f)
+		// Snapped side by side: level with this edge too (a lower or higher road passing close is not).
+		if (FVector::Dist2D(Point, Edge) > 60.f || FMath::Abs(Point.Z - Edge.Z) > 50.f)
 		{
 			return false;
 		}
@@ -844,7 +845,7 @@ namespace RMSideSlopes
 			}
 		}
 		const FVector Fwd = Best ? FVector(Best->Fwd.X, Best->Fwd.Y, 0.f).GetSafeNormal() : FVector::ZeroVector;
-		return !Fwd.IsNearlyZero() && FMath::Abs(FVector::DotProduct(Fwd, Out)) < 0.34f; // across Out = along the edge
+		return !Fwd.IsNearlyZero() && FMath::Abs(FVector::DotProduct(Fwd, Out)) < 0.09f; // within 5 degrees of along the edge
 	}
 
 	EHit FirstHit(UWorld* World, const FVector& From, const FVector& To, const AActor* Self, float& OutDist, const TArray<const AActor*>& PassThrough,

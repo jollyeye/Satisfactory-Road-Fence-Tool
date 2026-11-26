@@ -136,7 +136,7 @@ time, nothing is stored.
     from the saved `mSlopeNeighbourKey`: not on loading): its bank on that side goes. Dismantling the new piece leaves
     the side as it is (decided).
   - Asked 2026-11-26: only a road side by side stops a bank (about parallel, within 20 degrees, its slab within 1.5 m
-    of the edge: `IsParallelNeighbour`; tightened to 60 cm and only by the check straight down beside the edge, the trace
+    of the edge: `IsParallelNeighbour`; tightened to 5 degrees, 60 cm and level within 50 cm, and only by the check straight down beside the edge, the trace
     down the bank passes every road); intersections and roads at an angle are ignored (the bank goes on through
     them to the ground; asked 2026-11-26 after trying them as ground). Other pieces' banks are still ground.
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
