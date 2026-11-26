@@ -758,6 +758,11 @@ void ARMBuildableIntersection::SetSlopeRuns(uint32 Runs)
 		return;
 	}
 	mSlopeSamples.Reset();
+	// Only curbs that exist (old banks were "all": every bit set).
+	TArray<int32> SampleRun;
+	int32 NumRuns = 0;
+	SampleRuns(SampleRun, NumRuns);
+	Runs &= NumRuns >= 32 ? ~0u : ((1u << NumRuns) - 1u);
 	if (Runs != 0)
 	{
 		MeasureSlopes(mSlopeSamples);
