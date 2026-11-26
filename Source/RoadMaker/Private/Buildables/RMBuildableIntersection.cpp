@@ -675,22 +675,17 @@ void ARMBuildableIntersection::BuildSlopeMeshFrom(const TArray<FVector>& Ring, c
 		}
 		// Thinned in plan (points within 15 cm of the line between their neighbours dropped): far fewer triangles and a
 		// much quicker triangulation; the floor sits 30 cm into the ground, so the small gaps at the feet are buried.
-		for (bool bDropped = true; bDropped && Floor.Num() > 3;)
+		// One pass, never two neighbours in a row, so the error stays within the 15 cm.
+		for (int32 I = 0; I < Floor.Num() && Floor.Num() > 3; ++I)
 		{
-			bDropped = false;
-			for (int32 I = 0; I < Floor.Num() && Floor.Num() > 3; ++I)
+			const FVector& A = Floor[(I + Floor.Num() - 1) % Floor.Num()];
+			const FVector& B = Floor[(I + 1) % Floor.Num()];
+			const FVector2D AB(B - A), AP(Floor[I] - A);
+			const float Len = AB.Size();
+			const float Off = Len > 1.f ? FMath::Abs(AB.X * AP.Y - AB.Y * AP.X) / Len : AP.Size();
+			if (Off < 15.f)
 			{
-				const FVector& A = Floor[(I + Floor.Num() - 1) % Floor.Num()];
-				const FVector& B = Floor[(I + 1) % Floor.Num()];
-				const FVector2D AB(B - A), AP(Floor[I] - A);
-				const float Len = AB.Size();
-				const float Off = Len > 1.f ? FMath::Abs(AB.X * AP.Y - AB.Y * AP.X) / Len : AP.Size();
-				if (Off < 15.f)
-				{
-					Floor.RemoveAt(I);
-					bDropped = true;
-					--I;
-				}
+				Floor.RemoveAt(I); // the next point (now at I) is kept: the loop moves past it
 			}
 		}
 		if (Floor.Num() >= 3)

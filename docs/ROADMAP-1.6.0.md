@@ -171,7 +171,11 @@ time, nothing is stored.
   intersection): the Side Slopes tool rebuilt the intersection's whole slab several times a frame (outline lookups) and
   its cage every frame; now the outline is cached per shape and the cage rebuilt only when something changes. A slow-step
   log was added (`RMPerf::FScope`, `RM.PerfLogMs`, default 8 ms): mesh rebuilds, side slope measuring, the dismantle
-  tool's rider search (tracks, paths, markings on a piece), the Side Slopes tool. Waiting for a log of the dip.
+  tool's rider search (tracks, paths, markings on a piece), the Side Slopes tool. Log 2026-11-26: the dismantle dip
+  did not come back (no slow step); switching a curb's bank: the intersection rebuild took 18-28 ms (13 ms without
+  banks), then the game re-checks the paths over it (the same hitch as placing many paths). Floor polygon now thinned
+  in plan (15 cm, one pass) and the slopes part timed on its own. Frame drop looking at a busy intersection: the game
+  drawing its many vehicle paths, not the mod.
 
 ## Waiting
 - Issue #10: reply to the reporter once tested (with the user's go-ahead).
