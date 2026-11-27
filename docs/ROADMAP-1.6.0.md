@@ -188,6 +188,9 @@ time, nothing is stored.
     Always closed (arm down and solid, WorldStatic, players pass: it blocks the vehicle paths through it like a
     foundation on a path, so self-driving vehicles stop and wait; the paths are re-checked on closing / opening via
     `RevalidateVehiclePathsSoon`). Look-at text shows the mode.
+  - Tested 2026-11-27: vehicles climbed over the closed arm. Now an invisible box (`mVehicleBlock`: the arm's length,
+    0.6 m thick, road to 4 m, WorldStatic, ignores pawns / visibility) is solid only while always closed; the visible
+    arm is solid to players and creatures in every mode (asked).
   - Automated Machines (name convention, no dependency): `AM_Condition_Vehicle_Waiting`, `AM_Condition_Open`,
     `AM_Action_Open(bool)` and `AM_Action_Close(bool)` (on = always open / closed, off = back to automatic),
     `AM_Action_Automatic`, `AM_Info_*`. Its tab only

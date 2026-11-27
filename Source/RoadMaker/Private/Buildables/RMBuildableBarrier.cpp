@@ -6,6 +6,7 @@
 #include "EngineUtils.h"
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
+#include "Components/BoxComponent.h"
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
 
@@ -16,12 +17,24 @@ ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitial
 	mArmMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("BarrierArm"));
 	mArmMesh->SetupAttachment(mMesh);
 	mArmMesh->bUseComplexAsSimpleCollision = true;
-	// Aimed at by the build gun (dismantle, E); a solid obstacle for vehicles and their paths only while always closed
-	// (UpdateArm). Players walk through.
-	mArmMesh->SetCollisionObjectType(ECC_WorldStatic);
+	// The visible arm: solid to players and creatures (pawns) and aimed at by the build gun (dismantle, E), in every
+	// mode; vehicles are stopped by mVehicleBlock (always closed only).
+	mArmMesh->SetCollisionObjectType(ECC_WorldDynamic);
 	mArmMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	mArmMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	mArmMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	mArmMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	mVehicleBlock = CreateDefaultSubobject<UBoxComponent>(TEXT("VehicleBlock"));
+	mVehicleBlock->SetupAttachment(mMesh);
+	mVehicleBlock->SetCollisionObjectType(ECC_WorldStatic);
+	mVehicleBlock->SetCollisionResponseToAllChannels(ECR_Block);
+	mVehicleBlock->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);       // players and creatures: the arm itself
+	mVehicleBlock->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore); // the build gun aims at the arm and post
+	mVehicleBlock->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+	mVehicleBlock->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mVehicleBlock->SetHiddenInGame(true);
+	mVehicleBlock->SetCanEverAffectNavigation(false);
 	mArmMesh->SetCastShadow(true);
 }
 
@@ -121,6 +134,10 @@ void ARMBuildableBarrier::RebuildMesh()
 	BuildArmMesh(mArmLength, White, Red);
 	RMBarrier::ApplyColored(White, mArmMesh, 0, FLinearColor(0.9f, 0.9f, 0.9f), true);
 	RMBarrier::ApplyColored(Red, mArmMesh, 1, FLinearColor(0.8f, 0.05f, 0.03f), true);
+	// The vehicle block along the arm (closed), from the road up to BlockHeight.
+	const float Reach = PostHalf + mArmLength;
+	mVehicleBlock->SetBoxExtent(FVector(BlockHalfThickness, Reach * 0.5f, BlockHeight * 0.5f));
+	mVehicleBlock->SetRelativeLocation(FVector(0.f, Reach * 0.5f + PostHalf * 0.5f, BlockHeight * 0.5f));
 	UpdateArm(true);
 }
 
@@ -215,13 +232,9 @@ void ARMBuildableBarrier::DetectVehicles()
 
 void ARMBuildableBarrier::UpdateArm(bool bSnap)
 {
-	// An obstacle only while always closed (automatic never blocks; open is up anyway): solid to vehicles and seen by
-	// the game's vehicle path check, which then blocks the paths through it. Players (pawns) still walk through.
-	const bool bSolid = mMode == ERMBarrierMode::Closed;
-	mArmMesh->SetCollisionResponseToAllChannels(bSolid ? ECR_Block : ECR_Ignore);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	mArmMesh->SetCollisionEnabled(bSolid ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::QueryOnly);
+	// Vehicles are stopped only while always closed (automatic never blocks; open is up anyway): the tall invisible
+	// block, solid to them and seen by the game's vehicle path check, which then blocks the paths through it.
+	mVehicleBlock->SetCollisionEnabled(mMode == ERMBarrierMode::Closed ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 	const float Target = ShouldBeOpen() ? OpenAngle : 0.f;
 	if (bSnap || !HasActorBegunPlay())
 	{

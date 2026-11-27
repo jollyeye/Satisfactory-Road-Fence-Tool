@@ -1,7 +1,8 @@
 // Boom barrier (1.6.0): a post on a road's fence line and a striped arm across the road, hinged at the post's top.
 // Three modes, cycled with E (a window comes later): Automatic (the arm lifts while a vehicle is near, never blocks),
-// Always Open, Always Closed (the arm is down and blocks the vehicle paths through it, as a foundation on a path does:
-// self-driving vehicles stop and wait; players walk through). Placed like the Sign
+// Always Open, Always Closed (the arm is down and an invisible 4 m wall under it blocks vehicles and the vehicle paths
+// through it, as a foundation on a path does: self-driving vehicles stop and wait). The visible arm is solid to players
+// and creatures in every mode. Placed like the Sign
 // Gantry: click the side for the post, then the other side (the arm reaches it).
 // Automated Machines hooks (AM_ functions, found by name: no dependency): vehicle waiting / open conditions, open and
 // automatic actions.
@@ -92,6 +93,15 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
 	UProceduralMeshComponent* mArmMesh;
+
+	/**
+	 * Always closed: an invisible wall under and above the arm (road to 4 m, 0.6 m thick, the arm's length), solid to
+	 * vehicles and seen by the game's path check (the thin arm alone let vehicles climb over it). Not to players.
+	 */
+	UPROPERTY(VisibleAnywhere, Category = "Road Maker")
+	class UBoxComponent* mVehicleBlock;
+	static constexpr float BlockHeight = 400.f;
+	static constexpr float BlockHalfThickness = 30.f;
 
 	UPROPERTY(SaveGame, ReplicatedUsing = OnRep_Shape)
 	float mArmLength = 600.f;
