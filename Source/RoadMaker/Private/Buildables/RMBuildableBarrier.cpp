@@ -196,7 +196,7 @@ FText ARMBuildableBarrier::AM_Info_Open() const
 
 FText ARMBuildableBarrier::AM_Info_Mode() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoMode", "Sets the barrier's mode: 0 automatic (the arm lifts while a vehicle is near), 1 always open, 2 always closed (the vehicle paths through it are blocked, self-driving vehicles wait).");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoMode", "Sets the barrier's mode. Automatic: the arm lifts while a vehicle is near. Open: always up. Closed: always down, the vehicle paths through it are blocked and self-driving vehicles wait.");
 }
 
 void ARMBuildableBarrier::DetectVehicles()

@@ -1374,7 +1374,7 @@ msgstr ""
 #. Key:	BarrierInfoMode
 #: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
 msgctxt "RoadMaker,BarrierInfoMode"
-msgid "Sets the barrier's mode: 0 automatic (the arm lifts while a vehicle is near), 1 always open, 2 always closed (the vehicle paths through it are blocked, self-driving vehicles wait)."
+msgid "Sets the barrier's mode. Automatic: the arm lifts while a vehicle is near. Open: always up. Closed: always down, the vehicle paths through it are blocked and self-driving vehicles wait."
 msgstr ""
 
 #. Key:	BarrierWindowMode

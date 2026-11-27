@@ -14,6 +14,8 @@
 #include "Buildables/RMBuildableProcedural.h"
 #include "RMBuildableBarrier.generated.h"
 
+// Saved by value (the barrier and Automated Machines rules): new entries go at the end. Automated Machines shows the
+// entry names (split into words), so they must read well as they are.
 UENUM()
 enum class ERMBarrierMode : uint8
 {
@@ -62,8 +64,8 @@ public:
 	// --- Automated Machines (found by name; keep the names: rules store them) ---
 	UFUNCTION() bool AM_Condition_Vehicle_Waiting() const { return mVehicleNear; }
 	UFUNCTION() bool AM_Condition_Open() const { return ShouldBeOpen(); }
-	/** One action for the mode (a number): 0 automatic, 1 always open, 2 always closed. */
-	UFUNCTION() void AM_Action_Mode(int32 Mode) { SetMode(ERMBarrierMode(FMath::Clamp(Mode, 0, 2))); }
+	/** One action for the mode: Automated Machines shows the enum's entries as a dropdown (Automatic, Open, Closed). */
+	UFUNCTION() void AM_Action_Mode(ERMBarrierMode Mode) { SetMode(Mode); }
 	UFUNCTION() FText AM_Info_Vehicle_Waiting() const;
 	UFUNCTION() FText AM_Info_Open() const;
 	UFUNCTION() FText AM_Info_Mode() const;

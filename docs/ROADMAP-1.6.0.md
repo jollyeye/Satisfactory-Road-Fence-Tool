@@ -193,8 +193,9 @@ time, nothing is stored.
     (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our page: three mode buttons (the
     chosen one orange), arm and vehicle state, an "Automation" button when Automated Machines is installed (its
     `OpenAutomationWindow` called by name, MODDING.md). Clients set the mode through `ServerSetBarrierMode` (RCO).
-  - Automation: one action `AM_Action_Mode(number)` (0 automatic, 1 always open, 2 always closed) instead of three;
-    conditions Vehicle Waiting and Open stay.
+  - Automation: one action `AM_Action_Mode(ERMBarrierMode)`: Automated Machines (enum inputs, added 2026-11-27) shows
+    a dropdown Automatic / Open / Closed from the entry names (DisplayName metadata is not in the shipped game; entries
+    saved by value: new ones only at the end). Conditions Vehicle Waiting and Open stay.
   - Tested 2026-11-27: vehicles climbed over the closed arm. Now an invisible box (`mVehicleBlock`: the arm's length,
     0.6 m thick, road to 4 m, WorldStatic, ignores pawns / visibility) is solid only while always closed; the visible
     arm is solid to players and creatures in every mode (asked).
