@@ -137,7 +137,7 @@ void ARMBuildableBarrier::RebuildMesh()
 	// The vehicle block along the arm (closed), from the road up to BlockHeight.
 	const float Reach = PostHalf + mArmLength;
 	mVehicleBlock->SetBoxExtent(FVector(BlockHalfThickness, Reach * 0.5f, BlockHeight * 0.5f));
-	mVehicleBlock->SetRelativeLocation(FVector(0.f, Reach * 0.5f + PostHalf * 0.5f, BlockHeight * 0.5f));
+	mVehicleBlock->SetRelativeLocation(FVector(0.f, Reach * 0.5f, BlockHeight * 0.5f));
 	UpdateArm(true);
 }
 
