@@ -1319,11 +1319,6 @@ msgctxt "RoadMaker,BarrierModeClosed"
 msgid "Always closed"
 msgstr ""
 
-#. Key:	BarrierLookAt
-#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
-msgctxt "RoadMaker,BarrierLookAt"
-msgid "Boom Barrier: {0} (change)"
-msgstr ""
 
 #. Key:	BarrierInfoWaiting
 #: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
@@ -1331,17 +1326,7 @@ msgctxt "RoadMaker,BarrierInfoWaiting"
 msgid "A vehicle is near the barrier, on either side of the arm."
 msgstr ""
 
-#. Key:	BarrierInfoOpen
-#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
-msgctxt "RoadMaker,BarrierInfoOpen"
-msgid "On: always open. Off: back to automatic."
-msgstr ""
 
-#. Key:	BarrierInfoAutomatic
-#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
-msgctxt "RoadMaker,BarrierInfoAutomatic"
-msgid "The arm lifts by itself while a vehicle is near."
-msgstr ""
 
 #. Key:	BarrierFirstSide
 #: Source/RoadMaker/Private/Holograms/RMBarrierHologram.cpp
@@ -1376,11 +1361,66 @@ msgstr ""
 #. Key:	BoomBarrier.Desc
 #: Content/Text/ST_RoadMaker.uasset
 msgctxt "RoadMakerAssets,BoomBarrier.Desc"
-msgid "A post on a road's fence line with a striped arm across the road. Click the side for the post (a road or walking path edge), then the other side straight across: the arm reaches it (2 to 20 m). Press E on it to change its mode: Automatic (the arm lifts while a vehicle is near), Always open, Always closed (the arm stays down and blocks the vehicle paths through it: self-driving vehicles wait). Automated Machines can open or close it, put it back to automatic, and knows when a vehicle is waiting."
+msgid "A post on a road's fence line with a striped arm across the road. Click the side for the post (a road or walking path edge), then the other side straight across: the arm reaches it (2 to 20 m). Press E on it to choose its mode: Automatic (the arm lifts while a vehicle is near), Always open, Always closed (the arm stays down and blocks the vehicle paths through it: self-driving vehicles wait). With Automated Machines, its window has an Automation button: set the mode from events, and know when a vehicle is waiting."
 msgstr ""
 
-#. Key:	BarrierInfoClose
+
+#. Key:	BarrierInfoOpenNow
 #: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
-msgctxt "RoadMaker,BarrierInfoClose"
-msgid "On: always closed, the vehicle paths through it are blocked and self-driving vehicles wait. Off: back to automatic."
+msgctxt "RoadMaker,BarrierInfoOpenNow"
+msgid "The arm is up (always open, or automatic with a vehicle near)."
+msgstr ""
+
+#. Key:	BarrierInfoMode
+#: Source/RoadMaker/Private/Buildables/RMBuildableBarrier.cpp
+msgctxt "RoadMaker,BarrierInfoMode"
+msgid "Sets the barrier's mode: 0 automatic (the arm lifts while a vehicle is near), 1 always open, 2 always closed (the vehicle paths through it are blocked, self-driving vehicles wait)."
+msgstr ""
+
+#. Key:	BarrierWindowMode
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierWindowMode"
+msgid "MODE"
+msgstr ""
+
+#. Key:	BarrierWindowHelp
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierWindowHelp"
+msgid "Automatic: the arm lifts while a vehicle is near. Always closed: the vehicle paths through it are blocked, self-driving vehicles wait."
+msgstr ""
+
+#. Key:	BarrierWindowAutomation
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierWindowAutomation"
+msgid "Automation"
+msgstr ""
+
+#. Key:	BarrierWindowStatus
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierWindowStatus"
+msgid "Arm: {0}    Vehicle near: {1}"
+msgstr ""
+
+#. Key:	BarrierArmUp
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierArmUp"
+msgid "up"
+msgstr ""
+
+#. Key:	BarrierArmDown
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierArmDown"
+msgid "down"
+msgstr ""
+
+#. Key:	BarrierYes
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierYes"
+msgid "yes"
+msgstr ""
+
+#. Key:	BarrierNo
+#: Source/RoadMaker/Private/UI/RMBarrierWindow.cpp
+msgctxt "RoadMaker,BarrierNo"
+msgid "no"
 msgstr ""

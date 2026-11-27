@@ -188,6 +188,13 @@ time, nothing is stored.
     Always closed (arm down and solid, WorldStatic, players pass: it blocks the vehicle paths through it like a
     foundation on a path, so self-driving vehicles stop and wait; the paths are re-checked on closing / opening via
     `RevalidateVehiclePathsSoon`). Look-at text shows the mode.
+  - Window (asked 2026-11-27): E opens `URMBarrierWindow` (C++ `UFGInteractWidget`, set as the building's interact widget
+    through reflection: "Press E to configure Boom Barrier" like the game's buildings). The game's frame
+    (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our page: three mode buttons (the
+    chosen one orange), arm and vehicle state, an "Automation" button when Automated Machines is installed (its
+    `OpenAutomationWindow` called by name, MODDING.md). Clients set the mode through `ServerSetBarrierMode` (RCO).
+  - Automation: one action `AM_Action_Mode(number)` (0 automatic, 1 always open, 2 always closed) instead of three;
+    conditions Vehicle Waiting and Open stay.
   - Tested 2026-11-27: vehicles climbed over the closed arm. Now an invisible box (`mVehicleBlock`: the arm's length,
     0.6 m thick, road to 4 m, WorldStatic, ignores pawns / visibility) is solid only while always closed; the visible
     arm is solid to players and creatures in every mode (asked).

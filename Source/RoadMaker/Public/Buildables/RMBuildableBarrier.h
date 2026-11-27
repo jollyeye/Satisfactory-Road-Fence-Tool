@@ -1,5 +1,5 @@
 // Boom barrier (1.6.0): a post on a road's fence line and a striped arm across the road, hinged at the post's top.
-// Three modes, cycled with E (a window comes later): Automatic (the arm lifts while a vehicle is near, never blocks),
+// Three modes, set in its window (E: URMBarrierWindow): Automatic (the arm lifts while a vehicle is near, never blocks),
 // Always Open, Always Closed (the arm is down and an invisible 4 m wall under it blocks vehicles and the vehicle paths
 // through it, as a foundation on a path does: self-driving vehicles stop and wait). The visible arm is solid to players
 // and creatures in every mode. Placed like the Sign
@@ -35,10 +35,6 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void RebuildMesh() override;
 
-	// E: next mode.
-	virtual bool IsUseable_Implementation() const override { return true; }
-	virtual void OnUse_Implementation(class AFGCharacterPlayer* byCharacter, const FUseState& state) override;
-	virtual FText GetLookAtDecription_Implementation(class AFGCharacterPlayer* byCharacter, const FUseState& state) const override;
 
 	void SetArmLength(float Length);
 	float GetArmLength() const { return mArmLength; }
@@ -66,15 +62,11 @@ public:
 	// --- Automated Machines (found by name; keep the names: rules store them) ---
 	UFUNCTION() bool AM_Condition_Vehicle_Waiting() const { return mVehicleNear; }
 	UFUNCTION() bool AM_Condition_Open() const { return ShouldBeOpen(); }
-	/** On: always open; off: back to automatic. */
-	UFUNCTION() void AM_Action_Open(bool On) { SetMode(On ? ERMBarrierMode::Open : ERMBarrierMode::Automatic); }
-	/** On: always closed (paths through it blocked); off: back to automatic. */
-	UFUNCTION() void AM_Action_Close(bool On) { SetMode(On ? ERMBarrierMode::Closed : ERMBarrierMode::Automatic); }
-	UFUNCTION() void AM_Action_Automatic() { SetMode(ERMBarrierMode::Automatic); }
+	/** One action for the mode (a number): 0 automatic, 1 always open, 2 always closed. */
+	UFUNCTION() void AM_Action_Mode(int32 Mode) { SetMode(ERMBarrierMode(FMath::Clamp(Mode, 0, 2))); }
 	UFUNCTION() FText AM_Info_Vehicle_Waiting() const;
 	UFUNCTION() FText AM_Info_Open() const;
-	UFUNCTION() FText AM_Info_Close() const;
-	UFUNCTION() FText AM_Info_Automatic() const;
+	UFUNCTION() FText AM_Info_Mode() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Road Maker|Look")
 	UMaterialInterface* mPostMaterial = nullptr;

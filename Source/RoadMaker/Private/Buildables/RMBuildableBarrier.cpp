@@ -7,6 +7,7 @@
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "Components/BoxComponent.h"
+#include "UI/RMBarrierWindow.h"
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
 
@@ -14,6 +15,16 @@ ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitial
 	: Super(ObjectInitializer)
 {
 	mLODDistance = 0.f; // small: drawn in full
+	// E opens our window, like the game's building windows ("Press E to configure"): the game's own members, private,
+	// set through reflection on this class's defaults.
+	if (FSoftClassProperty* Widget = FindFProperty<FSoftClassProperty>(AFGBuildable::StaticClass(), TEXT("mInteractWidgetSoftClass")))
+	{
+		Widget->SetPropertyValue_InContainer(this, FSoftObjectPtr(URMBarrierWindow::StaticClass()));
+	}
+	if (FBoolProperty* Useable = FindFProperty<FBoolProperty>(AFGBuildable::StaticClass(), TEXT("mIsUseable")))
+	{
+		Useable->SetPropertyValue_InContainer(this, true);
+	}
 	mArmMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("BarrierArm"));
 	mArmMesh->SetupAttachment(mMesh);
 	mArmMesh->bUseComplexAsSimpleCollision = true;
@@ -160,15 +171,6 @@ void ARMBuildableBarrier::SetMode(ERMBarrierMode Mode)
 	}
 }
 
-void ARMBuildableBarrier::OnUse_Implementation(AFGCharacterPlayer* byCharacter, const FUseState& state)
-{
-	// No window yet: E cycles the mode (on the server; the mode is sent to everyone).
-	if (HasAuthority())
-	{
-		SetMode(ERMBarrierMode((uint8(mMode) + 1) % 3));
-	}
-}
-
 FText ARMBuildableBarrier::ModeName(ERMBarrierMode Mode)
 {
 	switch (Mode)
@@ -182,11 +184,6 @@ FText ARMBuildableBarrier::ModeName(ERMBarrierMode Mode)
 	}
 }
 
-FText ARMBuildableBarrier::GetLookAtDecription_Implementation(AFGCharacterPlayer* byCharacter, const FUseState& state) const
-{
-	return FText::Format(NSLOCTEXT("RoadMaker", "BarrierLookAt", "Boom Barrier: {0} (change)"), ModeName(mMode));
-}
-
 FText ARMBuildableBarrier::AM_Info_Vehicle_Waiting() const
 {
 	return NSLOCTEXT("RoadMaker", "BarrierInfoWaiting", "A vehicle is near the barrier, on either side of the arm.");
@@ -194,17 +191,12 @@ FText ARMBuildableBarrier::AM_Info_Vehicle_Waiting() const
 
 FText ARMBuildableBarrier::AM_Info_Open() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoOpen", "On: always open. Off: back to automatic.");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoOpenNow", "The arm is up (always open, or automatic with a vehicle near).");
 }
 
-FText ARMBuildableBarrier::AM_Info_Close() const
+FText ARMBuildableBarrier::AM_Info_Mode() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoClose", "On: always closed, the vehicle paths through it are blocked and self-driving vehicles wait. Off: back to automatic.");
-}
-
-FText ARMBuildableBarrier::AM_Info_Automatic() const
-{
-	return NSLOCTEXT("RoadMaker", "BarrierInfoAutomatic", "The arm lifts by itself while a vehicle is near.");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoMode", "Sets the barrier's mode: 0 automatic (the arm lifts while a vehicle is near), 1 always open, 2 always closed (the vehicle paths through it are blocked, self-driving vehicles wait).");
 }
 
 void ARMBuildableBarrier::DetectVehicles()

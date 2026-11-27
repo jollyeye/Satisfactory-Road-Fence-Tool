@@ -1,4 +1,5 @@
 #include "Net/RMRemoteCallObject.h"
+#include "Buildables/RMBuildableBarrier.h"
 #include "Buildables/RMBuildableFence.h"
 #include "Buildables/RMBuildableRoad.h"
 #include "Buildables/RMBuildableIntersection.h"
@@ -59,4 +60,12 @@ URMRemoteCallObject* URMRemoteCallObject::Get(APlayerController* PC)
 {
 	AFGPlayerController* FGPC = Cast<AFGPlayerController>(PC);
 	return FGPC ? Cast<URMRemoteCallObject>(FGPC->GetRemoteCallObjectOfClass(StaticClass())) : nullptr;
+}
+
+void URMRemoteCallObject::ServerSetBarrierMode_Implementation(ARMBuildableBarrier* Barrier, uint8 Mode)
+{
+	if (IsValid(Barrier) && Mode <= uint8(ERMBarrierMode::Closed))
+	{
+		Barrier->SetMode(ERMBarrierMode(Mode));
+	}
 }

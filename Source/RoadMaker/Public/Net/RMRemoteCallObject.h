@@ -32,6 +32,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerSetRoadLook(class ARMBuildableProcedural* Piece, uint8 Look);
 
+	/** Sets a boom barrier's mode (its window), on the server. */
+	UFUNCTION(Server, Reliable)
+	void ServerSetBarrierMode(class ARMBuildableBarrier* Barrier, uint8 Mode);
+
 	/** Registers this RCO for a player controller (call on the server). */
 	static void RegisterFor(class AFGPlayerController* PC);
 
