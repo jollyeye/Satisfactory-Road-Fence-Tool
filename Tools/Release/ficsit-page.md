@@ -15,7 +15,7 @@ Curved roads with lane lines, side slopes, intersections, road tools, fences, wa
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
-![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, chain-link fence, guard rails, street lights, chevrons, a tunnel arch with direction signs and a lit fence wall](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.5.jpg)
+![A tractor on a glowing cyberpunk road beside an asphalt road with lane text and a lane arrow, chain-link fence, guard rails, street lights, a boom barrier across the road, chevrons, direction signs and a tunnel arch](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/intro-1.6.jpg)
 
 ![Road Maker in the build menu: roads 1 to 4 wide, intersection, Gap Fill, walking paths, fences and the Sign Gantry](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/build-menu-1.4.png)
 
@@ -43,6 +43,8 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 ### Road Tools (build menu)
 ![The Road Tools tab: Cut Road, Join Road, Split Road, Merge Road, Adjust Curvature, Cut Fence and Join Fence](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-tools.png)
+
+![Smooth Joint: two straight roads meeting at a corner, the curve previewed with the cut-back marks, and the rounded result; Side Slopes: a raised road, and the same road with a cement-block bank down to the terrain](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/smooth-joint-side-slopes.jpg)
 
 - **Edit road:** **Cut Road** (optionally cutting its fences too), **Join Road** (two roads end to end into one, when they lie on one smooth curve), **Split Road** (lengthwise, in 8 m steps), **Merge Road** (two roads side by side into one wider road, up to 4 wide), **Adjust Joint** and **Smooth Joint** (below) and **Side Slopes** (below).
 - **Adjust Joint:** grab where two roads meet (or a free end) and move it; lane markings move along. Straight roads stay straight (they swing around their far end), a curved road meets a straight one flush, two curved roads meet in the joint's direction (the mouse wheel turns it). The joint moves at its own height; hold H and nudge up or down to change it.

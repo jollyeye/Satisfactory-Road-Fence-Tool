@@ -9,7 +9,7 @@ the game's paths, tracks, poles, signs and foundations.
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
 Manager). Current version: **1.6.0**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
 
-![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, fences, street lights, chevrons and a tunnel arch with direction signs](docs/screenshots/intro-1.5.jpg)
+![A tractor on a glowing cyberpunk road beside an asphalt road with lane text and a lane arrow, chain-link fence, guard rails, street lights, a boom barrier across the road, chevrons, direction signs and a tunnel arch](docs/screenshots/intro-1.6.jpg)
 
 ## Features
 
@@ -41,6 +41,8 @@ Manager). Current version: **1.6.0**, for Satisfactory 1.2 (build 520140 or newe
   roads end to end into one), Merge Road (two roads side by side into one wider road), Adjust
   Joint (move where roads meet; straight roads stay straight), Smooth Joint (round a corner with a flush
   curve), Side Slopes (bank raised roads and intersections down to the terrain), Cut Fence, Join Fence.
+
+![Smooth Joint and Side Slopes, before and after](docs/screenshots/smooth-joint-side-slopes.jpg)
 
 **Fences, walls and signs**
 - Guard Rail (H-beam material, paintable), Cement Blocks, Metal Grid Fence (woven chain-link): follow a
