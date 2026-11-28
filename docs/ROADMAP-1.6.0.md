@@ -213,9 +213,10 @@ time, nothing is stored.
     proxies count, 10 times a second): always closed, a vehicle with autopilot on, no driver, within the arm's reach
     across (plus 3 m) and heading towards the arm (backwards when reversing) gets `SetAutopilotEnabled(false)` once its
     front (half its local bounds' length ahead of its centre) is within 1.5 m of the arm's line plus what it covers
-    until the next check (tested 2026-11-28: at 25 m they stopped far too early: they stop at once), and is remembered
-    (`mStoppedVehicles`, saved). Leaving always closed (or dismantled): autopilot back on for the remembered ones still
-    within 50 m, without a driver, still off (`CanEnableAutopilot`). Player-driven vehicles are never touched.
+    until the next check (tested 2026-11-28: at 25 m they stopped far too early: they stop at once); nothing is remembered
+    (2026-11-28: no list kept, asked: a vehicle can be dismantled meanwhile). Leaving always closed (or dismantled):
+    autopilot back on for every vehicle in the zone (arm's reach across plus 3 m, up to 30 m either side of the arm)
+    with it off, no driver and `CanEnableAutopilot`. Player-driven vehicles are never touched.
   - Cost of many barriers (asked 2026-11-28, a thousand): each checks the game's vehicle list on the server, first by
     distance to the post (arm + 35 m), 10 times a second while a vehicle is that close, twice a second otherwise; the
     arm's timer runs only while it moves; post and arm not drawn past 250 m. The cap's underside is closed.

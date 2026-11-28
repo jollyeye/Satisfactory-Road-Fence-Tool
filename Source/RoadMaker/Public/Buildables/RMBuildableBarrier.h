@@ -4,8 +4,8 @@
 // mode: green open, orange automatic, red closed.
 // The arm is a hologram: nothing collides with it (players, creatures, vehicles) and the vehicle paths stay as they are.
 // Always closed, the barrier turns off the autopilot of self-driving vehicles coming towards the arm (never a vehicle
-// with a player at the wheel); when it opens again (or leaves always closed, or is dismantled) it turns the autopilot of
-// those vehicles back on, the ones still nearby.
+// with a player at the wheel); when it opens again (or leaves always closed, or is dismantled) it turns the autopilot
+// back on for the vehicles in its zone that have it off and nobody driving (no list kept).
 // Placed like the Sign Gantry: click the side for the post, then the other side (the arm reaches it).
 // Automated Machines hooks (AM_ functions, found by name: no dependency): vehicle waiting / open conditions, the mode
 // action.
@@ -104,10 +104,10 @@ public:
 protected:
 	/**
 	 * Server, 4 times a second: a vehicle within the barrier's reach (either side of the arm); always closed, the
-	 * autopilot of self-driving vehicles coming towards the arm is turned off (and they are remembered).
+	 * autopilot of self-driving vehicles coming towards the arm is turned off.
 	 */
 	void DetectVehicles();
-	/** Server: autopilot back on for the vehicles this barrier stopped, the ones still nearby and without a driver. */
+	/** Server: autopilot back on for every vehicle in the barrier's zone that has it off and nobody driving (no list kept). */
 	void ReleaseVehicles();
 	/** Arm towards its target (out or drawn back); the light band follows the mode. */
 	void UpdateArm(bool bSnap);
@@ -132,10 +132,6 @@ protected:
 	UPROPERTY(ReplicatedUsing = OnRep_State)
 	bool mVehicleNear = false;
 
-	/** Server: the vehicle identifiers whose autopilot this barrier turned off (saved: they are let go after a load). */
-	UPROPERTY(SaveGame)
-	TArray<AActor*> mStoppedVehicles;
-
 	/** 1 = the arm all the way out, 0 = drawn back into the hinge block. */
 	float mArmOut = 1.f;
 	FTimerHandle mDetectTimer;
@@ -147,5 +143,4 @@ protected:
 	bool mDetectFast = false;
 	static constexpr float ApproachReach = 3000.f; // vehicles looked at up to 30 m (centre) before the arm ...
 	static constexpr float StopGap = 150.f;        // ... and stopped with their front about 1.5 m before it
-	static constexpr float ReleaseReach = 5000.f;  // and back on for the stopped ones within 50 m
 };

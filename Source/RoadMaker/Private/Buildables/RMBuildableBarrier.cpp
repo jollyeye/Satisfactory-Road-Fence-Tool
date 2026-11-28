@@ -318,7 +318,6 @@ void ARMBuildableBarrier::DetectVehicles()
 			continue; // still further away, or already through
 		}
 		Id->SetAutopilotEnabled(false);
-		mStoppedVehicles.AddUnique(Id);
 		UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot off for %s (front %.1f m before the arm, %d km/h)"), *GetName(), *Vehicle->GetName(), Gap / 100.f,
 			Vehicle->GetSpeedInKMH());
 	}
@@ -338,22 +337,29 @@ void ARMBuildableBarrier::DetectVehicles()
 
 void ARMBuildableBarrier::ReleaseVehicles()
 {
-	const FVector Here = GetActorLocation();
-	for (AActor* Actor : mStoppedVehicles)
+	// No list kept (a vehicle can be dismantled meanwhile): every vehicle in the barrier's zone (the arm's reach across
+	// plus 3 m, up to 30 m before or after the arm) with its autopilot off and nobody driving gets it back on.
+	AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(GetWorld());
+	if (!Vehicles)
 	{
-		AFGWheeledVehicleIdentifier* Id = Cast<AFGWheeledVehicleIdentifier>(Actor);
-		AFGWheeledVehicle* Vehicle = Id ? Id->GetOwnerVehicle() : nullptr;
-		if (!Vehicle || Vehicle->GetDriver() || Id->IsAutopilotEnabled() || FVector::Dist(Vehicle->GetVehicleLocation(), Here) > ReleaseReach)
-		{
-			continue; // gone, taken over by a player, already on again, or driven away
-		}
-		if (Id->CanEnableAutopilot())
-		{
-			Id->SetAutopilotEnabled(true);
-			UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot back on for %s"), *GetName(), *Vehicle->GetName());
-		}
+		return;
 	}
-	mStoppedVehicles.Reset();
+	const FTransform& T = GetActorTransform();
+	for (AFGWheeledVehicleIdentifier* Id : Vehicles->GetAllVehicles())
+	{
+		AFGWheeledVehicle* Vehicle = Id ? Id->GetOwnerVehicle() : nullptr;
+		if (!Vehicle || Vehicle->GetDriver() || Id->IsAutopilotEnabled() || !Id->CanEnableAutopilot())
+		{
+			continue;
+		}
+		const FVector L = T.InverseTransformPosition(Vehicle->GetVehicleLocation());
+		if (L.Y < -300.f || L.Y > PostHalf + mArmLength + 300.f || L.Z < -300.f || L.Z > 600.f || FMath::Abs(L.X) > ApproachReach)
+		{
+			continue;
+		}
+		Id->SetAutopilotEnabled(true);
+		UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot back on for %s"), *GetName(), *Vehicle->GetName());
+	}
 }
 
 void ARMBuildableBarrier::UpdateArm(bool bSnap)
