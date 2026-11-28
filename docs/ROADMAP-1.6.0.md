@@ -161,6 +161,11 @@ time, nothing is stored.
   - Reported 2026-11-28: after cutting a banked road, the bank misses its last triangle at the cut (merged again it is
     fine). Not found by reading the code (the joined piece is passed through near the end); each measure now logs what
     the end samples stopped on (Log: "side slope at the ... end") to find it.
+    Log 2026-11-28: the joined piece at an end was not always found (the same joint read "1 joined" and later "0"), and
+    the gap moved to a road's start. Then the neighbour's bank, which starts right at this edge in the same plane, is
+    hit: just below the edge by the trace beside it (= ground above the edge: no bank there) or at once down the bank.
+    Now another piece's bank is ignored there (below edge + 5 cm for the trace beside it, the first 50 cm down the
+    bank). `SlopeVersion` 13: saved banks measured again.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):
   the reporter answered: only roads over the length limit (limit toggle off), the whole road, only joining players

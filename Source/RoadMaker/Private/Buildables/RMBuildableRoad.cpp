@@ -898,6 +898,15 @@ namespace RMSideSlopes
 				}
 				const bool bBank = Section == (Cast<ARMBuildableRoad>(Actor) ? 2 : 3);
 				OutDist = Hit.Distance;
+				// Not where a joined piece's bank carries on from this one's edge (a cut road: the neighbour's bank starts
+				// right there, in this bank's plane): just below the edge for the trace beside it, the first half metre
+				// down this bank. Joined pieces are passed through anyway, but they were not always found (after a cut,
+				// the start of a piece lost its last bank triangle).
+				const bool bOwnPlane = bNeighbours ? Hit.ImpactPoint.Z < Edge.Z + 5.f : Hit.Distance < 50.f;
+				if (bBank && bOwnPlane)
+				{
+					continue;
+				}
 				if (bBank)
 				{
 					LastHit = TEXT("bank of ") + Describe(Hit, Section);
