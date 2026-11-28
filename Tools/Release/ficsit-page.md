@@ -7,11 +7,11 @@ Road Maker
 RoadMaker
 
 ## Short description (max 128 characters)
-Curved roads with lane lines and markings, intersections, road tools, fences, fence walls, tunnel arches and a sign gantry.
+Curved roads with lane lines, side slopes, intersections, road tools, fences, walls, tunnel arches, a gantry and boom barriers.
 
 ## Full description (paste as Markdown)
 
-**Road Maker** adds real roads to Satisfactory: curved roads in asphalt, concrete blocks or cyberpunk, lane lines, arrows, numbers, vehicle icons and text in any language you paint in the customizer, tools to cut, join, split, merge and reshape roads and fences, a sign gantry across whole carriageways, tunnel arches, intersections that join up to six roads, fences and 4 m and 1 m fence walls that follow the road edge, one-click vehicle paths and railway tracks along the lanes, and your roads drawn on the map.
+**Road Maker** adds real roads to Satisfactory: curved roads in asphalt, concrete blocks or cyberpunk, lane lines, arrows, numbers, vehicle icons and text in any language you paint in the customizer, tools to cut, join, split, merge, reshape and round off roads and fences, side slopes that bank raised roads down to the terrain, a sign gantry across whole carriageways, tunnel arches, a boom barrier that stops self-driving vehicles, intersections that join up to six roads, fences and 4 m and 1 m fence walls that follow the road edge, one-click vehicle paths and railway tracks along the lanes, and your roads drawn on the map.
 
 Roads, intersections and road fences unlock in the **Road Maker** milestone in Tier 1; roads and intersections are **free to build**. The fence walls unlock with the game's own progression (see below).
 
@@ -21,13 +21,14 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 
 ### Roads (1, 2, 3 and 4 foundations wide)
 - Two clicks: start and end. The road curves like a vehicle path; the mouse wheel turns it.
-- Build modes: **Default**, **Straight**, **Zoop** (straight on out of the start, at its direction and slope; the length follows your aim in whole metres) and **Smooth quadratic Bezier** (height eases in and out to join roads at different levels without kinks, up to 45°).
+- Build modes: **Default**, **Straight** (a straight line in any direction; snapped to a road end it meets it at an angle, ready for Smooth Joint), **Zoop** (straight on out of the start, at its direction and slope; the length follows your aim in whole metres) and **Smooth quadratic Bezier** (height eases in and out to join roads at different levels without kinks, up to 45°).
 - **Road limits toggle (Left Alt, rebindable):** limits off = roads up to 1 km long with no turn or slope limits, and a 1 km build gun reach. Shown after the build mode's name ("Limits: ON / OFF") and in the key hint bar; remembered between sessions.
 - Long roads and fences are drawn in sections of up to 100 m, so far-away parts stay light.
 - Snaps to the ends of other roads and intersections, and to foundation edges (top level with the foundation).
 - Hold the snap key and aim at a built road (or an intersection curb) to build a road right beside it, edge to edge, in one click.
 - **Road materials** (Customizer › Material › Roads): Asphalt, Concrete Blocks and Cyberpunk (glowing lane lines), switched in place.
-- 1 m thick, asphalt and concrete textures matched to the game's foundations.
+- 1 m thick, asphalt and concrete textures matched to the game's foundations; the sides, underside and ends in cement blocks (circuit board on cyberpunk roads).
+- Dashed lane lines meet evenly where roads join: each road fits a whole number of dashes.
 - Other buildings can be placed on roads, just like on foundations.
 
 ### Lane lines — Customizer › Road Lines
@@ -43,9 +44,24 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 ### Road Tools (build menu)
 ![The Road Tools tab: Cut Road, Join Road, Split Road, Merge Road, Adjust Curvature, Cut Fence and Join Fence](https://raw.githubusercontent.com/jollyeye/Satisfactory-Road-Fence-Tool/main/docs/screenshots/road-tools.png)
 
-- **Edit road:** **Cut Road** (optionally cutting its fences too), **Join Road** (two roads end to end into one, when they lie on one smooth curve), **Split Road** (lengthwise, in 8 m steps), **Merge Road** (two roads side by side into one wider road, up to 4 wide) and **Adjust Curvature** (grab a road end and reshape it; lane markings move along).
+- **Edit road:** **Cut Road** (optionally cutting its fences too), **Join Road** (two roads end to end into one, when they lie on one smooth curve), **Split Road** (lengthwise, in 8 m steps), **Merge Road** (two roads side by side into one wider road, up to 4 wide), **Adjust Joint** and **Smooth Joint** (below) and **Side Slopes** (below).
+- **Adjust Joint:** grab where two roads meet (or a free end) and move it; lane markings move along. Straight roads stay straight (they swing around their far end), a curved road meets a straight one flush, two curved roads meet in the joint's direction (the mouse wheel turns it). The joint moves at its own height; hold H and nudge up or down to change it.
+- **Smooth Joint:** rounds the corner where two roads meet. Click the joint, drag away from it: both roads are cut back by the same distance (shown on screen) and a curve joins them flush, previewed in the roads' own look. The workflow for clean corners: lay straight roads corner to corner, move the corners with Adjust Joint, round them with Smooth Joint.
 - **Edit fence:** **Cut Fence** and **Join Fence** (two fences of the same kind end to end, up to 1 km).
 - Lines, paint, markings, fences and paths are kept. A green outline shows what will be joined or merged.
+
+### Side Slopes (Road Tools)
+- Banks a raised road, walking path or intersection down to the terrain (1 : 1.5, cement blocks, solid to walk and drive on), so roads on fill look built into the landscape.
+- Aim at a road side or an intersection curb: a cyan cage shows the bank it gets, click adds it; aim at a bank (red cage) to remove it. Hold the snap key for both sides / all curbs.
+- The banks stand on the terrain and rocks; plants, resource nodes and buildings don't stop them; banks of roads side by side run into each other. Where the ground is more than 8 m below, that side gets none (red lines). The space under the road is closed.
+- Cut, adjusted and copied roads keep their banks and measure them again. Free.
+
+### Boom Barrier
+- A post on the road's edge and a red and white hologram arm across the road (2 to 20 m). Click the side for the post (a road or walking path edge), then the other side straight across. On foundations the post and the arm's end snap to the foundation grid; scroll turns the arm by 90°.
+- Press E to choose its mode, shown by the post's light: **Automatic** (orange: the arm draws back while a vehicle is near), **Always open** (green), **Always closed** (red: self-driving vehicles coming towards it stop just before the arm, and drive on when it opens). Vehicles driven by a player are never stopped.
+- The arm is a hologram: players, creatures and vehicles pass through it, and vehicle paths stay valid.
+- The body can be painted (FICSIT colours by default).
+- With **Automated Machines** installed, its window has an Automation button: set the mode from any event, and react to a vehicle waiting.
 
 ### Sign Gantry
 - Two of the game's H-beams on the fence lines of roads with a beam across, 8 to 24 m above them, in the game's beam material and paint. Signs snap to the beam and columns every 2 m; wall attachments snap to it too.
@@ -119,9 +135,25 @@ Roads, intersections and road fences unlock in the **Road Maker** milestone in T
 - Saves stay small: only a few numbers per piece are saved, meshes are rebuilt on load.
 
 ### Notes
-- Translations: Chinese (Simplified) by muaxl. Every text can be translated; see GitHub issue #9.
+- Translations: Chinese (Simplified) by muaxl (the texts new in 1.6.0 are in English until translated). Every text can be translated; see GitHub issue #9.
 - Multiplayer support is included but has not been tested yet — please report issues.
 - Source code: https://github.com/jollyeye/Satisfactory-Road-Fence-Tool
+
+## Changelog for version 1.6.0
+**Added**
+- **Boom Barrier** (next to the Sign Gantry): a post on the road's edge with a red and white hologram arm across the road (2 to 20 m), placed like the gantry, or on foundations (grid snap, scroll turns the arm by 90°). Press E to pick its mode, shown by the post's light: Automatic (orange: the arm draws back while a vehicle is near), Always open (green), Always closed (red: self-driving vehicles stop just before the arm and drive on when it opens; vehicles driven by a player are never stopped). The arm is a hologram: nothing collides with it and vehicle paths stay valid. Paintable body. With Automated Machines: an Automation button in its window (set the mode from events; know when a vehicle is waiting).
+- **Side Slopes** (Road Tools): banks raised roads, walking paths and intersections down to the terrain. Per road side or intersection curb (snap key: all at once); a cage previews the bank. Banks stand on terrain and rocks, run into the banks beside them, and are left out where the ground is more than 8 m below. The space under the road is closed.
+- **Smooth Joint** (Road Tools): rounds the corner where two roads meet with a curve that meets both flush; both roads are cut back by the distance you drag.
+
+**Changed**
+- **Adjust Curvature is now Adjust Joint:** straight roads stay straight (they swing around their far end), a curved road meets a straight one flush, and the joint moves at its own height (H + nudge changes it) instead of dropping to the ground.
+- **Straight build mode** is a straight line in any direction (it was locked to the road it started from); snapped to a road end it meets it at an angle, ready for Smooth Joint.
+- **Dashed lane lines** meet evenly where two roads join: each road fits a whole number of dashes. Existing roads shift their dashes once.
+- The sides, underside and ends of roads, walking paths, intersections and gap fills are cement blocks (cyberpunk: circuit board) instead of plain concrete.
+
+**Fixed**
+- Multiplayer: players who joined a game should no longer rubber-band while walking on very long roads (limits off) (issue #10; not yet confirmed with two players).
+- The Side Slopes tool no longer rebuilds large intersections while aiming at them (frame drops).
 
 ## Changelog for version 1.5.1
 **Fixed**

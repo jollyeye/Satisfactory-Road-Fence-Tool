@@ -2,11 +2,12 @@
 
 A Satisfactory mod (C++, SML) that adds real roads: curved roads 1 to 4 foundations wide in asphalt,
 concrete blocks or cyberpunk, lane lines, lane markings and lane text, intersections joining up to six roads,
-tools to cut, split and reshape roads, road fences and fence walls, tunnel arches, a sign gantry, and snapping for
+tools to cut, split, reshape and round off roads, side slopes, road fences and fence walls, tunnel arches, a sign gantry,
+a boom barrier, and snapping for
 the game's paths, tracks, poles, signs and foundations.
 
 **Download / install:** [ficsit.app](https://ficsit.app/mod/RoadMaker) (use the Satisfactory Mod
-Manager). Current version: **1.5.1**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
+Manager). Current version: **1.6.0**, for Satisfactory 1.2 (build 520140 or newer) with SML 3.12.1.
 
 ![A glowing cyberpunk road with a vehicle marking and a tractor beside an asphalt road with lane text and a lane arrow, fences, street lights, chevrons and a tunnel arch with direction signs](docs/screenshots/intro-1.5.jpg)
 
@@ -38,7 +39,8 @@ Manager). Current version: **1.5.1**, for Satisfactory 1.2 (build 520140 or newe
 
 - Cut Road (optionally cutting its fences too), Split Road (lengthwise, in 8 m steps), Join Road (two
   roads end to end into one), Merge Road (two roads side by side into one wider road), Adjust
-  Curvature (grab a road end and reshape it), Cut Fence, Join Fence.
+  Joint (move where roads meet; straight roads stay straight), Smooth Joint (round a corner with a flush
+  curve), Side Slopes (bank raised roads and intersections down to the terrain), Cut Fence, Join Fence.
 
 **Fences, walls and signs**
 - Guard Rail (H-beam material, paintable), Cement Blocks, Metal Grid Fence (woven chain-link): follow a
@@ -51,6 +53,8 @@ Manager). Current version: **1.5.1**, for Satisfactory 1.2 (build 520140 or newe
 - Signs, wall attachments (wall mounts, wall holes, ladders...), beams and pillars snap to fence walls, the gantry
   and the tunnel arch.
 - Sign backgrounds: Chevrons Left and Chevrons Right in the game's sign editor.
+- Boom Barrier: a post and a hologram arm across the road (on road edges or foundations); Automatic, Always open
+  and Always closed (self-driving vehicles stop before the arm); Automated Machines hooks.
 
 **Map:** roads and intersections drawn on the game's map, with **Show Roads on Map** in its side menu. For map modders: the roads are drawn directly above the map picture (`mMap` in Widget_Map's `Overlay_0`), so anything you add to that overlay draws on top of them.
 
@@ -107,8 +111,8 @@ No Blueprint is edited by hand: the Python scripts are the source of truth for t
 
 ## Roadmap
 
-1.3.0 is out ([1.3.0 roadmap](docs/ROADMAP-1.3.0.md), 1.3.1 fixes in progress); earlier: [1.2.0 roadmap](docs/ROADMAP-1.2.0.md). Planned for 1.4.0 ([1.4.0 roadmap](docs/ROADMAP-1.4.0.md)): walking paths beside roads, a sign wall, traffic lights that follow the
-intersection, a boom barrier, and the cyberpunk road's circuit on Low quality.
+1.6.0 is out ([1.6.0 roadmap](docs/ROADMAP-1.6.0.md)); earlier: [1.5.0](docs/ROADMAP-1.5.0.md), [1.4.0](docs/ROADMAP-1.4.0.md),
+[1.3.0](docs/ROADMAP-1.3.0.md), [1.2.0](docs/ROADMAP-1.2.0.md).
 
 ## License and credits
 

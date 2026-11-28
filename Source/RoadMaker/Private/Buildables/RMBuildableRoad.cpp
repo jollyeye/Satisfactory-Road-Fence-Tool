@@ -1039,8 +1039,8 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 			Banks += Drop > 0.f ? 1 : 0;
 			if (K == 0 || K == Steps)
 			{
-				// Ends: what the bank stopped on (looking for a missing end triangle after a cut, 2026-11-28).
-				UE_LOG(LogRoadMaker, Log, TEXT("%s: side slope at the %s end, %s side: drop %.0f cm, %d joined piece(s), stopped on %s"), *GetName(),
+				// Ends: what the bank stopped on (found the missing end triangle after a cut, 2026-11-28; Verbose since).
+				UE_LOG(LogRoadMaker, Verbose, TEXT("%s: side slope at the %s end, %s side: drop %.0f cm, %d joined piece(s), stopped on %s"), *GetName(),
 					K == 0 ? TEXT("start") : TEXT("end"), Side < 0.f ? TEXT("left") : TEXT("right"), Drop, Pass.Num(), *RMSideSlopes::LastHit);
 			}
 			(Side < 0.f ? OutLeft : OutRight).Add(FVector2D(D, Drop));

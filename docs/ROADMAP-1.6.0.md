@@ -1,6 +1,7 @@
 # Road Maker 1.6.0 roadmap
 
-Started 2026-11-26, after 1.5.1 (released 2026-11-24).
+Started 2026-11-26, after 1.5.1 (released 2026-11-24). Release prepared 2026-11-28: version 1.6.0, changelog in
+`Tools/Release/ficsit-page.md`, the slope end log back to Verbose.
 
 ## Workflow (decided 2026-11-26)
 Lay the road out as straight pieces whose ends only touch (corners), move the corners with **Adjust Joint**, then
