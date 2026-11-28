@@ -233,4 +233,5 @@ time, nothing is stored.
     that blocked the vehicle paths (vehicles had climbed over the thin arm).
 
 ## Waiting
-- Issue #10: reply to the reporter once tested (with the user's go-ahead).
+- Issue #10: replied 2026-11-28 (user's go-ahead) with the cause and fix, asked the reporter to update server and
+  players to 1.6.0 and confirm (not tested with two players here). Close once confirmed.
