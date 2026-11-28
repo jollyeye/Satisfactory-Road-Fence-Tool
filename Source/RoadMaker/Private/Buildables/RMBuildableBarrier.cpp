@@ -89,21 +89,23 @@ void ARMBuildableBarrier::BuildPostMesh(FRMMesh& Steel, FRMMesh& Body, FRMMesh& 
 		RMGeometry::AddBeveledPost(FVector(C.X, C.Y, PlateHeight), X, Y, Z, 2.2f, 2.5f, 0.8f, Steel);
 	}
 	// The painted body (rounded edges in the lighting), the light band all around, the steel cap.
+	const int32 BodyFirst = Body.Vertices.Num();
 	RMGeometry::AddBeveledPost(FVector(0.f, 0.f, PlateHeight), X, Y, Z, BodyHalf, BodyTop - PlateHeight, 3.f, Body);
+	// The faces along the road (+X and -X: the 1st and 3rd side, 12 vertices each) get u + 2: the material draws the
+	// vent grille there (in the normal map), low on the face.
+	for (const int32 Face : { 0, 2 })
+	{
+		for (int32 V = BodyFirst + Face * 12; V < BodyFirst + Face * 12 + 12; ++V)
+		{
+			Body.UVs[V].X += 2.f;
+		}
+	}
 	Light.AddBox(FVector(0.f, 0.f, (BodyTop + LightTop) * 0.5f), X, Y, Z, FVector(BodyHalf - 0.5f, BodyHalf - 0.5f, (LightTop - BodyTop) * 0.5f), 100.f);
 	RMGeometry::AddBeveledPost(FVector(0.f, 0.f, LightTop), X, Y, Z, BodyHalf + 2.f, PostHeight - LightTop, 1.5f, Steel);
 	// The hinge block on the road side, the arm comes out of its face.
 	const float HingeDepth = HingeFace - BodyHalf;
 	Steel.AddBox(FVector(0.f, BodyHalf + HingeDepth * 0.5f, HingeHeight), X, Y, Z, FVector(11.f, HingeDepth * 0.5f, 13.f), 100.f);
 	Steel.AddBox(FVector(0.f, HingeFace + 0.6f, HingeHeight), X, Y, Z, FVector(6.f, 0.6f, ArmHalfHeight + 2.f), 100.f); // the emitter's rim
-	// A vent grille low on both faces along the road: five slats.
-	for (const float Side : { 1.f, -1.f })
-	{
-		for (int32 I = 0; I < 5; ++I)
-		{
-			Steel.AddBox(FVector(Side * (BodyHalf + 0.6f), 0.f, 14.f + I * 4.f), X, Y, Z, FVector(0.8f, 14.f, 1.f), 100.f);
-		}
-	}
 	RMGeometry::MapToPoleChrome(Steel);
 }
 
@@ -135,7 +137,7 @@ FLinearColor ARMBuildableBarrier::ModeColor(ERMBarrierMode Mode)
 	case ERMBarrierMode::Open:
 		return FLinearColor(0.05f, 1.f, 0.12f);
 	case ERMBarrierMode::Closed:
-		return FLinearColor(1.f, 0.03f, 0.02f);
+		return FLinearColor(0.45f, 0.f, 0.f); // pure red, dimmer: bright red turns orange in the tone mapping
 	default:
 		return FLinearColor(1.f, 0.32f, 0.f);
 	}

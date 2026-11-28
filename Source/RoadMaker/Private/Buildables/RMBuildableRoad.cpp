@@ -801,6 +801,16 @@ namespace RMSideSlopes
 	/** What a bank trace stops at: the ground (true), or a road / intersection beside it (no bank: false). */
 	enum class EHit { None, Ground, Neighbour };
 
+	/** What the last FirstHit stopped on (for the end-of-road log). */
+	FString LastHit;
+
+	FString Describe(const FHitResult& Hit, int32 Section)
+	{
+		const AActor* A = Hit.GetActor();
+		return FString::Printf(TEXT("%s (%s) %s section %d at %.0f cm"), A ? *A->GetName() : TEXT("-"), A ? *A->GetClass()->GetName() : TEXT("-"),
+			Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("-"), Section, Hit.Distance);
+	}
+
 	/** Whether a class or one of its parents has this name (no module dependency for foliage). */
 	bool IsKindOf(const UClass* Class, const TCHAR* Name)
 	{
@@ -890,6 +900,7 @@ namespace RMSideSlopes
 				OutDist = Hit.Distance;
 				if (bBank)
 				{
+					LastHit = TEXT("bank of ") + Describe(Hit, Section);
 					return EHit::Ground; // another piece's bank: this one runs into it
 				}
 continue; // other roads and intersections are ignored: the player picks the sides with banks (asked 2026-11-26)
@@ -899,6 +910,7 @@ continue; // other roads and intersections are ignored: the player picks the sid
 				continue; // buildings, vehicles, plants, pickups, resource nodes...: the bank goes on to the ground
 			}
 			OutDist = Hit.Distance;
+			LastHit = Describe(Hit, -1);
 			if (UE_LOG_ACTIVE(LogRoadMaker, Verbose))
 			{
 				// What the banks stand on (once per thing): to find things that should be passed through.
@@ -916,6 +928,7 @@ continue; // other roads and intersections are ignored: the player picks the sid
 			}
 			return EHit::Ground;
 		}
+		LastHit = TEXT("nothing");
 		return EHit::None;
 	}
 }
@@ -928,6 +941,7 @@ float ARMBuildableRoad::MeasureBankAt(UWorld* World, const FVector& Edge, const 
 	if (RMSideSlopes::FirstHit(World, Edge + FVector(0.f, 0.f, 150.f) + Out * 5.f, Edge + Out * 5.f - FVector(0.f, 0.f, 10.f), Self, Dist, Pass, Edge, Out, true)
 		!= RMSideSlopes::EHit::None)
 	{
+		RMSideSlopes::LastHit = TEXT("(above the edge) ") + RMSideSlopes::LastHit;
 		return 0.f;
 	}
 	// Down the bank from the edge: where it meets the ground, unless a road / intersection is in the way first.
@@ -1014,6 +1028,12 @@ void ARMBuildableRoad::MeasureSlopes(TArray<FVector2D>& OutLeft, TArray<FVector2
 			const FVector Edge = F.Pos + F.Right * (GetRoadWidth() * 0.5f * Side);
 			const float Drop = MeasureBankAt(World, Edge, Out, this, Pass);
 			Banks += Drop > 0.f ? 1 : 0;
+			if (K == 0 || K == Steps)
+			{
+				// Ends: what the bank stopped on (looking for a missing end triangle after a cut, 2026-11-28).
+				UE_LOG(LogRoadMaker, Log, TEXT("%s: side slope at the %s end, %s side: drop %.0f cm, %d joined piece(s), stopped on %s"), *GetName(),
+					K == 0 ? TEXT("start") : TEXT("end"), Side < 0.f ? TEXT("left") : TEXT("right"), Drop, Pass.Num(), *RMSideSlopes::LastHit);
+			}
 			(Side < 0.f ? OutLeft : OutRight).Add(FVector2D(D, Drop));
 		}
 	}

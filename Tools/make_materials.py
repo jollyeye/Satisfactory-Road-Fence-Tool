@@ -1216,8 +1216,38 @@ bb_primary = cpd_param(barrier_body, "MiddleLineColor", 24, unreal.LinearColor(0
 bb_col = node(barrier_body, unreal.MaterialExpressionMultiply, -300, 0)
 link(bb_primary, "", bb_col, "A")
 link(const(barrier_body, 0.8, -500, 80), "", bb_col, "B")
-MEL.connect_material_property(bb_col, "", MP.MP_BASE_COLOR)
+# The vent grille on the faces along the road (u + 2 from the code), in the normal map: a recessed panel 26 x 20 cm,
+# 10 cm above the plate, with five 2 cm slots; the slots dark. Body: 44 cm wide, 98 cm tall (v 0 at the top).
+BARRIER_VENT_HLSL = r"""
+float2 r = float2(0.0, 0.0);
+if (UV.x > 1.5)
+{
+    float x = (UV.x - 2.5) * 44.0;          // cm across the face, from its middle
+    float z = (1.0 - UV.y) * 98.0;          // cm up from the plate
+    float inx = 1.0 - smoothstep(13.0, 13.5, abs(x));
+    float inz = smoothstep(9.5, 10.0, z) * (1.0 - smoothstep(30.0, 30.5, z));
+    float p = frac((z - 10.0) / 4.0);
+    float slot = smoothstep(0.18, 0.28, p) * (1.0 - smoothstep(0.68, 0.78, p));
+    float m = inx * inz;
+    r.x = -m * (0.4 + 1.2 * slot);
+    r.y = m * slot;
+}
+return r;
+"""
+bb_uv = node(barrier_body, unreal.MaterialExpressionTextureCoordinate, -1000, 300, coordinate_index=0)
+bb_vent = custom(barrier_body, BARRIER_VENT_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT2, ["UV"], -750, 300, "Vent")
+link(bb_uv, "", bb_vent, "UV")
+bb_h = node(barrier_body, unreal.MaterialExpressionComponentMask, -500, 300, r=True, g=False, b=False, a=False)
+link(bb_vent, "", bb_h, "")
+bb_slot = node(barrier_body, unreal.MaterialExpressionComponentMask, -500, 400, r=False, g=True, b=False, a=False)
+link(bb_vent, "", bb_slot, "")
+bb_dark = node(barrier_body, unreal.MaterialExpressionLinearInterpolate, -150, 0)
+link(bb_col, "", bb_dark, "A")
+link(const(barrier_body, 0.02, -300, 120), "", bb_dark, "B")
+link(bb_slot, "", bb_dark, "Alpha")
+MEL.connect_material_property(bb_dark, "", MP.MP_BASE_COLOR)
 MEL.connect_material_property(const(barrier_body, 0.14, -300, 200), "", MP.MP_ROUGHNESS)
+bump_normal(barrier_body, bb_h, 1.0, None, 0, 600)
 holo_fade(barrier_body)
 finish(barrier_body)
 holo_instance(barrier_body)

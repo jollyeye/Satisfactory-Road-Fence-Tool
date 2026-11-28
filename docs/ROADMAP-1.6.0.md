@@ -158,6 +158,9 @@ time, nothing is stored.
     (`AFGVehicleSubsystem::InvalidateVehiclePathsInVolume`, `RevalidateVehiclePathsSoon`).
   - The tool's cage shows the banks only (no caps, no floor: `bBanksOnly`).
   - Later (maybe): past 8 m a straight-down wall at the foot, to 16 m in all.
+  - Reported 2026-11-28: after cutting a banked road, the bank misses its last triangle at the cut (merged again it is
+    fine). Not found by reading the code (the joined piece is passed through near the end); each measure now logs what
+    the end samples stopped on (Log: "side slope at the ... end") to find it.
 
 - **Issue #10: rubber banding walking on long roads in multiplayer** (fixed 2026-11-26, to test with two players):
   the reporter answered: only roads over the length limit (limit toggle off), the whole road, only joining players
@@ -188,11 +191,12 @@ time, nothing is stored.
     up or down). A road post can also end on a foundation (straight across the road). Hint `BarrierFoundationPost`.
   - Look (design `Resources/Qwen_Upscale_2.1_00003.png`): 64 x 64 cm steel base plate with four bolts, a 44 x 44 cm
     painted body (rounded edges) up to 1.02 m, a light band all around (6 cm), a steel cap to 1.16 m, a steel hinge
-    block on the road side (arm centre at 0.88 m) and a vent grille low on both faces along the road. Mesh sections:
+    block on the road side (arm centre at 0.88 m) and a vent grille low on both faces along the road (2026-11-28: in the
+    body material's normal map, a recessed panel with five dark slots, instead of steel slats; those faces have u + 2). Mesh sections:
     0 steel (`MI_RM_GuardRailPost`, the grid fence's posts), 1 body (`M_RM_BarrierBody`: the cyberpunk road's plastic
     without the circuit, primary colour x 0.8; paintable, the FICSIT wall's swatches, FICSIT by default; no secondary
     colour for now), 2 light (`M_RM_BarrierLight`: glows in custom primitive data 32, set per mode: green open, orange
-    automatic, red closed).
+    automatic, red closed; the red pure and dimmer (0.45, 0, 0) since bright red read as orange, 2026-11-28).
   - Arm: a hologram (`M_RM_BarrierHolo`: unlit, translucent, two-sided; red and white stripes every 0.5 m with soft
     edges, brighter and more solid at the long edges, a slow scan line), 12 x 6 cm, from the hinge block's face to the
     other side. No collision at all (players, creatures, vehicles, the build gun) and no shadow. It draws back into the
