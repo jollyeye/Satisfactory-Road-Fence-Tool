@@ -216,6 +216,9 @@ time, nothing is stored.
     until the next check (tested 2026-11-28: at 25 m they stopped far too early: they stop at once), and is remembered
     (`mStoppedVehicles`, saved). Leaving always closed (or dismantled): autopilot back on for the remembered ones still
     within 50 m, without a driver, still off (`CanEnableAutopilot`). Player-driven vehicles are never touched.
+  - Cost of many barriers (asked 2026-11-28, a thousand): each checks the game's vehicle list on the server, first by
+    distance to the post (arm + 35 m), 10 times a second while a vehicle is that close, twice a second otherwise; the
+    arm's timer runs only while it moves; post and arm not drawn past 250 m. The cap's underside is closed.
   - Window: E opens `URMBarrierWindow` (C++ `UFGInteractWidget`, set as the building's interact widget through
     reflection). The game's frame (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our
     page: three mode buttons (the chosen one orange), arm and vehicle state, an "Automation" button when Automated

@@ -141,7 +141,10 @@ protected:
 	FTimerHandle mDetectTimer;
 	FTimerHandle mArmTimer;
 
-	static constexpr float DetectInterval = 0.1f;
+	static constexpr float DetectInterval = 0.1f;     // a vehicle within reach
+	static constexpr float IdleDetectInterval = 0.5f; // none
+	static constexpr float MaxDrawDistance = 25000.f;
+	bool mDetectFast = false;
 	static constexpr float ApproachReach = 3000.f; // vehicles looked at up to 30 m (centre) before the arm ...
 	static constexpr float StopGap = 150.f;        // ... and stopped with their front about 1.5 m before it
 	static constexpr float ReleaseReach = 5000.f;  // and back on for the stopped ones within 50 m

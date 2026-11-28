@@ -37,6 +37,11 @@ ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitial
 	mArmMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 	mArmMesh->SetCanEverAffectNavigation(false);
 	mArmMesh->SetCastShadow(false);
+	// Small: not drawn past 250 m (many barriers cost nothing far away).
+	mMesh->LDMaxDrawDistance = MaxDrawDistance;
+	mMesh->CachedMaxDrawDistance = MaxDrawDistance;
+	mArmMesh->LDMaxDrawDistance = MaxDrawDistance;
+	mArmMesh->CachedMaxDrawDistance = MaxDrawDistance;
 }
 
 void ARMBuildableBarrier::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -52,8 +57,8 @@ void ARMBuildableBarrier::BeginPlay()
 	Super::BeginPlay();
 	if (HasAuthority())
 	{
-		GetWorldTimerManager().SetTimer(mDetectTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableBarrier::DetectVehicles), DetectInterval, true,
-			FMath::FRandRange(0.f, DetectInterval));
+		GetWorldTimerManager().SetTimer(mDetectTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableBarrier::DetectVehicles), IdleDetectInterval, true,
+			FMath::FRandRange(0.f, IdleDetectInterval));
 	}
 	UpdateArm(true);
 }
@@ -102,6 +107,12 @@ void ARMBuildableBarrier::BuildPostMesh(FRMMesh& Steel, FRMMesh& Body, FRMMesh& 
 	}
 	Light.AddBox(FVector(0.f, 0.f, (BodyTop + LightTop) * 0.5f), X, Y, Z, FVector(BodyHalf - 0.5f, BodyHalf - 0.5f, (LightTop - BodyTop) * 0.5f), 100.f);
 	RMGeometry::AddBeveledPost(FVector(0.f, 0.f, LightTop), X, Y, Z, BodyHalf + 2.f, PostHeight - LightTop, 1.5f, Steel);
+	{
+		// The cap's underside (it overhangs the band by 2.5 cm), facing down.
+		const float C = BodyHalf + 2.f;
+		Steel.AddQuad(FVector(-C, -C, LightTop), FVector(C, -C, LightTop), FVector(C, C, LightTop), FVector(-C, C, LightTop), -Z,
+			FVector2D(0.f, 0.f), FVector2D(1.f, 0.f), FVector2D(1.f, 1.f), FVector2D(0.f, 1.f));
+	}
 	// The hinge block on the road side, the arm comes out of its face.
 	const float HingeDepth = HingeFace - BodyHalf;
 	Steel.AddBox(FVector(0.f, BodyHalf + HingeDepth * 0.5f, HingeHeight), X, Y, Z, FVector(11.f, HingeDepth * 0.5f, 13.f), 100.f);
@@ -254,8 +265,13 @@ void ARMBuildableBarrier::DetectVehicles()
 		return;
 	}
 	const FTransform& T = GetActorTransform();
+	const FVector Here = T.GetLocation();
 	const bool bClosed = mMode == ERMBarrierMode::Closed;
 	bool bNear = false;
+	// Cheap first test: within the arm's length plus 30 m of the post (seen in 3D). The closest one sets the next
+	// check: 10 a second with a vehicle within that, twice a second otherwise (a thousand barriers stay cheap).
+	const float Reach = PostHalf + mArmLength + ApproachReach + 500.f;
+	bool bAnyClose = false;
 	for (AFGWheeledVehicleIdentifier* Id : Vehicles->GetAllVehicles())
 	{
 		AFGWheeledVehicle* Vehicle = Id ? Id->GetOwnerVehicle() : nullptr;
@@ -266,6 +282,11 @@ void ARMBuildableBarrier::DetectVehicles()
 		FVector Where;
 		FRotator Facing;
 		Vehicle->GetVehicleLocationAndRotation(Where, Facing);
+		if (FVector::DistSquared(Where, Here) > FMath::Square(Reach))
+		{
+			continue;
+		}
+		bAnyClose = true;
 		const FVector L = T.InverseTransformPosition(Where);
 		if (L.Y < -300.f || L.Y > PostHalf + mArmLength + 300.f || L.Z < -300.f || L.Z > 600.f)
 		{
@@ -306,6 +327,12 @@ void ARMBuildableBarrier::DetectVehicles()
 		mVehicleNear = bNear;
 		ForceNetUpdate();
 		UpdateArm(false);
+	}
+	if (bAnyClose != mDetectFast)
+	{
+		mDetectFast = bAnyClose;
+		const float Interval = mDetectFast ? DetectInterval : IdleDetectInterval;
+		GetWorldTimerManager().SetTimer(mDetectTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableBarrier::DetectVehicles), Interval, true);
 	}
 }
 
