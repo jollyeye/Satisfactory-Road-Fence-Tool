@@ -72,19 +72,85 @@ void ARMBarrierHologram::ResetTool()
 {
 	mStep = 0;
 	mFirst = FRMTunnelSide();
+	mFirstOnFoundation = false;
 	mHasHover = false;
 	mAcross = false;
 	mOverlayMesh->ClearAllMeshSections();
 }
 
+bool ARMBarrierHologram::FoundationPoint(const FHitResult& Hit, FVector& OutPoint, FVector& OutAxis) const
+{
+	FTransform Piece;
+	FBox Box;
+	if (!RMRoadUtils::GetFoundationPiece(Hit, Piece, Box))
+	{
+		return false;
+	}
+	// The grid in the piece's own space, from its centre (its edges and centre are grid points), on its top.
+	const FVector Scale = Piece.GetScale3D().GetAbs();
+	const FVector Center = Box.GetCenter();
+	const FVector Local = Piece.InverseTransformPosition(Hit.Location);
+	auto SnapAxis = [](float Value, float Mid, float Min, float Max, float AxisScale)
+	{
+		const float Step = FoundationGrid / FMath::Max(AxisScale, KINDA_SMALL_NUMBER);
+		return FMath::Clamp(Mid + FMath::RoundToFloat((Value - Mid) / Step) * Step, Min, Max);
+	};
+	OutPoint = Piece.TransformPosition(FVector(SnapAxis(Local.X, Center.X, Box.Min.X, Box.Max.X, Scale.X),
+		SnapAxis(Local.Y, Center.Y, Box.Min.Y, Box.Max.Y, Scale.Y), Box.Max.Z));
+	FVector View = Hit.TraceEnd - Hit.TraceStart;
+	View = View.GetSafeNormal2D();
+	float BestDot = -2.f;
+	for (const FVector& A : { FVector(1, 0, 0), FVector(-1, 0, 0), FVector(0, 1, 0), FVector(0, -1, 0) })
+	{
+		const FVector W = Piece.TransformVectorNoScale(A).GetSafeNormal2D();
+		const float D = FVector::DotProduct(W, View);
+		if (D > BestDot)
+		{
+			BestDot = D;
+			OutAxis = W;
+		}
+	}
+	return true;
+}
+
+FVector ARMBarrierHologram::FoundationArmDir() const
+{
+	const FVector Base = mStep == 1 ? mFirstAxis : mHoverAxis;
+	return Base.RotateAngleAxis(90.f * mQuarterTurns, FVector::UpVector).GetSafeNormal2D();
+}
+
+bool ARMBarrierHologram::ArmTo(const FVector& End, const FVector& Across)
+{
+	const FVector D = End - mPost;
+	const float W = float(FVector::DotProduct(D, Across)) - ARMBuildableBarrier::PostHalf;
+	if (W < ARMBuildableBarrier::MinArm || W > ARMBuildableBarrier::MaxArm || FMath::Abs(D.Z) > 300.f)
+	{
+		return false;
+	}
+	const FVector Fwd = FVector::CrossProduct(Across, FVector::UpVector);
+	SetActorLocationAndRotation(mPost, FRotator(0.f, Fwd.Rotation().Yaw, 0.f));
+	mArmLength = W;
+	return true;
+}
+
 void ARMBarrierHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 {
 	const FHitResult hitResult = RMRoadUtils::ThroughMarking(InHit); // aiming at a lane marking = at its road
-	if (mStep > 0 && !mFirst.Source.IsValid())
+	if (mStep > 0 && !mFirstOnFoundation && !mFirst.Source.IsValid())
 	{
 		ResetTool(); // the first road is gone
 	}
+	// The scroll wheel: a quarter turn per step (foundation posts).
+	const int32 Scroll = GetScrollRotateValue();
+	if (mLastScroll != TNumericLimits<int32>::Min() && Scroll != mLastScroll)
+	{
+		mQuarterTurns = (mQuarterTurns + (Scroll > mLastScroll ? 1 : 3)) % 4;
+	}
+	mLastScroll = Scroll;
+
 	mHasHover = ARMTunnelHologram::FindSideAt(hitResult, mHover, ARMBuildableBarrier::ColumnInset, false);
+	FVector FoundationAt;
+	mHoverOnFoundation = !mHasHover && FoundationPoint(hitResult, FoundationAt, mHoverAxis);
 	mAcross = false;
 	if (mHasHover)
 	{
@@ -92,19 +158,51 @@ void ARMBarrierHologram::SetHologramLocationAndRotation(const FHitResult& InHit)
 		float T;
 		RMOverlayLines::Nearest2D(mHover.Line, mStep == 1 ? mPost : FVector(hitResult.Location), Seg, T, mHoverPoint);
 	}
-	FVector End;
-	if (mStep == 1 && mHasHover && PairEnd(mHover, End))
+	else if (mHoverOnFoundation)
 	{
-		// At the post, turned so its local Y points across to the other side.
-		mAcross = true;
-		const FVector Across = (End - mPost).GetSafeNormal2D();
-		const FVector Fwd = FVector::CrossProduct(Across, FVector::UpVector);
-		SetActorLocationAndRotation(mPost, FRotator(0.f, Fwd.Rotation().Yaw, 0.f));
-		mArmLength = FMath::Clamp(FVector::Dist2D(mPost, End) - ARMBuildableBarrier::PostHalf, ARMBuildableBarrier::MinArm, ARMBuildableBarrier::MaxArm);
+		mHoverPoint = FoundationAt;
+	}
+	if (mStep == 0)
+	{
+		if (mHoverOnFoundation)
+		{
+			// The post on the grid, its arm shown short along the chosen axis.
+			mPost = mHoverPoint;
+			const FVector Fwd = FVector::CrossProduct(FoundationArmDir(), FVector::UpVector);
+			SetActorLocationAndRotation(mPost, FRotator(0.f, Fwd.Rotation().Yaw, 0.f));
+			mArmLength = ARMBuildableBarrier::MinArm;
+		}
+		else
+		{
+			SetActorLocationAndRotation(mHasHover ? mHoverPoint : FVector(hitResult.Location), FRotator::ZeroRotator);
+		}
 	}
 	else
 	{
-		SetActorLocationAndRotation(mStep == 1 ? mPost : (mHasHover ? mHoverPoint : FVector(hitResult.Location)), FRotator::ZeroRotator);
+		FVector End;
+		if (mFirstOnFoundation)
+		{
+			// Along the post's axis to the aimed point (a foundation grid point or a road edge), measured along the arm.
+			mAcross = (mHasHover || mHoverOnFoundation) && ArmTo(mHoverPoint, FoundationArmDir());
+		}
+		else if (mHasHover && PairEnd(mHover, End))
+		{
+			mAcross = ArmTo(End, (End - mPost).GetSafeNormal2D());
+		}
+		else if (mHoverOnFoundation)
+		{
+			// From a road's post to a foundation: straight across the road, towards the aimed side.
+			FVector Across = FVector::CrossProduct(FVector::UpVector, mFirstFwd).GetSafeNormal2D();
+			if (FVector::DotProduct(mHoverPoint - mPost, Across) < 0.f)
+			{
+				Across = -Across;
+			}
+			mAcross = ArmTo(mHoverPoint, Across);
+		}
+		if (!mAcross)
+		{
+			SetActorLocationAndRotation(mPost, GetActorRotation());
+		}
 	}
 	RebuildPreview();
 	RebuildOverlay();
@@ -122,7 +220,15 @@ bool ARMBarrierHologram::DoMultiStepPlacement(bool isInputFromARelease)
 	mLastClickTime = Now;
 	if (mStep == 0)
 	{
-		if (mHasHover)
+		if (mHoverOnFoundation)
+		{
+			mFirstOnFoundation = true;
+			mFirst = FRMTunnelSide();
+			mFirstAxis = mHoverAxis; // mPost: set while aiming
+			mFirstFwd = FVector::CrossProduct(FoundationArmDir(), FVector::UpVector);
+			mStep = 1;
+		}
+		else if (mHasHover)
 		{
 			mFirst = mHover;
 			int32 Seg = 0;
@@ -133,7 +239,7 @@ bool ARMBarrierHologram::DoMultiStepPlacement(bool isInputFromARelease)
 		}
 		return false;
 	}
-	if (mHasHover && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key)
+	if (IsOnFirst())
 	{
 		ResetTool();
 		return false;
@@ -144,11 +250,11 @@ bool ARMBarrierHologram::DoMultiStepPlacement(bool isInputFromARelease)
 void ARMBarrierHologram::CheckValidPlacement()
 {
 	// No Super call on purpose (as the gantry): the vanilla floor check is for boxes.
-	if (mStep == 1 && !mAcross && !(mHasHover && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key))
+	if (mStep == 1 && !mAcross && !IsOnFirst())
 	{
 		AddConstructDisqualifier(URMCD_GantryNotAcross::StaticClass());
 	}
-	else if (mStep == 0 && !mHasHover)
+	else if (mStep == 0 && !mHasHover && !mHoverOnFoundation)
 	{
 		AddConstructDisqualifier(URMCD_AimAtRoad::StaticClass());
 	}
@@ -158,7 +264,7 @@ void ARMBarrierHologram::UpdateHint()
 {
 	if (mStep == 1)
 	{
-		if (mHasHover && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key)
+		if (IsOnFirst())
 		{
 			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierDropFirst", "Boom Barrier: click to drop this side"));
 		}
@@ -169,12 +275,16 @@ void ARMBarrierHologram::UpdateHint()
 		}
 		else
 		{
-			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierSecondSide", "Boom Barrier: aim at the other side (any road or walking path edge straight across)"));
+			RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierSecondSide", "Boom Barrier: aim at the other side (any road or walking path edge straight across, or a foundation)"));
 		}
+	}
+	else if (mHoverOnFoundation)
+	{
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierFoundationPost", "Boom Barrier: click to place the post (scroll turns the arm by 90 degrees)"));
 	}
 	else
 	{
-		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierFirstSide", "Boom Barrier: click the side for the post (a road or walking path edge)"));
+		RMScreenHint::Show(GetWorld(), NSLOCTEXT("RoadMaker", "BarrierFirstSide", "Boom Barrier: click the side for the post (a road or walking path edge, or a foundation)"));
 	}
 }
 
@@ -182,7 +292,7 @@ void ARMBarrierHologram::RebuildOverlay()
 {
 	mOverlayMesh->ClearAllMeshSections();
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
-	if (!PC || !PC->PlayerCameraManager || (mStep == 0 && !mHasHover))
+	if (!PC || !PC->PlayerCameraManager || (mStep == 0 && !mHasHover && !mHoverOnFoundation))
 	{
 		return;
 	}
@@ -194,14 +304,20 @@ void ARMBarrierHologram::RebuildOverlay()
 	B.WorldPerPixel = 2.f * FMath::Tan(FMath::DegreesToRadians(PC->PlayerCameraManager->GetFOVAngle()) * 0.5f) / FMath::Max(ViewW, 1);
 	if (mStep == 1)
 	{
-		B.Polyline(mFirst.Line, FLinearColor(0.f, 1.f, 0.f)); // the post's side: green, and the post's arrow
+		if (!mFirstOnFoundation)
+		{
+			B.Polyline(mFirst.Line, FLinearColor(0.f, 1.f, 0.f)); // the post's side: green, and the post's arrow
+		}
 		B.Arrow(mPost, FLinearColor(0.f, 1.f, 0.f));
 	}
-	if (mHasHover && !(mStep == 1 && mHover.Source == mFirst.Source && mHover.Key == mFirst.Key))
+	if ((mHasHover || mHoverOnFoundation) && !(mStep == 1 && IsOnFirst()))
 	{
 		const bool bBad = mStep == 1 && !mAcross;
 		const FLinearColor Color = bBad ? FLinearColor(1.f, 0.05f, 0.05f) : FLinearColor(1.f, 1.f, 1.f);
-		B.Polyline(mHover.Line, Color);
+		if (mHasHover)
+		{
+			B.Polyline(mHover.Line, Color);
+		}
 		B.Arrow(mHoverPoint, Color);
 	}
 	const FTransform T = mOverlayMesh->GetComponentTransform();
@@ -220,7 +336,7 @@ void ARMBarrierHologram::RebuildOverlay()
 void ARMBarrierHologram::RebuildPreview()
 {
 	// The post where it will stand; the arm once the other side is known.
-	const float Length = mAcross ? mArmLength : 0.f;
+	const float Length = (mAcross || (mStep == 0 && mHoverOnFoundation)) ? mArmLength : 0.f;
 	if (FMath::IsNearlyEqual(mShownLength, Length, 0.5f) && mPreviewMesh->GetNumSections() > 0)
 	{
 		return;

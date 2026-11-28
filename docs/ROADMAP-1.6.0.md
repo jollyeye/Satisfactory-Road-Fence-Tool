@@ -182,6 +182,10 @@ time, nothing is stored.
   `render_icons.py barrier`).
   - Placement like the gantry's first two steps: click the side for the post (fence line, white arrow), aim at the other
     side straight across (same road's other edge or a road beside it): the arm reaches it (2 to 20 m); click builds.
+  - Foundations (asked 2026-11-28): the post snaps to a foundation's 0.5 m grid on its top (from its centre, like the
+    fences' grid), the arm along the foundation axis nearest the view; the scroll wheel turns it by quarter turns.
+    Second click: a foundation grid point (or a road edge) measured along the arm from the post (2 to 20 m, within 3 m
+    up or down). A road post can also end on a foundation (straight across the road). Hint `BarrierFoundationPost`.
   - Look (design `Resources/Qwen_Upscale_2.1_00003.png`): 64 x 64 cm steel base plate with four bolts, a 44 x 44 cm
     painted body (rounded edges) up to 1.02 m, a light band all around (6 cm), a steel cap to 1.16 m, a steel hinge
     block on the road side (arm centre at 0.88 m) and a vent grille low on both faces along the road. Mesh sections:
@@ -197,11 +201,12 @@ time, nothing is stored.
     the road and the arm's reach across), Always open, Always closed.
   - Vehicles: no more path block (the invisible box and the path re-check are gone). Server, 4 times a second, from the
     game's vehicle list (`AFGVehicleSubsystem::GetAllVehicles`, real place via `GetVehicleLocationAndRotation`, so far
-    proxies count): always closed, a vehicle with autopilot on, no driver, within the arm's reach across (plus 3 m),
-    1.5 to 25 m before the arm and heading towards it (backwards when reversing) gets `SetAutopilotEnabled(false)` and
-    is remembered (`mStoppedVehicles`, saved). Leaving always closed (or dismantled): autopilot back on for the
-    remembered ones still within 50 m, without a driver, still off (`CanEnableAutopilot`). Player-driven vehicles are
-    never touched. To check in game: how far a self-driving vehicle rolls after its autopilot goes off (25 m reach).
+    proxies count, 10 times a second): always closed, a vehicle with autopilot on, no driver, within the arm's reach
+    across (plus 3 m) and heading towards the arm (backwards when reversing) gets `SetAutopilotEnabled(false)` once its
+    front (half its local bounds' length ahead of its centre) is within 1.5 m of the arm's line plus what it covers
+    until the next check (tested 2026-11-28: at 25 m they stopped far too early: they stop at once), and is remembered
+    (`mStoppedVehicles`, saved). Leaving always closed (or dismantled): autopilot back on for the remembered ones still
+    within 50 m, without a driver, still off (`CanEnableAutopilot`). Player-driven vehicles are never touched.
   - Window: E opens `URMBarrierWindow` (C++ `UFGInteractWidget`, set as the building's interact widget through
     reflection). The game's frame (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our
     page: three mode buttons (the chosen one orange), arm and vehicle state, an "Automation" button when Automated

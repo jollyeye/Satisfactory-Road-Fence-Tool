@@ -52,8 +52,8 @@ void ARMBuildableBarrier::BeginPlay()
 	Super::BeginPlay();
 	if (HasAuthority())
 	{
-		GetWorldTimerManager().SetTimer(mDetectTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableBarrier::DetectVehicles), 0.25f, true,
-			FMath::FRandRange(0.f, 0.25f));
+		GetWorldTimerManager().SetTimer(mDetectTimer, FTimerDelegate::CreateUObject(this, &ARMBuildableBarrier::DetectVehicles), DetectInterval, true,
+			FMath::FRandRange(0.f, DetectInterval));
 	}
 	UpdateArm(true);
 }
@@ -245,7 +245,7 @@ void ARMBuildableBarrier::DetectVehicles()
 {
 	// The game's wheeled vehicles (its list of them, with their real place even when drawn as a far proxy): near =
 	// within 12 m along the road, the arm's reach across it (plus 3 m), up to 6 m above. Always closed, a self-driving
-	// vehicle without a driver coming towards the arm (up to 25 m before it, not on it) gets its autopilot turned off.
+	// vehicle without a driver coming towards the arm (stopped with its front just before the arm) gets its autopilot turned off.
 	AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(GetWorld());
 	if (!Vehicles)
 	{
@@ -270,7 +270,7 @@ void ARMBuildableBarrier::DetectVehicles()
 			continue;
 		}
 		bNear |= FMath::Abs(L.X) < 1200.f;
-		if (!bClosed || !Id->IsAutopilotEnabled() || Vehicle->GetDriver() || FMath::Abs(L.X) > ApproachReach || FMath::Abs(L.X) < 150.f)
+		if (!bClosed || !Id->IsAutopilotEnabled() || Vehicle->GetDriver() || FMath::Abs(L.X) > ApproachReach)
 		{
 			continue;
 		}
@@ -284,9 +284,20 @@ void ARMBuildableBarrier::DetectVehicles()
 		{
 			continue;
 		}
+		// Stopped just before the arm: once the gap between its front and the arm's line is within what it covers until
+		// the next check (and a little more). Its front: half its length (local bounds, along its forward axis) ahead
+		// of its centre, measured along the road.
+		const float HalfLength = FMath::Clamp(Vehicle->CalculateComponentsBoundingBoxInLocalSpace(true).GetExtent().X, 100.f, 800.f);
+		const float Gap = FMath::Abs(L.X) - HalfLength * FMath::Max(FMath::Abs(Heading.X), 0.3f);
+		const float Speed = FMath::Abs(float(Vehicle->GetSpeedInKMH())) / 0.036f; // cm/s
+		if (Gap > StopGap + Speed * DetectInterval * 1.5f || Gap < -100.f)
+		{
+			continue; // still further away, or already through
+		}
 		Id->SetAutopilotEnabled(false);
 		mStoppedVehicles.AddUnique(Id);
-		UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot off for %s (%.0f m before the arm)"), *GetName(), *Vehicle->GetName(), FMath::Abs(L.X) / 100.f);
+		UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot off for %s (front %.1f m before the arm, %d km/h)"), *GetName(), *Vehicle->GetName(), Gap / 100.f,
+			Vehicle->GetSpeedInKMH());
 	}
 	if (bNear != mVehicleNear)
 	{
