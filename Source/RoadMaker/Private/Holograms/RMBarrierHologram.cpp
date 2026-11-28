@@ -227,24 +227,26 @@ void ARMBarrierHologram::RebuildPreview()
 	}
 	mShownLength = Length;
 	mPreviewMesh->ClearAllMeshSections();
-	FRMMesh Mesh;
-	ARMBuildableBarrier::BuildPostMesh(Mesh);
+	FRMMesh Mesh, Body, Light;
+	ARMBuildableBarrier::BuildPostMesh(Mesh, Body, Light);
+	FRMMesh Arm;
 	if (Length > 0.f)
 	{
-		FRMMesh White, Red;
-		ARMBuildableBarrier::BuildArmMesh(Length, White, Red);
-		const FVector Hinge(0.f, 0.f, ARMBuildableBarrier::HingeHeight);
-		for (const FRMMesh* Part : { &White, &Red })
+		ARMBuildableBarrier::BuildArmMesh(Length, Arm);
+	}
+	const FVector Hinge(0.f, ARMBuildableBarrier::HingeFace, ARMBuildableBarrier::HingeHeight);
+	for (const TPair<const FRMMesh*, FVector>& Part : { TPair<const FRMMesh*, FVector>(&Body, FVector::ZeroVector),
+		TPair<const FRMMesh*, FVector>(&Light, FVector::ZeroVector), TPair<const FRMMesh*, FVector>(&Arm, Hinge) })
+	{
+		const FRMMesh& P = *Part.Key;
+		const int32 Base = Mesh.Vertices.Num();
+		for (int32 V = 0; V < P.Vertices.Num(); ++V)
 		{
-			const int32 Base = Mesh.Vertices.Num();
-			for (int32 V = 0; V < Part->Vertices.Num(); ++V)
-			{
-				Mesh.AddVertex(Part->Vertices[V] + Hinge, Part->Normals[V], Part->UVs[V], Part->Tangents[V].TangentX);
-			}
-			for (int32 I = 0; I + 2 < Part->Triangles.Num(); I += 3)
-			{
-				Mesh.Triangles.Append({ Base + Part->Triangles[I], Base + Part->Triangles[I + 1], Base + Part->Triangles[I + 2] });
-			}
+			Mesh.AddVertex(P.Vertices[V] + Part.Value, P.Normals[V], P.UVs[V], P.Tangents[V].TangentX);
+		}
+		for (int32 I = 0; I + 2 < P.Triangles.Num(); I += 3)
+		{
+			Mesh.Triangles.Append({ Base + P.Triangles[I], Base + P.Triangles[I + 1], Base + P.Triangles[I + 2] });
 		}
 	}
 	Mesh.ApplyToSection(mPreviewMesh, 0, false);

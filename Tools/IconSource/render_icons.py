@@ -830,16 +830,21 @@ def sign_gantry(sc):
 
 
 def boom_barrier(sc):
-    """A straight road with a boom barrier: a dark post on the near edge, the red and white arm across the road."""
+    """A straight road with a boom barrier: an orange post with a steel plate and cap and an orange light band, the red
+    and white hologram arm across the road."""
     road(sc, 16, 2, length=18.0, bend=0.0)
-    DARK = np.array([58, 60, 66.0]); RED = np.array([205, 32, 26.0]); W = np.array([242, 242, 238.0])
+    STEEL = np.array([170, 174, 180.0]); RED = np.array([235, 50, 44.0]); W = np.array([250, 236, 236.0])
+    GLOW = np.array([255, 150, 40.0])
     x = 9.0; yp = 7.6
-    box(sc, (x, yp, 1.0), 0.7, 0.7, 1.0, DARK, layer=1)              # post
-    box(sc, (x, yp, 2.2), 0.85, 0.85, 0.2, ORANGE, layer=1)          # housing on top
-    n = 9; y1 = -7.2; y0 = yp - 0.75; step = (y0 - y1) / n
+    box(sc, (x, yp, 0.05), 0.95, 0.95, 0.05, STEEL, layer=1)         # base plate
+    box(sc, (x, yp, 1.05), 0.66, 0.66, 0.95, ORANGE, layer=1)        # body
+    box(sc, (x, yp, 2.08), 0.68, 0.68, 0.08, GLOW, layer=1)          # light band
+    box(sc, (x, yp, 2.28), 0.72, 0.72, 0.12, STEEL, layer=1)         # cap
+    box(sc, (x, yp - 0.8, 1.75), 0.3, 0.16, 0.36, STEEL, layer=1)    # hinge block
+    n = 9; y1 = -7.2; y0 = yp - 0.96; step = (y0 - y1) / n
     for k in range(n):
         yc = y0 - step * (k + 0.5)
-        box(sc, (x, yc, 1.75), 0.24, step / 2.0, 0.24, RED if k % 2 == 0 else W, layer=1)
+        box(sc, (x, yc, 1.75), 0.1, step / 2.0, 0.18, RED if k % 2 == 0 else W, layer=1)
 
 def tunnel_icon(sc):
     """A straight road under a rounded concrete arch (the Tunnel Arch), the road running out of both ends."""

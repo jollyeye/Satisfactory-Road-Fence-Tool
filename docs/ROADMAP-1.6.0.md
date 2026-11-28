@@ -177,33 +177,41 @@ time, nothing is stored.
   in plan (15 cm, one pass) and the slopes part timed on its own. Frame drop looking at a busy intersection: the game
   drawing its many vehicle paths, not the mod.
 
-- **Boom barrier** (asked 2026-11-27, built, to test): `ARMBuildableBarrier` + `ARMBarrierHologram`, `Build_BoomBarrier`
-  (build menu next to the Sign Gantry, menu order 11; cost 2 steel pipes, 2 copper sheets; icon `render_icons.py barrier`).
+- **Boom barrier** (asked 2026-11-27, redesigned 2026-11-28, to test): `ARMBuildableBarrier` + `ARMBarrierHologram`,
+  `Build_BoomBarrier` (build menu next to the Sign Gantry, menu order 11; cost 2 steel pipes, 2 copper sheets; icon
+  `render_icons.py barrier`).
   - Placement like the gantry's first two steps: click the side for the post (fence line, white arrow), aim at the other
     side straight across (same road's other edge or a road beside it): the arm reaches it (2 to 20 m); click builds.
-  - Temporary meshes: a 40 x 40 cm, 1.1 m post (metal material) and a 12 x 12 cm arm hinged at 1 m, red / white stripes
-    every 0.5 m (unlit overlay colours for now), its own component (`mArmMesh`) turning up to 85 degrees (1.5 s).
-  - Modes (saved, replicated), E cycles them for now (UI later): Automatic (arm lifts while a wheeled vehicle is within
-    12 m along the road and the arm's reach across, checked 4 times a second on the server; never blocks), Always open,
-    Always closed (arm down and solid, WorldStatic, players pass: it blocks the vehicle paths through it like a
-    foundation on a path, so self-driving vehicles stop and wait; the paths are re-checked on closing / opening via
-    `RevalidateVehiclePathsSoon`). Look-at text shows the mode.
-  - Window (asked 2026-11-27): E opens `URMBarrierWindow` (C++ `UFGInteractWidget`, set as the building's interact widget
-    through reflection: "Press E to configure Boom Barrier" like the game's buildings). The game's frame
-    (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our page: three mode buttons (the
-    chosen one orange), arm and vehicle state, an "Automation" button when Automated Machines is installed (its
-    `OpenAutomationWindow` called by name, MODDING.md). Clients set the mode through `ServerSetBarrierMode` (RCO).
-  - Automation: one action `AM_Action_Mode(ERMBarrierMode)`: Automated Machines (enum inputs, added 2026-11-27) shows
-    a dropdown Automatic / Open / Closed from the entry names (DisplayName metadata is not in the shipped game; entries
-    saved by value: new ones only at the end). Conditions Vehicle Waiting and Open stay.
-  - Tested 2026-11-27: vehicles climbed over the closed arm. Now an invisible box (`mVehicleBlock`: the arm's length,
-    0.6 m thick, road to 4 m, WorldStatic, ignores pawns / visibility) is solid only while always closed; the visible
-    arm is solid to players and creatures in every mode (asked).
-  - Automated Machines (name convention, no dependency): `AM_Condition_Vehicle_Waiting`, `AM_Condition_Open`,
-    `AM_Action_Open(bool)` and `AM_Action_Close(bool)` (on = always open / closed, off = back to automatic),
-    `AM_Action_Automatic`, `AM_Info_*`. Its tab only
-    appears in the game's own building windows: the barrier has none yet (E), so the hooks show once it gets a window
-    (or Automated Machines' planned part 3).
+  - Look (design `Resources/Qwen_Upscale_2.1_00003.png`): 64 x 64 cm steel base plate with four bolts, a 44 x 44 cm
+    painted body (rounded edges) up to 1.02 m, a light band all around (6 cm), a steel cap to 1.16 m, a steel hinge
+    block on the road side (arm centre at 0.88 m) and a vent grille low on both faces along the road. Mesh sections:
+    0 steel (`MI_RM_GuardRailPost`, the grid fence's posts), 1 body (`M_RM_BarrierBody`: the cyberpunk road's plastic
+    without the circuit, primary colour x 0.8; paintable, the FICSIT wall's swatches, FICSIT by default; no secondary
+    colour for now), 2 light (`M_RM_BarrierLight`: glows in custom primitive data 32, set per mode: green open, orange
+    automatic, red closed).
+  - Arm: a hologram (`M_RM_BarrierHolo`: unlit, translucent, two-sided; red and white stripes every 0.5 m with soft
+    edges, brighter and more solid at the long edges, a slow scan line), 12 x 6 cm, from the hinge block's face to the
+    other side. No collision at all (players, creatures, vehicles, the build gun) and no shadow. It draws back into the
+    hinge block (squeezed along its length, eased, about 1 s) instead of turning.
+  - Modes (saved, replicated), set in the window: Automatic (arm draws back while a wheeled vehicle is within 12 m along
+    the road and the arm's reach across), Always open, Always closed.
+  - Vehicles: no more path block (the invisible box and the path re-check are gone). Server, 4 times a second, from the
+    game's vehicle list (`AFGVehicleSubsystem::GetAllVehicles`, real place via `GetVehicleLocationAndRotation`, so far
+    proxies count): always closed, a vehicle with autopilot on, no driver, within the arm's reach across (plus 3 m),
+    1.5 to 25 m before the arm and heading towards it (backwards when reversing) gets `SetAutopilotEnabled(false)` and
+    is remembered (`mStoppedVehicles`, saved). Leaving always closed (or dismantled): autopilot back on for the
+    remembered ones still within 50 m, without a driver, still off (`CanEnableAutopilot`). Player-driven vehicles are
+    never touched. To check in game: how far a self-driving vehicle rolls after its autopilot goes off (25 m reach).
+  - Window: E opens `URMBarrierWindow` (C++ `UFGInteractWidget`, set as the building's interact widget through
+    reflection). The game's frame (`Widget_Window_DarkMode`, title tab "Boom Barrier", its X, no inventory) around our
+    page: three mode buttons (the chosen one orange), arm and vehicle state, an "Automation" button when Automated
+    Machines is installed (its `OpenAutomationWindow` called by name, MODDING.md). Clients set the mode through
+    `ServerSetBarrierMode` (RCO).
+  - Automated Machines (name convention, no dependency): `AM_Condition_Vehicle_Waiting`, `AM_Condition_Open`, one
+    action `AM_Action_Mode(ERMBarrierMode)` (a dropdown Automatic / Open / Closed from the entry names; saved by value:
+    new entries only at the end), `AM_Info_*`.
+  - History: the first version (2026-11-27) had a solid arm turning up 85 degrees and, always closed, an invisible 4 m box
+    that blocked the vehicle paths (vehicles had climbed over the thin arm).
 
 ## Waiting
 - Issue #10: reply to the reporter once tested (with the user's go-ahead).

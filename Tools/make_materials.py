@@ -1209,6 +1209,68 @@ finish(cyber_body)
 holo_instance(cyber_body)
 log("Cyberpunk road body")
 
+# --- Boom barrier (1.6.0) ------------------------------------------------------------------------
+# Body: the cyberpunk road's plastic without the circuit (primary colour x 0.8, glossy), FICSIT orange by default.
+barrier_body = new_material("M_RM_BarrierBody")
+bb_primary = cpd_param(barrier_body, "MiddleLineColor", 24, unreal.LinearColor(0.94, 0.33, 0.06, 1.0), -600, 0)
+bb_col = node(barrier_body, unreal.MaterialExpressionMultiply, -300, 0)
+link(bb_primary, "", bb_col, "A")
+link(const(barrier_body, 0.8, -500, 80), "", bb_col, "B")
+MEL.connect_material_property(bb_col, "", MP.MP_BASE_COLOR)
+MEL.connect_material_property(const(barrier_body, 0.14, -300, 200), "", MP.MP_ROUGHNESS)
+holo_fade(barrier_body)
+finish(barrier_body)
+holo_instance(barrier_body)
+
+# Light band: glows in the mode's colour (custom primitive data 32, set in code: green / orange / red).
+barrier_light = new_material("M_RM_BarrierLight")
+bl_col = cpd_param(barrier_light, "LightColor", 32, unreal.LinearColor(1.0, 0.32, 0.0, 1.0), -600, 0)
+bl_base = node(barrier_light, unreal.MaterialExpressionMultiply, -300, 0)
+link(bl_col, "", bl_base, "A")
+link(const(barrier_light, 0.3, -500, 80), "", bl_base, "B")
+MEL.connect_material_property(bl_base, "", MP.MP_BASE_COLOR)
+bl_glow = node(barrier_light, unreal.MaterialExpressionMultiply, -300, 150)
+link(bl_col, "", bl_glow, "A")
+link(const(barrier_light, 8.0, -500, 220), "", bl_glow, "B")
+MEL.connect_material_property(bl_glow, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(const(barrier_light, 0.3, -300, 300), "", MP.MP_ROUGHNESS)
+holo_fade(barrier_light)
+finish(barrier_light)
+holo_instance(barrier_light)
+
+# Arm: a translucent, unlit hologram. Red and white stripes along UV0.x (one of each per 1.0, soft edges between
+# them), brighter and more solid towards the long edges (UV0.y 0..1 across each face), a faint scan line moving
+# along it.
+BARRIER_HOLO_HLSL = r"""
+float s = frac(UV.x);
+float w = smoothstep(0.40, 0.50, s) - smoothstep(0.90, 1.00, s);   // 0 red, 1 white
+float3 red = float3(1.0, 0.04, 0.03);
+float3 white = float3(1.0, 0.92, 0.92);
+float e = abs(UV.y * 2.0 - 1.0);
+float edge = e * e * e * e;
+float scan = 0.5 + 0.5 * sin((UV.x * 2.0 - Tm * 0.8) * 6.2831853);
+float3 c = lerp(red, white, w) * (1.6 + 2.4 * edge + 0.4 * scan * scan);
+float a = saturate(0.42 + 0.4 * edge + 0.08 * scan);
+return float4(c, a);
+"""
+barrier_holo = new_material("M_RM_BarrierHolo")
+barrier_holo.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+barrier_holo.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+barrier_holo.set_editor_property("two_sided", True)
+bh_uv = node(barrier_holo, unreal.MaterialExpressionTextureCoordinate, -1000, 0, coordinate_index=0)
+bh_time = node(barrier_holo, unreal.MaterialExpressionTime, -1000, 150)
+bh = custom(barrier_holo, BARRIER_HOLO_HLSL, unreal.CustomMaterialOutputType.CMOT_FLOAT4, ["UV", "Tm"], -700, 0, "BarrierHolo")
+link(bh_uv, "", bh, "UV")
+link(bh_time, "", bh, "Tm")
+bh_rgb = node(barrier_holo, unreal.MaterialExpressionComponentMask, -400, 0, r=True, g=True, b=True, a=False)
+link(bh, "", bh_rgb, "")
+bh_a = node(barrier_holo, unreal.MaterialExpressionComponentMask, -400, 150, r=False, g=False, b=False, a=True)
+link(bh, "", bh_a, "")
+MEL.connect_material_property(bh_rgb, "", MP.MP_EMISSIVE_COLOR)
+MEL.connect_material_property(bh_a, "", MP.MP_OPACITY)
+finish(barrier_holo)
+log("Boom barrier body, light and hologram arm")
+
 # --- Lane markings (arrows, numbers): flat paint in the road's line colour -----------------------
 # Plain: matte paint in the primary colour (the dashed middle lines' colour), like the asphalt's lines.
 marking = new_material("M_RoadMarking")
@@ -1545,7 +1607,9 @@ ASSIGN = {
     "Build_WalkingPath_2m": ROAD_SLAB_LOOKS,
     "Build_WalkingPath_4m": ROAD_SLAB_LOOKS,
     "Build_SignGantry": {"m_main_material": steel},
-    "Build_Tunnel": {"m_shell_material": pavers},  # the walking path's concrete blocks, turned 90 degrees (UV1 in code)
+    "Build_Tunnel": {"m_shell_material": pavers},
+    "Build_BoomBarrier": {"m_post_material": post_mat or steel, "m_body_material": barrier_body,
+                          "m_light_material": barrier_light, "m_holo_material": barrier_holo},  # the walking path's concrete blocks, turned 90 degrees (UV1 in code)
     "Build_LaneArrow": MARKING_LOOKS,
     "Build_LaneNumber": MARKING_LOOKS,
     "Build_LaneVehicle": VEHICLE_MARKING_LOOKS,

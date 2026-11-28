@@ -6,7 +6,11 @@
 #include "EngineUtils.h"
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
-#include "Components/BoxComponent.h"
+#include "FGFactoryColoringTypes.h"
+#include "WheeledVehicles/FGWheeledVehicle.h"
+#include "WheeledVehicles/FGWheeledVehicleIdentifier.h"
+#include "WheeledVehicles/FGVehicleSubsystem.h"
+#include "RMGeometry.h"
 #include "UI/RMBarrierWindow.h"
 #include "RoadMakerModule.h"
 #include "Buildables/RMBuildableRoad.h"
@@ -25,28 +29,14 @@ ARMBuildableBarrier::ARMBuildableBarrier(const FObjectInitializer& ObjectInitial
 	{
 		Useable->SetPropertyValue_InContainer(this, true);
 	}
+	mAllowColoring = true; // the body, in the primary colour (FICSIT by default)
 	mArmMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("BarrierArm"));
 	mArmMesh->SetupAttachment(mMesh);
-	mArmMesh->bUseComplexAsSimpleCollision = true;
-	// The visible arm: solid to players and creatures (pawns) and aimed at by the build gun (dismantle, E), in every
-	// mode; vehicles are stopped by mVehicleBlock (always closed only).
-	mArmMesh->SetCollisionObjectType(ECC_WorldDynamic);
+	// A hologram: nothing collides with it, nothing aims at it (the build gun aims at the post), no shadow.
+	mArmMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	mArmMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
-	mArmMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	mArmMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-
-	mVehicleBlock = CreateDefaultSubobject<UBoxComponent>(TEXT("VehicleBlock"));
-	mVehicleBlock->SetupAttachment(mMesh);
-	mVehicleBlock->SetCollisionObjectType(ECC_WorldStatic);
-	mVehicleBlock->SetCollisionResponseToAllChannels(ECR_Block);
-	mVehicleBlock->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);       // players and creatures: the arm itself
-	mVehicleBlock->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore); // the build gun aims at the arm and post
-	mVehicleBlock->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
-	mVehicleBlock->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	mVehicleBlock->SetHiddenInGame(true);
-	mVehicleBlock->SetCanEverAffectNavigation(false);
-	mArmMesh->SetCastShadow(true);
+	mArmMesh->SetCanEverAffectNavigation(false);
+	mArmMesh->SetCastShadow(false);
 }
 
 void ARMBuildableBarrier::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -70,6 +60,10 @@ void ARMBuildableBarrier::BeginPlay()
 
 void ARMBuildableBarrier::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (EndPlayReason == EEndPlayReason::Destroyed && HasAuthority())
+	{
+		ReleaseVehicles(); // dismantled while holding vehicles
+	}
 	GetWorldTimerManager().ClearTimer(mDetectTimer);
 	GetWorldTimerManager().ClearTimer(mArmTimer);
 	Super::EndPlay(EndPlayReason);
@@ -84,49 +78,66 @@ void ARMBuildableBarrier::SetArmLength(float Length)
 	}
 }
 
-void ARMBuildableBarrier::BuildPostMesh(FRMMesh& Out)
+void ARMBuildableBarrier::BuildPostMesh(FRMMesh& Steel, FRMMesh& Body, FRMMesh& Light)
 {
-	Out.AddBox(FVector(0.f, 0.f, PostHeight * 0.5f), FVector::ForwardVector, FVector::RightVector, FVector::UpVector,
-		FVector(PostHalf, PostHalf, PostHeight * 0.5f), 100.f);
-}
-
-void ARMBuildableBarrier::BuildArmMesh(float Length, FRMMesh& OutWhite, FRMMesh& OutRed)
-{
-	// Arm space: the hinge at the origin, the arm along +Y from the post's face.
-	const int32 Stripes = FMath::Max(1, FMath::RoundToInt(Length / StripeLength));
-	const float Step = Length / Stripes;
-	for (int32 I = 0; I < Stripes; ++I)
+	const FVector X = FVector::ForwardVector, Y = FVector::RightVector, Z = FVector::UpVector;
+	// Steel base plate with a bolt in each corner.
+	Steel.AddBox(FVector(0.f, 0.f, PlateHeight * 0.5f), X, Y, Z, FVector(PlateHalf, PlateHalf, PlateHeight * 0.5f), 100.f);
+	const float B = PlateHalf - 6.f;
+	for (const FVector2D& C : { FVector2D(B, B), FVector2D(-B, B), FVector2D(B, -B), FVector2D(-B, -B) })
 	{
-		FRMMesh& Out = (I % 2 == 0) ? OutRed : OutWhite;
-		Out.AddBox(FVector(0.f, PostHalf + Step * (I + 0.5f), 0.f), FVector::ForwardVector, FVector::RightVector, FVector::UpVector,
-			FVector(ArmHalf, Step * 0.5f, ArmHalf), 100.f);
+		RMGeometry::AddBeveledPost(FVector(C.X, C.Y, PlateHeight), X, Y, Z, 2.2f, 2.5f, 0.8f, Steel);
 	}
-}
-
-namespace RMBarrier
-{
-	/** A mesh into a section with one flat colour (the overlay material: unlit, temporary look). */
-	void ApplyColored(const FRMMesh& Mesh, UProceduralMeshComponent* Comp, int32 Section, const FLinearColor& Color, bool bCollision)
+	// The painted body (rounded edges in the lighting), the light band all around, the steel cap.
+	RMGeometry::AddBeveledPost(FVector(0.f, 0.f, PlateHeight), X, Y, Z, BodyHalf, BodyTop - PlateHeight, 3.f, Body);
+	Light.AddBox(FVector(0.f, 0.f, (BodyTop + LightTop) * 0.5f), X, Y, Z, FVector(BodyHalf - 0.5f, BodyHalf - 0.5f, (LightTop - BodyTop) * 0.5f), 100.f);
+	RMGeometry::AddBeveledPost(FVector(0.f, 0.f, LightTop), X, Y, Z, BodyHalf + 2.f, PostHeight - LightTop, 1.5f, Steel);
+	// The hinge block on the road side, the arm comes out of its face.
+	const float HingeDepth = HingeFace - BodyHalf;
+	Steel.AddBox(FVector(0.f, BodyHalf + HingeDepth * 0.5f, HingeHeight), X, Y, Z, FVector(11.f, HingeDepth * 0.5f, 13.f), 100.f);
+	Steel.AddBox(FVector(0.f, HingeFace + 0.6f, HingeHeight), X, Y, Z, FVector(6.f, 0.6f, ArmHalfHeight + 2.f), 100.f); // the emitter's rim
+	// A vent grille low on both faces along the road: five slats.
+	for (const float Side : { 1.f, -1.f })
 	{
-		TArray<FLinearColor> Colors;
-		Colors.Init(Color, Mesh.Vertices.Num());
-		Mesh.ApplyToSection(Comp, Section, bCollision, &Colors);
-		if (UMaterialInterface* M = RMOverlayLines::OverlayMaterial())
+		for (int32 I = 0; I < 5; ++I)
 		{
-			Comp->SetMaterial(Section, M);
+			Steel.AddBox(FVector(Side * (BodyHalf + 0.6f), 0.f, 14.f + I * 4.f), X, Y, Z, FVector(0.8f, 14.f, 1.f), 100.f);
 		}
 	}
+	RMGeometry::MapToPoleChrome(Steel);
+}
 
-	bool IsKindOf(const UClass* Class, const TCHAR* Name)
+void ARMBuildableBarrier::BuildArmMesh(float Length, FRMMesh& Out)
+{
+	// Arm space: the hinge block's face at the origin, the arm along +Y to PostHalf + Length from the post's centre.
+	// UV0: x = stripes (a red and a white one per 1.0), y = 0..1 across each long face (the material's edge glow).
+	const float L = FMath::Max(PostHalf + Length - HingeFace, 10.f);
+	const float U = L / (2.f * StripeLength);
+	const float T = ArmHalfThickness, H = ArmHalfHeight;
+	auto Long = [&Out, L, U](const FVector& A, const FVector& Bv, const FVector& N)
 	{
-		for (; Class; Class = Class->GetSuperClass())
-		{
-			if (Class->GetFName() == FName(Name))
-			{
-				return true;
-			}
-		}
-		return false;
+		// A and B: the face's two long edges at the hinge end.
+		Out.AddQuad(A, A + FVector(0.f, L, 0.f), Bv + FVector(0.f, L, 0.f), Bv, N,
+			FVector2D(0.f, 0.f), FVector2D(U, 0.f), FVector2D(U, 1.f), FVector2D(0.f, 1.f));
+	};
+	Long(FVector(T, 0.f, -H), FVector(T, 0.f, H), FVector::ForwardVector);
+	Long(FVector(-T, 0.f, -H), FVector(-T, 0.f, H), -FVector::ForwardVector);
+	Long(FVector(-T, 0.f, H), FVector(T, 0.f, H), FVector::UpVector);
+	Long(FVector(-T, 0.f, -H), FVector(T, 0.f, -H), -FVector::UpVector);
+	Out.AddQuad(FVector(-T, L, -H), FVector(T, L, -H), FVector(T, L, H), FVector(-T, L, H), FVector::RightVector,
+		FVector2D(U, 0.f), FVector2D(U, 0.f), FVector2D(U, 1.f), FVector2D(U, 1.f));
+}
+
+FLinearColor ARMBuildableBarrier::ModeColor(ERMBarrierMode Mode)
+{
+	switch (Mode)
+	{
+	case ERMBarrierMode::Open:
+		return FLinearColor(0.05f, 1.f, 0.12f);
+	case ERMBarrierMode::Closed:
+		return FLinearColor(1.f, 0.03f, 0.02f);
+	default:
+		return FLinearColor(1.f, 0.32f, 0.f);
 	}
 }
 
@@ -134,22 +145,52 @@ void ARMBuildableBarrier::RebuildMesh()
 {
 	mMesh->ClearAllMeshSections();
 	ClearFarMesh();
-	FRMMesh Post;
-	BuildPostMesh(Post);
-	Post.ApplyToSection(mMesh, 0, true);
+	FRMMesh Steel, Body, Light;
+	BuildPostMesh(Steel, Body, Light);
+	Steel.ApplyToSection(mMesh, 0, true);
 	ApplyMaterial(0, mPostMaterial);
+	Body.ApplyToSection(mMesh, 1, true);
+	ApplyMaterial(1, mBodyMaterial);
+	Light.ApplyToSection(mMesh, 2, true);
+	ApplyMaterial(2, mLightMaterial);
 
 	mArmMesh->ClearAllMeshSections();
-	mArmMesh->SetRelativeLocation(FVector(0.f, 0.f, HingeHeight));
-	FRMMesh White, Red;
-	BuildArmMesh(mArmLength, White, Red);
-	RMBarrier::ApplyColored(White, mArmMesh, 0, FLinearColor(0.9f, 0.9f, 0.9f), true);
-	RMBarrier::ApplyColored(Red, mArmMesh, 1, FLinearColor(0.8f, 0.05f, 0.03f), true);
-	// The vehicle block along the arm (closed), from the road up to BlockHeight.
-	const float Reach = PostHalf + mArmLength;
-	mVehicleBlock->SetBoxExtent(FVector(BlockHalfThickness, Reach * 0.5f, BlockHeight * 0.5f));
-	mVehicleBlock->SetRelativeLocation(FVector(0.f, Reach * 0.5f, BlockHeight * 0.5f));
+	mArmMesh->SetRelativeLocation(FVector(0.f, HingeFace, HingeHeight));
+	FRMMesh Arm;
+	BuildArmMesh(mArmLength, Arm);
+	Arm.ApplyToSection(mArmMesh, 0, false);
+	if (mHoloMaterial)
+	{
+		mArmMesh->SetMaterial(0, mHoloMaterial);
+	}
+	ApplyPaint(mCustomizationData);
 	UpdateArm(true);
+}
+
+void ARMBuildableBarrier::ApplyPaint(const FFactoryCustomizationData& Data)
+{
+	const FResolvedFactoryCustomizationData Resolved(Data, mColorSlot);
+	const FLinearColor P = Resolved.PrimaryColor;
+	const FLinearColor S = Resolved.SecondaryColor;
+	ForEachMeshComponent([&P, &S](UProceduralMeshComponent* M)
+	{
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::PrimaryColorIndex, FVector4(P.R, P.G, P.B, 1.0));
+		M->SetCustomPrimitiveDataVector4(ARMBuildableRoad::SecondaryColorIndex, FVector4(S.R, S.G, S.B, 1.0));
+	});
+	const FLinearColor L = ModeColor(mMode);
+	mMesh->SetCustomPrimitiveDataVector4(LightColorIndex, FVector4(L.R, L.G, L.B, 1.0));
+}
+
+void ARMBuildableBarrier::ApplyCustomizationData_Implementation(const FFactoryCustomizationData& customizationData)
+{
+	Super::ApplyCustomizationData_Implementation(customizationData);
+	ApplyPaint(customizationData);
+}
+
+void ARMBuildableBarrier::ApplyCustomizationData_Native(const FFactoryCustomizationData& customizationData)
+{
+	Super::ApplyCustomizationData_Native(customizationData);
+	ApplyPaint(customizationData);
 }
 
 void ARMBuildableBarrier::SetMode(ERMBarrierMode Mode)
@@ -158,16 +199,17 @@ void ARMBuildableBarrier::SetMode(ERMBarrierMode Mode)
 	{
 		return;
 	}
-	const bool bWasClosed = mMode == ERMBarrierMode::Closed;
 	mMode = Mode;
 	UE_LOG(LogRoadMaker, Verbose, TEXT("%s: barrier mode %d"), *GetName(), int32(Mode));
 	ForceNetUpdate();
 	UpdateArm(false);
-	if (bWasClosed != (Mode == ERMBarrierMode::Closed))
+	if (Mode != ERMBarrierMode::Closed)
 	{
-		// Closed or opened: the game checks the vehicle paths through it again (a closed arm is an obstacle on them,
-		// as a foundation would be: self-driving vehicles stop and wait; opened, the paths are clear again).
-		ARMBuildableRoad::RevalidateVehiclePathsSoon(this);
+		ReleaseVehicles();
+	}
+	else
+	{
+		DetectVehicles(); // stop the ones already coming
 	}
 }
 
@@ -191,28 +233,60 @@ FText ARMBuildableBarrier::AM_Info_Vehicle_Waiting() const
 
 FText ARMBuildableBarrier::AM_Info_Open() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoOpenNow", "The arm is up (always open, or automatic with a vehicle near).");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoOpenNow", "The arm is drawn back (always open, or automatic with a vehicle near).");
 }
 
 FText ARMBuildableBarrier::AM_Info_Mode() const
 {
-	return NSLOCTEXT("RoadMaker", "BarrierInfoMode", "Sets the barrier's mode. Automatic: the arm lifts while a vehicle is near. Open: always up. Closed: always down, the vehicle paths through it are blocked and self-driving vehicles wait.");
+	return NSLOCTEXT("RoadMaker", "BarrierInfoMode", "Sets the barrier's mode. Automatic: the arm draws back while a vehicle is near. Open: always drawn back. Closed: always out; self-driving vehicles coming towards it stop (their autopilot is turned off) and drive on when it opens.");
 }
 
 void ARMBuildableBarrier::DetectVehicles()
 {
-	// Vehicles (pawns of the game's wheeled vehicle class) within 12 m along the road, the arm's reach across it (plus
-	// 3 m), up to 6 m above: few actors, cheap.
-	const FTransform& T = GetActorTransform();
-	bool bNear = false;
-	for (TActorIterator<APawn> It(GetWorld()); It && !bNear; ++It)
+	// The game's wheeled vehicles (its list of them, with their real place even when drawn as a far proxy): near =
+	// within 12 m along the road, the arm's reach across it (plus 3 m), up to 6 m above. Always closed, a self-driving
+	// vehicle without a driver coming towards the arm (up to 25 m before it, not on it) gets its autopilot turned off.
+	AFGVehicleSubsystem* Vehicles = AFGVehicleSubsystem::Get(GetWorld());
+	if (!Vehicles)
 	{
-		if (!RMBarrier::IsKindOf(It->GetClass(), TEXT("FGWheeledVehicle")))
+		return;
+	}
+	const FTransform& T = GetActorTransform();
+	const bool bClosed = mMode == ERMBarrierMode::Closed;
+	bool bNear = false;
+	for (AFGWheeledVehicleIdentifier* Id : Vehicles->GetAllVehicles())
+	{
+		AFGWheeledVehicle* Vehicle = Id ? Id->GetOwnerVehicle() : nullptr;
+		if (!Vehicle)
 		{
 			continue;
 		}
-		const FVector L = T.InverseTransformPosition(It->GetActorLocation());
-		bNear = FMath::Abs(L.X) < 1200.f && L.Y > -300.f && L.Y < mArmLength + 300.f && L.Z > -300.f && L.Z < 600.f;
+		FVector Where;
+		FRotator Facing;
+		Vehicle->GetVehicleLocationAndRotation(Where, Facing);
+		const FVector L = T.InverseTransformPosition(Where);
+		if (L.Y < -300.f || L.Y > PostHalf + mArmLength + 300.f || L.Z < -300.f || L.Z > 600.f)
+		{
+			continue;
+		}
+		bNear |= FMath::Abs(L.X) < 1200.f;
+		if (!bClosed || !Id->IsAutopilotEnabled() || Vehicle->GetDriver() || FMath::Abs(L.X) > ApproachReach || FMath::Abs(L.X) < 150.f)
+		{
+			continue;
+		}
+		// Coming towards the arm: its heading (backwards when reversing) points at the arm's line.
+		FVector Heading = T.InverseTransformVectorNoScale(Facing.Vector());
+		if (Vehicle->GetForwardSpeed() < -10.f)
+		{
+			Heading = -Heading;
+		}
+		if (L.X * Heading.X >= 0.f)
+		{
+			continue;
+		}
+		Id->SetAutopilotEnabled(false);
+		mStoppedVehicles.AddUnique(Id);
+		UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot off for %s (%.0f m before the arm)"), *GetName(), *Vehicle->GetName(), FMath::Abs(L.X) / 100.f);
 	}
 	if (bNear != mVehicleNear)
 	{
@@ -222,16 +296,35 @@ void ARMBuildableBarrier::DetectVehicles()
 	}
 }
 
+void ARMBuildableBarrier::ReleaseVehicles()
+{
+	const FVector Here = GetActorLocation();
+	for (AActor* Actor : mStoppedVehicles)
+	{
+		AFGWheeledVehicleIdentifier* Id = Cast<AFGWheeledVehicleIdentifier>(Actor);
+		AFGWheeledVehicle* Vehicle = Id ? Id->GetOwnerVehicle() : nullptr;
+		if (!Vehicle || Vehicle->GetDriver() || Id->IsAutopilotEnabled() || FVector::Dist(Vehicle->GetVehicleLocation(), Here) > ReleaseReach)
+		{
+			continue; // gone, taken over by a player, already on again, or driven away
+		}
+		if (Id->CanEnableAutopilot())
+		{
+			Id->SetAutopilotEnabled(true);
+			UE_LOG(LogRoadMaker, Log, TEXT("%s: autopilot back on for %s"), *GetName(), *Vehicle->GetName());
+		}
+	}
+	mStoppedVehicles.Reset();
+}
+
 void ARMBuildableBarrier::UpdateArm(bool bSnap)
 {
-	// Vehicles are stopped only while always closed (automatic never blocks; open is up anyway): the tall invisible
-	// block, solid to them and seen by the game's vehicle path check, which then blocks the paths through it.
-	mVehicleBlock->SetCollisionEnabled(mMode == ERMBarrierMode::Closed ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
-	const float Target = ShouldBeOpen() ? OpenAngle : 0.f;
+	const FLinearColor L = ModeColor(mMode);
+	mMesh->SetCustomPrimitiveDataVector4(LightColorIndex, FVector4(L.R, L.G, L.B, 1.0));
+	const float Target = ShouldBeOpen() ? 0.f : 1.f;
 	if (bSnap || !HasActorBegunPlay())
 	{
-		mArmAngle = Target;
-		mArmMesh->SetRelativeRotation(FQuat(FVector::ForwardVector, FMath::DegreesToRadians(mArmAngle)));
+		mArmOut = Target;
+		ApplyArm();
 		return;
 	}
 	if (!GetWorldTimerManager().IsTimerActive(mArmTimer))
@@ -242,12 +335,20 @@ void ARMBuildableBarrier::UpdateArm(bool bSnap)
 
 void ARMBuildableBarrier::StepArm()
 {
-	// About a second and a half from closed to open.
-	const float Target = ShouldBeOpen() ? OpenAngle : 0.f;
-	mArmAngle = FMath::FInterpConstantTo(mArmAngle, Target, 1.f / 30.f, 60.f);
-	mArmMesh->SetRelativeRotation(FQuat(FVector::ForwardVector, FMath::DegreesToRadians(mArmAngle)));
-	if (FMath::IsNearlyEqual(mArmAngle, Target, 0.01f))
+	// About a second all the way out or back.
+	const float Target = ShouldBeOpen() ? 0.f : 1.f;
+	mArmOut = FMath::FInterpConstantTo(mArmOut, Target, 1.f / 30.f, 1.f);
+	ApplyArm();
+	if (FMath::IsNearlyEqual(mArmOut, Target, 0.001f))
 	{
 		GetWorldTimerManager().ClearTimer(mArmTimer);
 	}
+}
+
+void ARMBuildableBarrier::ApplyArm()
+{
+	// Drawn back into the hinge block: squeezed along its length towards the block's face (eased), hidden once in.
+	const float Ease = mArmOut * mArmOut * (3.f - 2.f * mArmOut);
+	mArmMesh->SetRelativeScale3D(FVector(1.f, FMath::Max(Ease, 0.01f), 1.f));
+	mArmMesh->SetVisibility(Ease > 0.01f);
 }

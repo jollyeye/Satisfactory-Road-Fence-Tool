@@ -150,7 +150,7 @@ void URMBarrierWindow::NativeOnInitialized()
 		S->SetPadding(FMargin(0.f, 18.f, 0.f, 0.f));
 	}
 	UTextBlock* Help = RMBarrierUI::MakeText(WidgetTree, NSLOCTEXT("RoadMaker", "BarrierWindowHelp",
-		"Automatic: the arm lifts while a vehicle is near. Always closed: the vehicle paths through it are blocked, self-driving vehicles wait."), 12, RMBarrierUI::Dim);
+		"Automatic: the arm draws back while a vehicle is near. Always closed: self-driving vehicles coming towards it stop, and drive on when it opens. The arm is a hologram: nothing collides with it."), 12, RMBarrierUI::Dim);
 	Help->SetAutoWrapText(false);
 	Help->SetWrapTextAt(410.f);
 	if (UVerticalBoxSlot* S = Column->AddChildToVerticalBox(Help))
@@ -265,7 +265,7 @@ void URMBarrierWindow::Refresh()
 	if (mStatus)
 	{
 		mStatus->SetText(FText::Format(NSLOCTEXT("RoadMaker", "BarrierWindowStatus", "Arm: {0}    Vehicle near: {1}"),
-			Barrier->ShouldBeOpen() ? NSLOCTEXT("RoadMaker", "BarrierArmUp", "up") : NSLOCTEXT("RoadMaker", "BarrierArmDown", "down"),
+			Barrier->ShouldBeOpen() ? NSLOCTEXT("RoadMaker", "BarrierArmUp", "drawn back") : NSLOCTEXT("RoadMaker", "BarrierArmDown", "across"),
 			Barrier->AM_Condition_Vehicle_Waiting() ? NSLOCTEXT("RoadMaker", "BarrierYes", "yes") : NSLOCTEXT("RoadMaker", "BarrierNo", "no")));
 	}
 }
